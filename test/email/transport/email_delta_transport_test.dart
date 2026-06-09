@@ -107,6 +107,12 @@ void main() {
     when(() => context.supportsMessageRfc724Mid).thenReturn(true);
     when(() => context.supportsMessageInfo).thenReturn(true);
     when(() => context.getMessageInfo(any())).thenAnswer((_) async => null);
+    when(
+      () => database.replaceMessageStanzaID(
+        currentStanzaID: any(named: 'currentStanzaID'),
+        message: any(named: 'message'),
+      ),
+    ).thenAnswer((_) async {});
   });
 
   StreamController<DeltaCoreEvent> stubInitializedSingleContext() {
@@ -274,10 +280,12 @@ void main() {
           originID: 'origin@example.com',
         ),
       );
-      when(
-        () => database.getMessageByStanzaID(any()),
-      ).thenAnswer((_) async => pendingMessage);
-      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+      when(() => database.getMessageByStanzaID(any())).thenAnswer((
+        invocation,
+      ) async {
+        final stanzaId = invocation.positionalArguments.first as String;
+        return stanzaId == pendingMessage?.stanzaID ? pendingMessage : null;
+      });
 
       await transport.ensureInitialized(
         databasePrefix: 'email_delta_transport_test',
@@ -291,12 +299,182 @@ void main() {
       expect(localPending, isNotNull);
       expect(localPending!.timestamp, isNot(staleDeltaTimestamp));
       final updated =
-          verify(() => database.updateMessage(captureAny())).captured.single
+          verify(
+                () => database.replaceMessageStanzaID(
+                  currentStanzaID: localPending.stanzaID,
+                  message: captureAny(named: 'message'),
+                ),
+              ).captured.single
               as Message;
+      expect(updated.stanzaID, deltaMessageStanzaId(msgId));
       expect(updated.deltaMsgId, msgId);
       expect(updated.deltaChatId, chatId);
       expect(updated.deltaAccountId, DeltaAccountDefaults.legacyId);
       expect(updated.timestamp, staleDeltaTimestamp);
+    },
+  );
+
+  test(
+    'sendText does not merge pending row with incompatible dc-msg row',
+    () async {
+      const chatId = 7;
+      const msgId = 170;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+        emailAddress: 'alice@example.com',
+        emailFromAddress: 'me@example.com',
+      );
+      Message? pendingMessage;
+      final replacements = <Message>[];
+
+      when(
+        () => deltaSafe.createAccounts(directory: any(named: 'directory')),
+      ).thenThrow(const DeltaAllocationException('accounts unavailable'));
+      when(
+        () => deltaSafe.createContext(
+          databasePath: any(named: 'databasePath'),
+          osName: any(named: 'osName'),
+        ),
+      ).thenAnswer((_) async => context);
+      when(
+        () => context.open(passphrase: any(named: 'passphrase')),
+      ).thenAnswer((_) async {});
+      when(() => context.getConfig(any())).thenAnswer((invocation) async {
+        final key = invocation.positionalArguments.first as String;
+        return key == 'addr' ? 'me@example.com' : null;
+      });
+      when(
+        () => context.setConfig(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => context.isConfigured).thenReturn(true);
+      when(
+        () => database.replaceDeltaPlaceholderSelfJids(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          resolvedAddress: 'me@example.com',
+          placeholderJids: any(named: 'placeholderJids'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.removeDeltaPlaceholderDuplicates(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          placeholderJids: any(named: 'placeholderJids'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.upsertEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      ).thenAnswer((invocation) async {
+        pendingMessage = invocation.positionalArguments.first as Message;
+      });
+      when(
+        () => context.sendText(
+          chatId: chatId,
+          message: 'hello',
+          subject: any(named: 'subject'),
+          html: any(named: 'html'),
+          forcePlaintext: false,
+          skipAutocrypt: false,
+        ),
+      ).thenAnswer((_) async => msgId);
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'hello',
+          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+          isOutgoing: true,
+        ),
+      );
+      when(
+        () => context.getMessageMimeHeaders(msgId),
+      ).thenAnswer((_) async => null);
+      when(
+        () => context.getMessageRfc724Mid(msgId),
+      ).thenAnswer((_) async => null);
+      when(() => database.getMessageByStanzaID(any())).thenAnswer((
+        invocation,
+      ) async {
+        final stanzaId = invocation.positionalArguments.first as String;
+        if (stanzaId == pendingMessage?.stanzaID) {
+          return pendingMessage;
+        }
+        if (stanzaId == deltaMessageStanzaId(msgId)) {
+          return Message(
+            stanzaID: deltaMessageStanzaId(msgId),
+            senderJid: 'me@example.com',
+            chatJid: 'other@example.com',
+            timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+            body: 'Other chat send',
+            acked: true,
+            deltaChatId: 8,
+            deltaMsgId: msgId,
+            deltaAccountId: DeltaAccountDefaults.legacyId,
+          );
+        }
+        return null;
+      });
+      when(
+        () => database.replaceMessageStanzaID(
+          currentStanzaID: any(named: 'currentStanzaID'),
+          message: any(named: 'message'),
+        ),
+      ).thenAnswer((invocation) async {
+        replacements.add(invocation.namedArguments[#message] as Message);
+      });
+
+      await transport.ensureInitialized(
+        databasePrefix: 'email_delta_transport_test',
+        databasePassphrase: 'test-passphrase',
+      );
+      expect(await transport.isConfigured(), isTrue);
+
+      await transport.sendText(chatId: chatId, body: 'hello');
+
+      expect(pendingMessage?.stanzaID, startsWith('dc-pending-'));
+      expect(replacements, hasLength(1));
+      expect(
+        replacements.single.stanzaID,
+        deltaScopedMessageStorageStanzaId(
+          accountId: DeltaAccountDefaults.legacyId,
+          chatId: chatId,
+          msgId: msgId,
+        ),
+      );
+      expect(replacements.single.chatJid, chat.jid);
+      expect(replacements.single.deltaChatId, chatId);
+      expect(replacements.single.deltaMsgId, msgId);
+      verifyNever(
+        () => database.deleteMessage(
+          deltaMessageStanzaId(msgId),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
     },
   );
 
@@ -424,10 +602,12 @@ void main() {
           originID: 'attachment@example.com',
         ),
       );
-      when(
-        () => database.getMessageByStanzaID(any()),
-      ).thenAnswer((_) async => pendingMessage);
-      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+      when(() => database.getMessageByStanzaID(any())).thenAnswer((
+        invocation,
+      ) async {
+        final stanzaId = invocation.positionalArguments.first as String;
+        return stanzaId == pendingMessage?.stanzaID ? pendingMessage : null;
+      });
 
       await transport.ensureInitialized(
         databasePrefix: 'email_delta_transport_test',
@@ -450,8 +630,14 @@ void main() {
       expect(localPending!.body, isNull);
       expect(localPending.fileMetadataID, startsWith('dc-pending-'));
       final updated =
-          verify(() => database.updateMessage(captureAny())).captured.single
+          verify(
+                () => database.replaceMessageStanzaID(
+                  currentStanzaID: localPending.stanzaID,
+                  message: captureAny(named: 'message'),
+                ),
+              ).captured.single
               as Message;
+      expect(updated.stanzaID, deltaMessageStanzaId(msgId));
       expect(updated.body, isNull);
       expect(updated.fileMetadataID, deltaFileMetadataId(msgId));
     },
@@ -497,6 +683,7 @@ void main() {
     );
     Message? pendingMessage;
     Message? updatedPending;
+    Message? replacementMessage;
     var duplicateDeleted = false;
 
     when(
@@ -607,6 +794,14 @@ void main() {
       updatedPending = invocation.positionalArguments.first as Message;
     });
     when(
+      () => database.replaceMessageStanzaID(
+        currentStanzaID: any(named: 'currentStanzaID'),
+        message: any(named: 'message'),
+      ),
+    ).thenAnswer((invocation) async {
+      replacementMessage = invocation.namedArguments[#message] as Message;
+    });
+    when(
       () => database.deleteMessage(
         deltaStanzaId,
         selfJid: 'me@example.com',
@@ -643,7 +838,10 @@ void main() {
     ).called(1);
     final updated = updatedPending;
     expect(updated, isNotNull);
-    return updated!;
+    final replacement = replacementMessage;
+    expect(replacement, isNotNull);
+    expect(replacement!.stanzaID, deltaStanzaId);
+    return replacement;
   }
 
   test(

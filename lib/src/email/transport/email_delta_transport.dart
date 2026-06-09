@@ -68,8 +68,6 @@ const String _attachmentHydrationFailedLog =
 const String _missingOutgoingDeltaIdError =
     'Outgoing email message missing delta ID.';
 const int _deltaMessageIdUnset = DeltaMessageId.none;
-const String _pendingOutgoingStanzaPrefix = 'dc-pending';
-const String _pendingOutgoingStanzaSeparator = '-';
 const bool _defaultScheduleAccountHydration = true;
 const Set<String> _deltaSensitiveConfigKeys = <String>{
   _deltaConfigKeyMailPassword,
@@ -1977,8 +1975,7 @@ class EmailDeltaTransport implements ChatTransport {
 
   String _pendingOutgoingStanzaId() {
     final String uniqueId = uuid.v4();
-    return '$_pendingOutgoingStanzaPrefix'
-        '$_pendingOutgoingStanzaSeparator$uniqueId';
+    return deltaPendingOutgoingStanzaId(uniqueId);
   }
 
   Future<void> _recordOutgoing({
@@ -2086,17 +2083,31 @@ class EmailDeltaTransport implements ChatTransport {
     final Message? duplicateMessage =
         duplicateCandidate == null ||
             duplicateCandidate.deltaMsgId != msgId ||
-            duplicateCandidate.deltaAccountId != accountId
+            duplicateCandidate.deltaAccountId != accountId ||
+            duplicateCandidate.chatJid != existing.chatJid ||
+            (duplicateCandidate.deltaChatId != null &&
+                duplicateCandidate.deltaChatId != chatId)
         ? null
         : duplicateCandidate;
+    final targetStanzaId = duplicateCandidate == null
+        ? duplicateStanzaId
+        : duplicateMessage == null
+        ? deltaScopedMessageStorageStanzaId(
+            accountId: accountId,
+            chatId: chatId,
+            msgId: msgId,
+          )
+        : existing.stanzaID;
     Message next = existing;
-    if (existing.deltaMsgId != msgId ||
+    if (existing.stanzaID != targetStanzaId ||
+        existing.deltaMsgId != msgId ||
         existing.deltaChatId != chatId ||
         existing.deltaAccountId != accountId ||
         existing.encryptionProtocol != encryptionProtocol ||
         (timestamp != null && existing.timestamp != timestamp) ||
         (metadata != null && existing.fileMetadataID != metadata.id)) {
       next = existing.copyWith(
+        stanzaID: targetStanzaId,
         deltaMsgId: msgId,
         deltaChatId: chatId,
         deltaAccountId: accountId,
@@ -2138,7 +2149,14 @@ class EmailDeltaTransport implements ChatTransport {
       );
     }
     if (next != existing) {
-      await db.updateMessage(next);
+      if (next.stanzaID == existing.stanzaID) {
+        await db.updateMessage(next);
+      } else {
+        await db.replaceMessageStanzaID(
+          currentStanzaID: existing.stanzaID,
+          message: next,
+        );
+      }
     }
     if (metadata != null && messageId != null) {
       if (previousMetadataId != metadata.id) {
@@ -2169,6 +2187,12 @@ class EmailDeltaTransport implements ChatTransport {
         selfJid: existing.senderJid,
         emailSelfJid: existing.senderJid,
       );
+      if (next.stanzaID != duplicateStanzaId) {
+        await db.replaceMessageStanzaID(
+          currentStanzaID: next.stanzaID,
+          message: next.copyWith(stanzaID: duplicateStanzaId),
+        );
+      }
     }
     if (shareId != null) {
       await db.insertMessageCopy(

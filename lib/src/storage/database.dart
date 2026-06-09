@@ -14,6 +14,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/storage/app_storage.dart';
 import 'package:drift/drift.dart';
@@ -226,6 +227,11 @@ abstract interface class XmppDatabase implements Database {
   });
 
   Future<void> updateMessage(Message message);
+
+  Future<void> replaceMessageStanzaID({
+    required String currentStanzaID,
+    required Message message,
+  });
 
   Future<void> ensureEmailEncryptionStatusMarkerForChat(String chatJid);
 
@@ -3040,7 +3046,8 @@ WHERE transport = ${MessageTransport.email.index}
         (tbl) =>
             tbl.deltaMsgId.isNull() &
             tbl.deltaChatId.equals(deltaChatId) &
-            tbl.deltaAccountId.equals(deltaAccountId),
+            tbl.deltaAccountId.equals(deltaAccountId) &
+            tbl.stanzaID.like(deltaPendingOutgoingStanzaLikePattern()),
       )
       ..orderBy([
         (tbl) =>
@@ -4877,6 +4884,68 @@ WHERE email_from_address IN ($placeholderClause)
     await update(messages).replace(
       message.copyWith(
         fileMetadataID: _normalizedFileMetadataIdOrNull(message.fileMetadataID),
+      ),
+    );
+  }
+
+  @override
+  Future<void> replaceMessageStanzaID({
+    required String currentStanzaID,
+    required Message message,
+  }) async {
+    final normalizedCurrentStanzaID = currentStanzaID.trim();
+    if (normalizedCurrentStanzaID.isEmpty) {
+      return;
+    }
+    _log.fine('Replacing message stanza id');
+    final normalizedMessage = message.copyWith(
+      fileMetadataID: _normalizedFileMetadataIdOrNull(message.fileMetadataID),
+    );
+    await (update(
+      messages,
+    )..where((tbl) => tbl.stanzaID.equals(normalizedCurrentStanzaID))).write(
+      MessagesCompanion(
+        id: Value(normalizedMessage.id ?? uuid.v4()),
+        stanzaID: Value(normalizedMessage.stanzaID),
+        originID: Value(normalizedMessage.originID),
+        mucStanzaId: Value(normalizedMessage.mucStanzaId),
+        occupantID: Value(normalizedMessage.occupantID),
+        senderJid: Value(normalizedMessage.senderJid),
+        senderRealJid: Value(normalizedMessage.senderRealJid),
+        chatJid: Value(normalizedMessage.chatJid),
+        body: Value(normalizedMessage.body),
+        subject: Value(normalizedMessage.subject),
+        htmlBody: Value(normalizedMessage.htmlBody),
+        timestamp: Value(normalizedMessage.timestamp ?? DateTime.timestamp()),
+        error: Value(normalizedMessage.error),
+        warning: Value(normalizedMessage.warning),
+        encryptionProtocol: Value(normalizedMessage.encryptionProtocol),
+        trust: Value(normalizedMessage.trust),
+        trusted: Value(normalizedMessage.trusted),
+        deviceID: Value(normalizedMessage.deviceID),
+        noStore: Value(normalizedMessage.noStore),
+        acked: Value(normalizedMessage.acked),
+        received: Value(normalizedMessage.received),
+        displayed: Value(normalizedMessage.displayed),
+        edited: Value(normalizedMessage.edited),
+        retracted: Value(normalizedMessage.retracted),
+        isFileUploadNotification: Value(
+          normalizedMessage.isFileUploadNotification,
+        ),
+        fileDownloading: Value(normalizedMessage.fileDownloading),
+        fileUploading: Value(normalizedMessage.fileUploading),
+        fileMetadataID: Value(normalizedMessage.fileMetadataID),
+        quoting: Value(normalizedMessage.quoting),
+        quotingReferenceKind: Value(normalizedMessage.quotingReferenceKind),
+        stickerPackID: Value(normalizedMessage.stickerPackID),
+        pseudoMessageType: Value(normalizedMessage.pseudoMessageType),
+        pseudoMessageData: Value(normalizedMessage.pseudoMessageData),
+        manualSendAgainStanzaID: Value(
+          normalizedMessage.manualSendAgainStanzaID,
+        ),
+        deltaChatId: Value(normalizedMessage.deltaChatId),
+        deltaMsgId: Value(normalizedMessage.deltaMsgId),
+        deltaAccountId: Value(normalizedMessage.deltaAccountId),
       ),
     );
   }
