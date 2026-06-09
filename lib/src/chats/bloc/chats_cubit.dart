@@ -127,9 +127,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       _xmppService = xmppService,
       _emailService = emailService,
       super(_seedInitialState(xmppService.cachedChatList)) {
-    _chatsSubscription = _chatsService.chatsStream().listen(
-      (items) => _updateChats(items),
-    );
+    _chatsSubscription = _listenToChats(limit: _chatListLimit);
     _recipientAddressSuggestionsSubscription = _chatsService
         .recipientAddressSuggestionsStream()
         .listen(_updateRecipientAddressSuggestions);
@@ -179,7 +177,10 @@ class ChatsCubit extends Cubit<ChatsState> {
   final XmppService _xmppService;
   EmailService? _emailService;
 
-  late final StreamSubscription<List<Chat>> _chatsSubscription;
+  static const int _chatListPageSize = 50;
+  int _chatListLimit = _chatListPageSize;
+  late StreamSubscription<List<Chat>> _chatsSubscription;
+  Future<void>? _chatListResubscribeTask;
   late final StreamSubscription<List<String>>
   _recipientAddressSuggestionsSubscription;
   late final StreamSubscription<void> _demoResetSubscription;
@@ -197,11 +198,46 @@ class ChatsCubit extends Cubit<ChatsState> {
       timer.cancel();
     }
     _exportCleanupTimers.clear();
+    await _chatListResubscribeTask;
     await _chatsSubscription.cancel();
     await _recipientAddressSuggestionsSubscription.cancel();
     await _demoResetSubscription.cancel();
     await _contactFolderRulesSubscription.cancel();
     return super.close();
+  }
+
+  StreamSubscription<List<Chat>> _listenToChats({required int limit}) =>
+      _chatsService
+          .chatsStream(start: 0, end: limit)
+          .listen((items) => _updateChats(items));
+
+  Future<void> loadMoreChats() async {
+    final items = state.items;
+    if (items == null || items.length < _chatListLimit) {
+      return;
+    }
+    final pending = _chatListResubscribeTask;
+    if (pending != null) {
+      await pending;
+      return;
+    }
+    final nextLimit = _chatListLimit + _chatListPageSize;
+    final task = _replaceChatsSubscription(limit: nextLimit);
+    _chatListResubscribeTask = task;
+    try {
+      await task;
+      _chatListLimit = nextLimit;
+    } finally {
+      if (identical(_chatListResubscribeTask, task)) {
+        _chatListResubscribeTask = null;
+      }
+    }
+  }
+
+  Future<void> _replaceChatsSubscription({required int limit}) async {
+    final previous = _chatsSubscription;
+    await previous.cancel();
+    _chatsSubscription = _listenToChats(limit: limit);
   }
 
   void startDemoInteractivePhase() {

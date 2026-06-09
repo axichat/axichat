@@ -30,6 +30,7 @@ class FoldersCubit extends Cubit<FoldersState> {
            collections: null,
            memberships: null,
            contactFolderRules: const <String, String>{},
+           unreadChats: null,
            items: null,
            visibleItems: null,
          ),
@@ -46,6 +47,9 @@ class FoldersCubit extends Cubit<FoldersState> {
     _contactFolderRulesSubscription = _xmppService
         .contactFolderRulesStream()
         .listen(_handleContactFolderRules);
+    _unreadChatsSubscription = _xmppService
+        .unreadChatsForFolderBadgesStream()
+        .listen(_handleUnreadChats);
   }
 
   final XmppService _xmppService;
@@ -58,6 +62,7 @@ class FoldersCubit extends Cubit<FoldersState> {
   _membershipsSubscription;
   late final StreamSubscription<Map<String, String>>
   _contactFolderRulesSubscription;
+  late final StreamSubscription<List<Chat>> _unreadChatsSubscription;
 
   void _handleCollections(List<MessageCollectionEntry> collections) {
     emit(state.copyWith(collections: collections));
@@ -82,6 +87,10 @@ class FoldersCubit extends Cubit<FoldersState> {
 
   void _handleContactFolderRules(Map<String, String> rules) {
     emit(state.copyWith(contactFolderRules: rules));
+  }
+
+  void _handleUnreadChats(List<Chat> chats) {
+    emit(state.copyWith(unreadChats: chats));
   }
 
   void updateCriteria({
@@ -268,6 +277,7 @@ class FoldersCubit extends Cubit<FoldersState> {
     await _collectionsSubscription.cancel();
     await _membershipsSubscription.cancel();
     await _contactFolderRulesSubscription.cancel();
+    await _unreadChatsSubscription.cancel();
     return super.close();
   }
 }

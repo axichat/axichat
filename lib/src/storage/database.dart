@@ -675,6 +675,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Chat>> getChats({required int start, required int end});
 
+  Stream<List<Chat>> watchUnreadChatsForFolderBadges();
+
+  Future<List<Chat>> getUnreadChatsForFolderBadges();
+
   Future<List<Chat>> getChatsByJids(Iterable<String> jids);
 
   Future<List<Chat>> getDeltaChats({int? accountId});
@@ -1716,26 +1720,45 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   $ChatsTable get table => chats;
 
   @override
-  Stream<List<Chat>> watchAll() =>
-      (select(table)..orderBy([
-            (t) => OrderingTerm(
-              expression: t.lastChangeTimestamp,
-              mode: OrderingMode.desc,
-            ),
-            (t) => OrderingTerm(expression: t.jid, mode: OrderingMode.asc),
-          ]))
-          .watch();
+  Stream<List<Chat>> watchAll() => _orderedQuery().watch();
 
   @override
-  Future<List<Chat>> selectAll() =>
-      (select(table)..orderBy([
-            (t) => OrderingTerm(
-              expression: t.lastChangeTimestamp,
-              mode: OrderingMode.desc,
-            ),
-            (t) => OrderingTerm(expression: t.jid, mode: OrderingMode.asc),
-          ]))
-          .get();
+  Future<List<Chat>> selectAll() => _orderedQuery().get();
+
+  Stream<List<Chat>> watchRange({required int start, required int end}) =>
+      _orderedRangeQuery(start: start, end: end).watch();
+
+  Future<List<Chat>> selectRange({required int start, required int end}) =>
+      _orderedRangeQuery(start: start, end: end).get();
+
+  Stream<List<Chat>> watchUnreadForFolderBadges() =>
+      _unreadFolderBadgeQuery().watch();
+
+  Future<List<Chat>> selectUnreadForFolderBadges() =>
+      _unreadFolderBadgeQuery().get();
+
+  SimpleSelectStatement<$ChatsTable, Chat> _orderedQuery() =>
+      select(table)..orderBy([
+        (t) => OrderingTerm(
+          expression: t.lastChangeTimestamp,
+          mode: OrderingMode.desc,
+        ),
+        (t) => OrderingTerm(expression: t.jid, mode: OrderingMode.asc),
+      ]);
+
+  SimpleSelectStatement<$ChatsTable, Chat> _orderedRangeQuery({
+    required int start,
+    required int end,
+  }) {
+    final query = _orderedQuery();
+    if (end > start) {
+      query.limit(end - start, offset: start);
+    }
+    return query;
+  }
+
+  SimpleSelectStatement<$ChatsTable, Chat> _unreadFolderBadgeQuery() =>
+      _orderedQuery()..where((tbl) => tbl.unreadCount.isBiggerThanValue(0));
 
   Stream<Chat?> watchOne(String jid) => (select(
     table,
@@ -7174,12 +7197,22 @@ ORDER BY pinned_at DESC, message_reference_id DESC
 
   @override
   Stream<List<Chat>> watchChats({required int start, required int end}) {
-    return chatsAccessor.watchAll();
+    return chatsAccessor.watchRange(start: start, end: end);
   }
 
   @override
   Future<List<Chat>> getChats({required int start, required int end}) {
-    return chatsAccessor.selectAll();
+    return chatsAccessor.selectRange(start: start, end: end);
+  }
+
+  @override
+  Stream<List<Chat>> watchUnreadChatsForFolderBadges() {
+    return chatsAccessor.watchUnreadForFolderBadges();
+  }
+
+  @override
+  Future<List<Chat>> getUnreadChatsForFolderBadges() {
+    return chatsAccessor.selectUnreadForFolderBadges();
   }
 
   @override

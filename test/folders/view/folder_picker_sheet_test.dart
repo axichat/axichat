@@ -63,6 +63,7 @@ void main() {
       ],
       memberships: const [],
       contactFolderRules: const <String, String>{},
+      unreadChats: null,
       items: null,
       visibleItems: null,
     );
@@ -120,6 +121,7 @@ void main() {
         collections: const [],
         memberships: const [],
         contactFolderRules: const <String, String>{},
+        unreadChats: null,
         items: null,
         visibleItems: null,
       ),
@@ -196,6 +198,7 @@ void main() {
           collections: [collection],
           memberships: const [],
           contactFolderRules: const <String, String>{},
+          unreadChats: null,
           items: null,
           visibleItems: null,
         ),

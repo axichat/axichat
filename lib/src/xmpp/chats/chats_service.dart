@@ -609,6 +609,15 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     return _cacheSortedChatList(chats: sorted, limit: limit);
   }
 
+  Stream<List<Chat>> unreadChatsForFolderBadgesStream() =>
+      createSingleItemStream<List<Chat>, XmppDatabase>(
+        watchFunction: (db) async {
+          final stream = db.watchUnreadChatsForFolderBadges().map(sortChats);
+          final initial = sortChats(await db.getUnreadChatsForFolderBadges());
+          return stream.startWith(initial);
+        },
+      );
+
   void clearCachedChatList() {
     _cachedChatList = null;
   }

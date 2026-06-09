@@ -52,7 +52,10 @@ void main() {
         StreamController<Map<String, String>>.broadcast();
 
     when(
-      () => xmppService.chatsStream(),
+      () => xmppService.chatsStream(
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+      ),
     ).thenAnswer((_) => chatsStreamController.stream);
     when(
       () => xmppService.recipientAddressSuggestionsStream(),
@@ -69,6 +72,28 @@ void main() {
   tearDown(() async {
     await chatsStreamController.close();
     await contactFolderRulesController.close();
+  });
+
+  test('loadMoreChats increases the subscribed chat window', () async {
+    final cubit = ChatsCubit(xmppService: xmppService);
+    addTearDown(cubit.close);
+
+    chatsStreamController.add(
+      List.generate(
+        50,
+        (index) => _chat(
+          jid: 'chat-$index@axi.im',
+          title: 'Chat $index',
+          timestamp: DateTime(2024, 1, 1).add(Duration(minutes: index)),
+        ),
+      ),
+    );
+    await pumpEventQueue();
+
+    await cubit.loadMoreChats();
+
+    verify(() => xmppService.chatsStream(start: 0, end: 50)).called(1);
+    verify(() => xmppService.chatsStream(start: 0, end: 100)).called(1);
   });
 
   test('spam search filters and query are applied in cubit', () async {
@@ -466,7 +491,10 @@ void main() {
   test('create room conflict surfaces alreadyExists failure state', () async {
     final xmppMucService = MockXmppMucService();
     when(
-      () => xmppMucService.chatsStream(),
+      () => xmppMucService.chatsStream(
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+      ),
     ).thenAnswer((_) => const Stream<List<Chat>>.empty());
     when(
       () => xmppMucService.recipientAddressSuggestionsStream(),
@@ -499,7 +527,10 @@ void main() {
   test('create room forwards the selected primary view', () async {
     final xmppMucService = MockXmppMucService();
     when(
-      () => xmppMucService.chatsStream(),
+      () => xmppMucService.chatsStream(
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+      ),
     ).thenAnswer((_) => const Stream<List<Chat>>.empty());
     when(
       () => xmppMucService.recipientAddressSuggestionsStream(),

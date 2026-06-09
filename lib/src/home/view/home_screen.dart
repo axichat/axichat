@@ -663,7 +663,7 @@ class _FoldersOverviewPage extends StatelessWidget {
       );
     }
     final folderUnreadCounts = _resolveFolderUnreadBadgeCounts(
-      chats: context.watch<ChatsCubit>().state.items ?? const <m.Chat>[],
+      chats: folderState.unreadChats ?? const <m.Chat>[],
       collections: collections,
       memberships:
           folderState.memberships ??
@@ -828,7 +828,7 @@ class _FoldersDetailPageState extends State<_FoldersDetailPage> {
         ? context.watch<FoldersCubit>().state
         : null;
     final folderUnreadCounts = _resolveFolderUnreadBadgeCounts(
-      chats: context.watch<ChatsCubit>().state.items ?? const <m.Chat>[],
+      chats: folderState?.unreadChats ?? const <m.Chat>[],
       collections:
           folderState?.collections ?? const <db.MessageCollectionEntry>[],
       memberships:

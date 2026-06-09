@@ -22,6 +22,7 @@ void main() {
   late StreamController<List<MessageCollectionMembershipEntry>>
   membershipsController;
   late StreamController<Map<String, String>> contactFolderRulesController;
+  late StreamController<List<Chat>> unreadChatsController;
 
   setUp(() {
     xmppService = MockXmppService();
@@ -32,6 +33,7 @@ void main() {
         StreamController<List<MessageCollectionMembershipEntry>>.broadcast();
     contactFolderRulesController =
         StreamController<Map<String, String>>.broadcast();
+    unreadChatsController = StreamController<List<Chat>>.broadcast();
 
     when(
       () => xmppService.messageCollectionItemsStream(
@@ -54,6 +56,9 @@ void main() {
     when(
       () => xmppService.contactFolderRulesStream(),
     ).thenAnswer((_) => contactFolderRulesController.stream);
+    when(
+      () => xmppService.unreadChatsForFolderBadgesStream(),
+    ).thenAnswer((_) => unreadChatsController.stream);
   });
 
   tearDown(() async {
@@ -61,6 +66,7 @@ void main() {
     await collectionsController.close();
     await membershipsController.close();
     await contactFolderRulesController.close();
+    await unreadChatsController.close();
   });
 
   test('filters only the active folder items for the current query', () async {

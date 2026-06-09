@@ -94,6 +94,7 @@ class FoldersState extends Equatable {
     required this.collections,
     required this.memberships,
     required this.contactFolderRules,
+    required this.unreadChats,
     required this.items,
     required this.visibleItems,
     this.query = '',
@@ -108,6 +109,7 @@ class FoldersState extends Equatable {
   final List<MessageCollectionEntry>? collections;
   final List<MessageCollectionMembershipEntry>? memberships;
   final Map<String, String> contactFolderRules;
+  final List<Chat>? unreadChats;
   final List<FolderMessageItem>? items;
   final List<FolderMessageItem>? visibleItems;
   final String query;
@@ -205,6 +207,7 @@ class FoldersState extends Equatable {
     List<MessageCollectionEntry>? collections,
     List<MessageCollectionMembershipEntry>? memberships,
     Map<String, String>? contactFolderRules,
+    List<Chat>? unreadChats,
     List<FolderMessageItem>? items,
     List<FolderMessageItem>? visibleItems,
     String? query,
@@ -220,6 +223,7 @@ class FoldersState extends Equatable {
       collections: collections ?? this.collections,
       memberships: memberships ?? this.memberships,
       contactFolderRules: contactFolderRules ?? this.contactFolderRules,
+      unreadChats: unreadChats ?? this.unreadChats,
       items: items ?? this.items,
       visibleItems: visibleItems ?? this.visibleItems,
       query: query ?? this.query,
@@ -242,6 +246,7 @@ class FoldersState extends Equatable {
     collections,
     memberships,
     contactFolderRules,
+    unreadChats,
     items,
     visibleItems,
     query,

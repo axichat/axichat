@@ -139,6 +139,7 @@ FoldersCubit _foldersCubit() {
       collections: const [],
       memberships: const [],
       contactFolderRules: const <String, String>{},
+      unreadChats: null,
       items: null,
       visibleItems: null,
     ),

@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:io';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/avatar/avatar_presentation.dart';
@@ -243,6 +244,9 @@ class _ChatsListBody extends StatelessWidget {
                             timestampNowListenable: nowListenable,
                             calendarStorage: calendarStorage,
                             selfIdentity: selfIdentity,
+                            onNearEnd: () => unawaited(
+                              context.read<ChatsCubit>().loadMoreChats(),
+                            ),
                           ),
                     ),
                   );
@@ -662,6 +666,7 @@ class AnimatedChatsListView extends StatefulWidget {
     required this.timestampNowListenable,
     required this.calendarStorage,
     required this.selfIdentity,
+    this.onNearEnd,
   });
 
   final List<Chat> items;
@@ -673,13 +678,14 @@ class AnimatedChatsListView extends StatefulWidget {
   final ValueListenable<DateTime> timestampNowListenable;
   final Storage? calendarStorage;
   final SelfAvatar selfIdentity;
+  final VoidCallback? onNearEnd;
 
   @override
   State<AnimatedChatsListView> createState() => _AnimatedChatsListViewState();
 }
 
 class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
-  final GlobalKey<SliverAnimatedListState> _listKey =
+  GlobalKey<SliverAnimatedListState> _listKey =
       GlobalKey<SliverAnimatedListState>();
   final ScrollController _scrollController = ScrollController();
   late List<Chat> _displayedItems;
@@ -688,10 +694,12 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   void initState() {
     super.initState();
     _displayedItems = List<Chat>.from(widget.items);
+    _scrollController.addListener(_handleScroll);
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -735,7 +743,23 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
 
     bool mutated = false;
     bool metadataChanged = false;
+    const largeAnimatedDeltaItemCount = 20;
+    final currentJids = _displayedItems.map((chat) => chat.jid).toSet();
     final Set<String> newJids = newItems.map((chat) => chat.jid).toSet();
+    var retainedCount = 0;
+    for (final chat in _displayedItems) {
+      if (newJids.contains(chat.jid)) {
+        retainedCount += 1;
+      }
+    }
+    final changedCount =
+        (_displayedItems.length - retainedCount) +
+        newItems.where((chat) => !currentJids.contains(chat.jid)).length;
+    if (changedCount > largeAnimatedDeltaItemCount ||
+        _hasRelativeOrderChanged(newItems, newJids, currentJids)) {
+      _resetDisplayedItems(newItems);
+      return;
+    }
 
     for (int i = _displayedItems.length - 1; i >= 0; i--) {
       final Chat chat = _displayedItems[i];
@@ -753,27 +777,16 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
 
     for (int targetIndex = 0; targetIndex < newItems.length; targetIndex++) {
       final Chat nextChat = newItems[targetIndex];
-      final int currentIndex = _displayedItems.indexWhere(
-        (chat) => chat.jid == nextChat.jid,
-      );
-      if (currentIndex == -1) {
+      if (targetIndex >= _displayedItems.length ||
+          _displayedItems[targetIndex].jid != nextChat.jid) {
+        if (currentJids.contains(nextChat.jid)) {
+          _resetDisplayedItems(newItems);
+          return;
+        }
         _displayedItems.insert(targetIndex, nextChat);
         listState.insertItem(targetIndex, duration: widget.animationDuration);
         mutated = true;
         continue;
-      }
-
-      if (currentIndex != targetIndex) {
-        final Chat movedChat = _displayedItems.removeAt(currentIndex);
-        listState.removeItem(
-          currentIndex,
-          (context, animation) =>
-              removedBuilder(movedChat, currentIndex, animation),
-          duration: widget.animationDuration,
-        );
-        _displayedItems.insert(targetIndex, movedChat);
-        listState.insertItem(targetIndex, duration: widget.animationDuration);
-        mutated = true;
       }
 
       if (_displayedItems[targetIndex] != nextChat) {
@@ -784,6 +797,51 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
 
     if (mutated || metadataChanged) {
       setState(() {});
+    }
+  }
+
+  bool _hasRelativeOrderChanged(
+    List<Chat> newItems,
+    Set<String> newJids,
+    Set<String> currentJids,
+  ) {
+    var currentIndex = 0;
+    for (final newChat in newItems) {
+      if (!currentJids.contains(newChat.jid)) {
+        continue;
+      }
+      while (currentIndex < _displayedItems.length &&
+          !newJids.contains(_displayedItems[currentIndex].jid)) {
+        currentIndex += 1;
+      }
+      if (currentIndex >= _displayedItems.length ||
+          _displayedItems[currentIndex].jid != newChat.jid) {
+        return true;
+      }
+      currentIndex += 1;
+    }
+    return false;
+  }
+
+  void _resetDisplayedItems(List<Chat> newItems) {
+    setState(() {
+      _listKey = GlobalKey<SliverAnimatedListState>();
+      _displayedItems = List<Chat>.from(newItems);
+    });
+  }
+
+  void _handleScroll() {
+    final onNearEnd = widget.onNearEnd;
+    if (onNearEnd == null || !_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (!position.hasContentDimensions) {
+      return;
+    }
+    final nearEndExtent = context.sizing.chatTileMinHeight * 4;
+    if (position.extentAfter <= nearEndExtent) {
+      onNearEnd();
     }
   }
 

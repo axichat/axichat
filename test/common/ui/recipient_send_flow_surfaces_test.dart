@@ -964,6 +964,7 @@ class _RecipientSurfaceHarness {
         collections: null,
         memberships: null,
         contactFolderRules: <String, String>{},
+        unreadChats: null,
         items: null,
         visibleItems: null,
       ),
