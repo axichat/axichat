@@ -8,6 +8,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/xml_safety.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -28,8 +29,6 @@ const String _messageReferenceIdAttr = 'message_reference_id';
 const String _messageStanzaIdAttr = 'message_stanza_id';
 const String _messageOriginIdAttr = 'message_origin_id';
 const String _messageMucStanzaIdAttr = 'message_muc_stanza_id';
-const String _deltaAccountIdAttr = 'delta_account_id';
-const String _deltaMsgIdAttr = 'delta_msg_id';
 const String _updatedAtAttr = 'updated_at';
 const String _activeAttr = 'active';
 const String _sourceIdAttr = 'source_id';
@@ -62,8 +61,6 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
     this.messageStanzaId,
     this.messageOriginId,
     this.messageMucStanzaId,
-    this.deltaAccountId,
-    this.deltaMsgId,
   });
 
   @override
@@ -73,8 +70,6 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   final String? messageStanzaId;
   final String? messageOriginId;
   final String? messageMucStanzaId;
-  final int? deltaAccountId;
-  final int? deltaMsgId;
   @override
   final DateTime updatedAt;
   @override
@@ -137,23 +132,24 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
     final sourceId = _normalizeSourceId(
       node.attributes[_sourceIdAttr]?.toString(),
     );
+    final receivedStanzaId = _normalizeReferenceValue(
+      node.attributes[_messageStanzaIdAttr]?.toString(),
+    );
     final payload = MessageCollectionSyncPayload(
       collectionId: collectionId,
       chatJid: chatJid,
       messageReferenceId: messageReferenceId,
-      messageStanzaId: _normalizeReferenceValue(
-        node.attributes[_messageStanzaIdAttr]?.toString(),
-      ),
+      messageStanzaId:
+          receivedStanzaId != null &&
+              isDeviceLocalDeltaStanzaId(receivedStanzaId)
+          ? null
+          : receivedStanzaId,
       messageOriginId: _normalizeReferenceValue(
         node.attributes[_messageOriginIdAttr]?.toString(),
       ),
       messageMucStanzaId: _normalizeReferenceValue(
         node.attributes[_messageMucStanzaIdAttr]?.toString(),
       ),
-      deltaAccountId: _parsePositiveIntAttr(
-        node.attributes[_deltaAccountIdAttr],
-      ),
-      deltaMsgId: _parsePositiveIntAttr(node.attributes[_deltaMsgIdAttr]),
       updatedAt: parsedUpdatedAt,
       active: active,
       sourceId: sourceId,
@@ -167,6 +163,10 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   }
 
   mox.XMLNode toXml() {
+    final shareableStanzaId =
+        messageStanzaId != null && isDeviceLocalDeltaStanzaId(messageStanzaId!)
+        ? null
+        : messageStanzaId;
     return mox.XMLNode.xmlns(
       tag: _entryTag,
       xmlns: messageCollectionsPubSubNode,
@@ -177,12 +177,9 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
         _activeAttr: active ? '1' : '0',
         _sourceIdAttr: escapeXmlAttribute(sourceId),
-        _messageStanzaIdAttr: ?escapeXmlAttributeOrNull(messageStanzaId),
+        _messageStanzaIdAttr: ?escapeXmlAttributeOrNull(shareableStanzaId),
         _messageOriginIdAttr: ?escapeXmlAttributeOrNull(messageOriginId),
         _messageMucStanzaIdAttr: ?escapeXmlAttributeOrNull(messageMucStanzaId),
-        if (deltaAccountId != null)
-          _deltaAccountIdAttr: deltaAccountId!.toString(),
-        if (deltaMsgId != null) _deltaMsgIdAttr: deltaMsgId!.toString(),
       },
     );
   }
@@ -214,18 +211,6 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
       return null;
     }
     return clamped;
-  }
-
-  static int? _parsePositiveIntAttr(Object? value) {
-    final normalized = value?.toString().trim();
-    if (normalized == null || normalized.isEmpty) {
-      return null;
-    }
-    final parsed = int.tryParse(normalized);
-    if (parsed == null || parsed < 0) {
-      return null;
-    }
-    return parsed;
   }
 
   static bool? _parseBoolAttr(Object? value) {

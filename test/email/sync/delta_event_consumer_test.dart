@@ -4,7 +4,6 @@ import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -1463,12 +1462,12 @@ void main() {
         start: 0,
         end: 10,
       );
-      expect(messages.map((message) => message.stanzaID), [
-        'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
-        ...xmppMessages.map((message) => message.stanzaID),
-      ]);
-      expect(messages.first.timestamp, emailTimestamp);
       expect(messages.first.deltaMsgId, msgId);
+      expect(
+        messages.skip(1).map((message) => message.stanzaID),
+        xmppMessages.map((message) => message.stanzaID),
+      );
+      expect(messages.first.timestamp, emailTimestamp);
       final updatedChat = await realDb.getChat(chat.jid);
       expect(updatedChat?.lastMessage, 'newer email');
       expect(updatedChat?.lastChangeTimestamp, emailTimestamp);
@@ -1486,10 +1485,11 @@ void main() {
         start: 0,
         end: 10,
       );
-      expect(rehydratedMessages.map((message) => message.stanzaID), [
-        'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
-        ...xmppMessages.map((message) => message.stanzaID),
-      ]);
+      expect(rehydratedMessages.first.deltaMsgId, msgId);
+      expect(
+        rehydratedMessages.skip(1).map((message) => message.stanzaID),
+        xmppMessages.map((message) => message.stanzaID),
+      );
       expect(
         rehydratedMessages.where((message) => message.deltaMsgId == msgId),
         hasLength(1),
@@ -2361,9 +2361,7 @@ void main() {
           any(
             that: predicate<Message>(
               (message) =>
-                  message.stanzaID ==
-                      'dc-local-msg-${DeltaAccountDefaults.legacyId}'
-                          '-$chatId-$msgId' &&
+                  message.stanzaID != existingXmppAttachment.stanzaID &&
                   message.deltaMsgId == msgId &&
                   message.chatJid == mixedChat.jid,
             ),
@@ -2461,14 +2459,9 @@ void main() {
                 ),
               ).captured.single
               as Message;
-      expect(
-        saved.stanzaID,
-        deltaScopedMessageStorageStanzaId(
-          accountId: DeltaAccountDefaults.legacyId,
-          chatId: chatId,
-          msgId: msgId,
-        ),
-      );
+      expect(saved.stanzaID, isNot(collision.stanzaID));
+      expect(saved.deltaMsgId, msgId);
+      expect(saved.deltaChatId, chatId);
       expect(saved.body, 'Actual message');
     },
   );
@@ -2538,14 +2531,9 @@ void main() {
                 ),
               ).captured.single
               as Message;
-      expect(
-        saved.stanzaID,
-        deltaScopedMessageStorageStanzaId(
-          accountId: DeltaAccountDefaults.legacyId,
-          chatId: chatId,
-          msgId: msgId,
-        ),
-      );
+      expect(saved.stanzaID, isNot(collision.stanzaID));
+      expect(saved.deltaMsgId, msgId);
+      expect(saved.deltaChatId, chatId);
       expect(saved.chatJid, chat.jid);
       expect(saved.body, 'Current snapshot message');
     },
@@ -4098,10 +4086,8 @@ void main() {
               ),
             ).captured.first
             as Message;
-    expect(
-      persisted.stanzaID,
-      'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
-    );
+    expect(persisted.stanzaID, isNotEmpty);
+    expect(persisted.deltaMsgId, msgId);
     expect(persisted.timestamp, deltaTimestamp);
     verifyNever(() => database.updateMessage(any()));
   });
@@ -4562,10 +4548,8 @@ void main() {
               ),
             ).captured.first
             as Message;
-    expect(
-      persisted.stanzaID,
-      'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
-    );
+    expect(persisted.stanzaID, isNotEmpty);
+    expect(persisted.deltaMsgId, msgId);
     expect(persisted.body, 'Different caption');
     verifyNever(() => database.updateMessage(any()));
   });
@@ -4686,10 +4670,8 @@ void main() {
               ),
             ).captured.first
             as Message;
-    expect(
-      persisted.stanzaID,
-      'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
-    );
+    expect(persisted.stanzaID, isNotEmpty);
+    expect(persisted.deltaMsgId, msgId);
     verifyNever(() => database.updateMessage(any()));
   });
 
@@ -4757,10 +4739,8 @@ void main() {
                 ),
               ).captured.single
               as Message;
-      expect(
-        persisted.stanzaID,
-        'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
-      );
+      expect(persisted.stanzaID, isNotEmpty);
+      expect(persisted.deltaMsgId, msgId);
       expect(persisted.subject, equals(deltaMessage.subject));
       expect(persisted.body, contains('synchronize data between your devices'));
     },

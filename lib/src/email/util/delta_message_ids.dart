@@ -40,3 +40,10 @@ bool isPendingOutgoingDeltaStanzaId(String stanzaId) {
 
 String deltaPendingOutgoingStanzaLikePattern() =>
     '$_deltaPendingOutgoingStanzaPrefix$_deltaMessageStanzaSeparator%';
+
+bool isDeviceLocalDeltaStanzaId(String stanzaId) {
+  const separator = _deltaMessageStanzaSeparator;
+  return stanzaId.startsWith('$_deltaMessageStanzaPrefix$separator') ||
+      stanzaId.startsWith('$_deltaScopedMessageStoragePrefix$separator') ||
+      stanzaId.startsWith('$_deltaPendingOutgoingStanzaPrefix$separator');
+}

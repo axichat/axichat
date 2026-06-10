@@ -283,6 +283,7 @@ void main() {
           originID: 'origin@example.com',
         ),
       );
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
       when(() => database.getMessageByStanzaID(any())).thenAnswer((
         invocation,
       ) async {
@@ -302,25 +303,19 @@ void main() {
       expect(localPending, isNotNull);
       expect(localPending!.timestamp, isNot(staleDeltaTimestamp));
       final updated =
-          verify(
-                () => database.replaceMessageStanzaID(
-                  currentStanzaID: localPending.stanzaID,
-                  message: captureAny(named: 'message'),
-                ),
-              ).captured.single
+          verify(() => database.updateMessage(captureAny())).captured.single
               as Message;
-      expect(
-        updated.stanzaID,
-        deltaScopedMessageStorageStanzaId(
-          accountId: DeltaAccountDefaults.legacyId,
-          chatId: chatId,
-          msgId: msgId,
-        ),
-      );
+      expect(updated.stanzaID, localPending.stanzaID);
       expect(updated.deltaMsgId, msgId);
       expect(updated.deltaChatId, chatId);
       expect(updated.deltaAccountId, DeltaAccountDefaults.legacyId);
       expect(updated.timestamp, staleDeltaTimestamp);
+      verifyNever(
+        () => database.replaceMessageStanzaID(
+          currentStanzaID: any(named: 'currentStanzaID'),
+          message: any(named: 'message'),
+        ),
+      );
     },
   );
 
@@ -456,6 +451,17 @@ void main() {
       ).thenAnswer((invocation) async {
         replacements.add(invocation.namedArguments[#message] as Message);
       });
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async => null);
+      Message? boundPending;
+      when(() => database.updateMessage(any())).thenAnswer((invocation) async {
+        boundPending = invocation.positionalArguments.first as Message;
+      });
 
       await transport.ensureInitialized(
         databasePrefix: 'email_delta_transport_test',
@@ -465,19 +471,12 @@ void main() {
 
       await transport.sendText(chatId: chatId, body: 'hello');
 
-      expect(pendingMessage?.stanzaID, startsWith('dc-pending-'));
-      expect(replacements, hasLength(1));
-      expect(
-        replacements.single.stanzaID,
-        deltaScopedMessageStorageStanzaId(
-          accountId: DeltaAccountDefaults.legacyId,
-          chatId: chatId,
-          msgId: msgId,
-        ),
-      );
-      expect(replacements.single.chatJid, chat.jid);
-      expect(replacements.single.deltaChatId, chatId);
-      expect(replacements.single.deltaMsgId, msgId);
+      expect(pendingMessage?.stanzaID, isNotEmpty);
+      expect(replacements, isEmpty);
+      expect(boundPending?.stanzaID, pendingMessage?.stanzaID);
+      expect(boundPending?.chatJid, chat.jid);
+      expect(boundPending?.deltaChatId, chatId);
+      expect(boundPending?.deltaMsgId, msgId);
       verifyNever(
         () => database.deleteMessage(
           deltaMessageStanzaId(msgId),
@@ -626,7 +625,13 @@ void main() {
 
     await transport.sendText(chatId: chatId, body: 'hello');
 
-    verifyNever(() => database.updateMessage(any()));
+    final updates = verify(
+      () => database.updateMessage(captureAny()),
+    ).captured.cast<Message>();
+    expect(
+      updates.every((update) => update.stanzaID == pendingMessage?.stanzaID),
+      isTrue,
+    );
   });
 
   test(
@@ -754,6 +759,7 @@ void main() {
           originID: 'attachment@example.com',
         ),
       );
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
       when(() => database.getMessageByStanzaID(any())).thenAnswer((
         invocation,
       ) async {
@@ -780,23 +786,12 @@ void main() {
       final localPending = pendingMessage;
       expect(localPending, isNotNull);
       expect(localPending!.body, isNull);
-      expect(localPending.fileMetadataID, startsWith('dc-pending-'));
+      expect(localPending.fileMetadataID, isNotEmpty);
+      expect(localPending.fileMetadataID, isNot(deltaFileMetadataId(msgId)));
       final updated =
-          verify(
-                () => database.replaceMessageStanzaID(
-                  currentStanzaID: localPending.stanzaID,
-                  message: captureAny(named: 'message'),
-                ),
-              ).captured.single
+          verify(() => database.updateMessage(captureAny())).captured.single
               as Message;
-      expect(
-        updated.stanzaID,
-        deltaScopedMessageStorageStanzaId(
-          accountId: DeltaAccountDefaults.legacyId,
-          chatId: chatId,
-          msgId: msgId,
-        ),
-      );
+      expect(updated.stanzaID, localPending.stanzaID);
       expect(updated.body, isNull);
       expect(updated.fileMetadataID, deltaFileMetadataId(msgId));
     },
@@ -944,14 +939,18 @@ void main() {
       invocation,
     ) async {
       final stanzaId = invocation.positionalArguments.first as String;
-      if (stanzaId == deltaStanzaId) {
-        return duplicateDeleted ? null : duplicateMessage;
-      }
       if (stanzaId == pendingMessage?.stanzaID) {
         return pendingMessage;
       }
       return null;
     });
+    when(
+      () => database.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+      ),
+    ).thenAnswer((_) async => duplicateDeleted ? null : duplicateMessage);
     when(() => database.updateMessage(any())).thenAnswer((invocation) async {
       updatedPending = invocation.positionalArguments.first as Message;
     });
@@ -1000,10 +999,9 @@ void main() {
     ).called(1);
     final updated = updatedPending;
     expect(updated, isNotNull);
-    final replacement = replacementMessage;
-    expect(replacement, isNotNull);
-    expect(replacement!.stanzaID, deltaStanzaId);
-    return replacement;
+    expect(updated!.stanzaID, pendingMessage?.stanzaID);
+    expect(replacementMessage, isNull);
+    return updated;
   }
 
   test(

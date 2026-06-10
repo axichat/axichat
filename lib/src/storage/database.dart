@@ -14,7 +14,6 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/storage/app_storage.dart';
 import 'package:drift/drift.dart';
@@ -42,10 +41,6 @@ const String _databaseFileSuffix = '.axichat.drift';
 const int _messageAttachmentMaxCount = 50;
 const int _emptyTimestampMillis = 0;
 
-/// Lookup candidates for a stored origin id. Email rows are canonical
-/// post-v60, but this lookup also serves raw XMPP origin ids and raw
-/// bracketed legacy values, so the email-shaped ('@'-bearing) variants are
-/// retained deliberately.
 List<String> _emailOriginIdCandidates(String originID) {
   final trimmed = originID.trim();
   if (trimmed.isEmpty) {
@@ -183,6 +178,10 @@ abstract interface class XmppDatabase implements Database {
   });
 
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
+
+  Future<List<Message>> getEmailMessagesWithDeltaAccountNotIn(
+    List<int> validAccountIds,
+  );
 
   Future<List<Message>> getMessagesByReferenceIds(
     Iterable<String> messageIds, {
@@ -562,7 +561,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<String?> getShareIdForDeltaMessage(
     int deltaMsgId, {
-    int deltaAccountId = DeltaAccountDefaults.legacyId,
+    required int deltaAccountId,
   });
 
   Future<void> removeChatMessages(String jid);
@@ -1357,7 +1356,7 @@ class MessageCopiesAccessor
 
   Future<MessageCopyData?> selectByDeltaMsgId(
     int deltaMsgId, {
-    int deltaAccountId = DeltaAccountDefaults.legacyId,
+    required int deltaAccountId,
   }) =>
       (select(table)..where(
             (tbl) =>
@@ -1368,7 +1367,7 @@ class MessageCopiesAccessor
 
   Future<String?> selectShareIdForDeltaMsg(
     int deltaMsgId, {
-    int deltaAccountId = DeltaAccountDefaults.legacyId,
+    required int deltaAccountId,
   }) async => (await selectByDeltaMsgId(
     deltaMsgId,
     deltaAccountId: deltaAccountId,
@@ -3062,8 +3061,7 @@ WHERE transport = ${MessageTransport.email.index}
         (tbl) =>
             tbl.deltaMsgId.isNull() &
             tbl.deltaChatId.equals(deltaChatId) &
-            tbl.deltaAccountId.equals(deltaAccountId) &
-            tbl.stanzaID.like(deltaPendingOutgoingStanzaLikePattern()),
+            tbl.deltaAccountId.equals(deltaAccountId),
       )
       ..orderBy([
         (tbl) =>
@@ -3362,6 +3360,19 @@ WHERE transport = ${MessageTransport.email.index}
     if (chatJid != null) {
       query.where((tbl) => tbl.chatJid.equals(chatJid));
     }
+    return query.get();
+  }
+
+  @override
+  Future<List<Message>> getEmailMessagesWithDeltaAccountNotIn(
+    List<int> validAccountIds,
+  ) {
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.deltaMsgId.isNotNull() &
+            tbl.deltaAccountId.isNotIn(validAccountIds),
+      );
     return query.get();
   }
 
@@ -5308,7 +5319,7 @@ WHERE stanza_i_d = ?
   @override
   Future<String?> getShareIdForDeltaMessage(
     int deltaMsgId, {
-    int deltaAccountId = DeltaAccountDefaults.legacyId,
+    required int deltaAccountId,
   }) => messageCopiesAccessor.selectShareIdForDeltaMsg(
     deltaMsgId,
     deltaAccountId: deltaAccountId,
@@ -6510,13 +6521,16 @@ WHERE stanza_i_d = ?
     }
 
     final normalizedAddedAt = addedAt.toUtc();
-    final normalizedDeltaAccountId = deltaMsgId == null ? null : deltaAccountId;
     await transaction(() async {
       final existing = await getMessageCollectionMembership(
         collectionId: normalizedCollectionId,
         chatJid: normalizedChatJid,
         messageReferenceId: normalizedReferenceId,
       );
+      final resolvedDeltaMsgId = deltaMsgId ?? existing?.deltaMsgId;
+      final resolvedDeltaAccountId = resolvedDeltaMsgId == null
+          ? null
+          : (deltaMsgId == null ? existing?.deltaAccountId : deltaAccountId);
       if (existing != null) {
         final existingAddedAt = existing.addedAt.toUtc();
         if (existingAddedAt.isAfter(normalizedAddedAt)) {
@@ -6532,8 +6546,8 @@ WHERE stanza_i_d = ?
                 normalizeValue(messageOriginId) ||
             normalizeValue(existing.messageMucStanzaId) !=
                 normalizeValue(messageMucStanzaId) ||
-            existing.deltaAccountId != normalizedDeltaAccountId ||
-            existing.deltaMsgId != deltaMsgId;
+            existing.deltaAccountId != resolvedDeltaAccountId ||
+            existing.deltaMsgId != resolvedDeltaMsgId;
         if (sameTimestamp &&
             (!existing.active || existing.active == active) &&
             !aliasChanged) {
@@ -6548,8 +6562,8 @@ WHERE stanza_i_d = ?
           messageStanzaId: normalizeValue(messageStanzaId),
           messageOriginId: normalizeValue(messageOriginId),
           messageMucStanzaId: normalizeValue(messageMucStanzaId),
-          deltaAccountId: normalizedDeltaAccountId,
-          deltaMsgId: deltaMsgId,
+          deltaAccountId: resolvedDeltaAccountId,
+          deltaMsgId: resolvedDeltaMsgId,
           addedAt: normalizedAddedAt,
           active: active,
         ),
@@ -7731,69 +7745,128 @@ WHERE jid = ?
     );
   }
 
-  /// v60 (message identity): backfills missing delta chat scope on email rows
-  /// where the mapping is unambiguous, and rewrites stored origin ids onto the
-  /// deterministic identity ladder (canonical Message-ID, or content-derived
-  /// key for absent/delta-generated ids). Unresolvable rows are counted and
-  /// left untouched — they never act as merge targets.
   Future<void> migrateMessageIdentityToLadder() async {
     final scopedByMapping = await _backfillDeltaChatScopeFromAccountMappings();
     final scopedByChat = await _backfillDeltaChatScopeFromChatRows();
     final unresolvable = await _countUnscopedEmailMessageRows();
     final rewritten = await _rewriteEmailOriginIdsToLadder();
+    final membershipsRepaired =
+        await _repairForeignCollectionMembershipHandles();
     _log.info(
       'Message identity migration: scopedByMapping=$scopedByMapping '
       'scopedByChat=$scopedByChat unresolvable=$unresolvable '
-      'originIdsRewritten=$rewritten',
+      'originIdsRewritten=$rewritten '
+      'membershipsRepaired=$membershipsRepaired',
     );
   }
 
-  Future<int> _backfillDeltaChatScopeFromAccountMappings() {
-    return customUpdate(
-      '''
-UPDATE messages
-SET delta_chat_id = (
-  SELECT MIN(eca.delta_chat_id) FROM email_chat_accounts eca
-  WHERE eca.chat_jid = messages.chat_jid
-    AND eca.delta_account_id = messages.delta_account_id
-)
-WHERE delta_msg_id IS NOT NULL
-  AND delta_chat_id IS NULL
-  AND (
-    SELECT COUNT(DISTINCT eca.delta_chat_id) FROM email_chat_accounts eca
-    WHERE eca.chat_jid = messages.chat_jid
-      AND eca.delta_account_id = messages.delta_account_id
-  ) = 1
-''',
-      updates: {messages},
-      updateKind: UpdateKind.update,
+  Future<int> _repairForeignCollectionMembershipHandles() async {
+    final entries = await (select(
+      messageCollectionMemberships,
+    )..where((tbl) => tbl.deltaMsgId.isNotNull())).get();
+    var repaired = 0;
+    for (final entry in entries) {
+      final matching = await getMessageByDeltaId(
+        entry.deltaMsgId!,
+        deltaAccountId: entry.deltaAccountId,
+        chatJid: entry.chatJid,
+      );
+      if (matching != null) {
+        continue;
+      }
+      await _clearCollectionMembershipHandles(entry);
+      repaired++;
+    }
+    return repaired;
+  }
+
+  Future<void> _clearCollectionMembershipHandles(
+    MessageCollectionMembershipEntry entry,
+  ) async {
+    final query = update(messageCollectionMemberships)
+      ..where(
+        (tbl) =>
+            tbl.collectionId.equals(entry.collectionId) &
+            tbl.chatJid.equals(entry.chatJid) &
+            tbl.messageReferenceId.equals(entry.messageReferenceId),
+      );
+    await query.write(
+      const MessageCollectionMembershipsCompanion(
+        deltaAccountId: Value(null),
+        deltaMsgId: Value(null),
+      ),
     );
   }
 
-  Future<int> _backfillDeltaChatScopeFromChatRows() {
-    return customUpdate(
-      '''
-UPDATE messages
-SET delta_chat_id = (
-  SELECT c.delta_chat_id FROM chats c WHERE c.jid = messages.chat_jid
-)
-WHERE delta_msg_id IS NOT NULL
-  AND delta_chat_id IS NULL
-  AND (
-    SELECT c.delta_chat_id FROM chats c WHERE c.jid = messages.chat_jid
-  ) IS NOT NULL
-''',
-      updates: {messages},
-      updateKind: UpdateKind.update,
-    );
+  Future<int> _backfillDeltaChatScopeFromAccountMappings() async {
+    final mappings = await select(emailChatAccounts).get();
+    final byKey = <(String, int), Set<int>>{};
+    for (final mapping in mappings) {
+      byKey
+          .putIfAbsent((mapping.chatJid, mapping.deltaAccountId), () => <int>{})
+          .add(mapping.deltaChatId);
+    }
+    var updated = 0;
+    for (final entry in byKey.entries) {
+      if (entry.value.length != 1) {
+        continue;
+      }
+      updated += await _scopeUnscopedEmailRows(
+        chatJid: entry.key.$1,
+        deltaAccountId: entry.key.$2,
+        deltaChatId: entry.value.single,
+      );
+    }
+    return updated;
+  }
+
+  Future<int> _scopeUnscopedEmailRows({
+    required String chatJid,
+    required int deltaAccountId,
+    required int deltaChatId,
+  }) {
+    final query = update(messages)
+      ..where(
+        (tbl) =>
+            tbl.chatJid.equals(chatJid) &
+            tbl.deltaAccountId.equals(deltaAccountId) &
+            tbl.deltaMsgId.isNotNull() &
+            tbl.deltaChatId.isNull(),
+      );
+    return query.write(MessagesCompanion(deltaChatId: Value(deltaChatId)));
+  }
+
+  Future<int> _backfillDeltaChatScopeFromChatRows() async {
+    final chatRows = await (select(
+      chats,
+    )..where((tbl) => tbl.deltaChatId.isNotNull())).get();
+    var updated = 0;
+    for (final chat in chatRows) {
+      final mapped = chat.deltaChatId;
+      if (mapped == null) {
+        continue;
+      }
+      final query = update(messages)
+        ..where(
+          (tbl) =>
+              tbl.chatJid.equals(chat.jid) &
+              tbl.deltaMsgId.isNotNull() &
+              tbl.deltaChatId.isNull(),
+        );
+      updated += await query.write(
+        MessagesCompanion(deltaChatId: Value(mapped)),
+      );
+    }
+    return updated;
   }
 
   Future<int> _countUnscopedEmailMessageRows() async {
-    final row = await customSelect(
-      'SELECT COUNT(*) AS unscoped FROM messages '
-      'WHERE delta_msg_id IS NOT NULL AND delta_chat_id IS NULL',
-    ).getSingle();
-    return row.read<int>('unscoped');
+    final count = countAll();
+    final query = selectOnly(messages)
+      ..addColumns([count])
+      ..where(messages.deltaMsgId.isNotNull() & messages.deltaChatId.isNull());
+    final row = await query.getSingle();
+    return row.read(count) ?? 0;
   }
 
   Future<int> _rewriteEmailOriginIdsToLadder() async {

@@ -20,7 +20,7 @@ void main() {
     await database.close();
   });
 
-  test('pending outgoing Delta query only returns dc-pending rows', () async {
+  test('pending outgoing Delta query selects by column state', () async {
     const chatId = 7;
     const accountId = 3;
     const chatJid = 'alice@example.com';
@@ -37,6 +37,7 @@ void main() {
     Future<void> saveCandidate({
       required String stanzaId,
       required int deltaAccountId,
+      required int? deltaChatId,
       required int? deltaMsgId,
     }) {
       return database.saveMessage(
@@ -47,7 +48,7 @@ void main() {
           timestamp: DateTime.utc(2026, 1, 1),
           body: stanzaId,
           deltaAccountId: deltaAccountId,
-          deltaChatId: chatId,
+          deltaChatId: deltaChatId,
           deltaMsgId: deltaMsgId,
         ),
         selfJid: 'me@example.com',
@@ -55,24 +56,34 @@ void main() {
     }
 
     await saveCandidate(
-      stanzaId: 'dc-pending-valid',
+      stanzaId: 'opaque-pending-key',
       deltaAccountId: accountId,
+      deltaChatId: chatId,
       deltaMsgId: null,
     );
     await saveCandidate(
-      stanzaId: 'pending-lookalike',
+      stanzaId: 'legacy-dc-pending-key',
       deltaAccountId: accountId,
+      deltaChatId: chatId,
       deltaMsgId: null,
     );
     await saveCandidate(
-      stanzaId: 'dc-pending-other-account',
+      stanzaId: 'other-account-pending',
       deltaAccountId: accountId + 1,
+      deltaChatId: chatId,
       deltaMsgId: null,
     );
     await saveCandidate(
-      stanzaId: 'dc-pending-already-bound',
+      stanzaId: 'already-bound',
       deltaAccountId: accountId,
+      deltaChatId: chatId,
       deltaMsgId: 42,
+    );
+    await saveCandidate(
+      stanzaId: 'xmpp-row-no-delta-chat',
+      deltaAccountId: accountId,
+      deltaChatId: null,
+      deltaMsgId: null,
     );
 
     final pending = await database.getPendingOutgoingDeltaMessages(
@@ -80,6 +91,9 @@ void main() {
       deltaChatId: chatId,
     );
 
-    expect(pending.map((message) => message.stanzaID), ['dc-pending-valid']);
+    expect(pending.map((message) => message.stanzaID).toSet(), {
+      'opaque-pending-key',
+      'legacy-dc-pending-key',
+    });
   });
 }

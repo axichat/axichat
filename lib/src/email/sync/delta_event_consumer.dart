@@ -24,12 +24,12 @@ import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:logging/logging.dart';
+import 'package:uuid/uuid.dart';
 
 const int _deltaChatLastSpecialId = DeltaChatId.lastSpecial;
 const int _deltaMessageIdUnset = DeltaMessageId.none;
@@ -1265,61 +1265,12 @@ class DeltaEventConsumer {
       return;
     }
     final int deltaAccountId = _deltaAccountId;
-    final stanzaId = deltaScopedMessageStorageStanzaId(
-      accountId: deltaAccountId,
-      chatId: chatId,
-      msgId: msg.id,
-    );
     final db = await _db();
     if (msg.isEncryptionStatusSystemMessage) {
       await db.ensureEmailEncryptionStatusMarkerForChat(resolvedChat.jid);
       return;
     }
-    final existing = await db.getMessageByStanzaID(stanzaId);
-    if (existing != null) {
-      if (_storedDeltaLocatorMatches(
-        existing,
-        msgId: msg.id,
-        chatId: chatId,
-        accountId: deltaAccountId,
-        chatJid: resolvedChat.jid,
-      )) {
-        await _logEmailPartDiagnostic(
-          stage: 'ingest-existing-stanza',
-          eventChatId: chatId,
-          msg: msg,
-          resolvedChat: resolvedChat,
-          existingByStanza: existing,
-          storedMessage: existing,
-        );
-        await _updateExistingMessage(existing: existing, msg: msg);
-        await _scheduleOriginIdHydrationIfNeeded(
-          existing: existing,
-          id: _DeltaChatJidMessageId(
-            accountId: deltaAccountId,
-            chatId: chatId,
-            chatJid: resolvedChat.jid,
-            msgId: msg.id,
-          ),
-        );
-        if (!msg.isOutgoing) {
-          await _learnAutocryptContactKeyForIncomingMessage(
-            db: db,
-            chat: resolvedChat,
-            msg: msg,
-          );
-        }
-        return;
-      }
-      _log.warning(
-        'Refusing to merge onto incompatible stored row for scoped stanza id. '
-        'stanzaId=$stanzaId msgId=${msg.id} chatId=$chatId '
-        'accountId=$deltaAccountId existingChat=${existing.chatJid} '
-        'existingDeltaChat=${existing.deltaChatId} '
-        'existingAccount=${existing.deltaAccountId}.',
-      );
-      return;
-    }
+    final stanzaId = _emailRowKey();
     final existingByDeltaId = await db.getMessageByDeltaId(
       msg.id,
       deltaAccountId: deltaAccountId,
@@ -1528,7 +1479,6 @@ class DeltaEventConsumer {
       'eventChatId=$eventChatId '
       'msgChatId=${msg.chatId} '
       'msgId=${msg.id} '
-      'stanzaId=${_diagnosticValue(_stanzaId(msg.id))} '
       'existingByStanza=${_diagnosticMessageSummary(existingByStanza)} '
       'existingByDelta=${_diagnosticMessageSummary(existingByDelta)} '
       'stored=${_diagnosticMessageSummary(storedMessage)} '
@@ -1850,10 +1800,6 @@ class DeltaEventConsumer {
     return scoped;
   }
 
-  /// Strict full-locator equality: account, chat (both jid and delta id), and
-  /// message id must all match. Rows the identity migration could not scope
-  /// (null deltaChatId) never match — display-only legacy data, never merge
-  /// targets.
   bool _storedDeltaLocatorMatches(
     Message message, {
     required int msgId,
@@ -1904,7 +1850,7 @@ class DeltaEventConsumer {
     final Map<String, FileMetadataData?> metadataById =
         <String, FileMetadataData?>{};
     for (final Message candidate in candidates) {
-      if (!isPendingOutgoingDeltaStanzaId(candidate.stanzaID)) {
+      if (!candidate.isPendingOutgoingEmail) {
         continue;
       }
       if (!_isSelfPendingSender(candidate)) {
@@ -2242,8 +2188,6 @@ class DeltaEventConsumer {
     await _scheduleOriginIdHydration(id: id);
   }
 
-  /// Upgrades a missing or content-derived origin key to a real Message-ID
-  /// once delta can supply one. Never downgrades a stored real Message-ID.
   Future<void> _hydrateOriginId({required _DeltaChatJidMessageId id}) async {
     final nativeOriginId = await _resolveOriginId(id.msgId);
     if (nativeOriginId == null) {
@@ -2340,9 +2284,6 @@ class DeltaEventConsumer {
     return parsedHeaderMessageId;
   }
 
-  /// Initial-store identity ladder: real Message-ID when delta holds one,
-  /// otherwise the deterministic content-derived key — never null, never a
-  /// receiver-minted `GEN_` value.
   Future<String> _resolveOriginIdForInitialStore(DeltaMessage msg) async {
     String? nativeOriginId;
     try {
@@ -3059,7 +3000,7 @@ String _normalizedAddress(String? address, int chatId) {
   return normalizeEmailAddress(address);
 }
 
-String _stanzaId(int msgId) => deltaMessageStanzaId(msgId);
+String _emailRowKey() => const Uuid().v4();
 
 String _stripSubjectHeader(String body, String subject) {
   final trimmedBody = body.trimLeft();

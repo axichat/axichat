@@ -946,6 +946,86 @@ final class _CalendarSyncWork {
   final bool isSelfSender;
 }
 
+@visibleForTesting
+Future<void> awaitAllWithIdleTimeout({
+  required List<Future<void>> waits,
+  required Duration idleTimeout,
+}) {
+  if (waits.isEmpty) {
+    return Future<void>.value();
+  }
+  final progress = _IdleDeadlineProgress(
+    pendingCount: waits.length,
+    idleTimeout: idleTimeout,
+  );
+  for (final wait in waits) {
+    unawaited(
+      wait.then(
+        (_) => progress.recordCompletion(),
+        onError: progress.recordError,
+      ),
+    );
+  }
+  progress.restartDeadline();
+  return progress.done;
+}
+
+final class _IdleDeadlineProgress {
+  _IdleDeadlineProgress({required int pendingCount, required this.idleTimeout})
+    : _pendingCount = pendingCount;
+
+  final Duration idleTimeout;
+  final Completer<void> _completer = Completer<void>();
+  int _pendingCount;
+  Timer? _deadline;
+
+  late final Future<void> done = _completer.future.whenComplete(
+    _cancelDeadline,
+  );
+
+  void restartDeadline() {
+    _deadline?.cancel();
+    _deadline = Timer(idleTimeout, _handleTimeout);
+  }
+
+  void recordCompletion() {
+    _pendingCount -= 1;
+    if (_completer.isCompleted) {
+      return;
+    }
+    if (_pendingCount == 0) {
+      _completer.complete();
+    } else {
+      restartDeadline();
+    }
+  }
+
+  void recordError(Object error, StackTrace stackTrace) {
+    if (_completer.isCompleted) {
+      return;
+    }
+    _completer.completeError(error, stackTrace);
+  }
+
+  void _handleTimeout() {
+    if (_completer.isCompleted) {
+      return;
+    }
+    _completer.completeError(
+      TimeoutException(
+        'Progress stalled with $_pendingCount operations outstanding.',
+        idleTimeout,
+      ),
+      StackTrace.current,
+    );
+  }
+
+  void _cancelDeadline() {
+    _deadline?.cancel();
+    _deadline = null;
+  }
+}
+
 enum MamGlobalSyncOutcome {
   completed,
   skippedUnsupported,
@@ -4629,6 +4709,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       StreamController<_CalendarSyncWork>();
   StreamSubscription<void>? _calendarSyncQueueSubscription;
   Completer<void> _calendarSyncAbortSignal = Completer<void>();
+  Duration _calendarSyncMamPageIdleTimeout = _calendarSyncDispatchTimeout;
   final Map<({String mamId, String queryId}), Completer<void>>
   _calendarSyncMamWorkWaiters =
       <({String mamId, String queryId}), Completer<void>>{};
@@ -4934,10 +5015,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         messageStanzaId: payload.messageStanzaId,
         messageOriginId: payload.messageOriginId,
         messageMucStanzaId: payload.messageMucStanzaId,
-        deltaAccountId: payload.deltaMsgId == null
-            ? null
-            : payload.deltaAccountId,
-        deltaMsgId: payload.deltaMsgId,
+        deltaAccountId: null,
+        deltaMsgId: null,
         addedAt: payload.updatedAt.toUtc(),
         active: payload.active,
       );
@@ -4949,10 +5028,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         messageStanzaId: payload.messageStanzaId,
         messageOriginId: payload.messageOriginId,
         messageMucStanzaId: payload.messageMucStanzaId,
-        deltaAccountId: payload.deltaMsgId == null
-            ? null
-            : payload.deltaAccountId,
-        deltaMsgId: payload.deltaMsgId,
+        deltaAccountId: null,
+        deltaMsgId: null,
       );
     });
   }
@@ -4978,15 +5055,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       stanzaId: local.messageStanzaId,
       originId: local.messageOriginId,
       mucStanzaId: local.messageMucStanzaId,
-      deltaAccountId: local.deltaAccountId,
-      deltaMsgId: local.deltaMsgId,
     );
     final remoteAliasScore = _messageCollectionAliasScore(
       stanzaId: remote.messageStanzaId,
       originId: remote.messageOriginId,
       mucStanzaId: remote.messageMucStanzaId,
-      deltaAccountId: remote.deltaAccountId,
-      deltaMsgId: remote.deltaMsgId,
     );
     if (remoteAliasScore > localAliasScore) {
       return _MessageCollectionSyncDecision.applyRemote;
@@ -5001,8 +5074,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String? stanzaId,
     required String? originId,
     required String? mucStanzaId,
-    required int? deltaAccountId,
-    required int? deltaMsgId,
   }) {
     var score = 0;
     if (stanzaId?.trim().isNotEmpty == true) {
@@ -5012,9 +5083,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       score += 1;
     }
     if (mucStanzaId?.trim().isNotEmpty == true) {
-      score += 1;
-    }
-    if (deltaAccountId != null && deltaMsgId != null) {
       score += 1;
     }
     return score;
@@ -5030,8 +5098,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       messageStanzaId: entry.messageStanzaId,
       messageOriginId: entry.messageOriginId,
       messageMucStanzaId: entry.messageMucStanzaId,
-      deltaAccountId: entry.deltaMsgId == null ? null : entry.deltaAccountId,
-      deltaMsgId: entry.deltaMsgId,
       updatedAt: entry.addedAt.toUtc(),
       active: entry.active,
       sourceId: await _ensureMessageCollectionSyncSourceId(),
@@ -10962,8 +11028,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       waits.add(waiter.future);
     }
     if (waits.isNotEmpty) {
-      await Future.wait(waits).timeout(_calendarSyncDispatchTimeout);
+      await awaitAllWithIdleTimeout(
+        waits: waits,
+        idleTimeout: _calendarSyncMamPageIdleTimeout,
+      );
     }
+  }
+
+  @visibleForTesting
+  void setCalendarMamPageIdleTimeoutOverride(Duration? timeout) {
+    _calendarSyncMamPageIdleTimeout = timeout ?? _calendarSyncDispatchTimeout;
   }
 
   String? _resolvedCalendarSyncMamQueryId({

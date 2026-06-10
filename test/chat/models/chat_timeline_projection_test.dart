@@ -1,12 +1,16 @@
 import 'package:axichat/src/chat/models/chat_timeline.dart';
 import 'package:axichat/src/chat/models/chat_timeline_projection.dart';
+import 'package:axichat/src/chat/models/rfc_email_group.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../email/fixtures/corporate_email_html_fixtures.dart';
 
 void main() {
   test(
@@ -2203,6 +2207,205 @@ void main() {
 
     expect(item.rowText, 'Service unavailable');
     expect(item.renderedText, 'Service unavailable');
+  });
+
+  test('email body text supersedes the unavailable content label', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-real-body-unavailable-html',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      body: 'Quarterly revenue grew 12 percent.',
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 210,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+
+    final item = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+      emailFullHtmlUnavailable: const {210},
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(item.renderedText, 'Quarterly revenue grew 12 percent.');
+    expect(item.rowText, 'Quarterly revenue grew 12 percent.');
+  });
+
+  test(
+    'forwarded subject-only email content supersedes the unavailable label',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        deltaChatId: 42,
+        emailAddress: 'peer@example.com',
+      );
+      final message = Message(
+        stanzaID: 'email-forward-subject-only',
+        senderJid: 'peer@example.com',
+        chatJid: chat.jid,
+        subject: markSyntheticForwardSubject('FWD: bob@example.com'),
+        body: 'Subject: Project Phoenix kickoff',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 211,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+      );
+
+      final item = _projectMessages(
+        chat: chat,
+        messages: [message],
+        isEmailChat: true,
+        pendingEmailContentLabel: 'Loading',
+        unavailableEmailContentLabel: 'Service unavailable',
+        emailFullHtmlUnavailable: const {211},
+      ).whereType<ChatTimelineMessageItem>().single;
+
+      expect(item.showSubject, isTrue);
+      expect(item.subjectLabel, 'Project Phoenix kickoff');
+      expect(item.renderedText, isEmpty);
+      expect(item.rowText, 'Project Phoenix kickoff');
+    },
+  );
+
+  test('css-heavy corporate email renders visible text without CSS leak', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-css-heavy',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      body: corporateCssHeavyEmailLeakedBodyText,
+      htmlBody: corporateCssHeavyEmailHtml,
+      pseudoMessageData: const {'emailRfc822Body': true},
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 220,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+
+    final item = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+      emailFullHtmlUnavailable: const {220},
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(item.renderedText, contains(corporateCssHeavyEmailVisibleText));
+    expect(item.renderedText, isNot(contains('@media')));
+    expect(item.renderedText, isNot(contains('font-family')));
+    expect(item.renderedText, isNot(contains('Service unavailable')));
+    expect(item.resolvedHtmlBody, corporateCssHeavyEmailHtml);
+    expect(item.emailVisualKind, ChatTimelineEmailVisualKind.html);
+  });
+
+  test('text-html-only corporate email resolves its visible HTML body', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-html-only',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      htmlBody: corporateTextHtmlOnlyEmailHtml,
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 240,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+
+    final item = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+      emailFullHtmlUnavailable: const {240},
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(item.renderedText, isNot(contains('Service unavailable')));
+    expect(item.renderedText, isNot(contains('Loading')));
+    expect(item.resolvedHtmlBody, corporateTextHtmlOnlyEmailHtml);
+    expect(item.emailVisualKind, ChatTimelineEmailVisualKind.html);
+    expect(
+      emailHtmlVisibleBodyText(item.resolvedHtmlBody),
+      contains(corporateTextHtmlOnlyEmailVisibleText),
+    );
+  });
+
+  test('style-only corporate email body never leaks stylesheet text', () {
+    final chat = chat_models.Chat(
+      jid: 'peer@example.com',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: 42,
+      emailAddress: 'peer@example.com',
+    );
+    final message = Message(
+      stanzaID: 'email-style-only',
+      senderJid: 'peer@example.com',
+      chatJid: chat.jid,
+      body: corporateStyleOnlyEmailLeakedBodyText,
+      htmlBody: corporateStyleOnlyEmailHtml,
+      pseudoMessageData: const {'emailRfc822Body': true},
+      deltaChatId: chat.deltaChatId,
+      deltaMsgId: 230,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+    );
+
+    final pendingItem = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(pendingItem.renderedText, 'Loading');
+    expect(pendingItem.rowText, isNot(contains('.footer')));
+    expect(pendingItem.rowText, isNot(contains('font-size')));
+    expect(pendingItem.resolvedHtmlBody, isNull);
+
+    final unavailableItem = _projectMessages(
+      chat: chat,
+      messages: [message],
+      isEmailChat: true,
+      pendingEmailContentLabel: 'Loading',
+      unavailableEmailContentLabel: 'Service unavailable',
+      emailFullHtmlUnavailable: const {230},
+    ).whereType<ChatTimelineMessageItem>().single;
+
+    expect(unavailableItem.renderedText, 'Service unavailable');
+    expect(unavailableItem.rowText, 'Service unavailable');
+    expect(unavailableItem.resolvedHtmlBody, isNull);
   });
 
   test('invite lifecycle tokens use the latest successful marker', () {

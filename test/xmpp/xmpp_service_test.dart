@@ -5072,6 +5072,241 @@ void main() {
       },
     );
 
+    test(
+      'Personal calendar MAM catch-up survives a slowly progressing page',
+      () async {
+        await _openXmppStateStore('axichat_personal_slow_page_calendar_mam');
+        HydratedBloc.storage = _InMemoryStorage();
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        await HydratedBloc.storage.write(
+          authStoragePrefix,
+          CalendarStateStorageCodec.encode(CalendarState.initial()),
+        );
+        final cursor = DateTime.utc(2026, 5, 20, 8);
+        await CalendarSyncState(
+              lastHandledTimestamp: cursor,
+              lastHandledStanzaId: 'slow-page-cursor-stanza',
+            )
+            .markArchiveCompleteWithoutSnapshot()
+            .markArchivePageHandled(
+              resumeId: 'slow-page-seed-resume',
+              calendarJid: selfBare,
+              archiveJid: selfBare,
+            )
+            .write();
+        final timestamp = DateTime.utc(2026, 5, 20, 9);
+        final mamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                for (var i = 0; i < 6; i++)
+                  _personalCalendarMamEvent(
+                    selfBare: selfBare,
+                    stanzaId: 'slow-page-update-$i',
+                    timestamp: timestamp.add(Duration(minutes: i)),
+                    message: _taskUpdate(
+                      task: _task(
+                        id: 'slow-page-task-$i',
+                        title: 'Slow page task $i',
+                        timestamp: timestamp.add(Duration(minutes: i)),
+                      ),
+                      operation: 'add',
+                    ),
+                  ),
+              ],
+              complete: true,
+              first: 'slow-page-first',
+              last: 'slow-page-last',
+              count: 6,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+        xmppService.setCalendarMamPageIdleTimeoutOverride(
+          const Duration(milliseconds: 400),
+        );
+        addTearDown(
+          () => xmppService.setCalendarMamPageIdleTimeoutOverride(null),
+        );
+        // Complete each dispatched envelope 100ms after it arrives, so the
+        // page keeps progressing but takes ~600ms overall: longer than the
+        // idle deadline in total while every gap stays inside it. Mark each
+        // inbound handled first, as the real dispatch consumer does.
+        final dispatchSubscription = xmppService.calendarSyncDispatchStream
+            .listen((dispatch) {
+              Timer(const Duration(milliseconds: 100), () async {
+                await CalendarSyncState.read()
+                    .markHandled(dispatch.inbound)
+                    .write();
+                dispatch.complete(true);
+              });
+            });
+        addTearDown(dispatchSubscription.cancel);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.completed,
+        );
+
+        expect(mamManager.queryCount, 1);
+        expect(mamManager.calls.single.after, 'slow-page-seed-resume');
+        expect(CalendarSyncState.read().lastArchiveResumeId, 'slow-page-last');
+      },
+    );
+
+    test(
+      'Personal calendar MAM catch-up times out on a stalled page and resumes '
+      'from the last completed page',
+      () async {
+        await _openXmppStateStore('axichat_personal_stalled_page_calendar_mam');
+        HydratedBloc.storage = _InMemoryStorage();
+        final selfBare = mox.JID
+            .fromString(xmppService.myJid!)
+            .toBare()
+            .toString();
+        await HydratedBloc.storage.write(
+          authStoragePrefix,
+          CalendarStateStorageCodec.encode(CalendarState.initial()),
+        );
+        final cursor = DateTime.utc(2026, 5, 21, 8);
+        await CalendarSyncState(
+              lastHandledTimestamp: cursor,
+              lastHandledStanzaId: 'stalled-cursor-stanza',
+            )
+            .markArchiveCompleteWithoutSnapshot()
+            .markArchivePageHandled(
+              resumeId: 'stalled-seed-resume',
+              calendarJid: selfBare,
+              archiveJid: selfBare,
+            )
+            .write();
+        final timestamp = DateTime.utc(2026, 5, 21, 9);
+        final firstMamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'stalled-page-one-update',
+                  timestamp: timestamp,
+                  message: _taskUpdate(
+                    task: _task(
+                      id: 'stalled-page-one-task',
+                      title: 'Stalled page one task',
+                      timestamp: timestamp,
+                    ),
+                    operation: 'add',
+                  ),
+                ),
+              ],
+              complete: false,
+              first: 'page-one-first',
+              last: 'page-one-last',
+              count: 2,
+            ),
+            ScriptedMamPage(
+              events: [
+                _personalCalendarMamEvent(
+                  selfBare: selfBare,
+                  stanzaId: 'stalled-page-two-update',
+                  timestamp: timestamp.add(const Duration(minutes: 1)),
+                  message: _taskUpdate(
+                    task: _task(
+                      id: 'stalled-page-two-task',
+                      title: 'Stalled page two task',
+                      timestamp: timestamp.add(const Duration(minutes: 1)),
+                    ),
+                    operation: 'add',
+                  ),
+                ),
+              ],
+              complete: true,
+              first: 'page-two-first',
+              last: 'page-two-last',
+              count: 2,
+            ),
+          ],
+        );
+        await xmppService.setMamSupportOverride(true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(firstMamManager);
+        xmppService.setCalendarMamPageIdleTimeoutOverride(
+          const Duration(milliseconds: 200),
+        );
+        addTearDown(
+          () => xmppService.setCalendarMamPageIdleTimeoutOverride(null),
+        );
+        // Handle the first page's envelope promptly (marking it handled, as
+        // the real dispatch consumer does) and stall every later envelope
+        // until the test releases it.
+        final stalledDispatches = <CalendarSyncDispatch>[];
+        var dispatchCount = 0;
+        final dispatchSubscription = xmppService.calendarSyncDispatchStream
+            .listen((dispatch) async {
+              dispatchCount += 1;
+              if (dispatchCount == 1) {
+                await CalendarSyncState.read()
+                    .markHandled(dispatch.inbound)
+                    .write();
+                dispatch.complete(true);
+                return;
+              }
+              stalledDispatches.add(dispatch);
+            });
+        addTearDown(dispatchSubscription.cancel);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.failed,
+        );
+
+        expect(firstMamManager.queryCount, 2);
+        expect(firstMamManager.calls.first.after, 'stalled-seed-resume');
+        expect(firstMamManager.calls.last.after, 'page-one-last');
+        expect(CalendarSyncState.read().lastArchiveResumeId, 'page-one-last');
+
+        // Release the stalled work so the sequential queue drains before the
+        // retry run.
+        for (final dispatch in stalledDispatches) {
+          dispatch.complete(true);
+        }
+        await pumpEventQueue(times: 20);
+
+        final secondMamManager = ScriptedMamManager(
+          eventStreamController: eventStreamController,
+          pages: [
+            const ScriptedMamPage(
+              complete: true,
+              first: 'retry-first',
+              last: 'retry-last',
+              count: 0,
+            ),
+          ],
+        );
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(secondMamManager);
+
+        expect(
+          await xmppService.rehydrateCalendarFromMam(),
+          CalendarMamOutcome.completed,
+        );
+
+        expect(secondMamManager.queryCount, 1);
+        expect(secondMamManager.calls.single.after, 'page-one-last');
+        expect(CalendarSyncState.read().lastArchiveResumeId, 'retry-last');
+      },
+    );
+
     test('Direct chat calendar MAM runs when coverage is incomplete', () async {
       const peerJid = 'peer@axi.im';
       await _openXmppStateStore('axichat_direct_incomplete_calendar_mam');

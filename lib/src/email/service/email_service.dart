@@ -828,6 +828,8 @@ class EmailService {
   );
   DateTime? _imapCapabilitiesCheckedAt;
   bool _imapCapabilitiesResolved = false;
+
+  bool _deltaAccountRepairCompleted = false;
   Timer? _imapSyncTimer;
   Object? _imapSyncLoopToken;
   final EmailAsyncQueue _imapSyncQueue = EmailAsyncQueue();
@@ -2597,9 +2599,7 @@ class EmailService {
     );
   }
 
-  String _pendingOutgoingStanzaId() {
-    return deltaPendingOutgoingStanzaId(const Uuid().v4());
-  }
+  String _pendingOutgoingStanzaId() => const Uuid().v4();
 
   String _resolveOutgoingSenderJid({
     required Chat chat,
@@ -2749,42 +2749,25 @@ class EmailService {
       }
       return;
     }
-    final scopedStanzaId = deltaScopedMessageStorageStanzaId(
-      accountId: accountId,
-      chatId: chatId,
-      msgId: msgId,
-    );
-    final duplicateCandidate = await _findOutgoingEmailEchoRow(
-      db: db,
-      pendingStanzaId: stanzaId,
-      scopedStanzaId: scopedStanzaId,
-      legacyStanzaId: deltaMessageStanzaId(msgId),
+    final duplicateCandidate = await db.getMessageByDeltaId(
+      msgId,
+      deltaAccountId: accountId,
+      deltaChatId: chatId,
     );
     final duplicateMessage =
         duplicateCandidate == null ||
-            duplicateCandidate.deltaMsgId != msgId ||
-            duplicateCandidate.deltaAccountId != accountId ||
-            duplicateCandidate.chatJid != existing.chatJid ||
-            (duplicateCandidate.deltaChatId != null &&
-                duplicateCandidate.deltaChatId != chatId)
+            duplicateCandidate.stanzaID == existing.stanzaID ||
+            duplicateCandidate.chatJid != existing.chatJid
         ? null
         : duplicateCandidate;
-    final targetStanzaId = _outgoingEmailPromotionTarget(
-      existing: existing,
-      scopedStanzaId: scopedStanzaId,
-      duplicateCandidate: duplicateCandidate,
-      duplicateMessage: duplicateMessage,
-    );
     var next = existing;
-    if (existing.stanzaID != targetStanzaId ||
-        existing.deltaMsgId != msgId ||
+    if (existing.deltaMsgId != msgId ||
         existing.deltaChatId != chatId ||
         existing.deltaAccountId != accountId ||
         existing.encryptionProtocol != encryptionProtocol ||
         (timestamp != null && existing.timestamp != timestamp) ||
         (metadata != null && existing.fileMetadataID != metadata.id)) {
       next = existing.copyWith(
-        stanzaID: targetStanzaId,
         deltaMsgId: msgId,
         deltaChatId: chatId,
         deltaAccountId: accountId,
@@ -2864,13 +2847,6 @@ class EmailService {
         selfJid: existing.senderJid,
         emailSelfJid: existing.senderJid,
       );
-      if (next.stanzaID != duplicateMessage.stanzaID) {
-        final promoted = next.copyWith(stanzaID: duplicateMessage.stanzaID);
-        await db.replaceMessageStanzaID(
-          currentStanzaID: next.stanzaID,
-          message: promoted,
-        );
-      }
     }
     if (shareId != null) {
       await db.insertMessageCopy(
@@ -2880,49 +2856,6 @@ class EmailService {
         dcAccountId: accountId,
       );
     }
-  }
-
-  /// Finds an already-ingested echo row for an outgoing message: scoped
-  /// stanza ids are the current mint; legacy `dc-msg-*` covers pre-migration
-  /// leftovers.
-  Future<Message?> _findOutgoingEmailEchoRow({
-    required XmppDatabase db,
-    required String pendingStanzaId,
-    required String scopedStanzaId,
-    required String legacyStanzaId,
-  }) async {
-    if (scopedStanzaId != pendingStanzaId) {
-      final scoped = await db.getMessageByStanzaID(scopedStanzaId);
-      if (scoped != null) {
-        return scoped;
-      }
-    }
-    if (legacyStanzaId == pendingStanzaId) {
-      return null;
-    }
-    return db.getMessageByStanzaID(legacyStanzaId);
-  }
-
-  /// Pending rows promote onto the scoped stanza id unless an incompatible
-  /// row already owns it (keep the pending id — never merge onto a mismatched
-  /// locator) or a compatible echo exists (the echo's identity is adopted
-  /// after the merge).
-  String _outgoingEmailPromotionTarget({
-    required Message existing,
-    required String scopedStanzaId,
-    required Message? duplicateCandidate,
-    required Message? duplicateMessage,
-  }) {
-    if (duplicateCandidate == null) {
-      return scopedStanzaId;
-    }
-    if (duplicateMessage != null) {
-      return existing.stanzaID;
-    }
-    if (duplicateCandidate.stanzaID == scopedStanzaId) {
-      return existing.stanzaID;
-    }
-    return scopedStanzaId;
   }
 
   Future<void> _markOutgoingEmailFailed({required String stanzaId}) async {
@@ -6277,7 +6210,44 @@ class EmailService {
       return false;
     }
     await ensureEventChannelActive();
-    return _acceptsRuntimeWork && !_blocksRuntimeReentry;
+    if (!_acceptsRuntimeWork || _blocksRuntimeReentry) {
+      return false;
+    }
+    await _repairStoredDeltaAccountIdsOnce();
+    return true;
+  }
+
+  Future<void> _repairStoredDeltaAccountIdsOnce() async {
+    if (_deltaAccountRepairCompleted) {
+      return;
+    }
+    _deltaAccountRepairCompleted = true;
+    final accountIds = await _transport.accountIds();
+    if (accountIds.isEmpty) {
+      return;
+    }
+    final db = await _databaseBuilder();
+    final invalid = await db.getEmailMessagesWithDeltaAccountNotIn(accountIds);
+    for (final message in invalid) {
+      await _repairStoredDeltaAccountId(db: db, message: message);
+    }
+    if (invalid.isNotEmpty) {
+      _log.info('Repaired ${invalid.length} stored delta account ids.');
+    }
+  }
+
+  Future<void> _repairStoredDeltaAccountId({
+    required XmppDatabase db,
+    required Message message,
+  }) async {
+    final resolved = await _resolveDeltaAccountIdForStoredMessage(message);
+    if (resolved != null) {
+      await db.updateMessage(message.copyWith(deltaAccountId: resolved));
+      return;
+    }
+    await db.updateMessage(
+      message.copyWith(deltaMsgId: null, deltaChatId: null),
+    );
   }
 
   Future<int> _sendDemoEmailMessage({

@@ -963,6 +963,12 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final normalizedPendingEmailContentLabel = pendingEmailContentLabel?.trim();
   final normalizedUnavailableEmailContentLabel = unavailableEmailContentLabel
       ?.trim();
+  final hasRenderableEmailSourceContent =
+      isEmailMessage &&
+      _hasRenderableEmailSourceContent(
+        message: message,
+        resolvedHtmlBody: resolvedForwardHtml,
+      );
   final shouldUseUnavailableEmailContentLabel =
       isEmailMessage &&
       message.error.isNone &&
@@ -971,6 +977,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       deltaMessageId != null &&
       deltaMessageId > 0 &&
       !hasResolvedForwardHtml &&
+      !hasRenderableEmailSourceContent &&
       emailFullHtmlIsUnavailable &&
       bodyTextTrimmed.isEmpty &&
       normalizedUnavailableEmailContentLabel != null &&
@@ -1312,6 +1319,14 @@ String? _resolvedEmailHtmlBodyForProjection({
   message: message,
   emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
 );
+
+bool _hasRenderableEmailSourceContent({
+  required Message message,
+  required String? resolvedHtmlBody,
+}) => rfcEmailBodyText(
+  message: message,
+  resolvedHtmlBody: resolvedHtmlBody,
+).trim().isNotEmpty;
 
 List<ChatTimelineEmailBodyBlock> _rfcEmailBodyBlocksForGroup({
   required RfcEmailGroup group,

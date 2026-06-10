@@ -18,6 +18,7 @@ import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart'
 import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
@@ -7803,6 +7804,120 @@ void main() {
         await controller.close();
       },
     );
+  });
+
+  group('calendar MAM page idle deadline', () {
+    const idleTimeout = Duration(seconds: 30);
+
+    test('slow but steadily progressing waits outlive the idle timeout', () {
+      fakeAsync((async) {
+        final completers = List.generate(4, (_) => Completer<void>());
+        var completed = false;
+        Object? error;
+        awaitAllWithIdleTimeout(
+          waits: [for (final completer in completers) completer.future],
+          idleTimeout: idleTimeout,
+        ).then(
+          (_) {
+            completed = true;
+          },
+          onError: (Object thrown, StackTrace _) {
+            error = thrown;
+          },
+        );
+
+        for (final completer in completers) {
+          async.elapse(const Duration(seconds: 20));
+          completer.complete();
+          async.flushMicrotasks();
+        }
+
+        expect(error, isNull);
+        expect(completed, isTrue);
+        expect(async.elapsed, greaterThan(idleTimeout));
+      });
+    });
+
+    test('stalled waits time out once progress stops', () {
+      fakeAsync((async) {
+        final first = Completer<void>();
+        final stalled = Completer<void>();
+        var completed = false;
+        Object? error;
+        awaitAllWithIdleTimeout(
+          waits: [first.future, stalled.future],
+          idleTimeout: idleTimeout,
+        ).then(
+          (_) {
+            completed = true;
+          },
+          onError: (Object thrown, StackTrace _) {
+            error = thrown;
+          },
+        );
+
+        async.elapse(const Duration(seconds: 20));
+        first.complete();
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 29));
+
+        expect(error, isNull, reason: 'progress restarts the deadline');
+
+        async.elapse(const Duration(seconds: 1, milliseconds: 1));
+
+        expect(error, isA<TimeoutException>());
+        expect(completed, isFalse);
+
+        stalled.complete();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('first error fails the wait immediately', () {
+      fakeAsync((async) {
+        final failing = Completer<void>();
+        final pending = Completer<void>();
+        var completed = false;
+        Object? error;
+        awaitAllWithIdleTimeout(
+          waits: [failing.future, pending.future],
+          idleTimeout: idleTimeout,
+        ).then(
+          (_) {
+            completed = true;
+          },
+          onError: (Object thrown, StackTrace _) {
+            error = thrown;
+          },
+        );
+
+        failing.completeError(XmppMessageException());
+        async.flushMicrotasks();
+
+        expect(error, isA<XmppMessageException>());
+        expect(completed, isFalse);
+
+        pending.complete();
+        async.flushMicrotasks();
+      });
+    });
+
+    test('empty waits complete without arming a deadline', () {
+      fakeAsync((async) {
+        var completed = false;
+        awaitAllWithIdleTimeout(
+          waits: const <Future<void>>[],
+          idleTimeout: idleTimeout,
+        ).then((_) {
+          completed = true;
+        });
+
+        async.flushMicrotasks();
+
+        expect(completed, isTrue);
+        expect(async.pendingTimers, isEmpty);
+      });
+    });
   });
 
   group('important folder sync', () {

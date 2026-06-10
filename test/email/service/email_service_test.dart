@@ -15,7 +15,6 @@ import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -288,6 +287,9 @@ void main() {
     when(
       () => transport.accountIds(),
     ).thenAnswer((_) async => const <int>[DeltaAccountDefaults.legacyId]);
+    when(
+      () => database.getEmailMessagesWithDeltaAccountNotIn(any()),
+    ).thenAnswer((_) async => const <Message>[]);
     when(
       () => transport.getChatlist(
         flags: any(named: 'flags'),
@@ -6337,7 +6339,12 @@ void main() {
       final result = await service.shareContextForMessage(message);
 
       expect(result, isNull);
-      verifyNever(() => database.getShareIdForDeltaMessage(any()));
+      verifyNever(
+        () => database.getShareIdForDeltaMessage(
+          any(),
+          deltaAccountId: any(named: 'deltaAccountId'),
+        ),
+      );
 
       addTearDown(service.shutdown);
     },
@@ -6506,13 +6513,17 @@ void main() {
       final msgId = await service.sendMessage(chat: chat, body: 'First send');
 
       expect(msgId, 123);
-      expect(savedPending?.stanzaID, startsWith('dc-pending-'));
+      expect(savedPending?.stanzaID, isNotEmpty);
       expect(savedPending?.deltaMsgId, isNull);
-      expect(replacedStanzaId, savedPending?.stanzaID);
-      expect(replacementMessage?.stanzaID, 'dc-local-msg-0-91-123');
-      expect(replacementMessage?.deltaMsgId, 123);
-      expect(replacementMessage?.deltaChatId, 91);
-      expect(replacementMessage?.deltaAccountId, DeltaAccountDefaults.legacyId);
+      expect(replacedStanzaId, isNull);
+      expect(replacementMessage, isNull);
+      final bound =
+          verify(() => database.updateMessage(captureAny())).captured.last
+              as Message;
+      expect(bound.stanzaID, savedPending?.stanzaID);
+      expect(bound.deltaMsgId, 123);
+      expect(bound.deltaChatId, 91);
+      expect(bound.deltaAccountId, DeltaAccountDefaults.legacyId);
       verify(
         () => transport.sendText(
           chatId: 91,
@@ -6624,6 +6635,25 @@ void main() {
         mergedPending = invocation.positionalArguments.single as Message;
       });
       when(
+        () => database.getMessageByDeltaId(
+          123,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ).thenAnswer(
+        (_) async => Message(
+          stanzaID: 'dc-msg-123',
+          senderJid: 'alice@example.org',
+          chatJid: 'peer@axi.im',
+          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+          body: 'First send',
+          acked: true,
+          deltaChatId: 91,
+          deltaMsgId: 123,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      );
+      when(
         () => database.replaceMessageStanzaID(
           currentStanzaID: any(named: 'currentStanzaID'),
           message: any(named: 'message'),
@@ -6647,12 +6677,12 @@ void main() {
       final msgId = await service.sendMessage(chat: chat, body: 'First send');
 
       expect(msgId, 123);
-      expect(savedPending?.stanzaID, startsWith('dc-pending-'));
+      expect(savedPending?.stanzaID, isNotEmpty);
       expect(mergedPending?.stanzaID, savedPending?.stanzaID);
       expect(mergedPending?.acked, isTrue);
-      expect(replacedStanzaId, savedPending?.stanzaID);
-      expect(replacementMessage?.stanzaID, 'dc-msg-123');
-      expect(replacementMessage?.deltaMsgId, 123);
+      expect(mergedPending?.deltaMsgId, 123);
+      expect(replacedStanzaId, isNull);
+      expect(replacementMessage, isNull);
       verify(
         () => database.deleteMessage(
           'dc-msg-123',
@@ -6759,6 +6789,17 @@ void main() {
       ).thenAnswer((invocation) async {
         replacements.add(invocation.namedArguments[#message] as Message);
       });
+      when(
+        () => database.getMessageByDeltaId(
+          123,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ).thenAnswer((_) async => null);
+      Message? boundPending;
+      when(() => database.updateMessage(any())).thenAnswer((invocation) async {
+        boundPending = invocation.positionalArguments.single as Message;
+      });
 
       final chat = Chat(
         jid: 'peer@axi.im',
@@ -6773,19 +6814,12 @@ void main() {
       final msgId = await service.sendMessage(chat: chat, body: 'First send');
 
       expect(msgId, 123);
-      expect(savedPending?.stanzaID, startsWith('dc-pending-'));
-      expect(replacements, hasLength(1));
-      expect(
-        replacements.single.stanzaID,
-        deltaScopedMessageStorageStanzaId(
-          accountId: DeltaAccountDefaults.legacyId,
-          chatId: 91,
-          msgId: 123,
-        ),
-      );
-      expect(replacements.single.chatJid, 'peer@axi.im');
-      expect(replacements.single.deltaChatId, 91);
-      expect(replacements.single.deltaMsgId, 123);
+      expect(savedPending?.stanzaID, isNotEmpty);
+      expect(replacements, isEmpty);
+      expect(boundPending?.stanzaID, savedPending?.stanzaID);
+      expect(boundPending?.chatJid, 'peer@axi.im');
+      expect(boundPending?.deltaChatId, 91);
+      expect(boundPending?.deltaMsgId, 123);
       verifyNever(
         () => database.deleteMessage(
           'dc-msg-123',
@@ -9033,13 +9067,21 @@ void main() {
       );
 
       when(
-        () => database.getShareIdForDeltaMessage(15),
+        () => database.getShareIdForDeltaMessage(
+          15,
+          deltaAccountId: any(named: 'deltaAccountId'),
+        ),
       ).thenAnswer((_) async => null);
 
       final result = await service.shareContextForMessage(message);
 
       expect(result, isNull);
-      verify(() => database.getShareIdForDeltaMessage(15)).called(1);
+      verify(
+        () => database.getShareIdForDeltaMessage(
+          15,
+          deltaAccountId: any(named: 'deltaAccountId'),
+        ),
+      ).called(1);
       verifyNever(() => database.getParticipantsForShare(any()));
 
       addTearDown(service.shutdown);
@@ -9079,7 +9121,10 @@ void main() {
     );
 
     when(
-      () => database.getShareIdForDeltaMessage(15),
+      () => database.getShareIdForDeltaMessage(
+        15,
+        deltaAccountId: any(named: 'deltaAccountId'),
+      ),
     ).thenAnswer((_) async => 'share-1');
     when(
       () => database.getParticipantsForShare('share-1'),
