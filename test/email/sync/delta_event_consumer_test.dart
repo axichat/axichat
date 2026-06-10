@@ -51,6 +51,9 @@ void main() {
       ),
     ).thenAnswer((_) async => null);
     when(
+      () => database.getMessageByStanzaID(any()),
+    ).thenAnswer((_) async => null);
+    when(
       () => database.getMessageByDeltaId(any(), chatJid: any(named: 'chatJid')),
     ).thenAnswer((_) async => null);
     when(
@@ -491,7 +494,11 @@ void main() {
         ),
       ).thenAnswer((_) async => chat);
       when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
       when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
@@ -708,7 +715,11 @@ void main() {
         ),
       ).thenAnswer((_) async => chat);
       when(
-        () => database.getMessageByStanzaID(existing.stanzaID),
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
       when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
@@ -1453,7 +1464,7 @@ void main() {
         end: 10,
       );
       expect(messages.map((message) => message.stanzaID), [
-        'dc-msg-$msgId',
+        'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
         ...xmppMessages.map((message) => message.stanzaID),
       ]);
       expect(messages.first.timestamp, emailTimestamp);
@@ -1476,7 +1487,7 @@ void main() {
         end: 10,
       );
       expect(rehydratedMessages.map((message) => message.stanzaID), [
-        'dc-msg-$msgId',
+        'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
         ...xmppMessages.map((message) => message.stanzaID),
       ]);
       expect(
@@ -2350,7 +2361,9 @@ void main() {
           any(
             that: predicate<Message>(
               (message) =>
-                  message.stanzaID == 'dc-msg-$msgId' &&
+                  message.stanzaID ==
+                      'dc-local-msg-${DeltaAccountDefaults.legacyId}'
+                          '-$chatId-$msgId' &&
                   message.deltaMsgId == msgId &&
                   message.chatJid == mixedChat.jid,
             ),
@@ -2673,7 +2686,11 @@ void main() {
         ),
       ).thenAnswer((_) async => chat);
       when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
       ).thenAnswer((_) async => existing);
       when(
         () => database.getFileMetadata(metadata.id),
@@ -2755,7 +2772,11 @@ void main() {
         ),
       ).thenAnswer((_) async => chat);
       when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
       ).thenAnswer((_) async => existing);
       when(
         () => database.getFileMetadata(metadata.id),
@@ -2833,7 +2854,11 @@ void main() {
       ),
     ).thenAnswer((_) async => chat);
     when(
-      () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      () => database.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+      ),
     ).thenAnswer((_) async => existing);
     when(
       () => database.getFileMetadata(metadata.id),
@@ -4073,7 +4098,10 @@ void main() {
               ),
             ).captured.first
             as Message;
-    expect(persisted.stanzaID, 'dc-msg-$msgId');
+    expect(
+      persisted.stanzaID,
+      'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
+    );
     expect(persisted.timestamp, deltaTimestamp);
     verifyNever(() => database.updateMessage(any()));
   });
@@ -4534,7 +4562,10 @@ void main() {
               ),
             ).captured.first
             as Message;
-    expect(persisted.stanzaID, 'dc-msg-$msgId');
+    expect(
+      persisted.stanzaID,
+      'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
+    );
     expect(persisted.body, 'Different caption');
     verifyNever(() => database.updateMessage(any()));
   });
@@ -4655,7 +4686,10 @@ void main() {
               ),
             ).captured.first
             as Message;
-    expect(persisted.stanzaID, 'dc-msg-$msgId');
+    expect(
+      persisted.stanzaID,
+      'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
+    );
     verifyNever(() => database.updateMessage(any()));
   });
 
@@ -4723,7 +4757,10 @@ void main() {
                 ),
               ).captured.single
               as Message;
-      expect(persisted.stanzaID, equals('dc-msg-$msgId'));
+      expect(
+        persisted.stanzaID,
+        'dc-local-msg-${DeltaAccountDefaults.legacyId}-$chatId-$msgId',
+      );
       expect(persisted.subject, equals(deltaMessage.subject));
       expect(persisted.body, contains('synchronize data between your devices'));
     },

@@ -309,7 +309,14 @@ void main() {
                 ),
               ).captured.single
               as Message;
-      expect(updated.stanzaID, deltaMessageStanzaId(msgId));
+      expect(
+        updated.stanzaID,
+        deltaScopedMessageStorageStanzaId(
+          accountId: DeltaAccountDefaults.legacyId,
+          chatId: chatId,
+          msgId: msgId,
+        ),
+      );
       expect(updated.deltaMsgId, msgId);
       expect(updated.deltaChatId, chatId);
       expect(updated.deltaAccountId, DeltaAccountDefaults.legacyId);
@@ -782,7 +789,14 @@ void main() {
                 ),
               ).captured.single
               as Message;
-      expect(updated.stanzaID, deltaMessageStanzaId(msgId));
+      expect(
+        updated.stanzaID,
+        deltaScopedMessageStorageStanzaId(
+          accountId: DeltaAccountDefaults.legacyId,
+          chatId: chatId,
+          msgId: msgId,
+        ),
+      );
       expect(updated.body, isNull);
       expect(updated.fileMetadataID, deltaFileMetadataId(msgId));
     },
@@ -933,7 +947,10 @@ void main() {
       if (stanzaId == deltaStanzaId) {
         return duplicateDeleted ? null : duplicateMessage;
       }
-      return pendingMessage;
+      if (stanzaId == pendingMessage?.stanzaID) {
+        return pendingMessage;
+      }
+      return null;
     });
     when(() => database.updateMessage(any())).thenAnswer((invocation) async {
       updatedPending = invocation.positionalArguments.first as Message;

@@ -2329,7 +2329,11 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         stanzaId ??
         (resolvedMsgId == null
             ? throw StateError(_missingOutgoingDeltaIdError)
-            : deltaMessageStanzaId(resolvedMsgId));
+            : deltaScopedMessageStorageStanzaId(
+                accountId: deltaAccountId,
+                chatId: chatId,
+                msgId: resolvedMsgId,
+              ));
     if (metadata != null) {
       await db.saveFileMetadata(metadata);
     }
@@ -2402,10 +2406,17 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       }
       return;
     }
-    final String duplicateStanzaId = deltaMessageStanzaId(msgId);
-    final Message? duplicateCandidate = duplicateStanzaId == stanzaId
-        ? null
-        : await db.getMessageByStanzaID(duplicateStanzaId);
+    final String scopedStanzaId = deltaScopedMessageStorageStanzaId(
+      accountId: accountId,
+      chatId: chatId,
+      msgId: msgId,
+    );
+    final Message? duplicateCandidate = await _findOutgoingEchoRow(
+      db: db,
+      pendingStanzaId: stanzaId,
+      scopedStanzaId: scopedStanzaId,
+      legacyStanzaId: deltaMessageStanzaId(msgId),
+    );
     final Message? duplicateMessage =
         duplicateCandidate == null ||
             duplicateCandidate.deltaMsgId != msgId ||
@@ -2415,15 +2426,12 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
                 duplicateCandidate.deltaChatId != chatId)
         ? null
         : duplicateCandidate;
-    final targetStanzaId = duplicateCandidate == null
-        ? duplicateStanzaId
-        : duplicateMessage == null
-        ? deltaScopedMessageStorageStanzaId(
-            accountId: accountId,
-            chatId: chatId,
-            msgId: msgId,
-          )
-        : existing.stanzaID;
+    final String targetStanzaId = _promotionTargetStanzaId(
+      existing: existing,
+      scopedStanzaId: scopedStanzaId,
+      duplicateCandidate: duplicateCandidate,
+      duplicateMessage: duplicateMessage,
+    );
     Message next = existing;
     if (existing.stanzaID != targetStanzaId ||
         existing.deltaMsgId != msgId ||
@@ -2513,10 +2521,10 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         selfJid: existing.senderJid,
         emailSelfJid: existing.senderJid,
       );
-      if (next.stanzaID != duplicateStanzaId) {
+      if (next.stanzaID != duplicateMessage.stanzaID) {
         await db.replaceMessageStanzaID(
           currentStanzaID: next.stanzaID,
-          message: next.copyWith(stanzaID: duplicateStanzaId),
+          message: next.copyWith(stanzaID: duplicateMessage.stanzaID),
         );
       }
     }
@@ -2528,6 +2536,49 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         dcAccountId: accountId,
       );
     }
+  }
+
+  /// Finds an already-ingested echo row for an outgoing message: scoped
+  /// stanza ids are the current mint; legacy `dc-msg-*` covers pre-migration
+  /// leftovers.
+  Future<Message?> _findOutgoingEchoRow({
+    required XmppDatabase db,
+    required String pendingStanzaId,
+    required String scopedStanzaId,
+    required String legacyStanzaId,
+  }) async {
+    if (scopedStanzaId != pendingStanzaId) {
+      final scoped = await db.getMessageByStanzaID(scopedStanzaId);
+      if (scoped != null) {
+        return scoped;
+      }
+    }
+    if (legacyStanzaId == pendingStanzaId) {
+      return null;
+    }
+    return db.getMessageByStanzaID(legacyStanzaId);
+  }
+
+  /// Pending rows promote onto the scoped stanza id unless an incompatible
+  /// row already owns it (keep the pending id — never merge onto a
+  /// mismatched locator) or a compatible echo exists (keep the pending id;
+  /// the echo's identity is adopted after the merge).
+  String _promotionTargetStanzaId({
+    required Message existing,
+    required String scopedStanzaId,
+    required Message? duplicateCandidate,
+    required Message? duplicateMessage,
+  }) {
+    if (duplicateCandidate == null) {
+      return scopedStanzaId;
+    }
+    if (duplicateMessage != null) {
+      return existing.stanzaID;
+    }
+    if (duplicateCandidate.stanzaID == scopedStanzaId) {
+      return existing.stanzaID;
+    }
+    return scopedStanzaId;
   }
 
   Future<void> _markOutgoingMessageFailed({required String stanzaId}) async {
@@ -2773,6 +2824,9 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       if (existingOrigin == originId) {
         return;
       }
+      if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
+        return;
+      }
       await db.updateMessage(existing.copyWith(originID: originId));
       await db.repairUnreadCountForChat(
         existing.chatJid,
@@ -2791,25 +2845,19 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       deltaAccountId: id.accountId,
       deltaChatId: id.chatId,
     );
-    if (scoped != null && _storedDeltaLocatorMatches(scoped, id)) {
-      return scoped;
-    }
-    final legacy = await db.getMessageByStanzaID(
-      deltaMessageStanzaId(id.msgId),
-    );
-    if (legacy == null || !_storedDeltaLocatorMatches(legacy, id)) {
+    if (scoped == null || !_storedDeltaLocatorMatches(scoped, id)) {
       return null;
     }
-    return legacy;
+    return scoped;
   }
 
+  /// Strict full-locator equality: account, chat, and message ids must all
+  /// match. Rows the identity migration could not scope (null deltaChatId)
+  /// never match — they are display-only legacy data, not merge targets.
   bool _storedDeltaLocatorMatches(Message message, _DeltaChatMessageId id) {
-    if (message.deltaMsgId != id.msgId ||
-        message.deltaAccountId != id.accountId) {
-      return false;
-    }
-    final deltaChatId = message.deltaChatId;
-    return deltaChatId == null || deltaChatId == id.chatId;
+    return message.deltaMsgId == id.msgId &&
+        message.deltaAccountId == id.accountId &&
+        message.deltaChatId == id.chatId;
   }
 
   Future<String?> _resolveMessageOriginId(
@@ -2819,17 +2867,21 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     final rfc724Mid = normalizeEmailMessageId(
       await context.getMessageRfc724Mid(msgId),
     );
-    if (rfc724Mid != null) {
+    if (rfc724Mid != null && !isDeltaGeneratedMessageId(rfc724Mid)) {
       return rfc724Mid;
     }
     final infoMessageId = parseDeltaMessageInfoMessageId(
       await context.getMessageInfo(msgId),
     );
-    if (infoMessageId != null) {
+    if (infoMessageId != null && !isDeltaGeneratedMessageId(infoMessageId)) {
       return infoMessageId;
     }
     final headers = await context.getMessageMimeHeaders(msgId);
-    return parseEmailMessageId(headers);
+    final headerMessageId = parseEmailMessageId(headers);
+    if (isDeltaGeneratedMessageId(headerMessageId)) {
+      return null;
+    }
+    return headerMessageId;
   }
 
   Chat _chatFromRemote({

@@ -6509,7 +6509,7 @@ void main() {
       expect(savedPending?.stanzaID, startsWith('dc-pending-'));
       expect(savedPending?.deltaMsgId, isNull);
       expect(replacedStanzaId, savedPending?.stanzaID);
-      expect(replacementMessage?.stanzaID, 'dc-msg-123');
+      expect(replacementMessage?.stanzaID, 'dc-local-msg-0-91-123');
       expect(replacementMessage?.deltaMsgId, 123);
       expect(replacementMessage?.deltaChatId, 91);
       expect(replacementMessage?.deltaAccountId, DeltaAccountDefaults.legacyId);

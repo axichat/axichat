@@ -1265,7 +1265,11 @@ class DeltaEventConsumer {
       return;
     }
     final int deltaAccountId = _deltaAccountId;
-    var stanzaId = _stanzaId(msg.id);
+    final stanzaId = deltaScopedMessageStorageStanzaId(
+      accountId: deltaAccountId,
+      chatId: chatId,
+      msgId: msg.id,
+    );
     final db = await _db();
     if (msg.isEncryptionStatusSystemMessage) {
       await db.ensureEmailEncryptionStatusMarkerForChat(resolvedChat.jid);
@@ -1307,18 +1311,14 @@ class DeltaEventConsumer {
         }
         return;
       }
-      _log.fine(
-        'Ignoring incompatible Delta stanza collision. '
+      _log.warning(
+        'Refusing to merge onto incompatible stored row for scoped stanza id. '
         'stanzaId=$stanzaId msgId=${msg.id} chatId=$chatId '
         'accountId=$deltaAccountId existingChat=${existing.chatJid} '
         'existingDeltaChat=${existing.deltaChatId} '
         'existingAccount=${existing.deltaAccountId}.',
       );
-      stanzaId = deltaScopedMessageStorageStanzaId(
-        accountId: deltaAccountId,
-        chatId: chatId,
-        msgId: msg.id,
-      );
+      return;
     }
     final existingByDeltaId = await db.getMessageByDeltaId(
       msg.id,
@@ -1361,16 +1361,11 @@ class DeltaEventConsumer {
         return;
       }
       _log.fine(
-        'Ignoring incompatible Delta id collision. '
+        'Ignoring incompatible Delta id collision; storing as new row. '
         'msgId=${msg.id} chatId=$chatId accountId=$deltaAccountId '
         'existingStanza=${existingByDeltaId.stanzaID} '
         'existingChat=${existingByDeltaId.chatJid} '
         'existingDeltaChat=${existingByDeltaId.deltaChatId}.',
-      );
-      stanzaId = deltaScopedMessageStorageStanzaId(
-        accountId: deltaAccountId,
-        chatId: chatId,
-        msgId: msg.id,
       );
     }
     final Message? persistedPending = msg.isOutgoing
@@ -1410,7 +1405,7 @@ class DeltaEventConsumer {
       );
       return;
     }
-    final String? originId = await _resolveOriginIdForInitialStore(msg.id);
+    final String originId = await _resolveOriginIdForInitialStore(msg);
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
     final senderJid = isOutgoing
@@ -1842,32 +1837,23 @@ class DeltaEventConsumer {
       deltaAccountId: id.accountId,
       deltaChatId: id.chatId,
     );
-    if (scoped != null &&
-        _storedDeltaLocatorMatches(
+    if (scoped == null ||
+        !_storedDeltaLocatorMatches(
           scoped,
           msgId: id.msgId,
           chatId: id.chatId,
           accountId: id.accountId,
           chatJid: id.chatJid,
         )) {
-      return scoped;
-    }
-    final legacy = await db.getMessageByStanzaID(_stanzaId(id.msgId));
-    if (legacy == null) {
       return null;
     }
-    if (!_storedDeltaLocatorMatches(
-      legacy,
-      msgId: id.msgId,
-      chatId: id.chatId,
-      accountId: id.accountId,
-      chatJid: id.chatJid,
-    )) {
-      return null;
-    }
-    return legacy;
+    return scoped;
   }
 
+  /// Strict full-locator equality: account, chat (both jid and delta id), and
+  /// message id must all match. Rows the identity migration could not scope
+  /// (null deltaChatId) never match — display-only legacy data, never merge
+  /// targets.
   bool _storedDeltaLocatorMatches(
     Message message, {
     required int msgId,
@@ -1875,13 +1861,10 @@ class DeltaEventConsumer {
     required int accountId,
     required String chatJid,
   }) {
-    if (message.deltaMsgId != msgId ||
-        message.deltaAccountId != accountId ||
-        message.chatJid != chatJid) {
-      return false;
-    }
-    final deltaChatId = message.deltaChatId;
-    return deltaChatId == null || deltaChatId == chatId;
+    return message.deltaMsgId == msgId &&
+        message.deltaAccountId == accountId &&
+        message.chatJid == chatJid &&
+        message.deltaChatId == chatId;
   }
 
   Future<Message?> _matchPersistedOutgoingMessage({
@@ -2249,7 +2232,8 @@ class DeltaEventConsumer {
     if (!existing.isEmailBacked) {
       return;
     }
-    if (normalizeEmailMessageId(existing.originID) != null) {
+    final existingOrigin = normalizeEmailMessageId(existing.originID);
+    if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
       return;
     }
     if (!_core.supportsMessageRfc724Mid) {
@@ -2258,9 +2242,12 @@ class DeltaEventConsumer {
     await _scheduleOriginIdHydration(id: id);
   }
 
+  /// Upgrades a missing or content-derived origin key to a real Message-ID
+  /// once delta can supply one. Never downgrades a stored real Message-ID.
   Future<void> _hydrateOriginId({required _DeltaChatJidMessageId id}) async {
     final nativeOriginId = await _resolveOriginId(id.msgId);
     if (nativeOriginId == null) {
+      _log.info('Origin ID hydration exhausted for Delta msg ${id.msgId}.');
       return;
     }
     final db = await _db();
@@ -2270,6 +2257,9 @@ class DeltaEventConsumer {
     }
     final existingOrigin = normalizeEmailMessageId(existing.originID);
     if (existingOrigin == nativeOriginId) {
+      return;
+    }
+    if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
       return;
     }
     final updated = existing.copyWith(originID: nativeOriginId);
@@ -2293,6 +2283,9 @@ class DeltaEventConsumer {
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to load Delta RFC724 Message-ID.', error, stackTrace);
     }
+    if (isDeltaGeneratedMessageId(rfc724Mid)) {
+      rfc724Mid = null;
+    }
     if (rfc724Mid != null) {
       await _logOriginResolutionDiagnostic(
         msgId: msgId,
@@ -2313,6 +2306,9 @@ class DeltaEventConsumer {
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to load Delta message info.', error, stackTrace);
     }
+    if (isDeltaGeneratedMessageId(parsedInfoMessageId)) {
+      parsedInfoMessageId = null;
+    }
     if (parsedInfoMessageId != null) {
       await _logOriginResolutionDiagnostic(
         msgId: msgId,
@@ -2327,7 +2323,10 @@ class DeltaEventConsumer {
       return parsedInfoMessageId;
     }
     final headers = await _core.getMessageMimeHeaders(msgId);
-    final parsedHeaderMessageId = parseEmailMessageId(headers);
+    var parsedHeaderMessageId = parseEmailMessageId(headers);
+    if (isDeltaGeneratedMessageId(parsedHeaderMessageId)) {
+      parsedHeaderMessageId = null;
+    }
     await _logOriginResolutionDiagnostic(
       msgId: msgId,
       source: 'mime_headers',
@@ -2341,13 +2340,27 @@ class DeltaEventConsumer {
     return parsedHeaderMessageId;
   }
 
-  Future<String?> _resolveOriginIdForInitialStore(int msgId) async {
+  /// Initial-store identity ladder: real Message-ID when delta holds one,
+  /// otherwise the deterministic content-derived key — never null, never a
+  /// receiver-minted `GEN_` value.
+  Future<String> _resolveOriginIdForInitialStore(DeltaMessage msg) async {
+    String? nativeOriginId;
     try {
-      return await _resolveOriginId(msgId);
+      nativeOriginId = await _resolveOriginId(msg.id);
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to resolve Delta origin ID.', error, stackTrace);
-      return null;
     }
+    if (nativeOriginId != null) {
+      return nativeOriginId;
+    }
+    _log.info(
+      'No usable Message-ID for Delta msg ${msg.id}; using derived key.',
+    );
+    return derivedEmailMessageKey(
+      subject: msg.subject,
+      timestamp: msg.timestamp,
+      bodyText: msg.text,
+    );
   }
 
   Future<void> _updateChatSummaryForIncomingMessage({

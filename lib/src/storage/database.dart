@@ -42,6 +42,10 @@ const String _databaseFileSuffix = '.axichat.drift';
 const int _messageAttachmentMaxCount = 50;
 const int _emptyTimestampMillis = 0;
 
+/// Lookup candidates for a stored origin id. Email rows are canonical
+/// post-v60, but this lookup also serves raw XMPP origin ids and raw
+/// bracketed legacy values, so the email-shaped ('@'-bearing) variants are
+/// retained deliberately.
 List<String> _emailOriginIdCandidates(String originID) {
   final trimmed = originID.trim();
   if (trimmed.isEmpty) {
@@ -2051,7 +2055,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 59;
+  int get schemaVersion => 60;
 
   @override
   MigrationStrategy get migration {
@@ -2518,6 +2522,9 @@ WHERE transport = ${MessageTransport.email.index}
         }
         if (from < 59) {
           await repairGeneratedEmailAttachmentCaptionBodies();
+        }
+        if (from < 60) {
+          await migrateMessageIdentityToLadder();
         }
       },
       beforeOpen: (_) async {
@@ -7722,6 +7729,94 @@ WHERE jid = ?
     await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
       ChatsCompanion(archived: Value(archived)),
     );
+  }
+
+  /// v60 (message identity): backfills missing delta chat scope on email rows
+  /// where the mapping is unambiguous, and rewrites stored origin ids onto the
+  /// deterministic identity ladder (canonical Message-ID, or content-derived
+  /// key for absent/delta-generated ids). Unresolvable rows are counted and
+  /// left untouched — they never act as merge targets.
+  Future<void> migrateMessageIdentityToLadder() async {
+    final scopedByMapping = await _backfillDeltaChatScopeFromAccountMappings();
+    final scopedByChat = await _backfillDeltaChatScopeFromChatRows();
+    final unresolvable = await _countUnscopedEmailMessageRows();
+    final rewritten = await _rewriteEmailOriginIdsToLadder();
+    _log.info(
+      'Message identity migration: scopedByMapping=$scopedByMapping '
+      'scopedByChat=$scopedByChat unresolvable=$unresolvable '
+      'originIdsRewritten=$rewritten',
+    );
+  }
+
+  Future<int> _backfillDeltaChatScopeFromAccountMappings() {
+    return customUpdate(
+      '''
+UPDATE messages
+SET delta_chat_id = (
+  SELECT MIN(eca.delta_chat_id) FROM email_chat_accounts eca
+  WHERE eca.chat_jid = messages.chat_jid
+    AND eca.delta_account_id = messages.delta_account_id
+)
+WHERE delta_msg_id IS NOT NULL
+  AND delta_chat_id IS NULL
+  AND (
+    SELECT COUNT(DISTINCT eca.delta_chat_id) FROM email_chat_accounts eca
+    WHERE eca.chat_jid = messages.chat_jid
+      AND eca.delta_account_id = messages.delta_account_id
+  ) = 1
+''',
+      updates: {messages},
+      updateKind: UpdateKind.update,
+    );
+  }
+
+  Future<int> _backfillDeltaChatScopeFromChatRows() {
+    return customUpdate(
+      '''
+UPDATE messages
+SET delta_chat_id = (
+  SELECT c.delta_chat_id FROM chats c WHERE c.jid = messages.chat_jid
+)
+WHERE delta_msg_id IS NOT NULL
+  AND delta_chat_id IS NULL
+  AND (
+    SELECT c.delta_chat_id FROM chats c WHERE c.jid = messages.chat_jid
+  ) IS NOT NULL
+''',
+      updates: {messages},
+      updateKind: UpdateKind.update,
+    );
+  }
+
+  Future<int> _countUnscopedEmailMessageRows() async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS unscoped FROM messages '
+      'WHERE delta_msg_id IS NOT NULL AND delta_chat_id IS NULL',
+    ).getSingle();
+    return row.read<int>('unscoped');
+  }
+
+  Future<int> _rewriteEmailOriginIdsToLadder() async {
+    final rows = await (select(
+      messages,
+    )..where((tbl) => tbl.deltaMsgId.isNotNull())).get();
+    var rewritten = 0;
+    for (final row in rows) {
+      final canonical = canonicalEmailOriginId(
+        rfc724Mid: row.originID,
+        subject: row.subject,
+        timestamp: row.timestamp,
+        bodyText: row.body,
+      );
+      if (canonical == row.originID) {
+        continue;
+      }
+      await (update(messages)
+            ..where((tbl) => tbl.stanzaID.equals(row.stanzaID)))
+          .write(MessagesCompanion(originID: Value(canonical)));
+      rewritten++;
+    }
+    return rewritten;
   }
 
   Future<void> repairGeneratedEmailAttachmentCaptionBodies() async {

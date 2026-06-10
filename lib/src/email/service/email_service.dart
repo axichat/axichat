@@ -2678,7 +2678,11 @@ class EmailService {
         stanzaId ??
         (resolvedMsgId == null
             ? throw StateError(_missingOutgoingDeltaIdError)
-            : deltaMessageStanzaId(resolvedMsgId));
+            : deltaScopedMessageStorageStanzaId(
+                accountId: accountId,
+                chatId: chatId,
+                msgId: resolvedMsgId,
+              ));
     if (metadata != null) {
       await db.saveFileMetadata(metadata);
     }
@@ -2745,10 +2749,17 @@ class EmailService {
       }
       return;
     }
-    final duplicateStanzaId = deltaMessageStanzaId(msgId);
-    final duplicateCandidate = duplicateStanzaId == stanzaId
-        ? null
-        : await db.getMessageByStanzaID(duplicateStanzaId);
+    final scopedStanzaId = deltaScopedMessageStorageStanzaId(
+      accountId: accountId,
+      chatId: chatId,
+      msgId: msgId,
+    );
+    final duplicateCandidate = await _findOutgoingEmailEchoRow(
+      db: db,
+      pendingStanzaId: stanzaId,
+      scopedStanzaId: scopedStanzaId,
+      legacyStanzaId: deltaMessageStanzaId(msgId),
+    );
     final duplicateMessage =
         duplicateCandidate == null ||
             duplicateCandidate.deltaMsgId != msgId ||
@@ -2758,15 +2769,12 @@ class EmailService {
                 duplicateCandidate.deltaChatId != chatId)
         ? null
         : duplicateCandidate;
-    final targetStanzaId = duplicateCandidate == null
-        ? duplicateStanzaId
-        : duplicateMessage == null
-        ? deltaScopedMessageStorageStanzaId(
-            accountId: accountId,
-            chatId: chatId,
-            msgId: msgId,
-          )
-        : existing.stanzaID;
+    final targetStanzaId = _outgoingEmailPromotionTarget(
+      existing: existing,
+      scopedStanzaId: scopedStanzaId,
+      duplicateCandidate: duplicateCandidate,
+      duplicateMessage: duplicateMessage,
+    );
     var next = existing;
     if (existing.stanzaID != targetStanzaId ||
         existing.deltaMsgId != msgId ||
@@ -2856,8 +2864,8 @@ class EmailService {
         selfJid: existing.senderJid,
         emailSelfJid: existing.senderJid,
       );
-      if (next.stanzaID != duplicateStanzaId) {
-        final promoted = next.copyWith(stanzaID: duplicateStanzaId);
+      if (next.stanzaID != duplicateMessage.stanzaID) {
+        final promoted = next.copyWith(stanzaID: duplicateMessage.stanzaID);
         await db.replaceMessageStanzaID(
           currentStanzaID: next.stanzaID,
           message: promoted,
@@ -2872,6 +2880,49 @@ class EmailService {
         dcAccountId: accountId,
       );
     }
+  }
+
+  /// Finds an already-ingested echo row for an outgoing message: scoped
+  /// stanza ids are the current mint; legacy `dc-msg-*` covers pre-migration
+  /// leftovers.
+  Future<Message?> _findOutgoingEmailEchoRow({
+    required XmppDatabase db,
+    required String pendingStanzaId,
+    required String scopedStanzaId,
+    required String legacyStanzaId,
+  }) async {
+    if (scopedStanzaId != pendingStanzaId) {
+      final scoped = await db.getMessageByStanzaID(scopedStanzaId);
+      if (scoped != null) {
+        return scoped;
+      }
+    }
+    if (legacyStanzaId == pendingStanzaId) {
+      return null;
+    }
+    return db.getMessageByStanzaID(legacyStanzaId);
+  }
+
+  /// Pending rows promote onto the scoped stanza id unless an incompatible
+  /// row already owns it (keep the pending id — never merge onto a mismatched
+  /// locator) or a compatible echo exists (the echo's identity is adopted
+  /// after the merge).
+  String _outgoingEmailPromotionTarget({
+    required Message existing,
+    required String scopedStanzaId,
+    required Message? duplicateCandidate,
+    required Message? duplicateMessage,
+  }) {
+    if (duplicateCandidate == null) {
+      return scopedStanzaId;
+    }
+    if (duplicateMessage != null) {
+      return existing.stanzaID;
+    }
+    if (duplicateCandidate.stanzaID == scopedStanzaId) {
+      return existing.stanzaID;
+    }
+    return scopedStanzaId;
   }
 
   Future<void> _markOutgoingEmailFailed({required String stanzaId}) async {
