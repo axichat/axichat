@@ -3,7 +3,6 @@
 import 'dart:core';
 import 'dart:isolate';
 
-import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/common/policy.dart';
@@ -376,7 +375,6 @@ void prepareMockConnection() {
 Future<void> connectSuccessfully(
   XmppService xmppService, {
   String accountJid = jid,
-  EndpointOverride? endpoint,
 }) async {
   final parsedJid = mox.JID.fromString(accountJid);
   final settings = XmppConnectionSettings(
@@ -492,7 +490,6 @@ Future<void> connectSuccessfully(
     password: password,
     databasePrefix: '',
     databasePassphrase: '',
-    endpoint: endpoint,
   );
 }
 

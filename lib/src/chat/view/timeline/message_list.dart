@@ -6,6 +6,8 @@ class _ChatMessageList extends StatefulWidget {
     required this.itemBuilder,
     required this.messageListOptions,
     required this.scrollToBottomOptions,
+    required this.onRenderedMessagesChanged,
+    required this.renderedMessagesHydrationKey,
     this.readOnly = false,
   });
 
@@ -18,19 +20,23 @@ class _ChatMessageList extends StatefulWidget {
   itemBuilder;
   final MessageListOptions messageListOptions;
   final ScrollToBottomOptions scrollToBottomOptions;
+  final ValueChanged<List<Message>> onRenderedMessagesChanged;
+  final Object? renderedMessagesHydrationKey;
   final bool readOnly;
 
   @override
   State<_ChatMessageList> createState() => _ChatMessageListState();
 }
 
-class _ChatMessageListRow extends StatelessWidget {
+class _ChatMessageListRow extends StatefulWidget {
   const _ChatMessageListRow({
     required this.item,
     required this.previousItem,
     required this.nextItem,
     required this.itemBuilder,
     required this.messageListOptions,
+    required this.onMessageRowMounted,
+    required this.onMessageRowUnmounted,
   });
 
   final ChatTimelineItem item;
@@ -43,24 +49,82 @@ class _ChatMessageListRow extends StatelessWidget {
   )
   itemBuilder;
   final MessageListOptions messageListOptions;
+  final ValueChanged<Message> onMessageRowMounted;
+  final ValueChanged<Message> onMessageRowUnmounted;
+
+  @override
+  State<_ChatMessageListRow> createState() => _ChatMessageListRowState();
+}
+
+class _ChatMessageListRowState extends State<_ChatMessageListRow> {
+  Message? get _message {
+    final item = widget.item;
+    return item is ChatTimelineMessageItem ? item.messageModel : null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final message = _message;
+    if (message != null) {
+      widget.onMessageRowMounted(message);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatMessageListRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldItem = oldWidget.item;
+    final oldMessage = oldItem is ChatTimelineMessageItem
+        ? oldItem.messageModel
+        : null;
+    final message = _message;
+    final oldMessageKey = oldMessage == null
+        ? null
+        : _renderedMessageKey(oldMessage);
+    final messageKey = message == null ? null : _renderedMessageKey(message);
+    if (oldMessageKey == messageKey) {
+      if (message != null && oldMessage != message) {
+        widget.onMessageRowMounted(message);
+      }
+      return;
+    }
+    if (oldMessage != null) {
+      oldWidget.onMessageRowUnmounted(oldMessage);
+    }
+    if (message != null) {
+      widget.onMessageRowMounted(message);
+    }
+  }
+
+  @override
+  void dispose() {
+    final message = _message;
+    if (message != null) {
+      widget.onMessageRowUnmounted(message);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final isAfterDateSeparator = _shouldShowChatTimelineDateSeparator(
-      previousItem,
-      item,
-      messageListOptions,
+      widget.previousItem,
+      widget.item,
+      widget.messageListOptions,
     );
     return Column(
       children: [
         if (isAfterDateSeparator)
-          messageListOptions.dateSeparatorBuilder != null
-              ? messageListOptions.dateSeparatorBuilder!(item.createdAt)
+          widget.messageListOptions.dateSeparatorBuilder != null
+              ? widget.messageListOptions.dateSeparatorBuilder!(
+                  widget.item.createdAt,
+                )
               : DefaultDateSeparator(
-                  date: item.createdAt,
-                  messageListOptions: messageListOptions,
+                  date: widget.item.createdAt,
+                  messageListOptions: widget.messageListOptions,
                 ),
-        itemBuilder(item, previousItem, nextItem),
+        widget.itemBuilder(widget.item, widget.previousItem, widget.nextItem),
       ],
     );
   }
@@ -69,8 +133,12 @@ class _ChatMessageListRow extends StatelessWidget {
 class _ChatMessageListState extends State<_ChatMessageList> {
   bool _scrollToBottomVisible = false;
   bool _isLoadingMore = false;
+  bool _renderedMessagesNotificationScheduled = false;
+  bool _renderedMessagesNotificationForced = false;
   int? _loadEarlierStartingCount;
   late final ScrollController _scrollController;
+  final Map<String, Message> _renderedMessagesById = {};
+  List<String> _lastRenderedMessageIds = const <String>[];
 
   @override
   void initState() {
@@ -87,6 +155,15 @@ class _ChatMessageListState extends State<_ChatMessageList> {
       _scrollController.dispose();
     }
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatMessageList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.renderedMessagesHydrationKey !=
+        widget.renderedMessagesHydrationKey) {
+      _scheduleRenderedMessagesChanged(force: true);
+    }
   }
 
   @override
@@ -118,12 +195,17 @@ class _ChatMessageListState extends State<_ChatMessageList> {
                   final ChatTimelineItem? nextItem = index > 0
                       ? items[index - 1]
                       : null;
-                  return _ChatMessageListRow(
-                    item: items[index],
-                    previousItem: previousItem,
-                    nextItem: nextItem,
-                    itemBuilder: itemBuilder,
-                    messageListOptions: messageListOptions,
+                  return RepaintBoundary(
+                    key: ValueKey<String>(items[index].id),
+                    child: _ChatMessageListRow(
+                      item: items[index],
+                      previousItem: previousItem,
+                      nextItem: nextItem,
+                      itemBuilder: itemBuilder,
+                      messageListOptions: messageListOptions,
+                      onMessageRowMounted: _handleMessageRowMounted,
+                      onMessageRowUnmounted: _handleMessageRowUnmounted,
+                    ),
                   );
                 },
               ),
@@ -185,6 +267,46 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     }
   }
 
+  void _handleMessageRowMounted(Message message) {
+    _renderedMessagesById[_renderedMessageKey(message)] = message;
+    _scheduleRenderedMessagesChanged();
+  }
+
+  void _handleMessageRowUnmounted(Message message) {
+    _renderedMessagesById.remove(_renderedMessageKey(message));
+    _scheduleRenderedMessagesChanged();
+  }
+
+  void _scheduleRenderedMessagesChanged({bool force = false}) {
+    if (force) {
+      _renderedMessagesNotificationForced = true;
+    }
+    if (_renderedMessagesNotificationScheduled) {
+      return;
+    }
+    _renderedMessagesNotificationScheduled = true;
+    scheduleMicrotask(() {
+      final forced = _renderedMessagesNotificationForced;
+      _renderedMessagesNotificationScheduled = false;
+      _renderedMessagesNotificationForced = false;
+      if (!mounted) {
+        return;
+      }
+      final messageIds = _renderedMessagesById.keys.toList(growable: false)
+        ..sort();
+      if (!forced && listEquals(messageIds, _lastRenderedMessageIds)) {
+        return;
+      }
+      _lastRenderedMessageIds = messageIds;
+      if (_renderedMessagesById.isEmpty) {
+        return;
+      }
+      widget.onRenderedMessagesChanged(
+        List<Message>.unmodifiable(_renderedMessagesById.values),
+      );
+    });
+  }
+
   void _showScrollToBottom() {
     if (_scrollToBottomVisible) return;
     setState(() {
@@ -198,6 +320,36 @@ class _ChatMessageListState extends State<_ChatMessageList> {
       _scrollToBottomVisible = false;
     });
   }
+}
+
+String _renderedMessageKey(Message message) {
+  return '${message.chatJid}\n${message.stanzaID}';
+}
+
+@visibleForTesting
+Widget debugChatMessageListForTesting({
+  required List<ChatTimelineItem> items,
+  required Widget Function(
+    ChatTimelineItem item,
+    ChatTimelineItem? previous,
+    ChatTimelineItem? next,
+  )
+  itemBuilder,
+  required MessageListOptions messageListOptions,
+  required ScrollToBottomOptions scrollToBottomOptions,
+  required ValueChanged<List<Message>> onRenderedMessagesChanged,
+  Object? renderedMessagesHydrationKey,
+  bool readOnly = false,
+}) {
+  return _ChatMessageList(
+    items: items,
+    itemBuilder: itemBuilder,
+    messageListOptions: messageListOptions,
+    scrollToBottomOptions: scrollToBottomOptions,
+    onRenderedMessagesChanged: onRenderedMessagesChanged,
+    renderedMessagesHydrationKey: renderedMessagesHydrationKey,
+    readOnly: readOnly,
+  );
 }
 
 bool _shouldShowChatTimelineDateSeparator(

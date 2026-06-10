@@ -16,3 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 Corresponding source code is available at:
 https://gitlab.com/axichat/axichat
+
+Delta Chat Core / deltachat-jsonrpc
+Copyright (C) Delta Chat contributors, Bjoern Petersen, and contributors.
+Licensed under the Mozilla Public License Version 2.0.
+Source: https://github.com/chatmail/core
+
+Axichat links against Delta Chat Core for email transport. Axichat's
+email Delta runtime bridge is original Dart code, but its primitive
+JSON-RPC envelope and method/event naming are intentionally aligned with
+Delta Chat's public deltachat-jsonrpc API conventions.

@@ -16,7 +16,6 @@ import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_state_store.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
-import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -756,6 +755,13 @@ void stubUnsafeBootstrapManagersUnavailable() {
   when(() => mockConnection.getManager<mox.PubSubManager>()).thenReturn(null);
 }
 
+Future<void> _pumpUntil(bool Function() isReady, {int attempts = 20}) async {
+  for (var attempt = 0; attempt < attempts && !isReady(); attempt++) {
+    await pumpEventQueue(times: 5);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 Future<void> _openXmppStateStore(String name) async {
   final tempDir = await Directory.systemTemp.createTemp(name);
   Hive.init(tempDir.path);
@@ -989,7 +995,7 @@ void main() {
     await xmppService.close();
   });
 
-  test('connect applies explicit endpoint to connection settings', () async {
+  test('connect leaves XMPP endpoint unset for JID-domain routing', () async {
     xmppService = XmppService(
       buildConnection: () => mockConnection,
       buildStateStore: (_, _) => mockStateStore,
@@ -997,17 +1003,14 @@ void main() {
       notificationService: mockNotificationService,
     );
 
-    await connectSuccessfully(
-      xmppService,
-      endpoint: const EndpointOverride(host: 'xmpp.custom.example', port: 5223),
-    );
+    await connectSuccessfully(xmppService);
 
     final captured = verify(
       () => mockConnection.connectionSettings = captureAny(),
     ).captured;
     final settings = captured.single as XmppConnectionSettings;
-    expect(settings.host, 'xmpp.custom.example');
-    expect(settings.port, 5223);
+    expect(settings.host, isNull);
+    expect(settings.port, isNull);
     await xmppService.close();
   });
 
@@ -1023,6 +1026,7 @@ void main() {
         notificationService: mockNotificationService,
       );
       await connectSuccessfully(xmppService);
+      stubUnsafeBootstrapManagersUnavailable();
 
       when(
         () => mockNotificationService.sendNotification(
@@ -1522,9 +1526,13 @@ void main() {
           );
 
           eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
-          await pumpEventQueue(times: 20);
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-          await pumpEventQueue(times: 20);
+          await _pumpUntil(
+            () =>
+                stateStoreValues[xmppService
+                    .selfAvatarPendingPublishKey
+                    .value] ==
+                null,
+          );
 
           expect(pubsubManager.publishCount, equals(0));
           expect(
@@ -3072,9 +3080,7 @@ void main() {
       expect(xmppService.selfAvatarHydrating, isTrue);
 
       metadataGates.first.complete();
-      await pumpEventQueue(times: 20);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      await pumpEventQueue(times: 20);
+      await _pumpUntil(() => !xmppService.selfAvatarHydrating);
 
       expect(xmppService.selfAvatarHydrating, isFalse);
 
@@ -3111,9 +3117,7 @@ void main() {
       expect(xmppService.selfAvatarHydrating, isTrue);
 
       metadataGates.last.complete();
-      await pumpEventQueue(times: 20);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      await pumpEventQueue(times: 20);
+      await _pumpUntil(() => !xmppService.selfAvatarHydrating);
 
       expect(xmppService.selfAvatarHydrating, isFalse);
     });
@@ -7428,6 +7432,22 @@ void main() {
       },
     );
 
+    test('pauseAutomaticReconnect marks connected state stale.', () async {
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          mox.XmppConnectionState.connected,
+          mox.XmppConnectionState.notConnected,
+        ),
+      );
+      await pumpEventQueue();
+      await reconnectionPolicy.setShouldReconnect(true);
+
+      await xmppService.pauseAutomaticReconnect();
+
+      expect(xmppService.connectionState, ConnectionState.notConnected);
+      expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
+    });
+
     test(
       'networkAvailable and autoFailure stay ignored while automatic reconnect is paused.',
       () async {
@@ -7486,7 +7506,7 @@ void main() {
       expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
     });
 
-    test('connected resume request does not clear reconnect pause.', () async {
+    test('paused connected resume request dispatches reconnect.', () async {
       eventStreamController.add(
         mox.ConnectionStateChangedEvent(
           mox.XmppConnectionState.connected,
@@ -7502,16 +7522,13 @@ void main() {
         isTrue,
       );
 
-      expect(reconnectTriggers, isEmpty);
-      expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
-      expect(
-        await xmppService.requestReconnect(ReconnectTrigger.networkAvailable),
-        isFalse,
-      );
+      expect(xmppService.connectionState, ConnectionState.connecting);
+      expect(reconnectTriggers, [ReconnectTrigger.resume]);
+      expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
     });
 
     test(
-      'connected active client state restores reconnect without dispatching.',
+      'active client state does not silently restore a paused stale connection.',
       () async {
         eventStreamController.add(
           mox.ConnectionStateChangedEvent(
@@ -7525,9 +7542,9 @@ void main() {
 
         await xmppService.setClientState();
 
-        expect(xmppService.connectionState, ConnectionState.connected);
+        expect(xmppService.connectionState, ConnectionState.notConnected);
         expect(reconnectTriggers, isEmpty);
-        expect(await reconnectionPolicy.getShouldReconnect(), isTrue);
+        expect(await reconnectionPolicy.getShouldReconnect(), isFalse);
       },
     );
 
@@ -8458,6 +8475,7 @@ void main() {
           connectingWatchdogTimeout: const Duration(milliseconds: 50),
         );
         await connectSuccessfully(xmppService);
+        stubUnsafeBootstrapManagersUnavailable();
 
         eventStreamController.add(
           mox.ConnectionStateChangedEvent(
@@ -8693,6 +8711,7 @@ void main() {
       );
 
       await connectSuccessfully(xmppService);
+      stubUnsafeBootstrapManagersUnavailable();
       eventStreamController.add(
         mox.ConnectionStateChangedEvent(
           ConnectionState.connected,

@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:archive/archive_io.dart';
@@ -14,6 +13,7 @@ import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
@@ -24,6 +24,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 import 'package:delta_ffi/delta_safe.dart';
@@ -42,12 +43,14 @@ import 'package:axichat/src/email/service/email_spam_service.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
+import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -306,7 +309,7 @@ final class _EmailAccountBinding {
   final String address;
   final int deltaAccountId;
 
-  String senderIdentity(EmailDeltaTransport transport) =>
+  String senderIdentity(EmailDeltaRuntime transport) =>
       transport.selfJidForAccount(deltaAccountId) ?? address;
 }
 
@@ -325,8 +328,109 @@ final class _EmailChatBinding {
 
   String get accountAddress => account.address;
 
-  String senderIdentity(EmailDeltaTransport transport) =>
+  String senderIdentity(EmailDeltaRuntime transport) =>
       account.senderIdentity(transport);
+}
+
+final class _DeltaChatMessageId {
+  const _DeltaChatMessageId({
+    required this.accountId,
+    required this.chatId,
+    required this.msgId,
+  });
+
+  final int accountId;
+  final int? chatId;
+  final int msgId;
+}
+
+final class _EmailRuntimeEventCore implements DeltaEventCore {
+  const _EmailRuntimeEventCore({
+    required EmailDeltaRuntime transport,
+    required int accountId,
+  }) : _transport = transport,
+       _accountId = accountId;
+
+  final EmailDeltaRuntime _transport;
+  final int _accountId;
+
+  @override
+  int get accountId => _accountId;
+
+  @override
+  bool get supportsMessageRfc724Mid => true;
+
+  @override
+  bool get supportsMessageInfo => true;
+
+  @override
+  bool get supportsMessageDebugInfo => true;
+
+  @override
+  Future<List<DeltaChatlistEntry>> getChatlist({int flags = 0}) =>
+      _transport.getChatlist(flags: flags, accountId: _accountId);
+
+  @override
+  Future<List<int>> getChatMessageIds({
+    required int chatId,
+    int? beforeMessageId,
+  }) => _transport.getChatMessageIds(
+    chatId: chatId,
+    beforeMessageId: beforeMessageId,
+    accountId: _accountId,
+  );
+
+  @override
+  Future<DeltaMessage?> getMessage(int messageId) =>
+      _transport.getMessage(messageId, accountId: _accountId);
+
+  @override
+  Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId) =>
+      _transport.getFreshMessageCountSafe(chatId, accountId: _accountId);
+
+  @override
+  Future<bool> downloadFullMessage(int messageId) =>
+      _transport.downloadFullMessage(messageId, accountId: _accountId);
+
+  @override
+  Future<String?> getMessageRfc724Mid(int messageId) =>
+      _transport.getMessageRfc724Mid(messageId, accountId: _accountId);
+
+  @override
+  Future<String?> getMessageInfo(int messageId) =>
+      _transport.getMessageInfo(messageId, accountId: _accountId);
+
+  @override
+  Future<String?> getMessageMimeHeaders(int messageId) =>
+      _transport.getMessageMimeHeaders(messageId, accountId: _accountId);
+
+  @override
+  Future<String?> getMessageDebugInfo(int messageId) =>
+      _transport.getMessageDebugInfo(messageId, accountId: _accountId);
+
+  @override
+  Future<DeltaMessageRfc822Body?> getMessageRfc822Body(int messageId) =>
+      _transport.getMessageRfc822Body(messageId, accountId: _accountId);
+
+  @override
+  Future<DeltaContactPublicKeyImport> importContactPublicKey({
+    required String address,
+    required String displayName,
+    required String armoredPublicKey,
+  }) => _transport.importContactPublicKey(
+    address: address,
+    displayName: displayName,
+    armoredPublicKey: armoredPublicKey,
+    accountId: _accountId,
+  );
+
+  @override
+  Future<DeltaChatSendCapabilities> chatSendCapabilities(int chatId) =>
+      _transport.chatSendCapabilities(chatId: chatId, accountId: _accountId);
+
+  @override
+  Future<DeltaChat?> getChat(int chatId) =>
+      _transport.getChat(chatId, accountId: _accountId);
 }
 
 sealed class EmailProvisioningException implements Exception {
@@ -459,7 +563,6 @@ class EmailService {
   static const int _attachmentFanOutWarningBytes = 8 * 1024 * 1024;
   static const int _deltaMessageIdUnset = DeltaMessageId.none;
   static const int _emptyUnreadCount = 0;
-  static const Duration _foregroundKeepaliveInterval = Duration(seconds: 45);
   static const Duration _foregroundFetchTimeout = Duration(seconds: 15);
   static const Duration _connectivityProbeTimeout = Duration(seconds: 1);
   static const Duration _notificationFlushDelay = Duration(milliseconds: 500);
@@ -588,6 +691,8 @@ class EmailService {
   };
   static const int _minimumHistoryWindow = 1;
   static const bool _includePseudoMessagesInBackfill = false;
+  static const String _missingOutgoingDeltaIdError =
+      'Outgoing email message missing delta ID.';
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
 
@@ -601,8 +706,8 @@ class EmailService {
   EmailService({
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
-    EmailDeltaTransport? transport,
-    EmailDeltaTransport Function()? transportFactory,
+    EmailDeltaRuntime? transport,
+    EmailDeltaRuntime Function()? transportFactory,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
     Logger? logger,
@@ -628,11 +733,8 @@ class EmailService {
        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     _transportFactory =
         transportFactory ??
-        () => EmailDeltaTransport(
-          databaseBuilder: _databaseBuilder,
-          databaseOperationTracker: _trackAppDatabaseOperation,
+        () => EmailDeltaWorkerRuntime(
           logger: _log,
-          localizationsProvider: () => _l10n,
           xmppSelfJidProvider: _xmppSelfJidProvider,
         );
     _transport = transport ?? _transportFactory();
@@ -655,22 +757,13 @@ class EmailService {
         (address) => _transport.unblockContact(address),
       ),
     );
-    _eventListener = (event) {
-      if (!_canProcessDeltaWork) {
-        return;
-      }
-      _enqueueDeltaOperation(
-        () => _processDeltaEvent(event),
-        operationName: _deltaQueueOperationNameProcessDeltaEvent,
-      );
-    };
     _attachTransportListener();
   }
 
   final CredentialStore _credentialStore;
   final Future<XmppDatabase> Function() _databaseBuilder;
-  late final EmailDeltaTransport Function() _transportFactory;
-  late EmailDeltaTransport _transport;
+  late final EmailDeltaRuntime Function() _transportFactory;
+  late EmailDeltaRuntime _transport;
   final EmailConnectionConfigBuilder _connectionConfigBuilder;
   final Logger _log;
   EndpointConfig _endpointConfig;
@@ -694,23 +787,22 @@ class EmailService {
 
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
-  late final void Function(DeltaCoreEvent) _eventListener;
-  EmailDeltaTransport? _listenerTransport;
+  EmailDeltaRuntime? _listenerTransport;
+  void Function(DeltaCoreEvent)? _listenerCallback;
+  final Map<int, DeltaEventConsumer> _deltaEventConsumers = {};
 
   Future<void> _deltaOperationQueue = Future<void>.value();
   int _deltaOperationQueueEpoch = 0;
 
   _EmailRuntimePhase _runtimePhase = _EmailRuntimePhase.stopped;
   Future<void>? _stopFuture;
-  EmailDeltaTransport? _stopFutureTransport;
+  EmailDeltaRuntime? _stopFutureTransport;
   Future<void>? _pendingNativeCleanup;
   final _authFailureController = StreamController<DeltaChatException>.broadcast(
     sync: true,
   );
   bool _foregroundKeepaliveEnabled = false;
-  bool _foregroundKeepaliveListenerAttached = false;
-  bool _foregroundKeepaliveServiceAcquired = false;
-  final EmailAsyncQueue _foregroundKeepaliveQueue = EmailAsyncQueue();
+  bool _foregroundKeepaliveLeaseAcquired = false;
   int _foregroundKeepaliveOperationId = 0;
   Timer? _contactsSyncTimer;
   String? _pendingPushToken;
@@ -745,6 +837,7 @@ class EmailService {
   final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   final EmailAsyncQueue _contactsSyncQueue = EmailAsyncQueue();
   final EmailAsyncQueue _chatlistSyncQueue = EmailAsyncQueue();
+  Future<void>? _chatlistRefreshTask;
   final EmailAsyncQueue _readStateQueue = EmailAsyncQueue();
   final EmailAsyncQueue _mdnConfigQueue = EmailAsyncQueue();
   _EmailNetworkTransition? _pendingNetworkTransition;
@@ -777,7 +870,8 @@ class EmailService {
     );
   }
 
-  void _configureTransport(EmailDeltaTransport transport) {
+  void _configureTransport(EmailDeltaRuntime transport) {
+    _deltaEventConsumers.clear();
     transport.updateDatabaseOperationTracker(_trackAppDatabaseOperation);
     transport.updateEmailEncryptionBetaSettings(
       _emailEncryptionBetaEnabledByAddress,
@@ -1414,6 +1508,11 @@ class EmailService {
 
   bool get _canProcessDeltaWork => _listenerAttached && !_blocksRuntimeReentry;
 
+  bool get _canProcessNetworkTransition =>
+      !_nativeCleanupPending &&
+      !_blocksRuntimeReentry &&
+      hasInMemoryReconnectContext;
+
   bool get isRunning => _acceptsRuntimeWork;
 
   bool get hasActiveSession => _credentialSession.hasActiveSession;
@@ -2016,7 +2115,7 @@ class EmailService {
     }
   }
 
-  Future<void> _runStop(EmailDeltaTransport transport) async {
+  Future<void> _runStop(EmailDeltaRuntime transport) async {
     if (_runtimePhase != _EmailRuntimePhase.disposing) {
       _runtimePhase = _EmailRuntimePhase.stopping;
     }
@@ -2028,6 +2127,7 @@ class EmailService {
     _clearNotificationQueue();
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
+    _chatlistRefreshTask = null;
     _readStateQueue.reset();
     _imapSyncQueue.reset();
     _networkSignalQueue.reset();
@@ -2040,7 +2140,17 @@ class EmailService {
     _credentialSession.invalidateBootstrapOperations();
     await _drainDeltaOperationQueueForShutdown();
     _resetDeltaOperationQueue();
-    await transport.stop();
+    final stopTransport = _transport;
+    if (!identical(stopTransport, transport)) {
+      _detachTransportListener(transport: stopTransport);
+    }
+    try {
+      await stopTransport.stop();
+    } finally {
+      if (_runtimePhase == _EmailRuntimePhase.disposing) {
+        await _releaseForegroundKeepaliveResources();
+      }
+    }
     if (_runtimePhase == _EmailRuntimePhase.stopping) {
       _runtimePhase = _EmailRuntimePhase.stopped;
     }
@@ -2082,23 +2192,35 @@ class EmailService {
       await pendingCleanup;
     }
     _runtimePhase = _EmailRuntimePhase.disposing;
-    await stop();
+    try {
+      await stop();
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Email transport stop failed during shutdown',
+        error,
+        stackTrace,
+      );
+    }
     _resetImapCapabilities();
     if (clearCredentials) {
-      try {
-        await _transport.deconfigureAccount();
-      } on Exception catch (error, stackTrace) {
-        _log.warning('Failed to deconfigure email account', error, stackTrace);
-      }
+      await _deconfigureTransportForCredentialClear(
+        _transport,
+        requireActiveRuntime: true,
+      );
       final scope = _scopeForOptionalJid(jid);
       if (scope != null) {
         await _clearCredentials(scope);
       }
     }
-    await _transport.dispose();
-    _credentialSession.clearRuntime();
-    _pendingPushToken = null;
-    _runtimePhase = _EmailRuntimePhase.stopped;
+    try {
+      await _transport.dispose();
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to dispose email transport', error, stackTrace);
+    } finally {
+      _credentialSession.clearRuntime();
+      _pendingPushToken = null;
+      _runtimePhase = _EmailRuntimePhase.stopped;
+    }
   }
 
   Future<void> _shutdownForLogout({
@@ -2160,7 +2282,7 @@ class EmailService {
   }
 
   Future<void> _stopTransportEventDeliveryForLogout(
-    EmailDeltaTransport transport,
+    EmailDeltaRuntime transport,
   ) async {
     try {
       await transport.stopEventDeliveryForLogout();
@@ -2176,9 +2298,10 @@ class EmailService {
   Future<void> _pendingRuntimeWorkForNativeCleanup() async {
     await Future.wait<void>([
       _deltaOperationQueue,
-      _foregroundKeepaliveQueue.pending,
       _channelOverflowRecoveryQueue.pending,
       _imapSyncQueue.pending,
+      _networkSignalQueue.pending,
+      _networkTransitionQueue.pending,
       _reconnectCatchUpQueue.pending,
       _reconnectRestartQueue.pending,
       _contactsSyncQueue.pending,
@@ -2210,7 +2333,6 @@ class EmailService {
   }
 
   void _resetRuntimeQueues() {
-    _foregroundKeepaliveQueue.reset();
     _channelOverflowRecoveryQueue.reset();
     _imapSyncQueue.reset();
     _networkSignalQueue.reset();
@@ -2221,12 +2343,13 @@ class EmailService {
     _reconnectRestartQueue.reset();
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
+    _chatlistRefreshTask = null;
     _readStateQueue.reset();
     _mdnConfigQueue.reset();
   }
 
   void _startNativeLogoutCleanup({
-    required EmailDeltaTransport transport,
+    required EmailDeltaRuntime transport,
     required Future<void> pendingRuntimeWork,
     required Future<void>? activeStop,
     required Future<void>? matchingStopFuture,
@@ -2283,37 +2406,70 @@ class EmailService {
   }
 
   Future<void> _runNativeLogoutCleanup({
-    required EmailDeltaTransport transport,
+    required EmailDeltaRuntime transport,
     required Future<void> pendingRuntimeWork,
     required Future<void>? activeStop,
     required Future<void>? matchingStopFuture,
     required bool clearTransportCredentials,
   }) async {
-    await _stopTransportForNativeLogoutCleanup(
-      transport: transport,
-      activeStop: activeStop,
-      matchingStopFuture: matchingStopFuture,
-    );
-    await _drainLogoutRuntimeWork(
-      activeStop: null,
-      pendingRuntimeWork: pendingRuntimeWork,
-    );
-    if (clearTransportCredentials) {
-      try {
-        await transport.deconfigureAccount();
-      } on Exception catch (error, stackTrace) {
-        _log.warning('Failed to deconfigure email account', error, stackTrace);
+    try {
+      await _stopTransportForNativeLogoutCleanup(
+        transport: transport,
+        activeStop: activeStop,
+        matchingStopFuture: matchingStopFuture,
+      );
+      await _drainLogoutRuntimeWork(
+        activeStop: null,
+        pendingRuntimeWork: pendingRuntimeWork,
+      );
+      if (clearTransportCredentials) {
+        await _deconfigureTransportForCredentialClear(
+          transport,
+          requireActiveRuntime: false,
+        );
       }
+      try {
+        if (transport is EmailDeltaWorkerRuntime) {
+          await transport.dispose(requestWorkerDispose: false);
+        } else {
+          await transport.dispose();
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.warning('Failed to dispose email transport', error, stackTrace);
+      }
+    } finally {
+      await _releaseForegroundKeepaliveResources();
+    }
+  }
+
+  Future<void> _deconfigureTransportForCredentialClear(
+    EmailDeltaRuntime transport, {
+    required bool requireActiveRuntime,
+  }) async {
+    if (requireActiveRuntime &&
+        (_databasePrefix == null || _databasePassphrase == null)) {
+      _log.fine('Skipping email account deconfigure; runtime is not active.');
+      return;
     }
     try {
-      await transport.dispose();
+      await transport.deconfigureAccount();
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      if (error.message == 'Delta worker is not initialized.') {
+        _log.fine(
+          'Skipping email account deconfigure; worker is not initialized.',
+          error,
+          stackTrace,
+        );
+        return;
+      }
+      _log.warning('Failed to deconfigure email account', error, stackTrace);
     } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to dispose email transport', error, stackTrace);
+      _log.warning('Failed to deconfigure email account', error, stackTrace);
     }
   }
 
   Future<void> _stopTransportForNativeLogoutCleanup({
-    required EmailDeltaTransport transport,
+    required EmailDeltaRuntime transport,
     required Future<void>? activeStop,
     required Future<void>? matchingStopFuture,
   }) async {
@@ -2353,7 +2509,7 @@ class EmailService {
     }
   }
 
-  void _replaceTransportAfterNativeCleanup(EmailDeltaTransport oldTransport) {
+  void _replaceTransportAfterNativeCleanup(EmailDeltaRuntime oldTransport) {
     if (!identical(_transport, oldTransport)) {
       return;
     }
@@ -2441,6 +2597,297 @@ class EmailService {
     );
   }
 
+  String _pendingOutgoingStanzaId() {
+    return deltaPendingOutgoingStanzaId(const Uuid().v4());
+  }
+
+  String _resolveOutgoingSenderJid({
+    required Chat chat,
+    required int accountId,
+  }) {
+    final chatSender = chat.emailFromAddress?.trim();
+    if (chatSender != null &&
+        chatSender.isNotEmpty &&
+        !chatSender.isDeltaPlaceholderJid) {
+      return chatSender;
+    }
+    final accountSender = _transport.selfJidForAccount(accountId);
+    if (accountSender != null &&
+        accountSender.isNotEmpty &&
+        !accountSender.isDeltaPlaceholderJid) {
+      return accountSender;
+    }
+    return deltaAnonUserJid;
+  }
+
+  FileMetadataData _pendingMetadataForAttachment(
+    EmailAttachment attachment,
+    String stanzaId,
+  ) {
+    return FileMetadataData(
+      id: stanzaId,
+      filename: sanitizeEmailAttachmentFilename(
+        attachment.fileName,
+        fallbackPath: attachment.path,
+      ),
+      path: attachment.path,
+      mimeType: sanitizeEmailMimeType(attachment.mimeType),
+      sizeBytes: attachment.sizeBytes,
+      width: attachment.width,
+      height: attachment.height,
+    );
+  }
+
+  FileMetadataData _metadataForAttachment(
+    EmailAttachment attachment,
+    int msgId,
+  ) {
+    return FileMetadataData(
+      id: deltaFileMetadataId(msgId),
+      filename: sanitizeEmailAttachmentFilename(
+        attachment.fileName,
+        fallbackPath: attachment.path,
+      ),
+      path: attachment.path,
+      mimeType: sanitizeEmailMimeType(attachment.mimeType),
+      sizeBytes: attachment.sizeBytes,
+      width: attachment.width,
+      height: attachment.height,
+    );
+  }
+
+  Future<void> _recordOutgoingEmail({
+    required int chatId,
+    required int accountId,
+    required Chat chat,
+    int? msgId,
+    String? stanzaId,
+    String? originId,
+    String? body,
+    String? subject,
+    String? quotingStanzaId,
+    FileMetadataData? metadata,
+    String? shareId,
+    String? localBodyOverride,
+    String? htmlBody,
+    DateTime? timestamp,
+  }) async {
+    final db = await _databaseBuilder();
+    final int? resolvedMsgId = msgId;
+    final resolvedStanzaId =
+        stanzaId ??
+        (resolvedMsgId == null
+            ? throw StateError(_missingOutgoingDeltaIdError)
+            : deltaMessageStanzaId(resolvedMsgId));
+    if (metadata != null) {
+      await db.saveFileMetadata(metadata);
+    }
+    final displayBody = localBodyOverride ?? body;
+    final trimmedBody = displayBody?.trim();
+    final senderJid = _resolveOutgoingSenderJid(
+      chat: chat,
+      accountId: accountId,
+    );
+    final message = Message(
+      stanzaID: resolvedStanzaId,
+      senderJid: senderJid,
+      chatJid: chat.jid,
+      timestamp: timestamp ?? DateTime.timestamp(),
+      originID: originId,
+      body: trimmedBody?.isNotEmpty == true ? trimmedBody : null,
+      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
+      subject: subject,
+      quoting: quotingStanzaId,
+      encryptionProtocol: EncryptionProtocol.none,
+      acked: false,
+      received: false,
+      deltaChatId: chatId,
+      deltaMsgId: resolvedMsgId,
+      deltaAccountId: accountId,
+      fileMetadataID: metadata?.id,
+    );
+    await db.saveMessage(message, selfJid: senderJid);
+    if (shareId != null && resolvedMsgId != null) {
+      await db.insertMessageCopy(
+        shareId: shareId,
+        dcMsgId: resolvedMsgId,
+        dcChatId: chatId,
+        dcAccountId: accountId,
+      );
+    }
+  }
+
+  Future<void> _markOutgoingEmailSent({
+    required String stanzaId,
+    required int msgId,
+    required int accountId,
+    required int chatId,
+    String? shareId,
+    FileMetadataData? metadata,
+    DateTime? timestamp,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+  }) async {
+    final db = await _databaseBuilder();
+    final existing = await db.getMessageByStanzaID(stanzaId);
+    final previousMetadataId = existing?.fileMetadataID;
+    final messageId = existing?.id;
+    if (metadata != null) {
+      await db.saveFileMetadata(metadata);
+    }
+    if (existing == null) {
+      if (shareId != null) {
+        await db.insertMessageCopy(
+          shareId: shareId,
+          dcMsgId: msgId,
+          dcChatId: chatId,
+          dcAccountId: accountId,
+        );
+      }
+      return;
+    }
+    final duplicateStanzaId = deltaMessageStanzaId(msgId);
+    final duplicateCandidate = duplicateStanzaId == stanzaId
+        ? null
+        : await db.getMessageByStanzaID(duplicateStanzaId);
+    final duplicateMessage =
+        duplicateCandidate == null ||
+            duplicateCandidate.deltaMsgId != msgId ||
+            duplicateCandidate.deltaAccountId != accountId ||
+            duplicateCandidate.chatJid != existing.chatJid ||
+            (duplicateCandidate.deltaChatId != null &&
+                duplicateCandidate.deltaChatId != chatId)
+        ? null
+        : duplicateCandidate;
+    final targetStanzaId = duplicateCandidate == null
+        ? duplicateStanzaId
+        : duplicateMessage == null
+        ? deltaScopedMessageStorageStanzaId(
+            accountId: accountId,
+            chatId: chatId,
+            msgId: msgId,
+          )
+        : existing.stanzaID;
+    var next = existing;
+    if (existing.stanzaID != targetStanzaId ||
+        existing.deltaMsgId != msgId ||
+        existing.deltaChatId != chatId ||
+        existing.deltaAccountId != accountId ||
+        existing.encryptionProtocol != encryptionProtocol ||
+        (timestamp != null && existing.timestamp != timestamp) ||
+        (metadata != null && existing.fileMetadataID != metadata.id)) {
+      next = existing.copyWith(
+        stanzaID: targetStanzaId,
+        deltaMsgId: msgId,
+        deltaChatId: chatId,
+        deltaAccountId: accountId,
+        encryptionProtocol: encryptionProtocol,
+        fileMetadataID: metadata?.id ?? existing.fileMetadataID,
+      );
+      if (timestamp != null && next.timestamp != timestamp) {
+        next = next.copyWith(timestamp: timestamp);
+      }
+    }
+    if (duplicateMessage != null) {
+      final duplicateOriginId = duplicateMessage.originID?.trim();
+      final hasSuccessfulState =
+          next.acked ||
+          next.received ||
+          next.displayed ||
+          duplicateMessage.acked ||
+          duplicateMessage.received ||
+          duplicateMessage.displayed;
+      final MessageError mergedError;
+      if (duplicateMessage.error != MessageError.none && !hasSuccessfulState) {
+        mergedError = duplicateMessage.error;
+      } else if (hasSuccessfulState && next.error != MessageError.none) {
+        mergedError = MessageError.none;
+      } else {
+        mergedError = next.error;
+      }
+      next = next.copyWith(
+        originID:
+            duplicateOriginId != null &&
+                duplicateOriginId.isNotEmpty &&
+                next.originID?.trim().isNotEmpty != true
+            ? duplicateOriginId
+            : next.originID,
+        acked: next.acked || duplicateMessage.acked,
+        received: next.received || duplicateMessage.received,
+        displayed: next.displayed || duplicateMessage.displayed,
+        error: mergedError,
+      );
+    }
+    if (next != existing) {
+      if (next.stanzaID == existing.stanzaID) {
+        await db.updateMessage(next);
+      } else {
+        await db.replaceMessageStanzaID(
+          currentStanzaID: existing.stanzaID,
+          message: next,
+        );
+      }
+    }
+    if (metadata != null && messageId != null) {
+      if (previousMetadataId != metadata.id) {
+        final removedIds = await db.deleteMessageAttachments(messageId);
+        await db.addMessageAttachment(
+          messageId: messageId,
+          fileMetadataId: metadata.id,
+        );
+        for (final removedId in removedIds) {
+          await db.deleteFileMetadata(removedId);
+        }
+      } else {
+        await db.addMessageAttachment(
+          messageId: messageId,
+          fileMetadataId: metadata.id,
+        );
+      }
+    }
+    if (metadata != null &&
+        previousMetadataId != null &&
+        previousMetadataId.isNotEmpty &&
+        previousMetadataId != metadata.id) {
+      await db.deleteFileMetadata(previousMetadataId);
+    }
+    if (duplicateMessage != null) {
+      await db.deleteMessage(
+        duplicateMessage.stanzaID,
+        selfJid: existing.senderJid,
+        emailSelfJid: existing.senderJid,
+      );
+      if (next.stanzaID != duplicateStanzaId) {
+        final promoted = next.copyWith(stanzaID: duplicateStanzaId);
+        await db.replaceMessageStanzaID(
+          currentStanzaID: next.stanzaID,
+          message: promoted,
+        );
+      }
+    }
+    if (shareId != null) {
+      await db.insertMessageCopy(
+        shareId: shareId,
+        dcMsgId: msgId,
+        dcChatId: chatId,
+        dcAccountId: accountId,
+      );
+    }
+  }
+
+  Future<void> _markOutgoingEmailFailed({required String stanzaId}) async {
+    final db = await _databaseBuilder();
+    await db.saveMessageError(
+      stanzaID: stanzaId,
+      error: MessageError.emailSendFailure,
+    );
+  }
+
+  EncryptionProtocol _encryptionProtocolForDelta(DeltaMessage? message) {
+    return message?.showPadlock == true
+        ? EncryptionProtocol.openPgp
+        : EncryptionProtocol.none;
+  }
+
   Future<int> sendMessage({
     required Chat chat,
     required String body,
@@ -2496,21 +2943,62 @@ class EmailService {
         participants: participants,
       );
     }
-    final msgId = await _guardDeltaOperation(
-      operation: 'send email message',
-      body: () => _transport.sendText(
+    final pendingStanzaId = _transport.persistsAppStateInternally
+        ? null
+        : _pendingOutgoingStanzaId();
+    if (pendingStanzaId != null) {
+      await _recordOutgoingEmail(
         chatId: chatId,
+        accountId: binding.deltaAccountId,
+        chat: binding.chat,
         body: payload.transmitText,
         subject: normalizedSubject,
+        quotingStanzaId: quotedStanzaId,
         shareId: shareId,
         localBodyOverride: payload.displayText,
         htmlBody: payload.htmlBody,
-        quotingStanzaId: quotedStanzaId,
+        timestamp: DateTime.timestamp(),
+        stanzaId: pendingStanzaId,
+      );
+    }
+    final int msgId;
+    try {
+      msgId = await _guardDeltaOperation(
+        operation: 'send email message',
+        body: () => _transport.sendText(
+          chatId: chatId,
+          body: payload.transmitText,
+          subject: normalizedSubject,
+          shareId: shareId,
+          localBodyOverride: payload.displayText,
+          htmlBody: payload.htmlBody,
+          quotingStanzaId: quotedStanzaId,
+          accountId: binding.deltaAccountId,
+          forcePlaintext: mode.forcePlaintext,
+          skipAutocrypt: mode.skipAutocrypt,
+        ),
+      );
+    } on Exception {
+      if (pendingStanzaId != null) {
+        await _markOutgoingEmailFailed(stanzaId: pendingStanzaId);
+      }
+      rethrow;
+    }
+    if (pendingStanzaId != null) {
+      final deltaMessage = await _transport.getMessage(
+        msgId,
         accountId: binding.deltaAccountId,
-        forcePlaintext: mode.forcePlaintext,
-        skipAutocrypt: mode.skipAutocrypt,
-      ),
-    );
+      );
+      await _markOutgoingEmailSent(
+        stanzaId: pendingStanzaId,
+        msgId: msgId,
+        accountId: binding.deltaAccountId,
+        chatId: chatId,
+        shareId: shareId,
+        timestamp: deltaMessage?.timestamp,
+        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
+      );
+    }
     if (shareId != null) {
       final db = await _databaseBuilder();
       await db.assignShareOriginator(
@@ -2523,6 +3011,7 @@ class EmailService {
       final message = await db.getMessageByDeltaId(
         msgId,
         deltaAccountId: binding.deltaAccountId,
+        deltaChatId: chatId,
       );
       if (message != null && !message.isForwarded) {
         await db.updateMessage(
@@ -2608,21 +3097,80 @@ class EmailService {
         participants: participants,
       );
     }
-    final msgId = await _guardDeltaOperation(
-      operation: 'send email attachment',
-      body: () => _transport.sendAttachment(
-        chatId: chatId,
-        attachment: effectiveAttachment.copyWith(caption: payload.transmitText),
-        subject: normalizedSubject,
-        shareId: shareId,
-        captionOverride: payload.displayText,
-        htmlCaption: payload.htmlBody,
-        quotingStanzaId: effectiveQuotedStanzaId,
-        accountId: binding.deltaAccountId,
-        forcePlaintext: mode.forcePlaintext,
-        skipAutocrypt: mode.skipAutocrypt,
-      ),
+    final pendingStanzaId = _transport.persistsAppStateInternally
+        ? null
+        : _pendingOutgoingStanzaId();
+    final pendingAttachment = effectiveAttachment.copyWith(
+      caption: payload.transmitText,
     );
+    if (pendingStanzaId != null) {
+      await _recordOutgoingEmail(
+        chatId: chatId,
+        accountId: binding.deltaAccountId,
+        chat: binding.chat,
+        body: pendingAttachment.caption,
+        subject: normalizedSubject,
+        quotingStanzaId: effectiveQuotedStanzaId,
+        metadata: _pendingMetadataForAttachment(
+          pendingAttachment,
+          pendingStanzaId,
+        ),
+        shareId: shareId,
+        localBodyOverride: payload.displayText,
+        htmlBody: payload.htmlBody,
+        timestamp: DateTime.timestamp(),
+        stanzaId: pendingStanzaId,
+      );
+    }
+    final int msgId;
+    try {
+      msgId = await _guardDeltaOperation(
+        operation: 'send email attachment',
+        body: () => _transport.sendAttachment(
+          chatId: chatId,
+          attachment: pendingAttachment,
+          subject: normalizedSubject,
+          shareId: shareId,
+          captionOverride: payload.displayText,
+          htmlCaption: payload.htmlBody,
+          quotingStanzaId: effectiveQuotedStanzaId,
+          accountId: binding.deltaAccountId,
+          forcePlaintext: mode.forcePlaintext,
+          skipAutocrypt: mode.skipAutocrypt,
+        ),
+      );
+    } on Exception {
+      if (pendingStanzaId != null) {
+        await _markOutgoingEmailFailed(stanzaId: pendingStanzaId);
+      }
+      rethrow;
+    }
+    if (pendingStanzaId != null) {
+      final metadata = _metadataForAttachment(pendingAttachment, msgId);
+      final deltaMessage = await _transport.getMessage(
+        msgId,
+        accountId: binding.deltaAccountId,
+      );
+      final hydratedMetadata = deltaMessage == null
+          ? metadata
+          : metadata.copyWith(
+              path: deltaMessage.filePath ?? metadata.path,
+              mimeType: deltaMessage.fileMime ?? metadata.mimeType,
+              sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
+              width: deltaMessage.width ?? metadata.width,
+              height: deltaMessage.height ?? metadata.height,
+            );
+      await _markOutgoingEmailSent(
+        stanzaId: pendingStanzaId,
+        msgId: msgId,
+        accountId: binding.deltaAccountId,
+        chatId: chatId,
+        shareId: shareId,
+        metadata: hydratedMetadata,
+        timestamp: deltaMessage?.timestamp,
+        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
+      );
+    }
     if (shareId != null) {
       final db = await _databaseBuilder();
       await db.assignShareOriginator(
@@ -2635,6 +3183,7 @@ class EmailService {
       final message = await db.getMessageByDeltaId(
         msgId,
         deltaAccountId: binding.deltaAccountId,
+        deltaChatId: chatId,
       );
       if (message != null && !message.isForwarded) {
         await db.updateMessage(
@@ -3293,8 +3842,16 @@ class EmailService {
   Future<void> _enqueueNetworkTransition(
     _EmailNetworkTransition transition,
   ) async {
+    if (!_canProcessNetworkTransition) {
+      _pendingNetworkTransition = null;
+      return;
+    }
     _setPendingNetworkTransition(transition);
     await _networkTransitionQueue.run(() async {
+      if (!_canProcessNetworkTransition) {
+        _pendingNetworkTransition = null;
+        return;
+      }
       final pending = _pendingNetworkTransition;
       _pendingNetworkTransition = null;
       if (pending == null) return;
@@ -3321,6 +3878,9 @@ class EmailService {
   }
 
   Future<void> _runNetworkTransition(_EmailNetworkTransition transition) async {
+    if (!_canProcessNetworkTransition) {
+      return;
+    }
     _activeNetworkTransition = transition;
     try {
       switch (transition) {
@@ -3335,6 +3895,18 @@ class EmailService {
             _EmailReconnectRestartPolicy.foregroundResume,
           );
       }
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine(
+        'Email network transition cancelled because the Delta worker stopped.',
+        error,
+        stackTrace,
+      );
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine(
+        'Email network transition failed in Delta core.',
+        error,
+        stackTrace,
+      );
     } finally {
       if (_activeNetworkTransition == transition) {
         _activeNetworkTransition = null;
@@ -3351,7 +3923,7 @@ class EmailService {
   Future<void> _handleNetworkAvailable(
     _EmailReconnectRestartPolicy restartPolicy,
   ) async {
-    if (_nativeCleanupPending || _blocksRuntimeReentry) {
+    if (!_canProcessNetworkTransition) {
       return;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
@@ -3361,6 +3933,7 @@ class EmailService {
     await _notifyTransportNetworkAvailable();
     await _bootstrapActiveAccountIfNeeded();
     await _runReconnectCatchUp();
+    _startImapSyncLoop();
     await _refreshConnectivityState(source: _EmailSyncSource.networkAvailable);
     fireAndForget(
       () => _scheduleReconnectRestart(restartPolicy),
@@ -3369,9 +3942,10 @@ class EmailService {
   }
 
   Future<void> _handleNetworkLost() async {
-    if (_nativeCleanupPending || _blocksRuntimeReentry) {
+    if (!_canProcessNetworkTransition) {
       return;
     }
+    _stopImapSyncLoop();
     _applyDeviceNetworkLostState(source: _EmailSyncSource.networkLost);
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -3465,12 +4039,22 @@ class EmailService {
     });
   }
 
-  Future<void> refreshChatlistFromCore() async {
-    await _chatlistSyncQueue.run(() async {
+  Future<void> refreshChatlistFromCore() {
+    final activeRefresh = _chatlistRefreshTask;
+    if (activeRefresh != null) {
+      return activeRefresh;
+    }
+    final task = _chatlistSyncQueue.run(() async {
       if (!await _ensureBackgroundSyncReady()) {
         return;
       }
-      await _transport.refreshChatlistSnapshot();
+      await _refreshChatlistSnapshotOnMain();
+    });
+    _chatlistRefreshTask = task;
+    return task.whenComplete(() {
+      if (identical(_chatlistRefreshTask, task)) {
+        _chatlistRefreshTask = null;
+      }
     });
   }
 
@@ -3767,10 +4351,11 @@ class EmailService {
       return;
     }
     await _performBackgroundFetchIfIdle(timeout: _foregroundFetchTimeout);
-    await _transport.backfillChatHistory(
+    await _backfillChatHistoryOnMain(
       chatId: chatId,
       chatJid: effectiveChat.jid,
       desiredWindow: desiredWindow,
+      targetChat: effectiveChat,
       beforeMessageId: beforeMessageId,
       beforeTimestamp: beforeTimestamp,
       filter: filter,
@@ -3791,7 +4376,7 @@ class EmailService {
     }
     final bridge = _foregroundBridge;
     if (bridge == null) {
-      _log.fine('Foreground bridge unavailable, skipping keepalive.');
+      _log.fine('Foreground bridge unavailable, skipping email foreground IO.');
       if (hasActiveSession) {
         _startImapSyncLoop();
       }
@@ -3800,74 +4385,96 @@ class EmailService {
     if (_foregroundKeepaliveEnabled) {
       if (await _foregroundKeepaliveRuntimeHealthy(bridge)) {
         await bridge.acquire(
-          clientId: foregroundClientEmailKeepalive,
+          clientId: foregroundClientEmailDelta,
           config: buildForegroundServiceConfig(
             notificationText: 'Email sync active',
           ),
         );
-        _foregroundKeepaliveServiceAcquired = true;
-        await _sendForegroundKeepaliveStartCommand(bridge);
-        _log.fine('Email foreground keepalive refreshed.');
+        _foregroundKeepaliveLeaseAcquired = true;
+        _log.fine('Email foreground IO already active.');
         return;
       }
       _log.warning(
-        'Repairing stale email foreground keepalive. '
-        'listenerAttached=$_foregroundKeepaliveListenerAttached '
-        'serviceAcquired=$_foregroundKeepaliveServiceAcquired',
+        'Repairing stale email foreground IO. '
+        'transport=${_transport.runtimeType}',
       );
       _foregroundKeepaliveEnabled = false;
-      _foregroundKeepaliveQueue.reset();
-      await _releaseForegroundKeepaliveResources();
     }
 
     final operationId = ++_foregroundKeepaliveOperationId;
 
-    _log.info('Starting email foreground keepalive.');
-    await start();
-    if (!_isForegroundKeepaliveOpCurrent(operationId)) {
-      return;
-    }
-
-    _stopImapSyncLoop();
-    _attachForegroundKeepaliveListener();
-
+    _log.info('Starting email foreground IO.');
     try {
       await bridge.acquire(
-        clientId: foregroundClientEmailKeepalive,
+        clientId: foregroundClientEmailDelta,
         config: buildForegroundServiceConfig(
           notificationText: 'Email sync active',
         ),
       );
-      _foregroundKeepaliveServiceAcquired = true;
-      _log.info('Email foreground keepalive lease acquired.');
-      if (!_isForegroundKeepaliveOpCurrent(operationId)) {
-        await _releaseForegroundKeepaliveResources();
-        return;
-      }
-      await _sendForegroundKeepaliveStartCommand(bridge);
+      _foregroundKeepaliveLeaseAcquired = true;
     } on Exception catch (error, stackTrace) {
+      _foregroundKeepaliveEnabled = false;
+      _foregroundKeepaliveLeaseAcquired = false;
       _log.warning(
-        'Failed to enable email foreground keepalive',
+        'Email foreground keepalive failed to acquire foreground service.',
         error,
         stackTrace,
       );
+      if (hasActiveSession) {
+        _startImapSyncLoop();
+      }
+      return;
+    }
+    if (!_isForegroundKeepaliveOpCurrent(operationId)) {
+      await _releaseForegroundKeepaliveResources();
+      return;
+    }
+
+    try {
+      if (!_acceptsRuntimeWork) {
+        await start();
+      }
+      if (!_isForegroundKeepaliveOpCurrent(operationId)) {
+        await _releaseForegroundKeepaliveResources();
+        if (hasActiveSession) {
+          _startImapSyncLoop();
+        }
+        return;
+      }
+      _stopImapSyncLoop();
+    } on Exception catch (error, stackTrace) {
       _foregroundKeepaliveEnabled = false;
       await _releaseForegroundKeepaliveResources();
-      _startImapSyncLoop();
+      _log.warning(
+        'Email foreground keepalive failed to keep worker runtime active.',
+        error,
+        stackTrace,
+      );
+      if (hasActiveSession) {
+        _startImapSyncLoop();
+      }
       return;
     }
 
     if (!_isForegroundKeepaliveOpCurrent(operationId)) {
       await _releaseForegroundKeepaliveResources();
-      _startImapSyncLoop();
       return;
     }
 
     _foregroundKeepaliveEnabled = true;
-    _log.info('Email foreground keepalive started.');
-    Future<void>(() async {
-      await _foregroundKeepaliveTick();
-    });
+    _log.info('Email foreground IO started.');
+  }
+
+  @visibleForTesting
+  bool get debugImapSyncLoopActive => _imapSyncLoopToken != null;
+
+  @visibleForTesting
+  Future<void> debugRunImapSyncTick() async {
+    final token = _imapSyncLoopToken;
+    if (token == null) {
+      return;
+    }
+    await _runImapSyncTick(token);
   }
 
   Stream<List<Message>> messageStreamForChat(
@@ -3935,11 +4542,162 @@ class EmailService {
     yield* db.watchChat(jid);
   }
 
+  Future<void> _handleDeltaEvent(
+    DeltaCoreEvent event, {
+    required bool sourcePersistsAppStateInternally,
+  }) async {
+    final notifyBeforeHandle = event.type == DeltaEventCode.chatDeleted;
+    if (!notifyBeforeHandle) {
+      await _persistDeltaEvent(
+        event,
+        sourcePersistsAppStateInternally: sourcePersistsAppStateInternally,
+      );
+    }
+    await _processDeltaEvent(event);
+    if (notifyBeforeHandle) {
+      await _persistDeltaEvent(
+        event,
+        sourcePersistsAppStateInternally: sourcePersistsAppStateInternally,
+      );
+    }
+  }
+
+  Future<void> _persistDeltaEvent(
+    DeltaCoreEvent event, {
+    required bool sourcePersistsAppStateInternally,
+  }) async {
+    if (sourcePersistsAppStateInternally) {
+      return;
+    }
+    final eventType = DeltaEventType.fromCode(event.type);
+    if (eventType == null) {
+      return;
+    }
+    final accountId = _deltaAccountIdForEvent(event);
+    if (accountId == null) {
+      _log.fine('Skipping Delta event persistence without account id.');
+      return;
+    }
+    final consumer = _deltaConsumerForAccount(accountId);
+    await consumer.handle(event);
+  }
+
+  int? _deltaAccountIdForEvent(DeltaCoreEvent event) => event.accountId;
+
+  DeltaEventConsumer _deltaConsumerForAccount(int accountId) {
+    return _deltaEventConsumers.putIfAbsent(
+      accountId,
+      () => DeltaEventConsumer(
+        databaseBuilder: _databaseBuilder,
+        core: _EmailRuntimeEventCore(
+          transport: _transport,
+          accountId: accountId,
+        ),
+        localizationsProvider: () => _l10n,
+        selfJidProvider: () => _selfSenderJidForAccount(accountId),
+        xmppSelfJidProvider: _xmppSelfJidProvider,
+        emailEncryptionBetaEnabledForAddress: (_, address) {
+          final normalized = normalizedAddressValue(address);
+          return normalized != null &&
+              _emailEncryptionBetaEnabledByAddress[normalized] == true;
+        },
+        logger: _log,
+        databaseOperationTracker: _trackAppDatabaseOperation,
+      ),
+    );
+  }
+
+  Future<bool> _bootstrapFromCoreOnMain() async {
+    final accountIds = await _transport.accountIds();
+    var didBootstrap = false;
+    for (final accountId in accountIds) {
+      await _transport.ensureAccountSession(accountId);
+      final consumer = _deltaConsumerForAccount(accountId);
+      if (await consumer.bootstrapFromCore()) {
+        didBootstrap = true;
+      }
+    }
+    return didBootstrap;
+  }
+
+  Future<void> _refreshChatlistSnapshotOnMain({int? accountId}) async {
+    final accountIds = await _deltaAccountIdsForScope(accountId);
+    for (final resolvedAccountId in accountIds) {
+      await _transport.ensureAccountSession(resolvedAccountId);
+      await _deltaConsumerForAccount(
+        resolvedAccountId,
+      ).refreshChatlistSnapshot();
+    }
+  }
+
+  Future<void> _backfillChatHistoryOnMain({
+    required int chatId,
+    required String chatJid,
+    required int desiredWindow,
+    Chat? targetChat,
+    int? beforeMessageId,
+    DateTime? beforeTimestamp,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    int? accountId,
+  }) async {
+    final resolvedAccountId = accountId;
+    if (resolvedAccountId == null) {
+      _log.fine('Skipping Delta chat history backfill without account id.');
+      return;
+    }
+    await _transport.ensureAccountSession(resolvedAccountId);
+    await _deltaConsumerForAccount(resolvedAccountId).backfillChatHistory(
+      chatId: chatId,
+      chatJid: chatJid,
+      desiredWindow: desiredWindow,
+      targetChat: targetChat,
+      beforeMessageId: beforeMessageId,
+      beforeTimestamp: beforeTimestamp,
+      filter: filter,
+    );
+  }
+
+  Future<void> _hydrateMessagesOnMain(
+    List<int> messageIds, {
+    int? accountId,
+  }) async {
+    if (messageIds.isEmpty) {
+      return;
+    }
+    final resolvedAccountId = accountId;
+    if (resolvedAccountId == null) {
+      _log.fine('Skipping Delta message hydration without account id.');
+      return;
+    }
+    await _transport.ensureAccountSession(resolvedAccountId);
+    final consumer = _deltaConsumerForAccount(resolvedAccountId);
+    const int batchSize = 8;
+    for (var index = 0; index < messageIds.length; index += batchSize) {
+      final chunk = messageIds.skip(index).take(batchSize).toList();
+      await Future.wait(chunk.map(consumer.hydrateMessage));
+    }
+  }
+
+  Future<List<int>> _deltaAccountIdsForScope(int? accountId) async {
+    if (accountId != null) {
+      return <int>[accountId];
+    }
+    return _transport.accountIds();
+  }
+
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {
     final eventType = DeltaEventType.fromCode(event.type);
     if (eventType == null) {
       return;
     }
+    int? eventAccountId() {
+      final accountId = _deltaAccountIdForEvent(event);
+      if (accountId == null) {
+        _log.fine('Skipping ${eventType.name} Delta event without account id.');
+      }
+      return accountId;
+    }
+
     switch (eventType) {
       case DeltaEventType.error:
         _handleCoreError(event.data2Text);
@@ -3949,10 +4707,14 @@ class EmailService {
         break;
       case DeltaEventType.incomingMsg:
         if (event.data2 > _deltaEventMessageUnset) {
+          final accountId = eventAccountId();
+          if (accountId == null) {
+            break;
+          }
           _queueNotification(
             chatId: event.data1,
             msgId: event.data2,
-            accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
+            accountId: accountId,
           );
         }
         break;
@@ -3960,40 +4722,51 @@ class EmailService {
         await _flushQueuedNotifications();
         break;
       case DeltaEventType.incomingReaction:
+        final accountId = eventAccountId();
+        if (accountId == null) {
+          break;
+        }
         await _handleIncomingReaction(
           chatId: event.data1,
           msgId: event.data2,
-          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
+          accountId: accountId,
           reaction: event.data2Text,
         );
         break;
       case DeltaEventType.incomingWebxdcNotify:
+        final accountId = eventAccountId();
+        if (accountId == null) {
+          break;
+        }
         await _handleIncomingWebxdcNotify(
           chatId: event.data1,
           msgId: event.data2,
-          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
+          accountId: accountId,
           text: event.data2Text,
         );
         break;
       case DeltaEventType.msgRead:
-        await _handleMessageRead(
-          event.data1,
-          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
-        );
+        final accountId = eventAccountId();
+        if (accountId == null) {
+          break;
+        }
+        await _handleMessageRead(event.data1, accountId: accountId);
         break;
       case DeltaEventType.msgsNoticed:
-        await _handleMessagesNoticed(
-          event.data1,
-          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
-        );
+        final accountId = eventAccountId();
+        if (accountId == null) {
+          break;
+        }
+        await _handleMessagesNoticed(event.data1, accountId: accountId);
         break;
       case DeltaEventType.chatModified:
         break;
       case DeltaEventType.chatDeleted:
-        await _handleChatDeleted(
-          event.data1,
-          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
-        );
+        final accountId = eventAccountId();
+        if (accountId == null) {
+          break;
+        }
+        await _handleChatDeleted(event.data1, accountId: accountId);
         break;
       case DeltaEventType.contactsChanged:
         _scheduleContactsSyncFromCore();
@@ -4179,29 +4952,28 @@ class EmailService {
 
   Future<_EmailNotificationTarget?> _notificationTargetForMessage({
     required XmppDatabase db,
-    required int msgId,
-    required int accountId,
-    int? chatId,
+    required _DeltaChatMessageId id,
   }) async {
-    final stanzaId = _stanzaId(msgId, accountId: accountId);
-    final message =
-        await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
-        await db.getMessageByStanzaID(stanzaId);
+    final message = await _lookupStoredDeltaMessage(db, id);
     if (message == null) {
       return null;
     }
     if (message.warning == MessageWarning.emailSpamQuarantined) {
       return null;
     }
-    final selfJid = _selfSenderJidForAccount(accountId) ?? selfSenderJid;
+    final selfJid = _selfSenderJidForAccount(id.accountId) ?? selfSenderJid;
     final senderBare = bareAddressValue(message.senderJid);
     final selfBare = bareAddressValue(selfJid);
     if (senderBare != null && selfBare != null && senderBare == selfBare) {
       return null;
     }
     var chat = await db.getChat(message.chatJid);
-    if (chat == null && chatId != null) {
-      chat = await db.getChatByDeltaChatId(chatId, accountId: accountId);
+    final deltaChatId = id.chatId;
+    if (chat == null && deltaChatId != null) {
+      chat = await db.getChatByDeltaChatId(
+        deltaChatId,
+        accountId: id.accountId,
+      );
     }
     final notificationBehavior = chat?.effectiveNotificationBehavior;
     if (notificationBehavior?.isMuted ?? false) {
@@ -4222,6 +4994,36 @@ class EmailService {
         conversationTitle: conversationTitle,
       ),
     );
+  }
+
+  Future<Message?> _lookupStoredDeltaMessage(
+    XmppDatabase db,
+    _DeltaChatMessageId id,
+  ) async {
+    final scoped = await db.getMessageByDeltaId(
+      id.msgId,
+      deltaAccountId: id.accountId,
+      deltaChatId: id.chatId,
+    );
+    if (scoped != null && _storedDeltaLocatorMatches(scoped, id)) {
+      return scoped;
+    }
+    final legacy = await db.getMessageByStanzaID(
+      deltaMessageStanzaId(id.msgId),
+    );
+    if (legacy == null || !_storedDeltaLocatorMatches(legacy, id)) {
+      return null;
+    }
+    return legacy;
+  }
+
+  bool _storedDeltaLocatorMatches(Message message, _DeltaChatMessageId id) {
+    if (message.deltaMsgId != id.msgId ||
+        message.deltaAccountId != id.accountId) {
+      return false;
+    }
+    final deltaChatId = message.deltaChatId;
+    return id.chatId == null || deltaChatId == null || deltaChatId == id.chatId;
   }
 
   String _notificationThreadKey(String chatJid) {
@@ -4315,9 +5117,11 @@ class EmailService {
         final db = await _databaseBuilder();
         var target = await _notificationTargetForMessage(
           db: db,
-          msgId: msgId,
-          accountId: accountId,
-          chatId: chatId,
+          id: _DeltaChatMessageId(
+            accountId: accountId,
+            chatId: chatId,
+            msgId: msgId,
+          ),
         );
         if (target == null) {
           return null;
@@ -4381,7 +5185,8 @@ class EmailService {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to raise notification for email message ${_stanzaId(msgId, accountId: accountId)}',
+        'Failed to raise notification for email message '
+        '${deltaMessageStanzaId(msgId)} accountId=$accountId',
         error,
         stackTrace,
       );
@@ -4420,9 +5225,11 @@ class EmailService {
         final db = await _databaseBuilder();
         final target = await _notificationTargetForMessage(
           db: db,
-          msgId: msgId,
-          accountId: accountId,
-          chatId: chatId,
+          id: _DeltaChatMessageId(
+            accountId: accountId,
+            chatId: chatId,
+            msgId: msgId,
+          ),
         );
         if (target == null) {
           return null;
@@ -4465,7 +5272,8 @@ class EmailService {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to raise reaction notification for email message ${_stanzaId(msgId, accountId: accountId)}',
+        'Failed to raise reaction notification for email message '
+        '${deltaMessageStanzaId(msgId)} accountId=$accountId',
         error,
         stackTrace,
       );
@@ -4486,9 +5294,11 @@ class EmailService {
         final db = await _databaseBuilder();
         final target = await _notificationTargetForMessage(
           db: db,
-          msgId: msgId,
-          accountId: accountId,
-          chatId: chatId,
+          id: _DeltaChatMessageId(
+            accountId: accountId,
+            chatId: chatId,
+            msgId: msgId,
+          ),
         );
         if (target == null) {
           return null;
@@ -4531,7 +5341,8 @@ class EmailService {
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to raise webxdc notification for email message ${_stanzaId(msgId, accountId: accountId)}',
+        'Failed to raise webxdc notification for email message '
+        '${deltaMessageStanzaId(msgId)} accountId=$accountId',
         error,
         stackTrace,
       );
@@ -4906,21 +5717,41 @@ class EmailService {
     _logSyncStateTransition(previous: previous, next: next, source: source);
   }
 
-  void _attachTransportListener([EmailDeltaTransport? transport]) {
+  void _attachTransportListener([EmailDeltaRuntime? transport]) {
     final target = transport ?? _transport;
     if (identical(_listenerTransport, target)) return;
     _detachTransportListener();
-    target.addEventListener(_eventListener);
+    void listener(DeltaCoreEvent event) {
+      if (!_canProcessDeltaWork) {
+        return;
+      }
+      final sourcePersistsAppStateInternally =
+          target.persistsAppStateInternally;
+      _enqueueDeltaOperation(
+        () => _handleDeltaEvent(
+          event,
+          sourcePersistsAppStateInternally: sourcePersistsAppStateInternally,
+        ),
+        operationName: _deltaQueueOperationNameProcessDeltaEvent,
+      );
+    }
+
+    target.addEventListener(listener);
     _listenerTransport = target;
+    _listenerCallback = listener;
   }
 
-  void _detachTransportListener({EmailDeltaTransport? transport}) {
+  void _detachTransportListener({EmailDeltaRuntime? transport}) {
     final attached = _listenerTransport;
     if (attached == null) return;
     if (transport != null && !identical(attached, transport)) return;
-    attached.removeEventListener(_eventListener);
+    final callback = _listenerCallback;
+    if (callback != null) {
+      attached.removeEventListener(callback);
+    }
     if (identical(_listenerTransport, attached)) {
       _listenerTransport = null;
+      _listenerCallback = null;
     }
   }
 
@@ -4998,7 +5829,7 @@ class EmailService {
       );
     }
     try {
-      await _transport.bootstrapFromCore();
+      await _bootstrapFromCoreOnMain();
       if (operationId != _bootstrapOperationIdForScope(scope) ||
           !_acceptsRuntimeWork) {
         return;
@@ -5028,37 +5859,24 @@ class EmailService {
 
   Future<void> _stopForegroundKeepalive() async {
     _foregroundKeepaliveOperationId++;
-    if (!_foregroundKeepaliveEnabled &&
-        !_foregroundKeepaliveListenerAttached &&
-        !_foregroundKeepaliveServiceAcquired) {
+    if (!_foregroundKeepaliveEnabled && !_foregroundKeepaliveLeaseAcquired) {
       return;
     }
     final stopwatch = Stopwatch()..start();
     _log.info(
-      'Stopping email foreground keepalive. '
+      'Stopping email foreground IO. '
       'enabled=$_foregroundKeepaliveEnabled '
-      'listenerAttached=$_foregroundKeepaliveListenerAttached '
-      'serviceAcquired=$_foregroundKeepaliveServiceAcquired',
+      'transport=${_transport.runtimeType}',
     );
     try {
       _foregroundKeepaliveEnabled = false;
-      _foregroundKeepaliveQueue.reset();
-      final bridge = _foregroundBridge;
-      if (bridge != null && _foregroundKeepaliveServiceAcquired) {
-        try {
-          await bridge.send([emailKeepalivePrefix, emailKeepaliveStopCommand]);
-        } on Exception catch (error, stackTrace) {
-          _log.finer('Failed to stop email keepalive', error, stackTrace);
-        }
-      }
       await _releaseForegroundKeepaliveResources();
     } finally {
       stopwatch.stop();
       _log.info(
-        'Stopped email foreground keepalive. '
+        'Stopped email foreground IO. '
         'elapsedMs=${stopwatch.elapsedMilliseconds} '
-        'listenerAttached=$_foregroundKeepaliveListenerAttached '
-        'serviceAcquired=$_foregroundKeepaliveServiceAcquired',
+        'transport=${_transport.runtimeType}',
       );
     }
   }
@@ -5066,9 +5884,7 @@ class EmailService {
   Future<bool> _foregroundKeepaliveRuntimeHealthy(
     ForegroundTaskBridge bridge,
   ) async {
-    if (!_foregroundKeepaliveEnabled ||
-        !_foregroundKeepaliveListenerAttached ||
-        !_foregroundKeepaliveServiceAcquired) {
+    if (!_foregroundKeepaliveEnabled || !_foregroundKeepaliveLeaseAcquired) {
       return false;
     }
     try {
@@ -5083,111 +5899,12 @@ class EmailService {
     }
   }
 
-  Future<void> _sendForegroundKeepaliveStartCommand(
-    ForegroundTaskBridge bridge,
-  ) async {
-    await bridge.send([
-      emailKeepalivePrefix,
-      emailKeepaliveStartCommand,
-      _foregroundKeepaliveInterval.inMilliseconds,
-    ]);
-    _log.info('Email foreground keepalive start command sent.');
-  }
-
-  void _attachForegroundKeepaliveListener() {
-    if (_foregroundKeepaliveListenerAttached) {
-      return;
-    }
-    final bridge = _foregroundBridge;
-    if (bridge == null) {
-      return;
-    }
-    bridge.registerListener(
-      foregroundClientEmailKeepalive,
-      _handleForegroundTaskMessage,
-    );
-    _foregroundKeepaliveListenerAttached = true;
-  }
-
   Future<void> _releaseForegroundKeepaliveResources() async {
-    final bridge = _foregroundBridge;
-    if (bridge == null) {
-      _foregroundKeepaliveListenerAttached = false;
-      _foregroundKeepaliveServiceAcquired = false;
+    if (!_foregroundKeepaliveLeaseAcquired) {
       return;
     }
-    if (_foregroundKeepaliveServiceAcquired) {
-      final releaseStopwatch = Stopwatch()..start();
-      _log.info('Releasing email foreground keepalive lease.');
-      try {
-        await bridge.release(foregroundClientEmailKeepalive);
-      } finally {
-        releaseStopwatch.stop();
-        _log.info(
-          'Email foreground keepalive lease release finished. '
-          'elapsedMs=${releaseStopwatch.elapsedMilliseconds}',
-        );
-      }
-      _foregroundKeepaliveServiceAcquired = false;
-    }
-    if (_foregroundKeepaliveListenerAttached) {
-      bridge.unregisterListener(foregroundClientEmailKeepalive);
-      _foregroundKeepaliveListenerAttached = false;
-    }
-  }
-
-  Future<void> _handleForegroundTaskMessage(String data) async {
-    if (!data.startsWith('$emailKeepaliveTickPrefix$join')) {
-      return;
-    }
-    if (!_foregroundKeepaliveEnabled) {
-      _log.fine('Dropping email foreground keepalive tick: disabled.');
-      return;
-    }
-    _log.fine('Received email foreground keepalive tick.');
-    _enqueueForegroundKeepaliveTick();
-  }
-
-  Future<void> _foregroundKeepaliveTick() async {
-    if (!_foregroundKeepaliveEnabled) {
-      _log.fine('Skipping email foreground keepalive tick: disabled.');
-      return;
-    }
-    if (!_acceptsRuntimeWork) {
-      _log.fine('Skipping email foreground keepalive tick: runtime blocked.');
-      return;
-    }
-    try {
-      await _notifyTransportNetworkAvailable();
-      await _refreshConnectivityState(
-        source: _EmailSyncSource.connectivityConfirm,
-      );
-      await _bootstrapActiveAccountIfNeeded();
-      final fetched = await _performBackgroundFetchIfIdle(
-        timeout: _foregroundFetchTimeout,
-      );
-      _log.fine('Email foreground keepalive fetch completed: fetched=$fetched');
-      if (fetched) {
-        await refreshChatlistFromCore();
-        _log.fine('Email foreground keepalive chatlist refresh completed.');
-        await _refreshConnectivityState(
-          source: _EmailSyncSource.backgroundFetchDone,
-          recoveryCompleted: true,
-        );
-      }
-    } on Exception catch (error, stackTrace) {
-      _log.finer('Foreground keepalive tick failed', error, stackTrace);
-    }
-  }
-
-  void _enqueueForegroundKeepaliveTick() {
-    _foregroundKeepaliveQueue.run(() async {
-      if (!_foregroundKeepaliveEnabled) {
-        _log.fine('Dropping queued email foreground keepalive tick: disabled.');
-        return;
-      }
-      await _foregroundKeepaliveTick();
-    });
+    _foregroundKeepaliveLeaseAcquired = false;
+    await _foregroundBridge?.release(foregroundClientEmailDelta);
   }
 
   void _startImapSyncLoop() {
@@ -5212,9 +5929,7 @@ class EmailService {
   }
 
   void _scheduleNextImapSync(Object token) {
-    if (_imapSyncLoopToken != token ||
-        _foregroundKeepaliveEnabled ||
-        !hasActiveSession) {
+    if (!_canContinueImapSyncLoop(token)) {
       return;
     }
     final interval = _imapSyncInterval();
@@ -5225,31 +5940,60 @@ class EmailService {
   }
 
   Future<void> _runImapSyncTick(Object token) async {
-    if (_imapSyncLoopToken != token || _foregroundKeepaliveEnabled) {
-      return;
-    }
-    if (!hasActiveSession) {
-      _stopImapSyncLoop();
+    if (!_canContinueImapSyncLoop(token)) {
       return;
     }
     if (_transport.isIoRunning) {
       _scheduleNextImapSync(token);
       return;
     }
-    await _enqueueImapSync(token);
+    try {
+      await _enqueueImapSync(token);
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      if (!_canContinueImapSyncLoop(token)) {
+        _log.fine('Email IMAP sync tick cancelled.', error, stackTrace);
+        return;
+      }
+      _log.warning('Email IMAP sync tick failed.', error, stackTrace);
+    } on DeltaSafeException catch (error, stackTrace) {
+      if (!_canContinueImapSyncLoop(token)) {
+        _log.fine('Email IMAP sync tick cancelled.', error, stackTrace);
+        return;
+      }
+      _log.warning('Email IMAP sync tick failed.', error, stackTrace);
+    } on TimeoutException catch (error, stackTrace) {
+      if (!_canContinueImapSyncLoop(token)) {
+        _log.fine('Email IMAP sync tick cancelled.', error, stackTrace);
+        return;
+      }
+      _log.warning('Email IMAP sync tick timed out.', error, stackTrace);
+    }
     _scheduleNextImapSync(token);
   }
 
   Future<void> _enqueueImapSync(Object token) async {
     await _imapSyncQueue.run(() async {
-      if (_imapSyncLoopToken != token || _foregroundKeepaliveEnabled) {
+      if (!_canContinueImapSyncLoop(token)) {
         return;
       }
       await _refreshImapCapabilities();
+      if (!_canContinueImapSyncLoop(token)) {
+        return;
+      }
       await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
+      if (!_canContinueImapSyncLoop(token)) {
+        return;
+      }
       await refreshChatlistFromCore();
     });
   }
+
+  bool _canContinueImapSyncLoop(Object token) =>
+      _imapSyncLoopToken == token &&
+      !_foregroundKeepaliveEnabled &&
+      hasActiveSession &&
+      !_nativeCleanupPending &&
+      !_blocksRuntimeReentry;
 
   Duration _imapSyncInterval() {
     final capabilities = _imapCapabilities;
@@ -7188,13 +7932,16 @@ class EmailService {
           if (_blocksRuntimeReentry) {
             return;
           }
-          final idsByAccount = await _trackAppDatabaseOperation(() async {
+          final candidates = await _trackAppDatabaseOperation(() async {
             final db = await _databaseBuilder();
-            return _seenDeltaIdsByAccountForMessages(
+            return _seenMessageCandidatesForMessages(
               db: db,
               messages: messages,
             );
           });
+          final idsByAccount = await _deltaIdsByResolvedAccountForMessages(
+            candidates,
+          );
           if (idsByAccount.isEmpty) {
             return;
           }
@@ -7233,23 +7980,41 @@ class EmailService {
     }
   }
 
-  Future<Map<int, List<int>>> _seenDeltaIdsByAccountForMessages({
+  Future<List<Message>> _seenMessageCandidatesForMessages({
     required XmppDatabase db,
     required List<Message> messages,
   }) async {
-    final idsByAccount = <int, LinkedHashSet<int>>{};
+    final candidates = <String, Message>{};
     for (final message in messages) {
-      final candidates = await _seenMessageCandidatesForRfcGroup(
+      final messageCandidates = await _seenMessageCandidatesForRfcGroup(
         db: db,
         message: message,
       );
-      for (final candidate in candidates) {
+      for (final candidate in messageCandidates) {
         final deltaId = candidate.deltaMsgId;
-        if (deltaId == null) continue;
-        idsByAccount
-            .putIfAbsent(candidate.deltaAccountId, LinkedHashSet<int>.new)
-            .add(deltaId);
+        if (deltaId == null) {
+          continue;
+        }
+        candidates['${candidate.deltaAccountId}:$deltaId'] = candidate;
       }
+    }
+    return candidates.values.toList(growable: false);
+  }
+
+  Future<Map<int, List<int>>> _deltaIdsByResolvedAccountForMessages(
+    List<Message> messages,
+  ) async {
+    final idsByAccount = <int, LinkedHashSet<int>>{};
+    for (final message in messages) {
+      final deltaId = message.deltaMsgId;
+      if (deltaId == null) {
+        continue;
+      }
+      final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+      if (accountId == null) {
+        continue;
+      }
+      idsByAccount.putIfAbsent(accountId, LinkedHashSet<int>.new).add(deltaId);
     }
     return {
       for (final entry in idsByAccount.entries)
@@ -7363,13 +8128,13 @@ class EmailService {
     if (deltaMessages.isEmpty) {
       return false;
     }
-    final idsByAccount = <int, List<int>>{};
-    for (final message in deltaMessages) {
-      idsByAccount
-          .putIfAbsent(message.deltaAccountId, () => <int>[])
-          .add(message.deltaMsgId!);
-    }
     await _ensureReady();
+    final idsByAccount = await _deltaIdsByResolvedAccountForMessages(
+      deltaMessages,
+    );
+    if (idsByAccount.isEmpty) {
+      return false;
+    }
     var success = true;
     for (final entry in idsByAccount.entries) {
       final result = await _transport.deleteMessages(
@@ -7474,7 +8239,7 @@ class EmailService {
         }
         continue;
       }
-      await _transport.hydrateMessages(candidateIds, accountId: deltaAccountId);
+      await _hydrateMessagesOnMain(candidateIds, accountId: deltaAccountId);
       final candidateMessages = <Message>[];
       for (final candidateId in candidateIds) {
         final deltaMessage = await _transport.getMessage(
@@ -7487,6 +8252,7 @@ class EmailService {
         final stored = await db.getMessageByDeltaId(
           candidateId,
           deltaAccountId: deltaAccountId,
+          deltaChatId: deltaChatId,
         );
         if (stored == null) {
           continue;
@@ -7643,6 +8409,7 @@ class EmailService {
     final existing = await db.getMessagesByDeltaIds(
       deltaIdSet,
       deltaAccountId: deltaAccountId,
+      deltaChatId: chat == null ? null : chatId,
     );
     for (final message in existing) {
       final deltaId = message.deltaMsgId;
@@ -7656,16 +8423,24 @@ class EmailService {
         .toList(growable: false);
     if (missingIds.isNotEmpty) {
       final stanzaIds = missingIds
-          .map((deltaId) => _stanzaId(deltaId, accountId: deltaAccountId))
+          .map(deltaMessageStanzaId)
           .toList(growable: false);
       final stanzaMatches = await db.getMessagesByStanzaIds(stanzaIds);
       final messagesByStanzaId = <String, Message>{
         for (final message in stanzaMatches) message.stanzaID: message,
       };
       for (final deltaId in missingIds) {
-        final stanzaId = _stanzaId(deltaId, accountId: deltaAccountId);
+        final stanzaId = deltaMessageStanzaId(deltaId);
         final message = messagesByStanzaId[stanzaId];
-        if (message != null) {
+        if (message != null &&
+            _storedDeltaLocatorMatches(
+              message,
+              _DeltaChatMessageId(
+                chatId: chat == null ? null : chatId,
+                msgId: deltaId,
+                accountId: deltaAccountId,
+              ),
+            )) {
           messagesByDeltaId[deltaId] = message;
         }
       }
@@ -7675,10 +8450,11 @@ class EmailService {
         .where((deltaId) => !messagesByDeltaId.containsKey(deltaId))
         .toList(growable: false);
     if (remainingIds.isNotEmpty) {
-      await _transport.hydrateMessages(remainingIds, accountId: deltaAccountId);
+      await _hydrateMessagesOnMain(remainingIds, accountId: deltaAccountId);
       final hydrated = await db.getMessagesByDeltaIds(
         remainingIds,
         deltaAccountId: deltaAccountId,
+        deltaChatId: chat == null ? null : chatId,
       );
       for (final message in hydrated) {
         final deltaId = message.deltaMsgId;
@@ -7687,7 +8463,7 @@ class EmailService {
         }
       }
       final stanzaIds = remainingIds
-          .map((deltaId) => _stanzaId(deltaId, accountId: deltaAccountId))
+          .map(deltaMessageStanzaId)
           .toList(growable: false);
       final stanzaMatches = await db.getMessagesByStanzaIds(stanzaIds);
       final messagesByStanzaId = <String, Message>{
@@ -7697,9 +8473,17 @@ class EmailService {
         if (messagesByDeltaId.containsKey(deltaId)) {
           continue;
         }
-        final stanzaId = _stanzaId(deltaId, accountId: deltaAccountId);
+        final stanzaId = deltaMessageStanzaId(deltaId);
         final message = messagesByStanzaId[stanzaId];
-        if (message != null) {
+        if (message != null &&
+            _storedDeltaLocatorMatches(
+              message,
+              _DeltaChatMessageId(
+                chatId: chat == null ? null : chatId,
+                msgId: deltaId,
+                accountId: deltaAccountId,
+              ),
+            )) {
           messagesByDeltaId[deltaId] = message;
         }
       }
@@ -7741,26 +8525,20 @@ class EmailService {
     final deltaId = message.deltaMsgId;
     if (deltaId == null) return false;
     await _ensureReady();
-    return _transport.downloadFullMessage(
-      deltaId,
-      accountId: message.deltaAccountId,
-    );
+    final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+    if (accountId == null) {
+      return false;
+    }
+    return _transport.downloadFullMessage(deltaId, accountId: accountId);
   }
 
   /// Resends failed messages using core retry.
   Future<bool> resendMessages(List<Message> messages) async {
-    final idsByAccount = <int, List<int>>{};
-    for (final message in messages) {
-      final deltaId = message.deltaMsgId;
-      if (deltaId == null) continue;
-      idsByAccount
-          .putIfAbsent(message.deltaAccountId, () => <int>[])
-          .add(deltaId);
-    }
+    await _ensureReady();
+    final idsByAccount = await _deltaIdsByResolvedAccountForMessages(messages);
     if (idsByAccount.isEmpty) {
       return false;
     }
-    await _ensureReady();
     var success = true;
     for (final entry in idsByAccount.entries) {
       final result = await _transport.resendMessages(
@@ -7825,20 +8603,58 @@ class EmailService {
       htmlBody: htmlBody,
       subject: null,
     );
-    final msgId = await _guardDeltaOperation(
-      operation: 'send reply',
-      body: () => _transport.sendTextWithQuote(
+    final pendingStanzaId = _transport.persistsAppStateInternally
+        ? null
+        : _pendingOutgoingStanzaId();
+    if (pendingStanzaId != null) {
+      await _recordOutgoingEmail(
         chatId: chatId,
-        body: payload.displayText,
-        quotedMessageId: quotedMsgId,
-        quotedStanzaId: quotedMessage.stanzaID,
-        subject: normalizedSubject,
-        htmlBody: payload.htmlBody,
         accountId: binding.deltaAccountId,
-        forcePlaintext: mode.forcePlaintext,
-        skipAutocrypt: mode.skipAutocrypt,
-      ),
-    );
+        chat: binding.chat,
+        body: payload.displayText,
+        subject: normalizedSubject,
+        quotingStanzaId: quotedMessage.stanzaID,
+        htmlBody: payload.htmlBody,
+        timestamp: DateTime.timestamp(),
+        stanzaId: pendingStanzaId,
+      );
+    }
+    final int msgId;
+    try {
+      msgId = await _guardDeltaOperation(
+        operation: 'send reply',
+        body: () => _transport.sendTextWithQuote(
+          chatId: chatId,
+          body: payload.displayText,
+          quotedMessageId: quotedMsgId,
+          quotedStanzaId: quotedMessage.stanzaID,
+          subject: normalizedSubject,
+          htmlBody: payload.htmlBody,
+          accountId: binding.deltaAccountId,
+          forcePlaintext: mode.forcePlaintext,
+          skipAutocrypt: mode.skipAutocrypt,
+        ),
+      );
+    } on Exception {
+      if (pendingStanzaId != null) {
+        await _markOutgoingEmailFailed(stanzaId: pendingStanzaId);
+      }
+      rethrow;
+    }
+    if (pendingStanzaId != null) {
+      final deltaMessage = await _transport.getMessage(
+        msgId,
+        accountId: binding.deltaAccountId,
+      );
+      await _markOutgoingEmailSent(
+        stanzaId: pendingStanzaId,
+        msgId: msgId,
+        accountId: binding.deltaAccountId,
+        chatId: chatId,
+        timestamp: deltaMessage?.timestamp,
+        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
+      );
+    }
     return msgId;
   }
 
@@ -7847,10 +8663,11 @@ class EmailService {
     final deltaId = message.deltaMsgId;
     if (deltaId == null) return null;
     await _ensureReady();
-    return _transport.getQuotedMessage(
-      deltaId,
-      accountId: message.deltaAccountId,
-    );
+    final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+    if (accountId == null) {
+      return null;
+    }
+    return _transport.getQuotedMessage(deltaId, accountId: accountId);
   }
 
   /// Gets raw RFC822 headers for a message, if available.
@@ -7864,15 +8681,252 @@ class EmailService {
     return sanitizeRawEmailHeaders(headers);
   }
 
+  Future<String?> getMessageRawHeadersForMessage(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) return null;
+    await _ensureReady();
+    final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+    if (accountId == null) {
+      return null;
+    }
+    final headers = await _transport.getMessageMimeHeaders(
+      deltaId,
+      accountId: accountId,
+    );
+    return sanitizeRawEmailHeaders(headers);
+  }
+
   /// Gets HTML synthesized from the stored MIME for a message, if available.
   Future<String?> getMessageFullHtml(Message message) async {
     final deltaId = message.deltaMsgId;
     if (deltaId == null || deltaId <= _deltaMessageIdUnset) return null;
     await _ensureReady();
-    return _transport.getMessageFullHtml(
-      deltaId,
-      accountId: message.deltaAccountId,
+    final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+    if (accountId == null) {
+      return null;
+    }
+    return _transport.getMessageFullHtml(deltaId, accountId: accountId);
+  }
+
+  Future<int?> _resolveDeltaAccountIdForStoredMessage(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
+      return null;
+    }
+    final accountIds = await _transport.accountIds();
+    final storedAccountId = message.deltaAccountId;
+    if (accountIds.contains(storedAccountId)) {
+      if (!await _deltaMessageMatchesStoredLocator(
+        message: message,
+        deltaAccountId: storedAccountId,
+      )) {
+        return null;
+      }
+      if (await _deltaMessageHasConflictingStoredOrigin(
+        message: message,
+        deltaAccountId: storedAccountId,
+      )) {
+        _log.fine(
+          'Stored message ${message.stanzaID} origin does not match '
+          'Delta account $storedAccountId.',
+        );
+        return null;
+      }
+      return message.deltaAccountId;
+    }
+    if (accountIds.isEmpty) {
+      _log.fine(
+        'No Delta accounts available for stored message ${message.stanzaID}.',
+      );
+      return null;
+    }
+    final storedOrigin = normalizeEmailMessageId(message.originID);
+    if (storedOrigin == null) {
+      _log.fine(
+        'Stored message ${message.stanzaID} account id $storedAccountId '
+        'is unavailable without origin proof.',
+      );
+      return null;
+    }
+    final matches = <int>[];
+    for (final accountId in accountIds) {
+      if (!await _deltaMessageMatchesStoredLocator(
+        message: message,
+        deltaAccountId: accountId,
+      )) {
+        continue;
+      }
+      final candidateOrigin = await _resolveDeltaMessageOriginId(
+        deltaMsgId: deltaId,
+        deltaAccountId: accountId,
+      );
+      if (candidateOrigin != storedOrigin) {
+        continue;
+      }
+      matches.add(accountId);
+    }
+    if (matches.length != 1) {
+      _log.fine(
+        'Stored message ${message.stanzaID} account id '
+        '${message.deltaAccountId} is unavailable and resolved to '
+        '${matches.length} candidate accounts.',
+      );
+      return null;
+    }
+    final resolvedAccountId = matches.single;
+    await _repairStoredMessageDeltaAccountId(
+      message: message,
+      deltaAccountId: resolvedAccountId,
     );
+    return resolvedAccountId;
+  }
+
+  Future<bool> _deltaMessageHasConflictingStoredOrigin({
+    required Message message,
+    required int deltaAccountId,
+  }) async {
+    final storedOrigin = normalizeEmailMessageId(message.originID);
+    if (storedOrigin == null) {
+      return false;
+    }
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
+      return false;
+    }
+    final candidateOrigin = await _resolveDeltaMessageOriginId(
+      deltaMsgId: deltaId,
+      deltaAccountId: deltaAccountId,
+    );
+    return candidateOrigin != null && candidateOrigin != storedOrigin;
+  }
+
+  Future<bool> _deltaMessageMatchesStoredLocator({
+    required Message message,
+    required int deltaAccountId,
+  }) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
+      return false;
+    }
+    DeltaMessage? deltaMessage;
+    try {
+      deltaMessage = await _transport.getMessage(
+        deltaId,
+        accountId: deltaAccountId,
+      );
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Failed to validate Delta message locator.', error, stackTrace);
+      return false;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Failed to validate Delta message locator.', error, stackTrace);
+      return false;
+    } on TimeoutException catch (error, stackTrace) {
+      _log.fine(
+        'Timed out validating Delta message locator.',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+    if (deltaMessage == null) {
+      return false;
+    }
+    final deltaChatId = message.deltaChatId;
+    if (deltaChatId != null && deltaMessage.chatId != deltaChatId) {
+      return false;
+    }
+    return true;
+  }
+
+  Future<String?> _resolveDeltaMessageOriginId({
+    required int deltaMsgId,
+    required int deltaAccountId,
+  }) async {
+    final rfc724Mid = normalizeEmailMessageId(
+      await _readDeltaMessageOriginData(
+        deltaMsgId: deltaMsgId,
+        deltaAccountId: deltaAccountId,
+        source: 'RFC724 Message-ID',
+        read: () => _transport.getMessageRfc724Mid(
+          deltaMsgId,
+          accountId: deltaAccountId,
+        ),
+      ),
+    );
+    if (rfc724Mid != null) {
+      return rfc724Mid;
+    }
+    final infoMessageId = parseDeltaMessageInfoMessageId(
+      await _readDeltaMessageOriginData(
+        deltaMsgId: deltaMsgId,
+        deltaAccountId: deltaAccountId,
+        source: 'message info',
+        read: () =>
+            _transport.getMessageInfo(deltaMsgId, accountId: deltaAccountId),
+      ),
+    );
+    if (infoMessageId != null) {
+      return infoMessageId;
+    }
+    return parseEmailMessageId(
+      await _readDeltaMessageOriginData(
+        deltaMsgId: deltaMsgId,
+        deltaAccountId: deltaAccountId,
+        source: 'MIME headers',
+        read: () => _transport.getMessageMimeHeaders(
+          deltaMsgId,
+          accountId: deltaAccountId,
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _readDeltaMessageOriginData({
+    required int deltaMsgId,
+    required int deltaAccountId,
+    required String source,
+    required Future<String?> Function() read,
+  }) async {
+    try {
+      return await read();
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine(
+        'Failed to load Delta $source for message $deltaMsgId '
+        'on account $deltaAccountId.',
+        error,
+        stackTrace,
+      );
+      return null;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine(
+        'Failed to load Delta $source for message $deltaMsgId '
+        'on account $deltaAccountId.',
+        error,
+        stackTrace,
+      );
+      return null;
+    } on TimeoutException catch (error, stackTrace) {
+      _log.fine(
+        'Timed out loading Delta $source for message $deltaMsgId '
+        'on account $deltaAccountId.',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _repairStoredMessageDeltaAccountId({
+    required Message message,
+    required int deltaAccountId,
+  }) async {
+    if (message.id == null || message.deltaAccountId == deltaAccountId) {
+      return;
+    }
+    await _trackAppDatabaseOperation(() async {
+      final db = await _databaseBuilder();
+      await db.updateMessage(message.copyWith(deltaAccountId: deltaAccountId));
+    });
   }
 
   /// Gets body-only content parsed from the stored RFC822 MIME, if available.
@@ -7880,10 +8934,11 @@ class EmailService {
     final deltaId = message.deltaMsgId;
     if (deltaId == null || deltaId <= _deltaMessageIdUnset) return null;
     await _ensureReady();
-    return _transport.getMessageRfc822Body(
-      deltaId,
-      accountId: message.deltaAccountId,
-    );
+    final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+    if (accountId == null) {
+      return null;
+    }
+    return _transport.getMessageRfc822Body(deltaId, accountId: accountId);
   }
 
   /// Saves a draft to core.
@@ -8146,10 +9201,6 @@ Map<String, bool> _normalizedEncryptionBetaMap(Map<String, bool> values) {
     normalized[address] = true;
   }
   return Map<String, bool>.unmodifiable(normalized);
-}
-
-String _stanzaId(int msgId, {required int accountId}) {
-  return deltaMessageStanzaId(msgId);
 }
 
 final class _EmailCredentialRuntimeSession {

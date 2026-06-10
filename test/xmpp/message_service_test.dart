@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -560,6 +561,40 @@ void main() {
     );
 
     test(
+      'Given an email-backed direct chat, sending an XMPP message promotes it.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+        await database.createChat(
+          Chat(
+            jid: jid,
+            title: 'Mixed Peer',
+            type: ChatType.chat,
+            lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+            transport: MessageTransport.email,
+            deltaChatId: 27,
+            emailAddress: 'mixed@example.com',
+            emailFromAddress: 'me@example.com',
+            emailSendConfirmationEnabled: false,
+          ),
+        );
+
+        await xmppService.sendMessage(jid: jid, text: text);
+
+        final chat = await database.getChat(jid);
+        expect(chat?.transport, MessageTransport.xmpp);
+        expect(chat?.deltaChatId, 27);
+        expect(chat?.emailAddress, 'mixed@example.com');
+        expect(chat?.emailFromAddress, 'me@example.com');
+        expect(chat?.emailSendConfirmationEnabled, isFalse);
+      },
+    );
+
+    test(
       'Given a first direct outbound message, publishes a conversation index seed.',
       () async {
         await connectSuccessfully(xmppService);
@@ -667,6 +702,57 @@ void main() {
             ?.firstTag('conv', xmlns: conversationIndexNode);
         expect(payload?.attributes['peer'], peerJid);
         expect(payload?.attributes['last_id'], isNull);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Given an email-backed direct chat, an inbound XMPP message promotes it.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        const peerJid = 'inbound-mixed@axi.im';
+        await database.createChat(
+          Chat(
+            jid: peerJid,
+            title: 'Inbound Mixed',
+            type: ChatType.chat,
+            lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+            transport: MessageTransport.email,
+            deltaChatId: 31,
+            emailAddress: 'inbound-mixed@example.com',
+            emailFromAddress: 'me@example.com',
+            shareSignatureEnabled: true,
+          ),
+        );
+        final event = mox.MessageEvent(
+          mox.JID.fromString(peerJid),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('hello from xmpp'),
+            const mox.MessageIdData('inbound-mixed-1'),
+          ]),
+          id: 'inbound-mixed-1',
+          type: 'chat',
+        );
+
+        controller.add(event);
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final chat = await database.getChat(peerJid);
+        expect(chat?.transport, MessageTransport.xmpp);
+        expect(chat?.deltaChatId, 31);
+        expect(chat?.emailAddress, 'inbound-mixed@example.com');
+        expect(chat?.emailFromAddress, 'me@example.com');
+        expect(chat?.shareSignatureEnabled, isTrue);
 
         await controller.close();
       },

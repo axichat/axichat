@@ -27,6 +27,8 @@ class _ChatMainTimelineList extends StatelessWidget {
   const _ChatMainTimelineList({
     required this.items,
     required this.messageListOptions,
+    required this.onRenderedMessagesChanged,
+    required this.renderedMessagesHydrationKey,
     required this.state,
     required this.chatEntity,
     required this.currentUserId,
@@ -99,6 +101,8 @@ class _ChatMainTimelineList extends StatelessWidget {
 
   final List<ChatTimelineItem> items;
   final MessageListOptions messageListOptions;
+  final ValueChanged<List<Message>> onRenderedMessagesChanged;
+  final Object? renderedMessagesHydrationKey;
   final ChatState state;
   final chat_models.Chat? chatEntity;
   final String? currentUserId;
@@ -304,6 +308,8 @@ class _ChatMainTimelineList extends StatelessWidget {
       child: _ChatMessageList(
         items: items,
         scrollToBottomOptions: const ScrollToBottomOptions(),
+        onRenderedMessagesChanged: onRenderedMessagesChanged,
+        renderedMessagesHydrationKey: renderedMessagesHydrationKey,
         itemBuilder: (currentItem, previous, next) => _ChatTimelineItemView(
           currentItem: currentItem,
           previous: previous,

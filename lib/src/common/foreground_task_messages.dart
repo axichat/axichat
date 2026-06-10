@@ -5,11 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     hide NotificationVisibility;
 
-const emailKeepalivePrefix = 'EmailKeepalive';
-const emailKeepaliveTickPrefix = 'EmailKeepaliveTick';
-const emailKeepaliveStartCommand = 'Start';
-const emailKeepaliveStopCommand = 'Stop';
-const foregroundClientEmailKeepalive = 'email_keepalive';
+const foregroundClientEmailDelta = 'email_delta';
 const foregroundTaskMessageSeparator = '::';
 const _notificationTapPrefix = 'NotificationTap';
 

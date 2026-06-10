@@ -98,9 +98,9 @@ void main() {
           sendDataToTask: (_) {},
         );
 
-        await bridge.acquire(clientId: foregroundClientEmailKeepalive);
-        await bridge.acquire(clientId: foregroundClientEmailKeepalive);
-        await bridge.release(foregroundClientEmailKeepalive);
+        await bridge.acquire(clientId: foregroundClientEmailDelta);
+        await bridge.acquire(clientId: foregroundClientEmailDelta);
+        await bridge.release(foregroundClientEmailDelta);
 
         expect(stopCalls, equals(1));
       },
@@ -122,11 +122,11 @@ void main() {
         sendDataToTask: (_) {},
       );
 
-      await bridge.release(foregroundClientEmailKeepalive);
+      await bridge.release(foregroundClientEmailDelta);
       expect(stopCalls, isZero);
 
       await bridge.acquire(clientId: foregroundClientXmpp);
-      await bridge.release(foregroundClientEmailKeepalive);
+      await bridge.release(foregroundClientEmailDelta);
       expect(stopCalls, isZero);
 
       await bridge.release(foregroundClientXmpp);
@@ -195,7 +195,7 @@ void main() {
           sendDataToTask: (_) {},
         );
 
-        await bridge.acquire(clientId: foregroundClientEmailKeepalive);
+        await bridge.acquire(clientId: foregroundClientEmailDelta);
         await bridge.acquire(clientId: foregroundClientXmpp);
         expect(startCalls, equals(1));
 
@@ -206,7 +206,7 @@ void main() {
         await bridge.release(foregroundClientXmpp);
         expect(stopCalls, isZero);
 
-        await bridge.release(foregroundClientEmailKeepalive);
+        await bridge.release(foregroundClientEmailDelta);
         expect(stopCalls, equals(1));
       },
     );
@@ -324,7 +324,7 @@ void main() {
         );
 
         await bridge.acquire(clientId: foregroundClientXmpp);
-        bridge.registerListener(foregroundClientEmailKeepalive, (_) {});
+        bridge.registerListener(foregroundClientEmailDelta, (_) {});
 
         final stopped = await bridge.stopIfRunning();
 

@@ -1096,6 +1096,15 @@ class _ChatScaffoldBody extends StatelessWidget {
                       loadingMessages: loadingMessages,
                       mainTimelineItems: mainTimelineItems,
                       messageListOptions: dashMessageListOptions,
+                      onRenderedMessagesChanged: (messages) {
+                        locate<ChatBloc>().add(
+                          ChatRenderedMessagesHydrationRequested(messages),
+                        );
+                      },
+                      renderedMessagesHydrationKey: (
+                        state.emailServiceAvailable,
+                        state.emailSelfJid,
+                      ),
                       typingVisible: typingVisible,
                       typingAvatars: typingAvatars,
                       typingAvatarPaths: typingAvatarPaths,

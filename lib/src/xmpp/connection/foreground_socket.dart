@@ -517,13 +517,10 @@ void startCallback() {
 
 class ForegroundSocket extends TaskHandler {
   static final _log = Logger('ForegroundSocket');
-  static const Duration _defaultEmailKeepaliveInterval = Duration(seconds: 45);
 
   XmppSocketWrapper? _socket;
   late final StreamSubscription<String> _dataSubscription;
   late final StreamSubscription<mox.XmppSocketEvent> _eventSubscription;
-  Timer? _emailKeepaliveTimer;
-  Duration _emailKeepaliveInterval = _defaultEmailKeepaliveInterval;
 
   static void _sendToMain(List<Object> strings) {
     final data = strings.join(join);
@@ -594,10 +591,6 @@ class ForegroundSocket extends TaskHandler {
       return _socket?.write(data.substring('$writePrefix$join'.length));
     } else if (data.startsWith('$closePrefix$join')) {
       return _socket?.close();
-    } else if (data.startsWith('$emailKeepalivePrefix$join')) {
-      _handleEmailKeepaliveCommand(
-        data.substring('$emailKeepalivePrefix$join'.length),
-      );
     }
   }
 
@@ -610,47 +603,6 @@ class ForegroundSocket extends TaskHandler {
     _socket = null;
     await _dataSubscription.cancel();
     await _eventSubscription.cancel();
-    _stopEmailKeepaliveTimer();
-  }
-
-  void _handleEmailKeepaliveCommand(String payload) {
-    final parts = payload.split(join);
-    if (parts.isEmpty) {
-      return;
-    }
-    switch (parts.first) {
-      case emailKeepaliveStartCommand:
-        final intervalMs = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
-        _emailKeepaliveInterval = intervalMs > 0
-            ? Duration(milliseconds: intervalMs)
-            : _defaultEmailKeepaliveInterval;
-        _resetEmailKeepaliveTimer();
-        break;
-      case emailKeepaliveStopCommand:
-        _stopEmailKeepaliveTimer();
-        break;
-    }
-  }
-
-  void _resetEmailKeepaliveTimer() {
-    _emailKeepaliveTimer?.cancel();
-    _emitEmailKeepaliveTick();
-    _emailKeepaliveTimer = Timer.periodic(
-      _emailKeepaliveInterval,
-      (_) => _emitEmailKeepaliveTick(),
-    );
-  }
-
-  void _stopEmailKeepaliveTimer() {
-    _emailKeepaliveTimer?.cancel();
-    _emailKeepaliveTimer = null;
-  }
-
-  void _emitEmailKeepaliveTick() {
-    _sendToMain([
-      emailKeepaliveTickPrefix,
-      DateTime.now().millisecondsSinceEpoch,
-    ]);
   }
 }
 

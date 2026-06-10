@@ -2820,6 +2820,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       _internalEnvelopeChats.add(message.chatJid);
     }
     await _dbOp<XmppDatabase>((db) async {
+      if (_messageProvesDirectXmppCapability(message, resolvedChatType)) {
+        await db.markDirectChatXmppCapable(message.chatJid);
+      }
       await db.saveMessage(message, chatType: resolvedChatType, selfJid: myJid);
     });
     await _applyMucInviteLifecycleToRoomState(message);
@@ -2830,6 +2833,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _applyPendingOutboundMessageStatusesForChat(message.chatJid);
     await _applyPendingInboundReactionsForMessage(message);
     await _applyPendingInboundPinMutationsForMessage(message);
+  }
+
+  bool _messageProvesDirectXmppCapability(Message message, ChatType chatType) {
+    return chatType == ChatType.chat &&
+        !message.isEmailBacked &&
+        !message.noStore &&
+        message.error == MessageError.none &&
+        message.pseudoMessageType == null &&
+        !_isInternalSyncEnvelope(message.body) &&
+        !isMultiDeviceSyncMessage(subject: message.subject, body: message.body);
   }
 
   Future<void> _applyMucInviteLifecycleToRoomState(Message message) async {}

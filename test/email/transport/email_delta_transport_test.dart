@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:io';
 
 import 'package:axichat/src/common/file_metadata_tools.dart';
@@ -6,6 +7,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
+import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -271,6 +273,7 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
         ),
       ).thenAnswer(
         (_) async => pendingMessage?.copyWith(
@@ -478,6 +481,147 @@ void main() {
     },
   );
 
+  test('sendText does not hydrate origin on incompatible dc-msg row', () async {
+    const chatId = 7;
+    const msgId = 171;
+    final chat = Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: chatId,
+      emailAddress: 'alice@example.com',
+      emailFromAddress: 'me@example.com',
+    );
+    Message? pendingMessage;
+
+    when(
+      () => deltaSafe.createAccounts(directory: any(named: 'directory')),
+    ).thenThrow(const DeltaAllocationException('accounts unavailable'));
+    when(
+      () => deltaSafe.createContext(
+        databasePath: any(named: 'databasePath'),
+        osName: any(named: 'osName'),
+      ),
+    ).thenAnswer((_) async => context);
+    when(
+      () => context.open(passphrase: any(named: 'passphrase')),
+    ).thenAnswer((_) async {});
+    when(() => context.getConfig(any())).thenAnswer((invocation) async {
+      final key = invocation.positionalArguments.first as String;
+      return key == 'addr' ? 'me@example.com' : null;
+    });
+    when(
+      () => context.setConfig(
+        key: any(named: 'key'),
+        value: any(named: 'value'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => context.isConfigured).thenReturn(true);
+    when(
+      () => database.replaceDeltaPlaceholderSelfJids(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        resolvedAddress: 'me@example.com',
+        placeholderJids: any(named: 'placeholderJids'),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.removeDeltaPlaceholderDuplicates(
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        placeholderJids: any(named: 'placeholderJids'),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.getChatByDeltaChatId(
+        chatId,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => chat);
+    when(
+      () => database.upsertEmailChatAccount(
+        chatJid: chat.jid,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+    ).thenAnswer((invocation) async {
+      pendingMessage = invocation.positionalArguments.first as Message;
+    });
+    when(
+      () => context.sendText(
+        chatId: chatId,
+        message: 'hello',
+        subject: any(named: 'subject'),
+        html: any(named: 'html'),
+        forcePlaintext: false,
+        skipAutocrypt: false,
+      ),
+    ).thenAnswer((_) async => msgId);
+    when(() => context.getMessage(msgId)).thenAnswer(
+      (_) async => DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'hello',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+        isOutgoing: true,
+      ),
+    );
+    when(
+      () => context.getMessageMimeHeaders(msgId),
+    ).thenAnswer((_) async => 'Message-ID: <origin@example.com>');
+    when(
+      () => context.getMessageRfc724Mid(msgId),
+    ).thenAnswer((_) async => null);
+    when(
+      () => database.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+      ),
+    ).thenAnswer((_) async => null);
+    when(() => database.getMessageByStanzaID(any())).thenAnswer((
+      invocation,
+    ) async {
+      final stanzaId = invocation.positionalArguments.first as String;
+      if (stanzaId == pendingMessage?.stanzaID) {
+        return pendingMessage;
+      }
+      if (stanzaId == deltaMessageStanzaId(msgId)) {
+        return Message(
+          stanzaID: deltaMessageStanzaId(msgId),
+          senderJid: 'other@example.com',
+          chatJid: 'other@example.com',
+          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+          body: 'Other account send',
+          acked: true,
+          deltaChatId: 99,
+          deltaMsgId: msgId,
+          deltaAccountId: 99,
+        );
+      }
+      return null;
+    });
+    when(() => database.updateMessage(any())).thenAnswer((_) async {});
+
+    await transport.ensureInitialized(
+      databasePrefix: 'email_delta_transport_test',
+      databasePassphrase: 'test-passphrase',
+    );
+    expect(await transport.isConfigured(), isTrue);
+
+    await transport.sendText(chatId: chatId, body: 'hello');
+
+    verifyNever(() => database.updateMessage(any()));
+  });
+
   test(
     'sendAttachment without caption does not persist a generated body',
     () async {
@@ -593,6 +737,7 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
         ),
       ).thenAnswer(
         (_) async => pendingMessage?.copyWith(
@@ -1528,6 +1673,249 @@ void main() {
     expect(events.hasListener, isTrue);
   });
 
+  test(
+    'account events without account id are forwarded with source account',
+    () async {
+      const accountId = 1;
+      final accounts = MockDeltaAccountsHandle();
+      final events = StreamController<DeltaCoreEvent>.broadcast();
+      final delivered = Completer<DeltaCoreEvent>();
+      transport = EmailDeltaTransport(
+        databaseBuilder: () async => database,
+        deltaSafe: deltaSafe,
+        persistEvents: false,
+      );
+      addTearDown(events.close);
+      when(
+        () => deltaSafe.createAccounts(directory: any(named: 'directory')),
+      ).thenAnswer((_) async => accounts);
+      when(
+        () => accounts.ensureAccount(
+          legacyDatabasePath: any(named: 'legacyDatabasePath'),
+        ),
+      ).thenAnswer((_) async => accountId);
+      when(() => accounts.contextFor(accountId)).thenReturn(context);
+      when(() => accounts.events()).thenAnswer((_) => events.stream);
+      when(() => accounts.startIo()).thenAnswer((_) async {});
+      when(() => accounts.stopIo()).thenAnswer((_) async {});
+      when(
+        () => context.open(passphrase: any(named: 'passphrase')),
+      ).thenAnswer((_) async {});
+      when(() => context.getConfig(any())).thenAnswer((invocation) async {
+        final key = invocation.positionalArguments.first as String;
+        return key == 'addr' ? 'me@example.com' : null;
+      });
+      when(
+        () => context.setConfig(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.replaceDeltaPlaceholderSelfJids(
+          deltaAccountId: accountId,
+          resolvedAddress: 'me@example.com',
+          placeholderJids: any(named: 'placeholderJids'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: 'me@example.com',
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.removeDeltaPlaceholderDuplicates(
+          deltaAccountId: accountId,
+          placeholderJids: any(named: 'placeholderJids'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: 'me@example.com',
+        ),
+      ).thenAnswer((_) async {});
+
+      transport.addEventListener((event) {
+        if (!delivered.isCompleted) {
+          delivered.complete(event);
+        }
+      });
+      await transport.ensureInitialized(
+        databasePrefix: 'email_delta_transport_test',
+        databasePassphrase: 'test-passphrase',
+      );
+      await transport.start();
+      addTearDown(transport.stop);
+
+      events.add(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: 10,
+          data2: 42,
+        ),
+      );
+
+      final event = await delivered.future.timeout(const Duration(seconds: 1));
+      expect(event.accountId, accountId);
+    },
+  );
+
+  test(
+    'account events without account id are skipped with multiple sessions',
+    () async {
+      const primaryAccountId = 1;
+      const secondAccountId = 2;
+      final accounts = MockDeltaAccountsHandle();
+      final secondContext = MockDeltaContextHandle();
+      final events = StreamController<DeltaCoreEvent>.broadcast();
+      final delivered = Completer<DeltaCoreEvent>();
+      transport = EmailDeltaTransport(
+        databaseBuilder: () async => database,
+        deltaSafe: deltaSafe,
+        persistEvents: false,
+      );
+      addTearDown(events.close);
+      when(
+        () => deltaSafe.createAccounts(directory: any(named: 'directory')),
+      ).thenAnswer((_) async => accounts);
+      when(
+        () => accounts.ensureAccount(
+          legacyDatabasePath: any(named: 'legacyDatabasePath'),
+        ),
+      ).thenAnswer((_) async => primaryAccountId);
+      when(() => accounts.contextFor(primaryAccountId)).thenReturn(context);
+      when(
+        () => accounts.contextFor(secondAccountId),
+      ).thenReturn(secondContext);
+      when(() => accounts.events()).thenAnswer((_) => events.stream);
+      when(() => accounts.startIo()).thenAnswer((_) async {});
+      when(() => accounts.stopIo()).thenAnswer((_) async {});
+      when(
+        () => context.open(passphrase: any(named: 'passphrase')),
+      ).thenAnswer((_) async {});
+      when(() => context.getConfig(any())).thenAnswer((invocation) async {
+        final key = invocation.positionalArguments.first as String;
+        return key == 'addr' ? 'one@example.com' : null;
+      });
+      when(
+        () => context.setConfig(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => secondContext.open(passphrase: any(named: 'passphrase')),
+      ).thenAnswer((_) async {});
+      when(() => secondContext.getConfig(any())).thenAnswer((invocation) async {
+        final key = invocation.positionalArguments.first as String;
+        return key == 'addr' ? 'two@example.com' : null;
+      });
+      when(
+        () => secondContext.setConfig(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.replaceDeltaPlaceholderSelfJids(
+          deltaAccountId: any(named: 'deltaAccountId'),
+          resolvedAddress: any(named: 'resolvedAddress'),
+          placeholderJids: any(named: 'placeholderJids'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.removeDeltaPlaceholderDuplicates(
+          deltaAccountId: any(named: 'deltaAccountId'),
+          placeholderJids: any(named: 'placeholderJids'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).thenAnswer((_) async {});
+
+      transport.addEventListener((event) {
+        if (!delivered.isCompleted) {
+          delivered.complete(event);
+        }
+      });
+      await transport.ensureInitialized(
+        databasePrefix: 'email_delta_transport_test',
+        databasePassphrase: 'test-passphrase',
+      );
+      await transport.ensureAccountSession(secondAccountId);
+      transport.setPrimaryAccountId(primaryAccountId);
+      await transport.start();
+      addTearDown(transport.stop);
+
+      events.add(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: 10,
+          data2: 42,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(delivered.isCompleted, isFalse);
+    },
+  );
+
+  test(
+    'explicit legacy account requests do not route to primary in accounts mode',
+    () async {
+      const primaryAccountId = 1;
+      const secondAccountId = 2;
+      const msgId = 42;
+      final accounts = MockDeltaAccountsHandle();
+      final secondContext = MockDeltaContextHandle();
+      final events = StreamController<DeltaCoreEvent>.broadcast();
+      transport = EmailDeltaTransport(
+        databaseBuilder: () async => database,
+        deltaSafe: deltaSafe,
+        persistEvents: false,
+      );
+      addTearDown(events.close);
+      when(
+        () => deltaSafe.createAccounts(directory: any(named: 'directory')),
+      ).thenAnswer((_) async => accounts);
+      when(
+        () => accounts.ensureAccount(
+          legacyDatabasePath: any(named: 'legacyDatabasePath'),
+        ),
+      ).thenAnswer((_) async => primaryAccountId);
+      when(() => accounts.contextFor(primaryAccountId)).thenReturn(context);
+      when(
+        () => accounts.contextFor(secondAccountId),
+      ).thenReturn(secondContext);
+      when(() => accounts.events()).thenAnswer((_) => events.stream);
+      when(
+        () => context.open(passphrase: any(named: 'passphrase')),
+      ).thenAnswer((_) async {});
+      when(() => context.getConfig(any())).thenAnswer((invocation) async {
+        final key = invocation.positionalArguments.first as String;
+        return key == 'addr' ? 'one@example.com' : null;
+      });
+      when(
+        () => secondContext.open(passphrase: any(named: 'passphrase')),
+      ).thenAnswer((_) async {});
+      when(() => secondContext.getConfig(any())).thenAnswer((invocation) async {
+        final key = invocation.positionalArguments.first as String;
+        return key == 'addr' ? 'two@example.com' : null;
+      });
+
+      await transport.ensureInitialized(
+        databasePrefix: 'email_delta_transport_test',
+        databasePassphrase: 'test-passphrase',
+      );
+      await transport.ensureAccountSession(secondAccountId);
+      transport.setPrimaryAccountId(primaryAccountId);
+
+      final message = await transport.getMessage(
+        msgId,
+        accountId: DeltaAccountDefaults.legacyId,
+      );
+
+      expect(message, isNull);
+      verifyNever(() => context.getMessage(msgId));
+      verifyNever(() => secondContext.getMessage(msgId));
+    },
+  );
+
   test('dispose after stop does not stop native IO twice', () async {
     const accountId = 1;
     final accounts = MockDeltaAccountsHandle();
@@ -1588,5 +1976,474 @@ void main() {
     await transport.dispose();
 
     verify(() => accounts.stopIo()).called(1);
+  });
+
+  test('worker runtime accepts cached account state before start', () async {
+    final runtime = EmailDeltaWorkerRuntime();
+    Object? uncaughtError;
+
+    await runZonedGuarded(
+      () async {
+        runtime.hydrateAccountAddress(address: 'me@example.com', accountId: 7);
+        runtime.setPrimaryAccountId(7);
+        await pumpEventQueue();
+      },
+      (error, _) {
+        uncaughtError = error;
+      },
+    );
+
+    expect(uncaughtError, isNull);
+    expect(runtime.activeAccountId, 7);
+    expect(runtime.selfJidForAccount(7), 'me@example.com');
+
+    await runtime.dispose();
+  });
+
+  test('worker runtime preserves typed errors across RPC', () async {
+    ReceivePort? workerReceivePort;
+    final runtime = EmailDeltaWorkerRuntime(
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            var initialized = false;
+            final receivePort = ReceivePort('fake-email-delta-worker-errors');
+            workerReceivePort = receivePort;
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              void respond(Object? result) {
+                mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+              }
+
+              void fail(String type, String message) {
+                mainPort.send({
+                  'jsonrpc': '2.0',
+                  'id': id,
+                  'error': {'code': -32000, 'type': type, 'message': message},
+                });
+              }
+
+              switch (op) {
+                case 'runtimeState':
+                  respond({
+                    'accountsSupported': true,
+                    'accountsActive': initialized,
+                    'activeAccountId': initialized ? 7 : 0,
+                    'isIoRunning': false,
+                    'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                  });
+                  return;
+                case 'ensureInitialized':
+                  initialized = true;
+                  respond(null);
+                  return;
+                case 'configureAccount':
+                  fail('DeltaOperationException', 'IMAP login failed');
+                  return;
+                case 'runImex':
+                  fail(
+                    'EmailDeltaImexTimeoutException',
+                    'Delta import/export timed out.',
+                  );
+                  return;
+                case 'dispose':
+                  respond(null);
+                  receivePort.close();
+                  return;
+                default:
+                  respond(null);
+                  return;
+              }
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(() async {
+      await runtime.dispose();
+      workerReceivePort?.close();
+    });
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_error_test',
+      databasePassphrase: 'passphrase',
+    );
+
+    await expectLater(
+      runtime.configureAccount(
+        address: 'me@example.com',
+        password: 'wrong',
+        displayName: 'Me',
+      ),
+      throwsA(
+        isA<DeltaOperationException>().having(
+          (error) => error.message,
+          'message',
+          'IMAP login failed',
+        ),
+      ),
+    );
+    await expectLater(
+      runtime.runImex(
+        mode: 1,
+        path: '/tmp/export',
+        timeout: const Duration(milliseconds: 10),
+      ),
+      throwsA(isA<EmailDeltaImexTimeoutException>()),
+    );
+  });
+
+  test('worker runtime reinitializes after preserved restart', () async {
+    final operations = <String>[];
+    final runtime = EmailDeltaWorkerRuntime(
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            var initialized = false;
+            final receivePort = ReceivePort('fake-email-delta-worker');
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              operations.add(op);
+              void respond(Object? result) {
+                mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+              }
+
+              switch (op) {
+                case 'runtimeState':
+                  respond({
+                    'accountsSupported': true,
+                    'accountsActive': initialized,
+                    'activeAccountId': initialized ? 7 : 0,
+                    'isIoRunning': false,
+                    'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                  });
+                  return;
+                case 'ensureInitialized':
+                  initialized = true;
+                  respond(null);
+                  return;
+                case 'accountIds':
+                  if (!initialized) {
+                    mainPort.send({
+                      'jsonrpc': '2.0',
+                      'id': id,
+                      'error': {'code': -32000, 'message': 'not initialized'},
+                    });
+                    return;
+                  }
+                  respond({
+                    'accountIds': <int>[7],
+                    'state': {
+                      'accountsSupported': true,
+                      'accountsActive': true,
+                      'activeAccountId': 7,
+                      'isIoRunning': false,
+                      'selfJids': {'7': 'me@example.com'},
+                    },
+                  });
+                  return;
+                case 'dispose':
+                  respond(null);
+                  receivePort.close();
+                  return;
+                default:
+                  respond(null);
+                  return;
+              }
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(runtime.dispose);
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_restart_test',
+      databasePassphrase: 'passphrase',
+    );
+    await runtime.debugStopWorkerPreservingInitializationForTest();
+
+    expect(await runtime.accountIds(), isNotEmpty);
+    expect(operations, [
+      'ensureInitialized',
+      'runtimeState',
+      'dispose',
+      'ensureInitialized',
+      'accountIds',
+    ]);
+  });
+
+  test('worker runtime joins concurrent initialization requests', () async {
+    final operations = <String>[];
+    final runtime = EmailDeltaWorkerRuntime(
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            var initialized = false;
+            final receivePort = ReceivePort('fake-email-delta-worker-join');
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              operations.add(op);
+              void respond(Object? result) {
+                mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+              }
+
+              switch (op) {
+                case 'runtimeState':
+                  respond({
+                    'accountsSupported': true,
+                    'accountsActive': initialized,
+                    'activeAccountId': initialized ? 7 : 0,
+                    'isIoRunning': false,
+                    'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                  });
+                  return;
+                case 'ensureInitialized':
+                  initialized = true;
+                  respond(null);
+                  return;
+                case 'accountIds':
+                  respond({
+                    'accountIds': <int>[7],
+                    'state': {
+                      'accountsSupported': true,
+                      'accountsActive': true,
+                      'activeAccountId': 7,
+                      'isIoRunning': false,
+                      'selfJids': {'7': 'me@example.com'},
+                    },
+                  });
+                  return;
+                case 'getCoreConfig':
+                  respond('value');
+                  return;
+                case 'dispose':
+                  respond(null);
+                  receivePort.close();
+                  return;
+                default:
+                  respond(null);
+                  return;
+              }
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(runtime.dispose);
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_join_test',
+      databasePassphrase: 'passphrase',
+    );
+    await runtime.debugStopWorkerPreservingInitializationForTest();
+    operations.clear();
+
+    await Future.wait<Object?>([
+      runtime.accountIds(),
+      runtime.getCoreConfig('configured_addr'),
+    ]);
+
+    expect(
+      operations.where((operation) => operation == 'ensureInitialized'),
+      hasLength(1),
+    );
+    expect(operations, contains('accountIds'));
+    expect(operations, contains('getCoreConfig'));
+  });
+
+  test('worker runtime restarts after background fetch timeout', () async {
+    final operations = <String>[];
+    final workerReceivePorts = <ReceivePort>[];
+    final runtime = EmailDeltaWorkerRuntime(
+      debugBackgroundFetchRpcGracePeriod: const Duration(milliseconds: 20),
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            var initialized = false;
+            final receivePort = ReceivePort('fake-email-delta-worker-timeout');
+            workerReceivePorts.add(receivePort);
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              operations.add(op);
+              void respond(Object? result) {
+                mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+              }
+
+              switch (op) {
+                case 'runtimeState':
+                  respond({
+                    'accountsSupported': true,
+                    'accountsActive': initialized,
+                    'activeAccountId': initialized ? 7 : 0,
+                    'isIoRunning': false,
+                    'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                  });
+                  return;
+                case 'ensureInitialized':
+                  initialized = true;
+                  respond(null);
+                  return;
+                case 'performBackgroundFetch':
+                  return;
+                case 'accountIds':
+                  respond({
+                    'accountIds': <int>[7],
+                    'state': {
+                      'accountsSupported': true,
+                      'accountsActive': true,
+                      'activeAccountId': 7,
+                      'isIoRunning': false,
+                      'selfJids': {'7': 'me@example.com'},
+                    },
+                  });
+                  return;
+                case 'dispose':
+                  respond(null);
+                  receivePort.close();
+                  return;
+                default:
+                  respond(null);
+                  return;
+              }
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(() async {
+      await runtime.dispose(requestWorkerDispose: false);
+      for (final receivePort in workerReceivePorts) {
+        receivePort.close();
+      }
+    });
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_timeout_test',
+      databasePassphrase: 'passphrase',
+    );
+
+    Object? uncaughtError;
+    await runZonedGuarded(
+      () async {
+        await expectLater(
+          runtime.performBackgroundFetch(const Duration(milliseconds: 20)),
+          throwsA(
+            isA<EmailDeltaWorkerRuntimeException>().having(
+              (error) => error.message,
+              'message',
+              'Delta worker performBackgroundFetch timed out.',
+            ),
+          ),
+        );
+      },
+      (error, _) {
+        uncaughtError = error;
+      },
+    );
+
+    operations.clear();
+    expect(uncaughtError, isNull);
+    expect(await runtime.accountIds(), [7]);
+    expect(operations, ['ensureInitialized', 'accountIds']);
+  });
+
+  test('worker runtime forced dispose skips queued dispose request', () async {
+    final operations = <String>[];
+    ReceivePort? workerReceivePort;
+    final runtime = EmailDeltaWorkerRuntime(
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            var initialized = false;
+            final receivePort = ReceivePort('fake-email-delta-worker-dispose');
+            workerReceivePort = receivePort;
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              operations.add(op);
+              void respond(Object? result) {
+                mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+              }
+
+              switch (op) {
+                case 'runtimeState':
+                  respond({
+                    'accountsSupported': true,
+                    'accountsActive': initialized,
+                    'activeAccountId': initialized ? 7 : 0,
+                    'isIoRunning': false,
+                    'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                  });
+                  return;
+                case 'ensureInitialized':
+                  initialized = true;
+                  respond(null);
+                  return;
+                case 'dispose':
+                  return;
+                default:
+                  respond(null);
+                  return;
+              }
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(() async {
+      workerReceivePort?.close();
+      workerReceivePort = null;
+      await runtime.dispose(requestWorkerDispose: false);
+    });
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_forced_dispose_test',
+      databasePassphrase: 'passphrase',
+    );
+    await runtime.dispose(requestWorkerDispose: false);
+    workerReceivePort?.close();
+    workerReceivePort = null;
+
+    expect(operations, isNot(contains('dispose')));
   });
 }

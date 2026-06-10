@@ -46,6 +46,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/models/chat_timeline_projection.dart';
+import 'package:axichat/src/chat/models/rfc_email_group.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/composer/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
@@ -2274,21 +2275,16 @@ class _ChatState extends State<Chat> {
         ? ChatSubjectCodec.previewBodyText(rawRenderedText)
         : rawRenderedText;
     final trimmedRenderedText = messageText.trim();
-    final deltaMessageId = messageModel.deltaMsgId;
     final suppressGroupedEmailHtml =
         timelineMessageItem.emailRfcGroupKey != null &&
         !timelineMessageItem.isEmailRfcGroupLeader;
-    final resolvedHtmlBody = isWelcomeChat
+    final resolvedHtmlBody = isWelcomeChat || suppressGroupedEmailHtml
         ? null
-        : suppressGroupedEmailHtml
-        ? null
-        : deltaMessageId == null
-        ? timelineMessageItem.resolvedHtmlBody ?? messageModel.htmlBody
-        : messageModel.hasRfc822BodyContent
-        ? timelineMessageItem.resolvedHtmlBody ?? messageModel.htmlBody
-        : state.emailFullHtmlByDeltaId[deltaMessageId] ??
-              timelineMessageItem.resolvedHtmlBody ??
-              messageModel.htmlBody;
+        : timelineMessageItem.resolvedHtmlBody ??
+              resolvedEmailHtmlBodyForMessage(
+                message: messageModel,
+                emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+              );
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
     final normalizedHtmlText = normalizedHtmlBody == null
         ? null
@@ -5772,6 +5768,7 @@ class _ChatState extends State<Chat> {
                     context.read<ChatBloc>().add(
                       ChatRenderedMessagesHydrationRequested(
                         searchState.results,
+                        allowOffWindowEmailContentHydration: true,
                       ),
                     );
                     _openChatSearch();

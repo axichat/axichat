@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
-import 'dart:io';
-
 import 'package:equatable/equatable.dart';
 
 class EndpointConfig extends Equatable {
@@ -11,8 +8,6 @@ class EndpointConfig extends Equatable {
     this.domain = defaultDomain,
     this.xmppEnabled = true,
     this.smtpEnabled = true,
-    this.xmppHost,
-    this.xmppPort = defaultXmppPort,
     this.imapHost,
     this.imapPort = defaultImapPort,
     this.smtpHost,
@@ -35,8 +30,6 @@ class EndpointConfig extends Equatable {
   final String domain;
   final bool xmppEnabled;
   final bool smtpEnabled;
-  final String? xmppHost;
-  final int xmppPort;
   final String? imapHost;
   final int imapPort;
   final String? smtpHost;
@@ -56,8 +49,6 @@ class EndpointConfig extends Equatable {
     String? domain,
     bool? xmppEnabled,
     bool? smtpEnabled,
-    Object? xmppHost = _unset,
-    int? xmppPort,
     Object? imapHost = _unset,
     int? imapPort,
     Object? smtpHost = _unset,
@@ -71,8 +62,6 @@ class EndpointConfig extends Equatable {
       domain: domain ?? this.domain,
       xmppEnabled: xmppEnabled ?? this.xmppEnabled,
       smtpEnabled: smtpEnabled ?? this.smtpEnabled,
-      xmppHost: xmppHost == _unset ? this.xmppHost : xmppHost as String?,
-      xmppPort: xmppPort ?? this.xmppPort,
       imapHost: imapHost == _unset ? this.imapHost : imapHost as String?,
       imapPort: imapPort ?? this.imapPort,
       smtpHost: smtpHost == _unset ? this.smtpHost : smtpHost as String?,
@@ -92,8 +81,6 @@ class EndpointConfig extends Equatable {
     'domain': domain,
     'xmppEnabled': xmppEnabled,
     'smtpEnabled': smtpEnabled,
-    'xmppHost': xmppHost,
-    'xmppPort': xmppPort,
     'imapHost': imapHost,
     'imapPort': imapPort,
     'smtpHost': smtpHost,
@@ -123,8 +110,6 @@ class EndpointConfig extends Equatable {
           json['xmppEnabled'] as bool? ?? json['xmppEnabled'] as bool? ?? true,
       smtpEnabled:
           json['smtpEnabled'] as bool? ?? json['smtpEnabled'] as bool? ?? true,
-      xmppHost: (json['xmppHost'] as String?)?.trim(),
-      xmppPort: readPort(json['xmppPort'], defaultXmppPort),
       imapHost: (json['imapHost'] as String?)?.trim(),
       imapPort: readPort(json['imapPort'], defaultImapPort),
       smtpHost: (json['smtpHost'] as String?)?.trim(),
@@ -145,8 +130,6 @@ class EndpointConfig extends Equatable {
     domain,
     xmppEnabled,
     smtpEnabled,
-    xmppHost,
-    xmppPort,
     imapHost,
     imapPort,
     smtpHost,
@@ -156,111 +139,4 @@ class EndpointConfig extends Equatable {
     emailProvisioningBaseUrl,
     emailProvisioningPublicToken,
   ];
-}
-
-class EndpointOverride extends Equatable {
-  const EndpointOverride({required this.host, required this.port});
-
-  final String host;
-  final int port;
-
-  EndpointOverride copyWith({String? host, int? port}) {
-    return EndpointOverride(host: host ?? this.host, port: port ?? this.port);
-  }
-
-  @override
-  List<Object?> get props => [host, port];
-}
-
-class EndpointResolver {
-  const EndpointResolver({
-    this.lookup = InternetAddress.lookup,
-    this.lookupTimeout = const Duration(seconds: 10),
-  });
-
-  final Future<List<InternetAddress>> Function(String host) lookup;
-  final Duration lookupTimeout;
-
-  Future<EndpointOverride> resolveXmpp(
-    EndpointConfig config, {
-    EndpointOverride? fallback,
-  }) async {
-    final resolvedPort = config.xmppPort > 0
-        ? config.xmppPort
-        : EndpointConfig.defaultXmppPort;
-    final preferred = config.xmppHost?.trim();
-    if (preferred != null && preferred.isNotEmpty) {
-      return EndpointOverride(host: preferred, port: resolvedPort);
-    }
-    final domain = config.domain.trim();
-    if (config.smtpEnabled && domain.isNotEmpty) {
-      return EndpointOverride(host: domain, port: resolvedPort);
-    }
-    return await _resolve(
-      config: config,
-      preferredHost: null,
-      defaultPort: resolvedPort,
-      fallback: fallback,
-    );
-  }
-
-  Future<EndpointOverride> resolveSmtp(
-    EndpointConfig config, {
-    EndpointOverride? fallback,
-  }) async {
-    final resolvedPort = config.smtpPort > 0
-        ? config.smtpPort
-        : EndpointConfig.defaultSmtpPort;
-    return await _resolve(
-      config: config,
-      preferredHost: config.smtpHost,
-      defaultPort: resolvedPort,
-      fallback: fallback,
-    );
-  }
-
-  Future<EndpointOverride> _resolve({
-    required EndpointConfig config,
-    required String? preferredHost,
-    required int defaultPort,
-    EndpointOverride? fallback,
-  }) async {
-    final fallbackHost = fallback?.host;
-    final fallbackPort = fallback?.port ?? defaultPort;
-    final selectedPort = defaultPort > 0 ? defaultPort : fallbackPort;
-    final preferred = preferredHost?.trim();
-    final preferredIp = preferred == null || preferred.isEmpty
-        ? null
-        : InternetAddress.tryParse(preferred);
-    if (preferredIp != null) {
-      return EndpointOverride(host: preferredIp.address, port: selectedPort);
-    }
-    final host = _chooseHost(preferredHost, fallbackHost, config.domain);
-    try {
-      final lookupHost = preferred != null && preferred.isNotEmpty
-          ? preferred
-          : config.domain.trim();
-      final addresses = await lookup(lookupHost).timeout(lookupTimeout);
-      final resolvedHost = addresses.isNotEmpty
-          ? addresses.first.address
-          : host;
-      return EndpointOverride(host: resolvedHost, port: selectedPort);
-    } on TimeoutException {
-      return EndpointOverride(host: host, port: selectedPort);
-    } on SocketException {
-      return EndpointOverride(host: host, port: selectedPort);
-    } on FormatException {
-      return EndpointOverride(host: host, port: selectedPort);
-    }
-  }
-
-  String _chooseHost(String? preferred, String? fallback, String domain) {
-    if (preferred != null && preferred.trim().isNotEmpty) {
-      return preferred.trim();
-    }
-    if (fallback != null && fallback.trim().isNotEmpty) {
-      return fallback.trim();
-    }
-    return domain.trim();
-  }
 }

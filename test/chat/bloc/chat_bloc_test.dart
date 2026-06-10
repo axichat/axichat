@@ -1589,7 +1589,11 @@ void main() {
       messageStreamController.add(<Message>[replyMessage]);
       await quoteLookupStarted.future;
 
-      bloc.add(ChatRenderedMessagesHydrationRequested([renderedMessage]));
+      bloc.add(
+        ChatRenderedMessagesHydrationRequested([
+          renderedMessage,
+        ], allowOffWindowEmailContentHydration: true),
+      );
       await _pumpBloc();
       expect(htmlLookupStarted.isCompleted, isFalse);
 
@@ -7483,6 +7487,53 @@ void main() {
     await bloc.close();
   });
 
+  test(
+    'forward draft uses visible HTML text when RFC822 body is CSS',
+    () async {
+      const message = Message(
+        stanzaID: 'forward-email-css-rfc',
+        senderJid: 'sender@example.com',
+        chatJid: 'sender@example.com',
+        body: 'body { margin: 0; padding: 0; }',
+        htmlBody: '<table><tr><td>Rich body</td></tr></table>',
+        pseudoMessageData: {'emailRfc822Body': true},
+        deltaChatId: 1,
+        deltaMsgId: 2,
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(const ChatMessageForwardRequested(message: message));
+      await _pumpBloc();
+
+      expect(
+        bloc.state.pendingForwardDraft?.sources.single.originalPlainTextBody,
+        'Rich body',
+      );
+      expect(
+        bloc.state.pendingForwardDraft?.sources.single.originalPlainTextBody,
+        isNot(contains('margin: 0')),
+      );
+      expect(
+        bloc.state.pendingForwardDraft?.sources.single.originalHtmlBody,
+        '<table><tr><td>Rich body</td></tr></table>',
+      );
+
+      await bloc.close();
+    },
+  );
+
   test('offline email send attempts send and does not save drafts', () async {
     final emailService = MockEmailService();
     _mockEmailSync(emailService);
@@ -8470,6 +8521,85 @@ void main() {
   );
 
   test(
+    'mixed XMPP-default chats use the XMPP stream even when email is available',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      final mixedChat = initialChat.copyWith(
+        transport: MessageTransport.xmpp,
+        deltaChatId: 41,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'self@example.com',
+      );
+      final xmppAttachment = Message(
+        stanzaID: 'mixed-xmpp-image',
+        senderJid: mixedChat.jid,
+        chatJid: mixedChat.jid,
+        timestamp: DateTime.utc(2026, 1, 4, 14),
+        body: 'sent over xmpp',
+        fileMetadataID: 'xmpp-image',
+      );
+      final emailMessage = Message(
+        stanzaID: 'mixed-email-copy',
+        senderJid: 'peer@example.com',
+        chatJid: mixedChat.jid,
+        deltaChatId: 41,
+        deltaMsgId: 410,
+        timestamp: DateTime.utc(2026, 1, 4, 14, 1),
+        body: 'sent over email',
+      );
+
+      final bloc = ChatBloc(
+        jid: mixedChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(mixedChat);
+      await _pumpBloc();
+      messageStreamController.add([xmppAttachment, emailMessage]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.chat?.defaultTransport, MessageTransport.xmpp);
+      expect(bloc.state.items.map((message) => message.stanzaID), [
+        emailMessage.stanzaID,
+        xmppAttachment.stanzaID,
+      ]);
+      expect(
+        bloc.state.items
+            .singleWhere(
+              (message) => message.stanzaID == xmppAttachment.stanzaID,
+            )
+            .isEmailBacked,
+        isFalse,
+      );
+      verify(
+        () => messageService.messageStreamForChat(
+          mixedChat.jid,
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).called(greaterThanOrEqualTo(1));
+      verifyNever(
+        () => emailService.messageStreamForChat(
+          mixedChat.jid,
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'mixed chat message stream orders newer email ahead of older xmpp offsets',
     () async {
       final mixedChat = initialChat.copyWith(
@@ -9018,13 +9148,138 @@ void main() {
       verify(
         () => emailService.backfillChatHistory(
           chat: emailChat,
-          desiredWindow: ChatBloc.messageBatchSize + 5,
+          desiredWindow: ChatBloc.messageBatchSize,
           beforeMessageId: newest.deltaMsgId,
           beforeTimestamp: newest.timestamp,
           filter: MessageTimelineFilter.allWithContact,
         ),
       ).called(1);
       expect(bloc.state.items, [newest]);
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
+
+  test(
+    'email unread bootstrap grows backfill until boundary message is available',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 8,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+        unreadCount: ChatBloc.messageBatchSize * 4,
+      );
+      final newest = Message(
+        stanzaID: 'email-newest-before-boundary',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 205,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 5, 10),
+        body: 'Newest visible email',
+      );
+      final boundary = Message(
+        stanzaID: 'email-oldest-unread-boundary',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 101,
+        deltaAccountId: 3,
+        timestamp: DateTime(2026, 1, 4, 10),
+        body: 'Oldest unread email',
+      );
+
+      when(
+        () => emailService.getOldestFreshMessageId(any()),
+      ).thenAnswer((_) async => boundary.deltaMsgId);
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+
+      var localCount = 1;
+      var boundaryAvailable = false;
+      final requestedWindows = <int>[];
+      when(
+        () => messageService.countLocalMessages(
+          jid: any(named: 'jid'),
+          filter: any(named: 'filter'),
+          includePseudoMessages: any(named: 'includePseudoMessages'),
+        ),
+      ).thenAnswer((_) async => localCount);
+      when(
+        () => messageService.loadMessageByDeltaId(
+          boundary.deltaMsgId!,
+          chatJid: emailChat.jid,
+        ),
+      ).thenAnswer((_) async => boundaryAvailable ? boundary : null);
+      when(
+        () => emailService.backfillChatHistory(
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          beforeMessageId: any(named: 'beforeMessageId'),
+          beforeTimestamp: any(named: 'beforeTimestamp'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((invocation) async {
+        final desiredWindow = invocation.namedArguments[#desiredWindow] as int;
+        requestedWindows.add(desiredWindow);
+        localCount = desiredWindow;
+        if (requestedWindows.length == 2) {
+          boundaryAvailable = true;
+        }
+      });
+      when(
+        () => messageService.countChatMessagesThrough(
+          emailChat.jid,
+          throughTimestamp: boundary.timestamp!,
+          throughStanzaId: boundary.stanzaID,
+          throughDeltaMsgId: boundary.deltaMsgId,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer((_) async => ChatBloc.messageBatchSize + 25);
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([newest]);
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(requestedWindows, [
+        ChatBloc.messageBatchSize,
+        ChatBloc.messageBatchSize * 2,
+      ]);
+      verify(
+        () => emailService.messageStreamForChat(
+          emailChat.jid,
+          start: 0,
+          end: ChatBloc.messageBatchSize + 25,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).called(1);
 
       await bloc.close();
       await emailMessageStreamController.close();
@@ -9063,6 +9318,8 @@ void main() {
       await _pumpBloc();
       messageStreamController.add([message]);
       await _pumpBloc();
+      await _pumpBloc();
+      bloc.add(ChatRenderedMessagesHydrationRequested([message]));
       await _pumpBloc();
       await _pumpBloc();
 
@@ -9121,7 +9378,11 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    bloc.add(ChatRenderedMessagesHydrationRequested([renderedMessage]));
+    bloc.add(
+      ChatRenderedMessagesHydrationRequested([
+        renderedMessage,
+      ], allowOffWindowEmailContentHydration: true),
+    );
     await untilCalled(() => emailService.getMessageFullHtml(renderedMessage));
     await _pumpBloc();
 
@@ -9183,7 +9444,11 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    bloc.add(ChatRenderedMessagesHydrationRequested([otherChatMessage]));
+    bloc.add(
+      ChatRenderedMessagesHydrationRequested([
+        otherChatMessage,
+      ], allowOffWindowEmailContentHydration: true),
+    );
     await _pumpBloc();
     await _pumpBloc();
 
@@ -9396,6 +9661,8 @@ void main() {
       emailMessageStreamController.add([message]);
       await _pumpBloc();
       await _pumpBloc();
+      bloc.add(ChatRenderedMessagesHydrationRequested([message]));
+      await _pumpBloc();
 
       expect(bloc.state.messagesLoaded, isTrue);
       expect(bloc.state.items.single.htmlBody, '<p>Inline html</p>');
@@ -9467,6 +9734,8 @@ void main() {
       emailMessageStreamController.add([message]);
       await _pumpBloc();
       await _pumpBloc();
+      bloc.add(ChatRenderedMessagesHydrationRequested([message]));
+      await _pumpBloc();
 
       expect(bloc.state.emailFullHtmlLoading, contains(message.deltaMsgId));
 
@@ -9496,7 +9765,7 @@ void main() {
   );
 
   test(
-    'loaded email window requests full html even when inline html is present',
+    'rendered email row requests full html even when inline html is present',
     () async {
       final emailService = MockEmailService();
       final emailMessageStreamController =
@@ -9545,6 +9814,9 @@ void main() {
       chatStreamController.add(emailChat);
       await _pumpBloc();
       emailMessageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+      bloc.add(ChatRenderedMessagesHydrationRequested([message]));
       await _pumpBloc();
       await _pumpBloc();
 
@@ -9599,10 +9871,7 @@ void main() {
         () => emailService.getQuotedMessage(any()),
       ).thenAnswer((_) async => null);
       when(
-        () => emailService.getMessageRawHeaders(
-          any(),
-          accountId: any(named: 'accountId'),
-        ),
+        () => emailService.getMessageRawHeadersForMessage(any()),
       ).thenAnswer((_) async => 'X-Test: yes');
 
       final bloc = ChatBloc(
@@ -9618,6 +9887,9 @@ void main() {
       chatStreamController.add(emailChat);
       await _pumpBloc();
       emailMessageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+      bloc.add(ChatRenderedMessagesHydrationRequested([message]));
       await _pumpBloc();
       await _pumpBloc();
 
@@ -9638,19 +9910,14 @@ void main() {
       await _pumpBloc();
       await _pumpBloc();
 
-      verifyNever(
-        () => emailService.getMessageRawHeaders(
-          any(),
-          accountId: any(named: 'accountId'),
-        ),
-      );
+      verifyNever(() => emailService.getMessageRawHeadersForMessage(any()));
 
       bloc.add(ChatEmailHeadersRequested(message));
       await _pumpBloc();
       await _pumpBloc();
 
       verify(
-        () => emailService.getMessageRawHeaders(101, accountId: 3),
+        () => emailService.getMessageRawHeadersForMessage(message),
       ).called(1);
       expect(bloc.state.emailRawHeadersByDeltaId[101], 'X-Test: yes');
 

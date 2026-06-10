@@ -4,11 +4,13 @@ import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logging/logging.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../mocks.dart';
@@ -32,7 +34,7 @@ void main() {
     context = MockDeltaContextHandle();
     consumer = DeltaEventConsumer(
       databaseBuilder: () async => database,
-      context: context,
+      core: DeltaContextEventCore(context),
       selfJidProvider: () => 'me@example.com',
     );
     when(
@@ -45,10 +47,18 @@ void main() {
       () => database.getMessageByDeltaId(
         any(),
         deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
       ),
     ).thenAnswer((_) async => null);
     when(
       () => database.getMessageByDeltaId(any(), chatJid: any(named: 'chatJid')),
+    ).thenAnswer((_) async => null);
+    when(
+      () => database.getMessageByDeltaId(
+        any(),
+        deltaAccountId: any(named: 'deltaAccountId'),
+        chatJid: any(named: 'chatJid'),
+      ),
     ).thenAnswer((_) async => null);
     when(
       () => database.upsertEmailChatAccount(
@@ -311,6 +321,119 @@ void main() {
   );
 
   test(
+    'keeps Delta html when RFC822 body reread returns css-only text',
+    () async {
+      const chatId = 7;
+      const msgId = 29;
+      final timestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        subject: 'Your ride',
+        html:
+            '<html><body>'
+            '<p>Ride complete.</p>'
+            '<p>Thanks for riding.</p>'
+            '</body></html>',
+        timestamp: timestamp,
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => context.getMessageIdsByRfc724Mid(msgId),
+      ).thenAnswer((_) async => const <int>[]);
+      when(() => context.getMessageRfc822Body(msgId)).thenAnswer(
+        (_) async => const DeltaMessageRfc822Body(
+          plainText:
+              'body { margin: 0; padding: 0; } '
+              '.button { color: #111111; display: block; }',
+        ),
+      );
+      when(
+        () => database.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => database.getChat(any())).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      final persistedMessage =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.first
+              as Message;
+      expect(persistedMessage.body, contains('Ride complete.'));
+      expect(persistedMessage.body, isNot(contains('margin: 0')));
+      expect(persistedMessage.htmlBody, deltaMessage.html);
+      expect(persistedMessage.hasRfc822BodyContent, isFalse);
+    },
+  );
+
+  test('keeps valid RFC822 plain text when Delta also has html', () async {
+    const chatId = 7;
+    const msgId = 30;
+    final timestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+    final deltaMessage = DeltaMessage(
+      id: msgId,
+      chatId: chatId,
+      subject: 'Receipt',
+      html: '<html><body><p>Generated Delta body</p></body></html>',
+      timestamp: timestamp,
+    );
+
+    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+    when(
+      () => context.getMessageIdsByRfc724Mid(msgId),
+    ).thenAnswer((_) async => const <int>[]);
+    when(() => context.getMessageRfc822Body(msgId)).thenAnswer(
+      (_) async =>
+          const DeltaMessageRfc822Body(plainText: 'Real RFC822 plain body'),
+    );
+    when(
+      () => database.getMessageByStanzaID(any()),
+    ).thenAnswer((_) async => null);
+    when(() => database.getChat(any())).thenAnswer((_) async => null);
+    when(() => database.createChat(any())).thenAnswer((_) async {});
+    when(() => database.updateChat(any())).thenAnswer((_) async {});
+    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+    when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+    await consumer.handle(
+      DeltaCoreEvent(
+        type: DeltaEventType.msgsChanged.code,
+        data1: chatId,
+        data2: msgId,
+      ),
+    );
+
+    final persistedMessage =
+        verify(
+              () => database.saveMessage(
+                captureAny(),
+                selfJid: any(named: 'selfJid'),
+              ),
+            ).captured.first
+            as Message;
+    expect(persistedMessage.body, 'Real RFC822 plain body');
+    expect(persistedMessage.htmlBody, isNull);
+    expect(persistedMessage.hasRfc822BodyContent, isTrue);
+  });
+
+  test(
     'preserves existing RFC822 body when split row body cannot be reread',
     () async {
       const chatId = 7;
@@ -435,6 +558,70 @@ void main() {
             as Message;
     expect(persistedMessage.originID, 'fallback@example.com');
   });
+
+  test(
+    'FINER email diagnostics avoid native debug and MIME header fetches',
+    () async {
+      const chatId = 7;
+      const msgId = 126;
+      final timestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+      final previousHierarchicalLoggingEnabled = hierarchicalLoggingEnabled;
+      final previousRootLevel = Logger.root.level;
+      hierarchicalLoggingEnabled = true;
+      addTearDown(() {
+        Logger.root.level = previousRootLevel;
+        hierarchicalLoggingEnabled = previousHierarchicalLoggingEnabled;
+      });
+      final diagnosticLogger = Logger('DeltaEventConsumer.diagnosticsTest')
+        ..level = Level.FINER;
+      consumer = DeltaEventConsumer(
+        databaseBuilder: () async => database,
+        core: DeltaContextEventCore(context),
+        selfJidProvider: () => 'me@example.com',
+        logger: diagnosticLogger,
+      );
+
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Hello',
+          timestamp: timestamp,
+        ),
+      );
+      when(
+        () => context.getMessageRfc724Mid(msgId),
+      ).thenAnswer((_) async => '<diagnostic@example.com>');
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verifyNever(() => context.getMessageDebugInfo(msgId));
+      verifyNever(() => context.getMessageMimeHeaders(msgId));
+      verify(
+        () => database.saveMessage(
+          any(
+            that: predicate<Message>(
+              (message) => message.originID == 'diagnostic@example.com',
+            ),
+          ),
+          selfJid: any(named: 'selfJid'),
+        ),
+      ).called(1);
+    },
+  );
 
   test(
     'downloads partial incoming email files without attachment settings',
@@ -855,6 +1042,7 @@ void main() {
       () => database.getMessageByDeltaId(
         any(),
         deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
       ),
     ).thenAnswer((invocation) async {
       final deltaMsgId = invocation.positionalArguments.first as int;
@@ -935,6 +1123,7 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => null);
       when(() => database.createChat(any())).thenAnswer((_) async {});
@@ -979,6 +1168,7 @@ void main() {
       chatJid: 'alice@example.com',
       body: 'Hello',
       timestamp: timestamp,
+      deltaAccountId: DeltaAccountDefaults.legacyId,
       deltaChatId: chatId,
       deltaMsgId: msgId,
     );
@@ -1016,6 +1206,7 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -1057,6 +1248,7 @@ void main() {
       timestamp: timestamp,
       fileMetadataID: 'photo-metadata',
       pseudoMessageData: const {'emailAttachmentCaption': true},
+      deltaAccountId: DeltaAccountDefaults.legacyId,
       deltaChatId: chatId,
       deltaMsgId: msgId,
     );
@@ -1098,6 +1290,7 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -1235,7 +1428,7 @@ void main() {
       );
       final realConsumer = DeltaEventConsumer(
         databaseBuilder: () async => realDb,
-        context: context,
+        core: DeltaContextEventCore(context),
         selfJidProvider: () => 'me@example.com',
         xmppSelfJidProvider: () => 'me@axi.im',
       );
@@ -1365,7 +1558,7 @@ void main() {
       );
       consumer = DeltaEventConsumer(
         databaseBuilder: () async => database,
-        context: context,
+        core: DeltaContextEventCore(context),
         selfJidProvider: () => 'me@example.com',
         emailEncryptionBetaEnabledForAddress: (_, address) =>
             address == 'me@example.com',
@@ -1447,7 +1640,7 @@ void main() {
     );
     consumer = DeltaEventConsumer(
       databaseBuilder: () async => database,
-      context: context,
+      core: DeltaContextEventCore(context),
       selfJidProvider: () => 'me@example.com',
       emailEncryptionBetaEnabledForAddress: (_, address) =>
           address == 'me@example.com',
@@ -2058,6 +2251,293 @@ void main() {
     },
   );
 
+  test(
+    'outgoing Delta copy does not reclassify an existing XMPP attachment row',
+    () async {
+      const chatId = 32;
+      const msgId = 92;
+      final mixedChat = Chat(
+        jid: 'alice@axi.im',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        contactJid: 'alice@axi.im',
+        deltaChatId: chatId,
+        emailAddress: 'alice@example.com',
+      );
+      final xmppMetadata = FileMetadataData(
+        id: 'xmpp-photo',
+        filename: 'photo.jpg',
+        path: '/local/photo.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1234,
+      );
+      final existingXmppAttachment = Message(
+        stanzaID: 'xmpp-photo-message',
+        senderJid: 'me@example.com',
+        chatJid: mixedChat.jid,
+        timestamp: DateTime.utc(2024, 1, 2, 9),
+        id: 'xmpp-photo-row',
+        fileMetadataID: xmppMetadata.id,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        filePath: '/delta/copied/photo',
+        fileMime: 'image/jpeg',
+        fileSize: 1234,
+        timestamp: DateTime.utc(2024, 1, 2, 9, 0, 30),
+        isOutgoing: true,
+        state: DeltaMessageState.outDelivered,
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => mixedChat);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getPendingOutgoingDeltaMessages(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async => [existingXmppAttachment]);
+      when(
+        () => database.getFileMetadata(xmppMetadata.id),
+      ).thenAnswer((_) async => xmppMetadata);
+      when(
+        () => database.getFileMetadata(deltaFileMetadataId(msgId)),
+      ).thenAnswer((_) async => null);
+      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
+      when(
+        () => database.replaceMessageAttachments(
+          messageId: existingXmppAttachment.id!,
+          fileMetadataIds: any<List<String>>(named: 'fileMetadataIds'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.deleteFileMetadata(xmppMetadata.id),
+      ).thenAnswer((_) async {});
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.saveMessage(
+          any(
+            that: predicate<Message>(
+              (message) =>
+                  message.stanzaID == 'dc-msg-$msgId' &&
+                  message.deltaMsgId == msgId &&
+                  message.chatJid == mixedChat.jid,
+            ),
+          ),
+          selfJid: any(named: 'selfJid'),
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.updateMessage(
+          any(
+            that: predicate<Message>(
+              (message) =>
+                  message.stanzaID == existingXmppAttachment.stanzaID &&
+                  message.deltaMsgId == msgId,
+            ),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'incompatible dc-msg stanza collision stores a separate local row',
+    () async {
+      const chatId = 33;
+      const msgId = 93;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      const collision = Message(
+        stanzaID: 'dc-msg-93',
+        senderJid: 'bob@example.com',
+        chatJid: 'bob@example.com',
+        body: 'Other account message',
+        deltaAccountId: 99,
+        deltaChatId: 99,
+        deltaMsgId: msgId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Actual message',
+        timestamp: DateTime.utc(2024, 1, 2, 9),
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.upsertEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => collision);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async => null);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verifyNever(() => database.updateMessage(collision));
+      final saved =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.single
+              as Message;
+      expect(
+        saved.stanzaID,
+        deltaScopedMessageStorageStanzaId(
+          accountId: DeltaAccountDefaults.legacyId,
+          chatId: chatId,
+          msgId: msgId,
+        ),
+      );
+      expect(saved.body, 'Actual message');
+    },
+  );
+
+  test(
+    'chatlist snapshot collision does not suppress current Delta message',
+    () async {
+      const chatId = 34;
+      const msgId = 94;
+      final chat = Chat(
+        jid: 'snapshot-alice@example.com',
+        title: 'Snapshot Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      const collision = Message(
+        stanzaID: 'dc-msg-94',
+        senderJid: 'bob@example.com',
+        chatJid: 'bob@example.com',
+        body: 'Other snapshot message',
+        deltaAccountId: 99,
+        deltaChatId: 99,
+        deltaMsgId: msgId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Current snapshot message',
+        timestamp: DateTime.utc(2024, 1, 2, 10),
+      );
+
+      when(() => context.getChatlist()).thenAnswer(
+        (_) async => const [DeltaChatlistEntry(chatId: chatId, msgId: msgId)],
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => collision);
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(() => context.getFreshMessageCountSafe(chatId)).thenAnswer(
+        (_) async => const DeltaFreshMessageCount(count: 0, supported: false),
+      );
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.refreshChatlistSnapshot();
+
+      verifyNever(() => database.updateMessage(collision));
+      final saved =
+          verify(
+                () => database.saveMessage(
+                  captureAny(),
+                  selfJid: any(named: 'selfJid'),
+                ),
+              ).captured.single
+              as Message;
+      expect(
+        saved.stanzaID,
+        deltaScopedMessageStorageStanzaId(
+          accountId: DeltaAccountDefaults.legacyId,
+          chatId: chatId,
+          msgId: msgId,
+        ),
+      );
+      expect(saved.chatJid, chat.jid);
+      expect(saved.body, 'Current snapshot message');
+    },
+  );
+
   test('updates existing message timestamp from Delta core', () async {
     const chatId = 7;
     const msgId = 24;
@@ -2113,6 +2593,7 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -2423,6 +2904,7 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -2490,6 +2972,7 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -2565,6 +3048,7 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -2638,6 +3122,7 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -2713,6 +3198,7 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -2797,6 +3283,7 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -2824,7 +3311,7 @@ void main() {
     final timestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
     final mixedConsumer = DeltaEventConsumer(
       databaseBuilder: () async => database,
-      context: context,
+      core: DeltaContextEventCore(context),
       selfJidProvider: () => 'me@example.com',
       xmppSelfJidProvider: () => 'me@axi.im',
     );
@@ -2877,6 +3364,7 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -3513,7 +4001,7 @@ void main() {
       deltaChatId: chatId,
     );
     final stalePending = Message(
-      stanzaID: 'pending-1',
+      stanzaID: 'dc-pending-1',
       senderJid: 'me@example.com',
       chatJid: chat.jid,
       timestamp: DateTime.utc(2024, 1, 1, 9),
@@ -3554,6 +4042,7 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => null);
     when(
@@ -3604,7 +4093,7 @@ void main() {
         deltaChatId: chatId,
       );
       final pending = Message(
-        stanzaID: 'pending-nosubject',
+        stanzaID: 'dc-pending-nosubject',
         senderJid: 'me@example.com',
         chatJid: chat.jid,
         timestamp: DateTime.utc(2024, 1, 1, 9),
@@ -3705,7 +4194,7 @@ void main() {
         sizeBytes: 1234,
       );
       final pending = Message(
-        stanzaID: 'pending-attachment-message',
+        stanzaID: 'dc-pending-attachment-message',
         senderJid: 'me@example.com',
         chatJid: chat.jid,
         timestamp: DateTime.utc(2024, 1, 1, 9),
@@ -3853,7 +4342,7 @@ void main() {
         sizeBytes: 1234,
       );
       final pending = Message(
-        stanzaID: 'pending-captioned-attachment-message',
+        stanzaID: 'dc-pending-captioned-attachment-message',
         senderJid: 'me@example.com',
         chatJid: chat.jid,
         timestamp: DateTime.utc(2024, 1, 1, 9),
@@ -3965,7 +4454,7 @@ void main() {
       sizeBytes: 1234,
     );
     final pending = Message(
-      stanzaID: 'pending-different-caption-attachment-message',
+      stanzaID: 'dc-pending-different-caption-attachment-message',
       senderJid: 'me@example.com',
       chatJid: chat.jid,
       timestamp: DateTime.utc(2024, 1, 1, 9),
@@ -4078,7 +4567,7 @@ void main() {
     );
     final pendingTimestamp = DateTime.utc(2024, 1, 1, 9);
     final firstPending = Message(
-      stanzaID: 'pending-ambiguous-attachment-message-one',
+      stanzaID: 'dc-pending-ambiguous-attachment-message-one',
       senderJid: 'me@example.com',
       chatJid: chat.jid,
       timestamp: pendingTimestamp,
@@ -4087,7 +4576,7 @@ void main() {
       deltaChatId: chatId,
     );
     final secondPending = Message(
-      stanzaID: 'pending-ambiguous-attachment-message-two',
+      stanzaID: 'dc-pending-ambiguous-attachment-message-two',
       senderJid: 'me@example.com',
       chatJid: chat.jid,
       timestamp: pendingTimestamp,

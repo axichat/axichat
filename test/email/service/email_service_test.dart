@@ -14,6 +14,8 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
+import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -94,6 +96,94 @@ class FakeForegroundBridge implements ForegroundTaskBridge {
       }
     }
   }
+}
+
+void _stubRuntimeLifecycle(MockEmailDeltaTransport runtime) {
+  when(
+    () => runtime.ensureInitialized(
+      databasePrefix: any(named: 'databasePrefix'),
+      databasePassphrase: any(named: 'databasePassphrase'),
+    ),
+  ).thenAnswer((_) async {});
+  when(() => runtime.start()).thenAnswer((_) async {});
+  when(() => runtime.stop()).thenAnswer((_) async {});
+  when(() => runtime.dispose()).thenAnswer((_) async {});
+  when(() => runtime.stopEventDeliveryForLogout()).thenAnswer((_) async {});
+  when(() => runtime.accountIds()).thenAnswer((_) async => const <int>[]);
+  when(
+    () => runtime.getChatlist(
+      flags: any(named: 'flags'),
+      accountId: any(named: 'accountId'),
+    ),
+  ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+  when(
+    () => runtime.getChat(any(), accountId: any(named: 'accountId')),
+  ).thenAnswer((_) async => null);
+  when(
+    () => runtime.getChatMessageIds(
+      chatId: any(named: 'chatId'),
+      beforeMessageId: any(named: 'beforeMessageId'),
+      accountId: any(named: 'accountId'),
+    ),
+  ).thenAnswer((_) async => const <int>[]);
+  when(
+    () => runtime.getMessage(any(), accountId: any(named: 'accountId')),
+  ).thenAnswer((_) async => null);
+  when(
+    () =>
+        runtime.getMessageRfc724Mid(any(), accountId: any(named: 'accountId')),
+  ).thenAnswer((_) async => null);
+  when(
+    () => runtime.getMessageInfo(any(), accountId: any(named: 'accountId')),
+  ).thenAnswer((_) async => null);
+  when(
+    () => runtime.getMessageMimeHeaders(
+      any(),
+      accountId: any(named: 'accountId'),
+    ),
+  ).thenAnswer((_) async => null);
+  when(
+    () =>
+        runtime.getMessageDebugInfo(any(), accountId: any(named: 'accountId')),
+  ).thenAnswer((_) async => null);
+  when(
+    () =>
+        runtime.getMessageRfc822Body(any(), accountId: any(named: 'accountId')),
+  ).thenAnswer((_) async => null);
+  when(
+    () => runtime.getFreshMessageCountSafe(
+      any(),
+      accountId: any(named: 'accountId'),
+    ),
+  ).thenAnswer(
+    (_) async => const DeltaFreshMessageCount(count: 0, supported: true),
+  );
+  when(() => runtime.activeAccountId).thenReturn(DeltaAccountDefaults.legacyId);
+  when(() => runtime.isIoRunning).thenReturn(false);
+  when(() => runtime.persistsAppStateInternally).thenReturn(true);
+}
+
+Future<void> _untilRuntimeChatlistRead(
+  MockEmailDeltaTransport transport,
+) async {
+  await untilCalled(
+    () => transport.getChatlist(flags: 0, accountId: any(named: 'accountId')),
+  );
+}
+
+void _verifyRuntimeChatlistReads(MockEmailDeltaTransport transport, int count) {
+  verify(
+    () => transport.getChatlist(flags: 0, accountId: any(named: 'accountId')),
+  ).called(count);
+}
+
+void _verifyNoRuntimeChatlistReads(MockEmailDeltaTransport transport) {
+  verifyNever(
+    () => transport.getChatlist(
+      flags: any(named: 'flags'),
+      accountId: any(named: 'accountId'),
+    ),
+  );
 }
 
 void main() {
@@ -195,7 +285,18 @@ void main() {
     when(
       () => transport.createAccount(),
     ).thenAnswer((_) async => DeltaAccountDefaults.legacyId);
-    when(() => transport.accountIds()).thenAnswer((_) async => const <int>[]);
+    when(
+      () => transport.accountIds(),
+    ).thenAnswer((_) async => const <int>[DeltaAccountDefaults.legacyId]);
+    when(
+      () => transport.getChatlist(
+        flags: any(named: 'flags'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+    when(
+      () => transport.getChat(any(), accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => null);
     when(() => transport.ensureAccountSession(any())).thenAnswer((_) async {});
     when(
       () => transport.isConfigured(accountId: any(named: 'accountId')),
@@ -330,6 +431,42 @@ void main() {
       () => transport.getMessage(any(), accountId: any(named: 'accountId')),
     ).thenAnswer((_) async => null);
     when(
+      () => transport.getMessageRfc724Mid(
+        any(),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
+      () => transport.getMessageInfo(any(), accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => null);
+    when(
+      () => transport.getMessageMimeHeaders(
+        any(),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
+      () => transport.getMessageDebugInfo(
+        any(),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
+      () => transport.getMessageRfc822Body(
+        any(),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
+      () => transport.getFreshMessageCountSafe(
+        any(),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer(
+      (_) async => const DeltaFreshMessageCount(count: 0, supported: true),
+    );
+    when(() => transport.persistsAppStateInternally).thenReturn(true);
+    when(
       () => transport.ensureInitialized(
         databasePrefix: any(named: 'databasePrefix'),
         databasePassphrase: any(named: 'databasePassphrase'),
@@ -404,6 +541,19 @@ void main() {
     when(() => database.updateChat(any())).thenAnswer((_) async {});
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
     when(
+      () => database.replaceMessageStanzaID(
+        currentStanzaID: any(named: 'currentStanzaID'),
+        message: any(named: 'message'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.deleteMessage(
+        any(),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
       () => database.getChatByDeltaChatId(
         any(),
         accountId: any(named: 'accountId'),
@@ -413,6 +563,7 @@ void main() {
       () => database.getMessageByDeltaId(
         any(),
         deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
       ),
     ).thenAnswer((_) async => null);
     when(
@@ -590,6 +741,7 @@ void main() {
     () async {
       const chatId = 7;
       const msgId = 42;
+      const accountId = DeltaAccountDefaults.legacyId;
       final message = Message(
         stanzaID: 'dc-msg-$msgId',
         senderJid: 'peer@axi.im',
@@ -597,6 +749,9 @@ void main() {
         timestamp: DateTime.now(),
         body: 'Hello from email',
         encryptionProtocol: EncryptionProtocol.none,
+        deltaAccountId: accountId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
       );
       final chat = Chat(
         jid: 'dc-$chatId@delta.chat',
@@ -618,6 +773,7 @@ void main() {
         transport: transport,
         notificationService: notificationService,
         foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
       );
 
       listener(
@@ -625,6 +781,7 @@ void main() {
           type: DeltaEventType.incomingMsg.code,
           data1: chatId,
           data2: msgId,
+          accountId: accountId,
         ),
       );
 
@@ -644,6 +801,7 @@ void main() {
           type: DeltaEventType.incomingMsgBunch.code,
           data1: 0,
           data2: 0,
+          accountId: accountId,
         ),
       );
 
@@ -671,8 +829,80 @@ void main() {
     },
   );
 
+  test('skips notifications for incompatible dc-msg fallback rows', () async {
+    const chatId = 7;
+    const msgId = 43;
+    const accountId = DeltaAccountDefaults.legacyId;
+    final staleMessage = Message(
+      stanzaID: 'dc-msg-$msgId',
+      senderJid: 'other@example.com',
+      chatJid: 'other@example.com',
+      timestamp: DateTime.now(),
+      body: 'Wrong account row',
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaAccountId: 99,
+      deltaChatId: 99,
+      deltaMsgId: msgId,
+    );
+
+    when(
+      () => database.getMessageByStanzaID('dc-msg-$msgId'),
+    ).thenAnswer((_) async => staleMessage);
+
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      transportFactory: () => transport,
+    );
+
+    addTearDown(service.shutdown);
+
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
+        data1: chatId,
+        data2: msgId,
+        accountId: accountId,
+      ),
+    );
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsgBunch.code,
+        data1: chatId,
+        data2: 0,
+        accountId: accountId,
+      ),
+    );
+
+    await pumpMicrotasks();
+
+    verifyNever(
+      () => notificationService.sendMessageNotification(
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        senderName: any(named: 'senderName'),
+        senderKey: any(named: 'senderKey'),
+        conversationTitle: any(named: 'conversationTitle'),
+        sentAt: any(named: 'sentAt'),
+        isGroupConversation: any(named: 'isGroupConversation'),
+        extraConditions: any(named: 'extraConditions'),
+        allowForeground: any(named: 'allowForeground'),
+        payload: any(named: 'payload'),
+        threadKey: any(named: 'threadKey'),
+        showPreviewOverride: any(named: 'showPreviewOverride'),
+        channel: any(named: 'channel'),
+      ),
+    );
+  });
+
   test('per-chat MDN override restores global read receipt config', () async {
     when(() => transport.accountIds()).thenAnswer((_) async => const <int>[1]);
+    when(
+      () => transport.getMessage(10, accountId: 1),
+    ).thenAnswer((_) async => const DeltaMessage(id: 10, chatId: 2));
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
@@ -749,6 +979,12 @@ void main() {
           deltaAccountId: 1,
         ),
       ).thenAnswer((_) async => const <Message>[first, second]);
+      when(
+        () => transport.getMessage(10, accountId: 1),
+      ).thenAnswer((_) async => const DeltaMessage(id: 10, chatId: 2));
+      when(
+        () => transport.getMessage(11, accountId: 1),
+      ).thenAnswer((_) async => const DeltaMessage(id: 11, chatId: 2));
       final service = EmailService(
         credentialStore: credentialStore,
         databaseBuilder: () async => database,
@@ -778,6 +1014,308 @@ void main() {
       ).called(1);
     },
   );
+
+  test('unscoped Delta events do not persist with active account id', () async {
+    when(() => transport.activeAccountId).thenReturn(99);
+    when(() => transport.accountIds()).thenAnswer((_) async => const <int>[99]);
+    when(() => transport.persistsAppStateInternally).thenReturn(false);
+    await createProvisionedService();
+    clearInteractions(transport);
+
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.incomingMsg.code,
+        data1: 7,
+        data2: 42,
+      ),
+    );
+    await pumpMicrotasks();
+
+    verifyNever(() => transport.getMessage(42, accountId: 99));
+  });
+
+  test('getMessageFullHtml validates stored Delta account locator', () async {
+    const message = Message(
+      id: 'message-row',
+      stanzaID: 'dc-msg-42',
+      senderJid: 'sender@example.com',
+      chatJid: 'chat@example.com',
+      deltaAccountId: 3,
+      deltaChatId: 7,
+      deltaMsgId: 42,
+    );
+    when(() => transport.accountIds()).thenAnswer((_) async => const <int>[3]);
+    when(
+      () => transport.getMessage(42, accountId: 3),
+    ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+    when(
+      () => transport.getMessageFullHtml(42, accountId: 3),
+    ).thenAnswer((_) async => '<p>ok</p>');
+
+    final service = await createProvisionedService();
+
+    expect(await service.getMessageFullHtml(message), '<p>ok</p>');
+    verify(() => transport.getMessage(42, accountId: 3)).called(1);
+    verify(() => transport.getMessageFullHtml(42, accountId: 3)).called(1);
+  });
+
+  test(
+    'getMessageFullHtml repairs stale Delta account when unambiguous',
+    () async {
+      const message = Message(
+        id: 'message-row',
+        stanzaID: 'dc-msg-42',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        deltaAccountId: 404,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+        originID: 'message@example.com',
+      );
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[3]);
+      when(
+        () => transport.getMessage(42, accountId: 3),
+      ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+      when(
+        () => transport.getMessageRfc724Mid(42, accountId: 3),
+      ).thenAnswer((_) async => 'Message-ID: <message@example.com>');
+      when(
+        () => transport.getMessageFullHtml(42, accountId: 3),
+      ).thenAnswer((_) async => '<p>ok</p>');
+
+      final service = await createProvisionedService();
+
+      expect(await service.getMessageFullHtml(message), '<p>ok</p>');
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>().having(
+              (saved) => saved.deltaAccountId,
+              'deltaAccountId',
+              3,
+            ),
+          ),
+        ),
+      ).called(1);
+      verify(() => transport.getMessageFullHtml(42, accountId: 3)).called(1);
+      verifyNever(() => transport.getMessageFullHtml(42, accountId: 404));
+    },
+  );
+
+  test(
+    'getMessageFullHtml skips stale Delta account without origin proof',
+    () async {
+      const message = Message(
+        id: 'message-row',
+        stanzaID: 'dc-msg-42',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        deltaAccountId: 404,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+      );
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[3]);
+      when(
+        () => transport.getMessage(42, accountId: 3),
+      ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+
+      final service = await createProvisionedService();
+
+      expect(await service.getMessageFullHtml(message), isNull);
+      verifyNever(() => transport.getMessageRfc724Mid(42, accountId: 3));
+      verifyNever(() => transport.getMessageInfo(42, accountId: 3));
+      verifyNever(() => transport.getMessageMimeHeaders(42, accountId: 3));
+      verifyNever(() => transport.getMessageFullHtml(42, accountId: 404));
+      verifyNever(() => database.updateMessage(any()));
+    },
+  );
+
+  test(
+    'getMessageFullHtml repairs stale Delta account from message info',
+    () async {
+      const message = Message(
+        id: 'message-row',
+        stanzaID: 'dc-msg-42',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        deltaAccountId: 404,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+        originID: 'message@example.com',
+      );
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[3]);
+      when(
+        () => transport.getMessage(42, accountId: 3),
+      ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+      when(
+        () => transport.getMessageInfo(42, accountId: 3),
+      ).thenAnswer((_) async => 'Message-ID: <message@example.com>');
+      when(
+        () => transport.getMessageFullHtml(42, accountId: 3),
+      ).thenAnswer((_) async => '<p>ok</p>');
+
+      final service = await createProvisionedService();
+
+      expect(await service.getMessageFullHtml(message), '<p>ok</p>');
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>().having(
+              (saved) => saved.deltaAccountId,
+              'deltaAccountId',
+              3,
+            ),
+          ),
+        ),
+      ).called(1);
+    },
+  );
+
+  test(
+    'getMessageFullHtml repairs stale Delta account from MIME headers',
+    () async {
+      const message = Message(
+        id: 'message-row',
+        stanzaID: 'dc-msg-42',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        deltaAccountId: 404,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+        originID: 'message@example.com',
+      );
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[3]);
+      when(
+        () => transport.getMessage(42, accountId: 3),
+      ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+      when(() => transport.getMessageMimeHeaders(42, accountId: 3)).thenAnswer(
+        (_) async => 'Message-ID: <message@example.com>\nSubject: Hi',
+      );
+      when(
+        () => transport.getMessageFullHtml(42, accountId: 3),
+      ).thenAnswer((_) async => '<p>ok</p>');
+
+      final service = await createProvisionedService();
+
+      expect(await service.getMessageFullHtml(message), '<p>ok</p>');
+      verify(
+        () => database.updateMessage(
+          any(
+            that: isA<Message>().having(
+              (saved) => saved.deltaAccountId,
+              'deltaAccountId',
+              3,
+            ),
+          ),
+        ),
+      ).called(1);
+    },
+  );
+
+  test(
+    'getMessageFullHtml rejects available account origin conflict',
+    () async {
+      const message = Message(
+        id: 'message-row',
+        stanzaID: 'dc-msg-42',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        deltaAccountId: 3,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+        originID: 'message@example.com',
+      );
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[3]);
+      when(
+        () => transport.getMessage(42, accountId: 3),
+      ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+      when(
+        () => transport.getMessageRfc724Mid(42, accountId: 3),
+      ).thenAnswer((_) async => 'Message-ID: <other@example.com>');
+
+      final service = await createProvisionedService();
+
+      expect(await service.getMessageFullHtml(message), isNull);
+      verifyNever(() => transport.getMessageFullHtml(42, accountId: 3));
+      verifyNever(() => database.updateMessage(any()));
+    },
+  );
+
+  test(
+    'getMessageFullHtml rejects ambiguous stale Delta account repair',
+    () async {
+      const message = Message(
+        id: 'message-row',
+        stanzaID: 'dc-msg-42',
+        senderJid: 'sender@example.com',
+        chatJid: 'chat@example.com',
+        deltaAccountId: 404,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+        originID: 'message@example.com',
+      );
+      when(
+        () => transport.accountIds(),
+      ).thenAnswer((_) async => const <int>[3, 4]);
+      when(
+        () => transport.getMessage(42, accountId: 3),
+      ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+      when(
+        () => transport.getMessage(42, accountId: 4),
+      ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+      when(
+        () => transport.getMessageRfc724Mid(42, accountId: 3),
+      ).thenAnswer((_) async => 'Message-ID: <message@example.com>');
+      when(
+        () => transport.getMessageRfc724Mid(42, accountId: 4),
+      ).thenAnswer((_) async => 'Message-ID: <message@example.com>');
+
+      final service = await createProvisionedService();
+
+      expect(await service.getMessageFullHtml(message), isNull);
+      verifyNever(
+        () => transport.getMessageFullHtml(
+          any(),
+          accountId: any(named: 'accountId'),
+        ),
+      );
+      verifyNever(() => database.updateMessage(any()));
+    },
+  );
+
+  test('deleteMessages skips unresolved stale Delta account rows', () async {
+    const message = Message(
+      id: 'message-row',
+      stanzaID: 'dc-msg-42',
+      senderJid: 'sender@example.com',
+      chatJid: 'chat@example.com',
+      deltaAccountId: 404,
+      deltaChatId: 7,
+      deltaMsgId: 42,
+    );
+    when(() => transport.accountIds()).thenAnswer((_) async => const <int>[3]);
+    when(
+      () => transport.getMessage(42, accountId: 3),
+    ).thenAnswer((_) async => const DeltaMessage(id: 42, chatId: 7));
+
+    final service = await createProvisionedService();
+
+    expect(await service.deleteMessages(const <Message>[message]), isFalse);
+    verifyNever(
+      () => transport.deleteMessages(any(), accountId: any(named: 'accountId')),
+    );
+    verifyNever(() => database.updateMessage(any()));
+  });
 
   test('imports BYOK private key from a copied temp file', () async {
     final source = await temporaryFile(
@@ -1557,6 +2095,7 @@ void main() {
     'flushes multiple pending notifications immediately for a chat-scoped bunch',
     () async {
       const chatId = 11;
+      const accountId = DeltaAccountDefaults.legacyId;
       const firstMsgId = 88;
       const secondMsgId = 89;
       final firstMessage = Message(
@@ -1566,6 +2105,9 @@ void main() {
         timestamp: DateTime.now(),
         body: 'First batched hello',
         encryptionProtocol: EncryptionProtocol.none,
+        deltaAccountId: accountId,
+        deltaChatId: chatId,
+        deltaMsgId: firstMsgId,
       );
       final secondMessage = Message(
         stanzaID: 'dc-msg-$secondMsgId',
@@ -1574,6 +2116,9 @@ void main() {
         timestamp: DateTime.now().add(const Duration(seconds: 1)),
         body: 'Second batched hello',
         encryptionProtocol: EncryptionProtocol.none,
+        deltaAccountId: accountId,
+        deltaChatId: chatId,
+        deltaMsgId: secondMsgId,
       );
       final chat = Chat(
         jid: 'dc-$chatId@delta.chat',
@@ -1598,6 +2143,7 @@ void main() {
         transport: transport,
         notificationService: notificationService,
         foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
       );
 
       addTearDown(service.shutdown);
@@ -1607,6 +2153,7 @@ void main() {
           type: DeltaEventType.incomingMsg.code,
           data1: chatId,
           data2: firstMsgId,
+          accountId: accountId,
         ),
       );
       listener(
@@ -1614,6 +2161,7 @@ void main() {
           type: DeltaEventType.incomingMsg.code,
           data1: chatId,
           data2: secondMsgId,
+          accountId: accountId,
         ),
       );
 
@@ -1641,6 +2189,7 @@ void main() {
           type: DeltaEventType.incomingMsgBunch.code,
           data1: chatId,
           data2: 0,
+          accountId: accountId,
         ),
       );
 
@@ -1826,6 +2375,7 @@ void main() {
       transport: transport,
       notificationService: notificationService,
       foregroundBridge: foregroundBridge,
+      transportFactory: () => transport,
     );
 
     addTearDown(service.shutdown);
@@ -1881,6 +2431,7 @@ void main() {
     () async {
       const chatId = 9;
       const msgId = 77;
+      const accountId = DeltaAccountDefaults.legacyId;
       final message = Message(
         stanzaID: 'dc-msg-$msgId',
         senderJid: 'peer@axi.im',
@@ -1888,6 +2439,9 @@ void main() {
         timestamp: DateTime.now(),
         body: 'Queued hello',
         encryptionProtocol: EncryptionProtocol.none,
+        deltaAccountId: accountId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
       );
       final chat = Chat(
         jid: 'dc-$chatId@delta.chat',
@@ -1917,6 +2471,7 @@ void main() {
           type: DeltaEventType.incomingMsg.code,
           data1: chatId,
           data2: msgId,
+          accountId: accountId,
         ),
       );
 
@@ -2039,6 +2594,7 @@ void main() {
         transport: transport,
         notificationService: notificationService,
         foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
       );
 
       await service.ensureProvisioned(
@@ -2322,6 +2878,47 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  test('refreshChatlistFromCore coalesces concurrent refreshes', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+    clearInteractions(transport);
+
+    final chatlistRead = Completer<List<DeltaChatlistEntry>>();
+    when(
+      () => transport.getChatlist(flags: 0, accountId: any(named: 'accountId')),
+    ).thenAnswer((_) => chatlistRead.future);
+    when(
+      () => transport.getChatlist(
+        flags: any(named: 'flags', that: isNot(0)),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+
+    final firstRefresh = service.refreshChatlistFromCore();
+    final secondRefresh = service.refreshChatlistFromCore();
+    await _untilRuntimeChatlistRead(transport);
+
+    chatlistRead.complete(const <DeltaChatlistEntry>[]);
+    await Future.wait([firstRefresh, secondRefresh]);
+
+    _verifyRuntimeChatlistReads(transport, 1);
+
+    addTearDown(service.shutdown);
+  });
+
   test(
     'syncSessionState keeps home refresh fetch and chatlist work active',
     () async {
@@ -2364,7 +2961,7 @@ void main() {
         () => transport.performBackgroundFetch(captureAny()),
       ).captured;
       expect(captured, [const Duration(seconds: 15)]);
-      verify(() => transport.refreshChatlistSnapshot()).called(1);
+      _verifyRuntimeChatlistReads(transport, 2);
       verify(() => database.replaceContacts(any())).called(1);
 
       addTearDown(service.shutdown);
@@ -2411,7 +3008,7 @@ void main() {
       expect(await service.syncSessionState(), isTrue);
 
       verifyNever(() => transport.performBackgroundFetch(any()));
-      verify(() => transport.refreshChatlistSnapshot()).called(1);
+      _verifyRuntimeChatlistReads(transport, 2);
       verify(() => database.replaceContacts(any())).called(1);
 
       addTearDown(service.shutdown);
@@ -2431,35 +3028,93 @@ void main() {
     await pumpMicrotasks();
     verifyNever(() => transport.start());
     expect(
-      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
       isFalse,
     );
     expect(foregroundBridge.sent, isEmpty);
     addTearDown(service.shutdown);
   });
 
-  test('foreground keepalive performs periodic fetches', () async {
-    var fetchCalls = 0;
-    var refreshCalls = 0;
-    when(() => transport.performBackgroundFetch(any())).thenAnswer((
-      invocation,
-    ) async {
-      fetchCalls++;
-      return true;
-    });
-    when(
-      () =>
-          transport.refreshChatlistSnapshot(accountId: any(named: 'accountId')),
-    ).thenAnswer((_) async {
-      refreshCalls++;
-    });
+  test(
+    'foreground email IO does not perform periodic keepalive fetches',
+    () async {
+      var fetchCalls = 0;
+      var refreshCalls = 0;
+      when(() => transport.performBackgroundFetch(any())).thenAnswer((
+        invocation,
+      ) async {
+        fetchCalls++;
+        return true;
+      });
+      when(
+        () => transport.getChatlist(
+          flags: any(named: 'flags'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async {
+        refreshCalls++;
+        return const <DeltaChatlistEntry>[];
+      });
 
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+      fetchCalls = 0;
+      refreshCalls = 0;
+
+      await service.setForegroundKeepalive(true);
+      await pumpMicrotasks();
+      expect(fetchCalls, isZero);
+      expect(refreshCalls, isZero);
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isTrue,
+      );
+
+      foregroundBridge.emit(
+        'EmailKeepaliveTick$join${DateTime.now().millisecondsSinceEpoch}',
+      );
+      await pumpMicrotasks();
+      expect(fetchCalls, isZero);
+      expect(refreshCalls, isZero);
+
+      await service.setForegroundKeepalive(false);
+      await service.shutdown();
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isFalse,
+      );
+
+      foregroundBridge.emit(
+        'EmailKeepaliveTick$join${DateTime.now().millisecondsSinceEpoch}',
+      );
+      await pumpMicrotasks();
+      expect(fetchCalls, isZero);
+      expect(refreshCalls, isZero);
+    },
+  );
+
+  test('foreground email IO keeps the existing worker runtime', () async {
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
       transport: transport,
       notificationService: notificationService,
       foregroundBridge: foregroundBridge,
+      transportFactory: () => transport,
     );
 
     await service.ensureProvisioned(
@@ -2469,39 +3124,116 @@ void main() {
       jid: 'alice@example.org',
       passwordOverride: 'password',
     );
+    clearInteractions(transport);
 
     await service.setForegroundKeepalive(true);
-    await pumpMicrotasks();
-    expect(fetchCalls, 1);
-    expect(refreshCalls, 1);
+
+    verifyNever(() => transport.stop());
+    verifyNever(() => transport.dispose());
+    verifyNever(
+      () => transport.ensureInitialized(
+        databasePrefix: any(named: 'databasePrefix'),
+        databasePassphrase: any(named: 'databasePassphrase'),
+      ),
+    );
     expect(
-      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
       isTrue,
     );
 
-    foregroundBridge.emit(
-      '$emailKeepaliveTickPrefix$join${DateTime.now().millisecondsSinceEpoch}',
+    await service.shutdown();
+  });
+
+  test('foreground email IO disable only releases the lease', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+      transportFactory: () => transport,
     );
-    await pumpMicrotasks();
-    expect(fetchCalls, 2);
-    expect(refreshCalls, 2);
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+    await service.setForegroundKeepalive(true);
+    clearInteractions(transport);
 
     await service.setForegroundKeepalive(false);
-    await service.shutdown();
+
+    verifyNever(() => transport.stop());
+    verifyNever(() => transport.dispose());
     expect(
-      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
       isFalse,
     );
 
-    foregroundBridge.emit(
-      '$emailKeepaliveTickPrefix$join${DateTime.now().millisecondsSinceEpoch}',
-    );
-    await pumpMicrotasks();
-    expect(fetchCalls, 2);
-    expect(refreshCalls, 2);
+    await service.shutdown();
   });
 
-  test('foreground keepalive repairs stale foreground lease', () async {
+  test(
+    'stale foreground email IO enable keeps IMAP polling after disable during start',
+    () async {
+      final startEntered = Completer<void>();
+      final allowStart = Completer<void>();
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+      await service.stop();
+      when(() => transport.start()).thenAnswer((_) async {
+        if (!startEntered.isCompleted) {
+          startEntered.complete();
+        }
+        await allowStart.future;
+      });
+
+      final enable = service.setForegroundKeepalive(true);
+      await startEntered.future;
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isTrue,
+      );
+
+      await service.setForegroundKeepalive(false);
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isFalse,
+      );
+      expect(service.debugImapSyncLoopActive, isTrue);
+
+      allowStart.complete();
+      await enable;
+
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isFalse,
+      );
+      expect(service.debugImapSyncLoopActive, isTrue);
+
+      await service.shutdown();
+    },
+  );
+
+  test('foreground email IO repairs stale foreground lease', () async {
     when(
       () => transport.performBackgroundFetch(any()),
     ).thenAnswer((_) async => false);
@@ -2512,6 +3244,7 @@ void main() {
       transport: transport,
       notificationService: notificationService,
       foregroundBridge: foregroundBridge,
+      transportFactory: () => transport,
     );
 
     await service.ensureProvisioned(
@@ -2525,37 +3258,27 @@ void main() {
     await service.setForegroundKeepalive(true);
     await pumpMicrotasks();
     expect(
-      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
       isTrue,
     );
 
-    await foregroundBridge.release(foregroundClientEmailKeepalive);
+    await foregroundBridge.release(foregroundClientEmailDelta);
     foregroundBridge.sent.clear();
 
     await service.setForegroundKeepalive(true);
     await pumpMicrotasks();
 
     expect(
-      foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+      foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
       isTrue,
     );
-    expect(
-      foregroundBridge.sent,
-      contains(
-        predicate<List<Object>>(
-          (message) =>
-              message.length == 3 &&
-              message[0] == emailKeepalivePrefix &&
-              message[1] == emailKeepaliveStartCommand,
-        ),
-      ),
-    );
+    expect(foregroundBridge.sent, isEmpty);
 
     await service.shutdown();
   });
 
   test(
-    'foreground keepalive re-acquires email lease while XMPP keeps service running',
+    'foreground email IO re-acquires email lease while XMPP keeps service running',
     () async {
       when(
         () => transport.performBackgroundFetch(any()),
@@ -2567,6 +3290,7 @@ void main() {
         transport: transport,
         notificationService: notificationService,
         foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
       );
 
       await service.ensureProvisioned(
@@ -2579,27 +3303,17 @@ void main() {
 
       await service.setForegroundKeepalive(true);
       await foregroundBridge.acquire(clientId: foregroundClientXmpp);
-      await foregroundBridge.release(foregroundClientEmailKeepalive);
+      await foregroundBridge.release(foregroundClientEmailDelta);
       foregroundBridge.sent.clear();
 
       await service.setForegroundKeepalive(true);
 
       expect(foregroundBridge.isClientAcquired(foregroundClientXmpp), isTrue);
       expect(
-        foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
         isTrue,
       );
-      expect(
-        foregroundBridge.sent,
-        contains(
-          predicate<List<Object>>(
-            (message) =>
-                message.length == 3 &&
-                message[0] == emailKeepalivePrefix &&
-                message[1] == emailKeepaliveStartCommand,
-          ),
-        ),
-      );
+      expect(foregroundBridge.sent, isEmpty);
 
       await service.shutdown();
       await foregroundBridge.release(foregroundClientXmpp);
@@ -2927,6 +3641,42 @@ void main() {
   });
 
   test(
+    'ensureProvisioned maps typed Delta configure errors after worker RPC',
+    () async {
+      when(
+        () => transport.configureAccount(
+          address: any(named: 'address'),
+          password: any(named: 'password'),
+          displayName: any(named: 'displayName'),
+          additional: any(named: 'additional'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenThrow(const DeltaOperationException('IMAP login failed'));
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await expectLater(
+        service.ensureProvisioned(
+          displayName: 'Alice',
+          databasePrefix: 'alice',
+          databasePassphrase: 'passphrase',
+          jid: 'alice@axi.im',
+          passwordOverride: 'wrong-password',
+        ),
+        throwsA(isA<EmailProvisioningAuthenticationFailedException>()),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
     'updatePassword pauses keepalive and reports reconnect pending on configure timeout',
     () async {
       final storedCredentials = <String, String>{};
@@ -2980,6 +3730,7 @@ void main() {
         transport: transport,
         notificationService: notificationService,
         foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
       );
 
       await service.ensureProvisioned(
@@ -3007,17 +3758,10 @@ void main() {
       expect(service.syncState.status, EmailSyncStatus.recovering);
       expect(capturedConfigurePayloads, hasLength(2));
       expect(capturedConfigurePayloads.last['send_pw'], 'new-password');
+      expect(foregroundBridge.sent, isEmpty);
       expect(
-        foregroundBridge.sent,
-        containsAllInOrder([
-          [emailKeepalivePrefix, emailKeepaliveStopCommand],
-          predicate<List<Object>>(
-            (message) =>
-                message.length == 3 &&
-                message[0] == emailKeepalivePrefix &&
-                message[1] == emailKeepaliveStartCommand,
-          ),
-        ]),
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isTrue,
       );
 
       verifyInOrder([
@@ -3075,6 +3819,43 @@ void main() {
 
     await service.shutdown(jid: 'bob@axi.im', clearCredentials: true);
 
+    expect(deletedKeys.length, greaterThanOrEqualTo(2));
+    expect(deletedKeys.every((key) => key.contains('bob@axi.im')), isTrue);
+  });
+
+  test('shutdown clears credentials when transport stop fails', () async {
+    final deletedKeys = <String>[];
+    when(() => credentialStore.delete(key: any(named: 'key'))).thenAnswer((
+      invocation,
+    ) async {
+      final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+      deletedKeys.add(key.value);
+      return true;
+    });
+
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+    clearInteractions(transport);
+    when(() => transport.stop()).thenThrow(Exception('stop failed'));
+
+    await service.shutdown(jid: 'bob@axi.im', clearCredentials: true);
+
+    verify(() => transport.stop()).called(1);
+    verify(() => transport.deconfigureAccount()).called(1);
+    verify(() => transport.dispose()).called(1);
     expect(deletedKeys.length, greaterThanOrEqualTo(2));
     expect(deletedKeys.every((key) => key.contains('bob@axi.im')), isTrue);
   });
@@ -3683,6 +4464,88 @@ void main() {
   );
 
   test(
+    'shutdown after pending native cleanup skips replacement deconfigure',
+    () async {
+      final replacementTransport = MockEmailDeltaTransport();
+      _stubRuntimeLifecycle(replacementTransport);
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => replacementTransport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      final disposeCompleter = Completer<void>();
+      when(
+        () => transport.dispose(),
+      ).thenAnswer((_) => disposeCompleter.future);
+
+      await service.shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout);
+      await untilCalled(() => transport.dispose());
+
+      final shutdownFuture = service.shutdown(
+        jid: 'bob@axi.im',
+        clearCredentials: true,
+      );
+      await pumpMicrotasks();
+      disposeCompleter.complete();
+      await shutdownFuture;
+
+      verifyNever(() => replacementTransport.deconfigureAccount());
+      verify(() => replacementTransport.dispose()).called(1);
+    },
+  );
+
+  test(
+    'logout shutdown releases foreground email IO lease after native cleanup',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+        transportFactory: () => transport,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+      await service.setForegroundKeepalive(true);
+
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isTrue,
+      );
+
+      await service.shutdown(jid: 'bob@axi.im', mode: EmailShutdownMode.logout);
+      await untilCalled(() => transport.dispose());
+      await pumpMicrotasks();
+
+      verify(() => transport.stopEventDeliveryForLogout()).called(1);
+      verify(() => transport.dispose()).called(1);
+      expect(
+        foregroundBridge.isClientAcquired(foregroundClientEmailDelta),
+        isFalse,
+      );
+    },
+  );
+
+  test(
     'logout shutdown does not wait for pre-DB chatlist refresh before returning',
     () async {
       final service = EmailService(
@@ -3702,19 +4565,15 @@ void main() {
         passwordOverride: 'password',
       );
 
-      final refreshCompleter = Completer<void>();
+      final refreshCompleter = Completer<List<DeltaChatlistEntry>>();
       when(
-        () => transport.refreshChatlistSnapshot(
-          accountId: any(named: 'accountId'),
-        ),
+        () =>
+            transport.getChatlist(flags: 0, accountId: any(named: 'accountId')),
       ).thenAnswer((_) => refreshCompleter.future);
+      clearInteractions(transport);
 
       final networkFuture = service.handleNetworkAvailable();
-      await untilCalled(
-        () => transport.refreshChatlistSnapshot(
-          accountId: any(named: 'accountId'),
-        ),
-      );
+      await _untilRuntimeChatlistRead(transport);
 
       var shutdownCompleted = false;
       final shutdownFuture = service
@@ -3730,7 +4589,7 @@ void main() {
       verify(() => transport.stopEventDeliveryForLogout()).called(1);
       verifyNever(() => transport.dispose());
 
-      refreshCompleter.complete();
+      refreshCompleter.complete(const <DeltaChatlistEntry>[]);
       await networkFuture;
 
       await untilCalled(() => transport.dispose());
@@ -3762,6 +4621,7 @@ void main() {
       when(
         () => transport.performBackgroundFetch(any()),
       ).thenAnswer((_) => fetchCompleter.future);
+      clearInteractions(transport);
 
       final networkFuture = service.handleNetworkAvailable();
       await untilCalled(() => transport.performBackgroundFetch(any()));
@@ -3775,11 +4635,6 @@ void main() {
       await shutdownFuture;
 
       expect(shutdownCompleted, isTrue);
-      verifyNever(
-        () => transport.refreshChatlistSnapshot(
-          accountId: any(named: 'accountId'),
-        ),
-      );
       verifyNever(() => transport.dispose());
 
       fetchCompleter.complete(true);
@@ -3993,7 +4848,11 @@ void main() {
       final lookupStarted = Completer<void>();
       final lookupCompleter = Completer<Message?>();
       when(
-        () => database.getMessageByDeltaId(msgId, deltaAccountId: accountId),
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: accountId,
+          deltaChatId: chatId,
+        ),
       ).thenAnswer((_) {
         if (!lookupStarted.isCompleted) {
           lookupStarted.complete();
@@ -4305,7 +5164,7 @@ void main() {
         expect(service.syncState.status, EmailSyncStatus.offline);
         verifyNever(() => transport.bootstrapFromCore());
         verifyNever(() => transport.performBackgroundFetch(any()));
-        verifyNever(() => transport.refreshChatlistSnapshot());
+        _verifyNoRuntimeChatlistReads(transport);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4346,7 +5205,7 @@ void main() {
         expect(service.syncState.status, EmailSyncStatus.recovering);
         verifyNever(() => transport.bootstrapFromCore());
         verifyNever(() => transport.performBackgroundFetch(any()));
-        verifyNever(() => transport.refreshChatlistSnapshot());
+        _verifyNoRuntimeChatlistReads(transport);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4388,7 +5247,7 @@ void main() {
         expect(service.syncState.status, EmailSyncStatus.recovering);
         verifyNever(() => transport.bootstrapFromCore());
         verifyNever(() => transport.performBackgroundFetch(any()));
-        verifyNever(() => transport.refreshChatlistSnapshot());
+        _verifyNoRuntimeChatlistReads(transport);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4423,13 +5282,12 @@ void main() {
         when(() => transport.connectivity()).thenAnswer((_) async => 3000);
 
         emitConnectivityChanged();
-        await untilCalled(() => transport.refreshChatlistSnapshot());
+        await _untilRuntimeChatlistRead(transport);
         await pumpMicrotasks();
 
         expect(service.syncState.status, EmailSyncStatus.ready);
-        verify(() => transport.bootstrapFromCore()).called(1);
         verify(() => transport.performBackgroundFetch(any())).called(1);
-        verify(() => transport.refreshChatlistSnapshot()).called(1);
+        _verifyRuntimeChatlistReads(transport, 2);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4464,12 +5322,11 @@ void main() {
         when(() => transport.connectivity()).thenAnswer((_) async => 2000);
 
         emitBackgroundFetchDone();
-        await untilCalled(() => transport.refreshChatlistSnapshot());
+        await _untilRuntimeChatlistRead(transport);
         await pumpMicrotasks();
 
         expect(service.syncState.status, EmailSyncStatus.recovering);
-        verify(() => transport.bootstrapFromCore()).called(1);
-        verify(() => transport.refreshChatlistSnapshot()).called(1);
+        _verifyRuntimeChatlistReads(transport, 2);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4514,7 +5371,7 @@ void main() {
           verify(
             () => transport.performBackgroundFetch(const Duration(seconds: 15)),
           ).called(1);
-          verify(() => transport.refreshChatlistSnapshot()).called(1);
+          _verifyRuntimeChatlistReads(transport, 1);
         } finally {
           await service.shutdown(jid: 'bob@axi.im');
         }
@@ -4548,7 +5405,7 @@ void main() {
         expect(await service.refreshUnreadForHomeRefresh(), isTrue);
 
         verifyNever(() => transport.performBackgroundFetch(any()));
-        verify(() => transport.refreshChatlistSnapshot()).called(1);
+        _verifyRuntimeChatlistReads(transport, 1);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4585,7 +5442,7 @@ void main() {
         verify(
           () => transport.performBackgroundFetch(const Duration(seconds: 15)),
         ).called(1);
-        verify(() => transport.refreshChatlistSnapshot()).called(1);
+        _verifyRuntimeChatlistReads(transport, 1);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4619,13 +5476,12 @@ void main() {
         when(() => transport.connectivity()).thenAnswer((_) async => 4000);
 
         emitConnectivityChanged();
-        await untilCalled(() => transport.refreshChatlistSnapshot());
+        await _untilRuntimeChatlistRead(transport);
         await pumpMicrotasks();
 
         expect(service.syncState.status, EmailSyncStatus.ready);
-        verify(() => transport.bootstrapFromCore()).called(1);
         verify(() => transport.performBackgroundFetch(any())).called(1);
-        verify(() => transport.refreshChatlistSnapshot()).called(1);
+        _verifyRuntimeChatlistReads(transport, 2);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -4685,12 +5541,12 @@ void main() {
         when(() => transport.isIoRunning).thenReturn(true);
 
         emitChannelOverflow();
-        await untilCalled(() => transport.refreshChatlistSnapshot());
+        await _untilRuntimeChatlistRead(transport);
         await pumpMicrotasks();
 
         verifyNever(() => transport.performBackgroundFetch(any()));
         verify(() => transport.notifyNetworkAvailable()).called(1);
-        verify(() => transport.refreshChatlistSnapshot()).called(1);
+        _verifyRuntimeChatlistReads(transport, 1);
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }
@@ -5161,6 +6017,87 @@ void main() {
     },
   );
 
+  test('handleNetworkLost stops IMAP polling until network recovers', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+
+    expect(service.debugImapSyncLoopActive, isTrue);
+
+    await service.handleNetworkLost();
+
+    expect(service.debugImapSyncLoopActive, isFalse);
+
+    await service.handleNetworkAvailable();
+
+    expect(service.debugImapSyncLoopActive, isTrue);
+    await service.shutdown(jid: 'bob@axi.im');
+  });
+
+  test('IMAP sync tick absorbs stopped Delta worker cancellation', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+    when(() => transport.performBackgroundFetch(any())).thenThrow(
+      const EmailDeltaWorkerRuntimeException('Delta worker stopped.'),
+    );
+
+    await service.debugRunImapSyncTick();
+
+    expect(service.debugImapSyncLoopActive, isTrue);
+    await service.shutdown(jid: 'bob@axi.im');
+  });
+
+  test('handleNetworkLost is dropped after shutdown clears runtime', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+
+    await service.shutdown(jid: 'bob@axi.im');
+    clearInteractions(transport);
+
+    await service.handleNetworkLost();
+
+    verifyNever(() => transport.notifyNetworkLost());
+    verifyNever(() => transport.start());
+  });
+
   test(
     'credential-clearing shutdown blocks re-entry while dispose is in flight',
     () async {
@@ -5470,6 +6407,396 @@ void main() {
 
     addTearDown(service.shutdown);
   });
+
+  test(
+    'sendMessage persists outgoing row when runtime owns only Delta core',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(() => transport.persistsAppStateInternally).thenReturn(false);
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+      when(
+        () =>
+            transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 123,
+          chatId: 91,
+          text: 'First send',
+          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+          isOutgoing: true,
+        ),
+      );
+      when(
+        () => transport.sendText(
+          chatId: 91,
+          body: 'First send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
+        ),
+      ).thenAnswer((_) async => 123);
+
+      Message? savedPending;
+      String? replacedStanzaId;
+      Message? replacementMessage;
+      when(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      ).thenAnswer((invocation) async {
+        savedPending = invocation.positionalArguments.single as Message;
+      });
+      when(() => database.getMessageByStanzaID(any())).thenAnswer((
+        invocation,
+      ) async {
+        final stanzaId = invocation.positionalArguments.single as String;
+        if (stanzaId == savedPending?.stanzaID) {
+          return savedPending;
+        }
+        return null;
+      });
+      when(
+        () => database.replaceMessageStanzaID(
+          currentStanzaID: any(named: 'currentStanzaID'),
+          message: any(named: 'message'),
+        ),
+      ).thenAnswer((invocation) async {
+        replacedStanzaId =
+            invocation.namedArguments[#currentStanzaID] as String;
+        replacementMessage = invocation.namedArguments[#message] as Message;
+      });
+
+      final chat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      final msgId = await service.sendMessage(chat: chat, body: 'First send');
+
+      expect(msgId, 123);
+      expect(savedPending?.stanzaID, startsWith('dc-pending-'));
+      expect(savedPending?.deltaMsgId, isNull);
+      expect(replacedStanzaId, savedPending?.stanzaID);
+      expect(replacementMessage?.stanzaID, 'dc-msg-123');
+      expect(replacementMessage?.deltaMsgId, 123);
+      expect(replacementMessage?.deltaChatId, 91);
+      expect(replacementMessage?.deltaAccountId, DeltaAccountDefaults.legacyId);
+      verify(
+        () => transport.sendText(
+          chatId: 91,
+          body: 'First send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'sendMessage promotes pending row after Delta event saved final row',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(() => transport.persistsAppStateInternally).thenReturn(false);
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+      when(
+        () =>
+            transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 123,
+          chatId: 91,
+          text: 'First send',
+          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+          isOutgoing: true,
+        ),
+      );
+      when(
+        () => transport.sendText(
+          chatId: 91,
+          body: 'First send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
+        ),
+      ).thenAnswer((_) async => 123);
+
+      Message? savedPending;
+      Message? mergedPending;
+      String? replacedStanzaId;
+      Message? replacementMessage;
+      when(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      ).thenAnswer((invocation) async {
+        savedPending = invocation.positionalArguments.single as Message;
+      });
+      when(() => database.getMessageByStanzaID(any())).thenAnswer((
+        invocation,
+      ) async {
+        final stanzaId = invocation.positionalArguments.single as String;
+        if (stanzaId == savedPending?.stanzaID) {
+          return savedPending;
+        }
+        if (stanzaId == 'dc-msg-123') {
+          return Message(
+            stanzaID: 'dc-msg-123',
+            senderJid: 'alice@example.org',
+            chatJid: 'peer@axi.im',
+            timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+            body: 'First send',
+            acked: true,
+            deltaChatId: 91,
+            deltaMsgId: 123,
+            deltaAccountId: DeltaAccountDefaults.legacyId,
+          );
+        }
+        return null;
+      });
+      when(() => database.updateMessage(any())).thenAnswer((invocation) async {
+        mergedPending = invocation.positionalArguments.single as Message;
+      });
+      when(
+        () => database.replaceMessageStanzaID(
+          currentStanzaID: any(named: 'currentStanzaID'),
+          message: any(named: 'message'),
+        ),
+      ).thenAnswer((invocation) async {
+        replacedStanzaId =
+            invocation.namedArguments[#currentStanzaID] as String;
+        replacementMessage = invocation.namedArguments[#message] as Message;
+      });
+
+      final chat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      final msgId = await service.sendMessage(chat: chat, body: 'First send');
+
+      expect(msgId, 123);
+      expect(savedPending?.stanzaID, startsWith('dc-pending-'));
+      expect(mergedPending?.stanzaID, savedPending?.stanzaID);
+      expect(mergedPending?.acked, isTrue);
+      expect(replacedStanzaId, savedPending?.stanzaID);
+      expect(replacementMessage?.stanzaID, 'dc-msg-123');
+      expect(replacementMessage?.deltaMsgId, 123);
+      verify(
+        () => database.deleteMessage(
+          'dc-msg-123',
+          selfJid: 'alice@example.org',
+          emailSelfJid: 'alice@example.org',
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'sendMessage does not merge pending row with incompatible dc-msg row',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(() => transport.persistsAppStateInternally).thenReturn(false);
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+      when(
+        () =>
+            transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer(
+        (_) async => DeltaMessage(
+          id: 123,
+          chatId: 91,
+          text: 'First send',
+          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+          isOutgoing: true,
+        ),
+      );
+      when(
+        () => transport.sendText(
+          chatId: 91,
+          body: 'First send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
+          accountId: DeltaAccountDefaults.legacyId,
+          forcePlaintext: true,
+          skipAutocrypt: true,
+        ),
+      ).thenAnswer((_) async => 123);
+
+      Message? savedPending;
+      final replacements = <Message>[];
+      when(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      ).thenAnswer((invocation) async {
+        savedPending = invocation.positionalArguments.single as Message;
+      });
+      when(() => database.getMessageByStanzaID(any())).thenAnswer((
+        invocation,
+      ) async {
+        final stanzaId = invocation.positionalArguments.single as String;
+        if (stanzaId == savedPending?.stanzaID) {
+          return savedPending;
+        }
+        if (stanzaId == 'dc-msg-123') {
+          return Message(
+            stanzaID: 'dc-msg-123',
+            senderJid: 'alice@example.org',
+            chatJid: 'other@axi.im',
+            timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+            body: 'Other chat send',
+            acked: true,
+            deltaChatId: 92,
+            deltaMsgId: 123,
+            deltaAccountId: DeltaAccountDefaults.legacyId,
+          );
+        }
+        return null;
+      });
+      when(
+        () => database.replaceMessageStanzaID(
+          currentStanzaID: any(named: 'currentStanzaID'),
+          message: any(named: 'message'),
+        ),
+      ).thenAnswer((invocation) async {
+        replacements.add(invocation.namedArguments[#message] as Message);
+      });
+
+      final chat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      final msgId = await service.sendMessage(chat: chat, body: 'First send');
+
+      expect(msgId, 123);
+      expect(savedPending?.stanzaID, startsWith('dc-pending-'));
+      expect(replacements, hasLength(1));
+      expect(
+        replacements.single.stanzaID,
+        deltaScopedMessageStorageStanzaId(
+          accountId: DeltaAccountDefaults.legacyId,
+          chatId: 91,
+          msgId: 123,
+        ),
+      );
+      expect(replacements.single.chatJid, 'peer@axi.im');
+      expect(replacements.single.deltaChatId, 91);
+      expect(replacements.single.deltaMsgId, 123);
+      verifyNever(
+        () => database.deleteMessage(
+          'dc-msg-123',
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
 
   test(
     'sendMessage normalizes direct recipient addresses to bare JIDs',
@@ -6419,6 +7746,7 @@ void main() {
         () => database.getMessageByDeltaId(
           301,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 88,
         ),
       ).thenAnswer((_) async => forwardedCopy);
 
@@ -6456,10 +7784,9 @@ void main() {
         ),
       ).called(1);
       verify(
-        () => transport.hydrateMessages([
-          301,
-        ], accountId: DeltaAccountDefaults.legacyId),
-      ).called(1);
+        () =>
+            transport.getMessage(301, accountId: DeltaAccountDefaults.legacyId),
+      ).called(greaterThanOrEqualTo(1));
       verify(
         () => database.updateMessage(
           any(
@@ -6612,18 +7939,21 @@ void main() {
         () => database.getMessageByDeltaId(
           301,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 88,
         ),
       ).thenAnswer((_) async => forwardedCopyOne);
       when(
         () => database.getMessageByDeltaId(
           302,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 88,
         ),
       ).thenAnswer((_) async => unrelatedMessage);
       when(
         () => database.getMessageByDeltaId(
           303,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 88,
         ),
       ).thenAnswer((_) async => forwardedCopyTwo);
 
@@ -6831,12 +8161,14 @@ void main() {
         () => database.getMessageByDeltaId(
           401,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 88,
         ),
       ).thenAnswer((_) async => forwardedCopyOne);
       when(
         () => database.getMessageByDeltaId(
           402,
           deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 88,
         ),
       ).thenAnswer((_) async => forwardedCopyTwo);
 
@@ -7396,6 +8728,46 @@ void main() {
   );
 
   test(
+    'searchMessages rejects incompatible legacy dc-msg fallback rows',
+    () async {
+      const msgId = 42;
+      const accountId = DeltaAccountDefaults.legacyId;
+      const collision = Message(
+        stanzaID: 'dc-msg-42',
+        senderJid: 'sender@example.com',
+        chatJid: 'other@example.com',
+        body: 'wrong account',
+        deltaAccountId: 99,
+        deltaChatId: 7,
+        deltaMsgId: msgId,
+      );
+      final service = await createProvisionedService();
+
+      when(
+        () => transport.searchMessages(
+          chatId: 0,
+          query: 'needle',
+          accountId: accountId,
+        ),
+      ).thenAnswer((_) async => const <int>[msgId]);
+      when(
+        () => database.getMessagesByDeltaIds(
+          any(),
+          deltaAccountId: accountId,
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      ).thenAnswer((_) async => const <Message>[]);
+      when(
+        () => database.getMessagesByStanzaIds(any()),
+      ).thenAnswer((_) async => const <Message>[collision]);
+
+      final results = await service.searchMessages(query: 'needle');
+
+      expect(results, isEmpty);
+    },
+  );
+
+  test(
     'backfillChatHistory uses the canonical direct chat row after rehydration',
     () async {
       final service = EmailService(
@@ -7444,16 +8816,21 @@ void main() {
         ),
       ).thenAnswer((_) async => 0);
       when(
-        () => transport.backfillChatHistory(
-          chatId: any(named: 'chatId'),
-          chatJid: any(named: 'chatJid'),
-          desiredWindow: any(named: 'desiredWindow'),
-          beforeMessageId: any(named: 'beforeMessageId'),
-          beforeTimestamp: any(named: 'beforeTimestamp'),
-          filter: any(named: 'filter'),
+        () => transport.getChat(91, accountId: any(named: 'accountId')),
+      ).thenAnswer(
+        (_) async => const DeltaChat(
+          id: 91,
+          name: 'Peer',
+          contactAddress: 'peer@example.com',
+        ),
+      );
+      when(
+        () => transport.getChatMessageIds(
+          chatId: 91,
+          beforeMessageId: 42,
           accountId: any(named: 'accountId'),
         ),
-      ).thenAnswer((_) async {});
+      ).thenAnswer((_) async => const <int>[]);
 
       await service.backfillChatHistory(
         chat: Chat(
@@ -7476,7 +8853,7 @@ void main() {
           filter: MessageTimelineFilter.directOnly,
           includePseudoMessages: false,
         ),
-      ).called(1);
+      ).called(2);
       verifyNever(
         () => database.countEmailBackedChatMessages(
           'dc-91@delta.chat',
@@ -7486,13 +8863,9 @@ void main() {
         ),
       );
       verify(
-        () => transport.backfillChatHistory(
+        () => transport.getChatMessageIds(
           chatId: 91,
-          chatJid: 'peer@example.com',
-          desiredWindow: 5,
           beforeMessageId: 42,
-          beforeTimestamp: null,
-          filter: MessageTimelineFilter.directOnly,
           accountId: DeltaAccountDefaults.legacyId,
         ),
       ).called(1);
@@ -7566,16 +8939,21 @@ void main() {
         ),
       ).thenAnswer((_) async => 1);
       when(
-        () => transport.backfillChatHistory(
-          chatId: any(named: 'chatId'),
-          chatJid: any(named: 'chatJid'),
-          desiredWindow: any(named: 'desiredWindow'),
+        () => transport.getChat(92, accountId: any(named: 'accountId')),
+      ).thenAnswer(
+        (_) async => const DeltaChat(
+          id: 92,
+          name: 'Peer',
+          contactAddress: 'peer@example.com',
+        ),
+      );
+      when(
+        () => transport.getChatMessageIds(
+          chatId: 92,
           beforeMessageId: any(named: 'beforeMessageId'),
-          beforeTimestamp: any(named: 'beforeTimestamp'),
-          filter: any(named: 'filter'),
           accountId: any(named: 'accountId'),
         ),
-      ).thenAnswer((_) async {});
+      ).thenAnswer((_) async => const <int>[]);
 
       await service.backfillChatHistory(
         chat: mixedChat,
@@ -7590,7 +8968,7 @@ void main() {
           filter: MessageTimelineFilter.directOnly,
           includePseudoMessages: false,
         ),
-      ).called(1);
+      ).called(2);
       verifyNever(() => database.getChat(nativeEmailChat.jid));
       verify(
         () => database.upsertEmailChatAccount(
@@ -7614,13 +8992,9 @@ void main() {
         ),
       );
       verify(
-        () => transport.backfillChatHistory(
+        () => transport.getChatMessageIds(
           chatId: 92,
-          chatJid: mixedChat.jid,
-          desiredWindow: 5,
-          beforeMessageId: null,
-          beforeTimestamp: DateTime(2024, 1, 1),
-          filter: MessageTimelineFilter.directOnly,
+          beforeMessageId: DeltaMessageId.none,
           accountId: DeltaAccountDefaults.legacyId,
         ),
       ).called(1);

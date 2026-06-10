@@ -39,6 +39,7 @@ final class _ChatPresentationHydrationRequested extends ChatEvent {
     required this.missingQuoteIds,
     required this.metadataIds,
     this.renderedMessages = const <Message>[],
+    required this.hydrateEmailContent,
     this.allowOffWindowEmailContentHydration = false,
     required this.syncFileMetadata,
   });
@@ -48,6 +49,7 @@ final class _ChatPresentationHydrationRequested extends ChatEvent {
   final Set<String> missingQuoteIds;
   final Set<String> metadataIds;
   final List<Message> renderedMessages;
+  final bool hydrateEmailContent;
   final bool allowOffWindowEmailContentHydration;
   final bool syncFileMetadata;
 
@@ -58,6 +60,7 @@ final class _ChatPresentationHydrationRequested extends ChatEvent {
     missingQuoteIds,
     metadataIds,
     renderedMessages,
+    hydrateEmailContent,
     allowOffWindowEmailContentHydration,
     syncFileMetadata,
   ];
@@ -86,13 +89,16 @@ final class _ChatReadStateSyncRequested extends ChatEvent {
 }
 
 final class ChatRenderedMessagesHydrationRequested extends ChatEvent {
-  ChatRenderedMessagesHydrationRequested(Iterable<Message> messages)
-    : messages = List<Message>.unmodifiable(messages);
+  ChatRenderedMessagesHydrationRequested(
+    Iterable<Message> messages, {
+    this.allowOffWindowEmailContentHydration = false,
+  }) : messages = List<Message>.unmodifiable(messages);
 
   final List<Message> messages;
+  final bool allowOffWindowEmailContentHydration;
 
   @override
-  List<Object?> get props => [messages];
+  List<Object?> get props => [messages, allowOffWindowEmailContentHydration];
 }
 
 final class _PinnedMessagesUpdated extends ChatEvent {

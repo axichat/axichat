@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -383,7 +382,6 @@ void main() {
           databasePassphrase: any(named: 'databasePassphrase'),
           preHashed: any(named: 'preHashed'),
           reuseExistingSession: any(named: 'reuseExistingSession'),
-          endpoint: any(named: 'endpoint'),
         ),
       ).thenThrow(XmppAuthenticationException());
       when(
@@ -394,7 +392,6 @@ void main() {
           databasePassphrase: any(named: 'databasePassphrase'),
           preHashed: any(named: 'preHashed'),
           reuseExistingSession: any(named: 'reuseExistingSession'),
-          endpoint: any(named: 'endpoint'),
         ),
       ).thenAnswer((_) async => saltedPassword);
     });
@@ -454,7 +451,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: false,
             reuseExistingSession: false,
-            endpoint: any(named: 'endpoint'),
           ),
         ).called(1);
         verifyNever(
@@ -464,7 +460,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             password: any(named: 'password'),
             preHashed: any(named: 'preHashed'),
-            endpoint: any(named: 'endpoint'),
           ),
         );
       },
@@ -492,7 +487,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) async {
           xmppPreparationOrder.add('connect');
@@ -534,7 +528,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) => Completer<String?>().future);
       },
@@ -825,7 +818,6 @@ void main() {
             databasePassphrase: 'passphrase',
             preHashed: true,
             reuseExistingSession: false,
-            endpoint: any(named: 'endpoint'),
           ),
         ).called(1);
       },
@@ -887,6 +879,86 @@ void main() {
           ),
         ).called(2);
         verifyNever(() => mockEmailService.handleNetworkAvailable());
+      },
+    );
+
+    test(
+      'deferred email provisioning completion during logout does not restart reconnect',
+      () async {
+        final provisioningCompleter = Completer<EmailAccount>();
+        final disconnectCompleter = Completer<void>();
+        when(() => mockXmppService.myJid).thenReturn(validJid);
+        when(
+          () => mockXmppService.connectionState,
+        ).thenReturn(ConnectionState.connected);
+        when(
+          () => mockXmppService.disconnect(),
+        ).thenAnswer((_) => disconnectCompleter.future);
+        when(() => mockEmailService.hasActiveSession).thenReturn(false);
+        when(
+          () => mockEmailService.ensureProvisioned(
+            displayName: any(named: 'displayName'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            jid: any(named: 'jid'),
+            passwordOverride: any(named: 'passwordOverride'),
+            addressOverride: any(named: 'addressOverride'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        ).thenAnswer((_) => provisioningCompleter.future);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+        );
+        addTearDown(bloc.close);
+
+        await bloc.login(username: validUsername, password: validPassword);
+        await untilCalled(
+          () => mockEmailService.ensureProvisioned(
+            displayName: any(named: 'displayName'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            jid: any(named: 'jid'),
+            passwordOverride: any(named: 'passwordOverride'),
+            addressOverride: any(named: 'addressOverride'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        );
+
+        final logout = bloc.logout();
+        await untilCalled(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: any(named: 'clearCredentials'),
+            mode: EmailShutdownMode.logout,
+          ),
+        );
+
+        provisioningCompleter.complete(
+          const EmailAccount(address: validJid, password: validPassword),
+        );
+        await pumpEventQueue();
+
+        verify(
+          () => mockEmailService.ensureProvisioned(
+            displayName: any(named: 'displayName'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            jid: any(named: 'jid'),
+            passwordOverride: any(named: 'passwordOverride'),
+            addressOverride: any(named: 'addressOverride'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        ).called(1);
+        verifyNever(() => mockEmailService.handleNetworkAvailable());
+
+        disconnectCompleter.complete();
+        await logout;
       },
     );
 
@@ -1287,7 +1359,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         );
       },
@@ -1318,7 +1389,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) {
           xmppConnected = true;
@@ -1330,9 +1400,6 @@ void main() {
         return AuthenticationCubit(
           credentialStore: mockCredentialStore,
           initialEndpointConfig: _xmppOnlyEndpointConfig,
-          endpointResolver: EndpointResolver(
-            lookup: (_) async => [InternetAddress.loopbackIPv4],
-          ),
           xmppService: mockXmppService,
           httpClient: mockHttpClient,
           emailProvisioningClient: mockProvisioningClient,
@@ -1417,7 +1484,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) {
           if (!connectStarted.isCompleted) {
@@ -1428,9 +1494,6 @@ void main() {
         return AuthenticationCubit(
           credentialStore: mockCredentialStore,
           initialEndpointConfig: _xmppOnlyEndpointConfig,
-          endpointResolver: EndpointResolver(
-            lookup: (_) async => [InternetAddress.loopbackIPv4],
-          ),
           xmppService: mockXmppService,
           httpClient: mockHttpClient,
           emailProvisioningClient: mockProvisioningClient,
@@ -1495,7 +1558,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) {
           if (!connectStarted.isCompleted) {
@@ -1506,9 +1568,6 @@ void main() {
         return AuthenticationCubit(
           credentialStore: mockCredentialStore,
           initialEndpointConfig: _xmppOnlyEndpointConfig,
-          endpointResolver: EndpointResolver(
-            lookup: (_) async => [InternetAddress.loopbackIPv4],
-          ),
           xmppService: mockXmppService,
           httpClient: mockHttpClient,
           emailProvisioningClient: mockProvisioningClient,
@@ -1548,7 +1607,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenThrow(XmppNetworkException());
         when(
@@ -1558,7 +1616,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             password: any(named: 'password'),
             preHashed: any(named: 'preHashed'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) async {});
       },
@@ -1580,7 +1637,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             password: validPassword,
             preHashed: true,
-            endpoint: any(named: 'endpoint'),
           ),
         ).called(1);
         expect(bloc.state, isA<AuthenticationComplete>());
@@ -1603,7 +1659,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenThrow(XmppNetworkException());
         when(
@@ -1613,7 +1668,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             password: any(named: 'password'),
             preHashed: any(named: 'preHashed'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) async {});
       },
@@ -1623,9 +1677,6 @@ void main() {
         xmppService: mockXmppService,
         httpClient: mockHttpClient,
         emailProvisioningClient: mockProvisioningClient,
-        endpointResolver: EndpointResolver(
-          lookup: (_) async => const <InternetAddress>[],
-        ),
       ),
       act: (bloc) => bloc.login(),
       expect: () => const [
@@ -1644,10 +1695,6 @@ void main() {
             databasePassphrase: 'passphrase',
             preHashed: true,
             reuseExistingSession: false,
-            endpoint: EndpointOverride(
-              host: EndpointConfig.defaultDomain,
-              port: EndpointConfig.defaultXmppPort,
-            ),
           ),
         ).called(1);
         verify(
@@ -1657,106 +1704,6 @@ void main() {
             databasePassphrase: 'passphrase',
             password: validPassword,
             preHashed: true,
-            endpoint: EndpointOverride(
-              host: EndpointConfig.defaultDomain,
-              port: EndpointConfig.defaultXmppPort,
-            ),
-          ),
-        ).called(1);
-      },
-    );
-
-    blocTest<AuthenticationCubit, AuthenticationState>(
-      'Stored offline login preserves custom XMPP endpoint.',
-      setUp: () {
-        credentialStorage['jid'] = validJid;
-        credentialStorage['password'] = validPassword;
-        credentialStorage['password_prehashed_v1'] = true.toString();
-        credentialStorage['${validJid}_database_prefix'] = 'prefix';
-        credentialStorage['prefix_database_passphrase'] = 'passphrase';
-        when(
-          () => mockXmppService.connect(
-            jid: any(named: 'jid'),
-            password: any(named: 'password'),
-            databasePrefix: any(named: 'databasePrefix'),
-            databasePassphrase: any(named: 'databasePassphrase'),
-            preHashed: any(named: 'preHashed'),
-            reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
-          ),
-        ).thenThrow(XmppNetworkException());
-        when(
-          () => mockXmppService.resumeOfflineSession(
-            jid: any(named: 'jid'),
-            databasePrefix: any(named: 'databasePrefix'),
-            databasePassphrase: any(named: 'databasePassphrase'),
-            password: any(named: 'password'),
-            preHashed: any(named: 'preHashed'),
-            endpoint: any(named: 'endpoint'),
-          ),
-        ).thenAnswer((_) async {});
-      },
-      build: () => AuthenticationCubit(
-        credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(
-          xmppHost: 'xmpp.custom.example',
-          xmppPort: 6222,
-        ),
-        xmppService: mockXmppService,
-        httpClient: mockHttpClient,
-        emailProvisioningClient: mockProvisioningClient,
-        endpointResolver: EndpointResolver(
-          lookup: (_) async => const <InternetAddress>[],
-        ),
-      ),
-      act: (bloc) => bloc.login(),
-      expect: () => const [
-        AuthenticationLogInInProgress(
-          phase: AuthenticationLoginPhase.preNetwork,
-          config: EndpointConfig(
-            xmppHost: 'xmpp.custom.example',
-            xmppPort: 6222,
-          ),
-        ),
-        AuthenticationLogInInProgress(
-          config: EndpointConfig(
-            xmppHost: 'xmpp.custom.example',
-            xmppPort: 6222,
-          ),
-        ),
-        AuthenticationComplete(
-          config: EndpointConfig(
-            xmppHost: 'xmpp.custom.example',
-            xmppPort: 6222,
-          ),
-        ),
-      ],
-      verify: (_) {
-        verify(
-          () => mockXmppService.connect(
-            jid: validJid,
-            password: validPassword,
-            databasePrefix: 'prefix',
-            databasePassphrase: 'passphrase',
-            preHashed: true,
-            reuseExistingSession: false,
-            endpoint: const EndpointOverride(
-              host: 'xmpp.custom.example',
-              port: 6222,
-            ),
-          ),
-        ).called(1);
-        verify(
-          () => mockXmppService.resumeOfflineSession(
-            jid: validJid,
-            databasePrefix: 'prefix',
-            databasePassphrase: 'passphrase',
-            password: validPassword,
-            preHashed: true,
-            endpoint: const EndpointOverride(
-              host: 'xmpp.custom.example',
-              port: 6222,
-            ),
           ),
         ).called(1);
       },
@@ -1852,7 +1799,6 @@ void main() {
           databasePassphrase: any(named: 'databasePassphrase'),
           preHashed: any(named: 'preHashed'),
           reuseExistingSession: any(named: 'reuseExistingSession'),
-          endpoint: any(named: 'endpoint'),
         ),
       ).thenThrow(XmppAuthenticationException());
     });
@@ -1952,7 +1898,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) async => saltedPassword);
       },
@@ -2018,7 +1963,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) async => saltedPassword);
         addTearDown(() {
@@ -2176,7 +2120,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenAnswer((_) async => saltedPassword);
       },
@@ -2487,7 +2430,6 @@ void main() {
             databasePassphrase: any(named: 'databasePassphrase'),
             preHashed: any(named: 'preHashed'),
             reuseExistingSession: any(named: 'reuseExistingSession'),
-            endpoint: any(named: 'endpoint'),
           ),
         ).thenThrow(XmppAuthenticationException());
       },
@@ -3931,6 +3873,10 @@ void main() {
       () async {
         final emailCompleter = Completer<void>();
         final events = <String>[];
+        when(() => mockEmailService.hasActiveSession).thenReturn(true);
+        when(
+          () => mockEmailService.syncState,
+        ).thenReturn(const EmailSyncState.ready());
         when(
           () => mockEmailService.handleForegroundResumeNetworkAvailable(),
         ).thenAnswer((_) {
@@ -3969,6 +3915,73 @@ void main() {
         expect(emailCompleter.isCompleted, isFalse);
 
         emailCompleter.complete();
+        await pumpEventQueue();
+      },
+    );
+
+    test(
+      'slow email recovery does not block XMPP lifecycle reconnect',
+      () async {
+        final provisioningCompleter = Completer<EmailAccount>();
+        when(() => mockXmppService.myJid).thenReturn(validJid);
+        when(() => mockEmailService.hasActiveSession).thenReturn(false);
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'secret';
+        when(
+          () => mockEmailService.ensureProvisioned(
+            displayName: any(named: 'displayName'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            jid: any(named: 'jid'),
+            passwordOverride: any(named: 'passwordOverride'),
+            addressOverride: any(named: 'addressOverride'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        ).thenAnswer((_) => provisioningCompleter.future);
+        when(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        ).thenAnswer((_) async => true);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        addTearDown(bloc.close);
+
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await untilCalled(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        );
+        await untilCalled(
+          () => mockEmailService.ensureProvisioned(
+            displayName: any(named: 'displayName'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            jid: any(named: 'jid'),
+            passwordOverride: any(named: 'passwordOverride'),
+            addressOverride: any(named: 'addressOverride'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        );
+
+        expect(provisioningCompleter.isCompleted, isFalse);
+        verify(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        ).called(1);
+
+        provisioningCompleter.complete(
+          const EmailAccount(address: validJid, password: validPassword),
+        );
         await pumpEventQueue();
       },
     );
@@ -4121,32 +4134,35 @@ void main() {
       },
     );
 
-    test('skips resume reconnect when XMPP is already connected', () async {
-      when(() => mockXmppService.connected).thenReturn(true);
+    test(
+      'requests resume reconnect even when XMPP reports connected',
+      () async {
+        when(() => mockXmppService.connected).thenReturn(true);
 
-      final bloc = AuthenticationCubit(
-        credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
-        xmppService: mockXmppService,
-        emailService: mockEmailService,
-        httpClient: mockHttpClient,
-        emailProvisioningClient: mockProvisioningClient,
-        initialState: const AuthenticationComplete(),
-      );
-      addTearDown(bloc.close);
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        addTearDown(bloc.close);
 
-      WidgetsBinding.instance.handleAppLifecycleStateChanged(
-        AppLifecycleState.inactive,
-      );
-      WidgetsBinding.instance.handleAppLifecycleStateChanged(
-        AppLifecycleState.resumed,
-      );
-      await pumpEventQueue();
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.inactive,
+        );
+        WidgetsBinding.instance.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        await pumpEventQueue();
 
-      verifyNever(
-        () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
-      );
-    });
+        verify(
+          () => mockXmppService.requestReconnect(ReconnectTrigger.resume),
+        ).called(1);
+      },
+    );
   });
 
   group('background XMPP reconnect pause', () {

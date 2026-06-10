@@ -1267,7 +1267,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           shouldAttemptNetwork ||
           (emailBoundaryDeltaId != null && boundaryMessage == null)) {
         shouldAttemptNetwork = false;
-        await _loadEarlierFromEmail(desiredWindow: desiredWindow);
+        final nextDesiredWindow = emailBoundaryDeltaId == null
+            ? desiredWindow
+            : localCount < desiredWindow
+            ? desiredWindow
+            : localCount + messageBatchSize;
+        await _loadEarlierFromEmail(desiredWindow: nextDesiredWindow);
         final refreshed = await _archivedMessageCount(chat);
         if (emailBoundaryDeltaId != null) {
           boundaryMessage = await _loadEmailMessageByDeltaId(
@@ -2586,6 +2591,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Iterable<Message> messages, {
     Set<String> missingQuoteIds = const <String>{},
     Set<String> metadataIds = const <String>{},
+    bool hydrateEmailContent = false,
     bool allowOffWindowEmailContentHydration = false,
     bool syncFileMetadata = false,
   }) {
@@ -2609,6 +2615,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         missingQuoteIds: Set<String>.unmodifiable(missingQuoteIds),
         metadataIds: Set<String>.unmodifiable(metadataIds),
         renderedMessages: renderedMessages,
+        hydrateEmailContent: hydrateEmailContent,
         allowOffWindowEmailContentHydration:
             allowOffWindowEmailContentHydration,
         syncFileMetadata: syncFileMetadata,
@@ -2622,7 +2629,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     _requestPresentationHydrationForMessages(
       event.messages,
-      allowOffWindowEmailContentHydration: true,
+      hydrateEmailContent: true,
+      allowOffWindowEmailContentHydration:
+          event.allowOffWindowEmailContentHydration,
     );
   }
 
@@ -2733,14 +2742,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (messages.isEmpty) {
       return;
     }
-    _maybeRequestVisibleEmailFullHtml(
-      messages,
-      allowOffWindow: event.allowOffWindowEmailContentHydration,
-    );
-    _maybeRequestVisibleEmailQuotedText(
-      messages,
-      allowOffWindow: event.allowOffWindowEmailContentHydration,
-    );
+    if (event.hydrateEmailContent) {
+      _maybeRequestVisibleEmailFullHtml(
+        messages,
+        allowOffWindow: event.allowOffWindowEmailContentHydration,
+      );
+      _maybeRequestVisibleEmailQuotedText(
+        messages,
+        allowOffWindow: event.allowOffWindowEmailContentHydration,
+      );
+    }
 
     if (messages.any((message) => message.deltaMsgId != null)) {
       await _hydrateShareContexts(messages, emit);
@@ -2975,15 +2986,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final desiredLimit = desiredWindow > messageBatchSize
         ? desiredWindow
         : messageBatchSize;
+    final emailBoundaryDeltaId = _emailUnreadBoundaryDeltaId;
     final canPageNetwork =
         _canPageEmailHistory(chat) || _xmppAllowedForChat(chat);
+    Message? emailBoundaryMessage;
+    if (emailBoundaryDeltaId != null) {
+      emailBoundaryMessage = await _loadEmailMessageByDeltaId(
+        chat: chat,
+        deltaMessageId: emailBoundaryDeltaId,
+      );
+    }
     if (canPageNetwork) {
+      final archiveWindow = emailBoundaryDeltaId == null
+          ? desiredLimit
+          : messageBatchSize;
       await _ensureUnreadWindowLoaded(
         chat: chat,
-        desiredWindow: desiredLimit,
+        desiredWindow: archiveWindow,
         unreadTargetCount: unreadTargetCount,
-        emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
+        emailBoundaryDeltaId: emailBoundaryDeltaId,
       );
+    }
+    if (emailBoundaryDeltaId != null) {
+      emailBoundaryMessage ??= await _loadEmailMessageByDeltaId(
+        chat: chat,
+        deltaMessageId: emailBoundaryDeltaId,
+      );
+      if (emailBoundaryMessage != null) {
+        await _subscribeThroughMessage(
+          chat: chat,
+          target: emailBoundaryMessage,
+        );
+        return;
+      }
     }
     if (desiredLimit != _currentMessageLimit) {
       _unreadBootstrapRefreshLimit = desiredLimit;
@@ -4355,10 +4390,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     String? headers;
     try {
-      headers = await emailService.getMessageRawHeaders(
-        deltaMessageId,
-        accountId: message.deltaAccountId,
-      );
+      headers = await emailService.getMessageRawHeadersForMessage(message);
     } catch (_) {
       headers = null;
     }
@@ -5475,11 +5507,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         (syncState) => add(_EmailSyncStateChanged(syncState)),
       );
       _applyEmailSyncState(emailService.syncState, emit);
-      _maybeRequestVisibleEmailFullHtml(state.items);
       _requestEmailFullHtml(state.focused);
       _maybeRequestEmailQuotedText(state.focused);
       _requestPresentationHydrationForMessages(
         state.pinnedMessages.map((item) => item.message).whereType<Message>(),
+        hydrateEmailContent: true,
+        allowOffWindowEmailContentHydration: true,
       );
     } else {
       _applyEmailSyncState(const EmailSyncState.ready(), emit);
@@ -6298,14 +6331,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   String? _resolvedEmailHtmlBodyForMessage(Message message) {
-    final deltaMessageId = message.deltaMsgId;
-    if (deltaMessageId == null) {
-      return message.htmlBody;
-    }
-    if (message.hasRfc822BodyContent) {
-      return message.htmlBody;
-    }
-    return state.emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
+    return resolvedEmailHtmlBodyForMessage(
+      message: message,
+      emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+    );
   }
 
   String _rfcEmailMessagePlainBody(Message message) => rfcEmailBodyText(
@@ -6420,10 +6449,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final renderedText = display.body.trim();
     final originalSubject = display.subject?.trim();
     var originalBody = renderedText;
+    if (isEmailMessage &&
+        message.hasRfc822BodyContent &&
+        HtmlContentCodec.looksLikeCssBodyText(originalBody)) {
+      originalBody = rfcEmailBodyText(
+        message: message,
+        resolvedHtmlBody: _resolvedEmailHtmlBodyForMessage(message),
+      );
+    }
     if (originalBody.isEmpty) {
-      final normalizedHtml = message.normalizedHtmlBody;
+      final normalizedHtml = HtmlContentCodec.normalizeHtml(
+        _resolvedEmailHtmlBodyForMessage(message),
+      );
       if (normalizedHtml != null) {
-        originalBody = HtmlContentCodec.toPlainText(normalizedHtml).trim();
+        originalBody = emailHtmlVisibleBodyText(normalizedHtml);
         if (originalSubject != null && originalSubject.isNotEmpty) {
           originalBody = ChatSubjectCodec.stripRepeatedSubject(
             body: originalBody,
@@ -6432,12 +6471,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
     }
-    final htmlBody = message.deltaMsgId == null || message.hasRfc822BodyContent
-        ? message.normalizedHtmlBody
-        : HtmlContentCodec.normalizeHtml(
-            state.emailFullHtmlByDeltaId[message.deltaMsgId] ??
-                message.htmlBody,
-          );
+    final htmlBody = HtmlContentCodec.normalizeHtml(
+      _resolvedEmailHtmlBodyForMessage(message),
+    );
     final shouldForwardHtml =
         isEmailMessage &&
         HtmlContentCodec.shouldRenderRichEmailHtml(

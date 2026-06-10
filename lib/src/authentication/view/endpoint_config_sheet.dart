@@ -113,10 +113,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
 
     return current.copyWith(
       domain: domain,
-      xmppHost: null,
       imapHost: null,
       smtpHost: null,
-      xmppPort: EndpointConfig.defaultXmppPort,
       imapPort: EndpointConfig.defaultImapPort,
       smtpPort: EndpointConfig.defaultSmtpPort,
       apiPort: EndpointConfig.defaultApiPort,

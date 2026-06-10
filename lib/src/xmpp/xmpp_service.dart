@@ -608,7 +608,6 @@ abstract interface class XmppBase {
     required String databasePassphrase,
     bool preHashed = false,
     bool reuseExistingSession = false,
-    EndpointOverride? endpoint,
   });
 
   Future<void> resumeOfflineSession({
@@ -617,7 +616,6 @@ abstract interface class XmppBase {
     required String databasePassphrase,
     String? password,
     bool preHashed = false,
-    EndpointOverride? endpoint,
   });
 
   Future<void> disconnect();
@@ -1769,7 +1767,6 @@ class XmppService extends XmppBase
     required String databasePassphrase,
     bool preHashed = false,
     bool reuseExistingSession = false,
-    EndpointOverride? endpoint,
   }) async {
     _databasePrefix = databasePrefix;
     _reconnectBlocked = false;
@@ -1794,7 +1791,6 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
-            endpoint: endpoint,
           );
         } on ForegroundServiceUnavailableException catch (error, stackTrace) {
           if (!attemptForeground) {
@@ -1828,7 +1824,6 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
-            endpoint: endpoint,
           );
           return saltedPassword;
         }
@@ -1891,7 +1886,6 @@ class XmppService extends XmppBase
     required String databasePassphrase,
     String? password,
     bool preHashed = false,
-    EndpointOverride? endpoint,
   }) async {
     _databasePrefix = databasePrefix;
     _reconnectBlocked = false;
@@ -1932,8 +1926,6 @@ class XmppService extends XmppBase
       _connection.connectionSettings = XmppConnectionSettings(
         jid: targetJid.toBare(),
         password: password,
-        host: endpoint?.host,
-        port: endpoint?.port,
       );
       await _attachMessageNotificationSubscription();
       _sessionReconnectEnabled = true;
@@ -1950,7 +1942,6 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
     required bool preHashed,
-    EndpointOverride? endpoint,
   }) async {
     _connectionPasswordPreHashed = preHashed;
     _setConnection(connectionOverride ?? await _connectionFactory());
@@ -1977,8 +1968,6 @@ class XmppService extends XmppBase
     _connection.connectionSettings = XmppConnectionSettings(
       jid: _myJid!.toBare(),
       password: password,
-      host: endpoint?.host,
-      port: endpoint?.port,
     );
 
     _connectInFlight = true;
@@ -2872,7 +2861,8 @@ class XmppService extends XmppBase
     _pingController.stop();
     await _stopNetworkAvailabilityListener();
     _cancelConnectingWatchdog();
-    if (connectionState == ConnectionState.connecting) {
+    if (connectionState == ConnectionState.connected ||
+        connectionState == ConnectionState.connecting) {
       _setConnectionState(ConnectionState.notConnected);
     }
     await _connection.setShouldReconnect(false);

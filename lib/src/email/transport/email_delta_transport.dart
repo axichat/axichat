@@ -78,6 +78,18 @@ enum _DeltaSecurityModeResolution { auto, ssl, startTls, plain, unknown }
 
 enum _DeltaEventDeliveryBlockReason { stopped, logout }
 
+final class _DeltaChatMessageId {
+  const _DeltaChatMessageId({
+    required this.accountId,
+    required this.chatId,
+    required this.msgId,
+  });
+
+  final int accountId;
+  final int chatId;
+  final int msgId;
+}
+
 Map<String, String> _sanitizeDeltaConfigForLog(Map<String, String> config) {
   final sanitized = <String, String>{};
   final sortedKeys = config.keys.toList()..sort();
@@ -126,7 +138,29 @@ class _DeltaAccountSession {
 
   final int accountId;
   final DeltaContextHandle context;
-  final DeltaEventConsumer consumer;
+  final DeltaEventConsumer? consumer;
+}
+
+DeltaCoreEvent _deltaEventForAccount({
+  required DeltaCoreEvent event,
+  required int accountId,
+}) {
+  final eventAccountId = event.accountId;
+  if (eventAccountId == accountId) {
+    return event;
+  }
+  if (eventAccountId != null &&
+      eventAccountId != DeltaAccountDefaults.legacyId) {
+    return event;
+  }
+  return DeltaCoreEvent(
+    type: event.type,
+    data1: event.data1,
+    data2: event.data2,
+    data1Text: event.data1Text,
+    data2Text: event.data2Text,
+    accountId: accountId,
+  );
 }
 
 class _DeltaBackgroundFetchEventSubscriptions {
@@ -174,29 +208,235 @@ final class EmailDeltaImexCancelledException extends EmailDeltaImexException {
     : super('Delta import/export was cancelled.');
 }
 
-class EmailDeltaTransport implements ChatTransport {
+abstract interface class EmailDeltaRuntime implements ChatTransport {
+  @override
+  Stream<DeltaCoreEvent> get events;
+  String? get selfJid;
+  bool get accountsSupported;
+  bool get accountsActive;
+  int get activeAccountId;
+  bool get isIoRunning;
+  bool get persistsAppStateInternally;
+
+  void updateDatabaseOperationTracker(
+    Future<T> Function<T>(Future<T> Function() operation)? tracker,
+  );
+  void updateEmailEncryptionBetaSettings(Map<String, bool> enabledByAddress);
+  void hydrateAccountAddress({required String address, int? accountId});
+  void setPrimaryAccountId(int? accountId);
+  String? selfJidForAccount(int accountId);
+  void addEventListener(void Function(DeltaCoreEvent event) listener);
+  void removeEventListener(void Function(DeltaCoreEvent event) listener);
+
+  Future<bool> isConfigured({int? accountId});
+  Future<void> deconfigureAccount({int? accountId});
+  @override
+  Future<void> configureAccount({
+    required String address,
+    required String password,
+    required String displayName,
+    Map<String, String> additional = const {},
+    int? accountId,
+  });
+  Future<void> stopEventDeliveryForLogout();
+  Future<bool> bootstrapFromCore({int? accountId});
+  Future<void> refreshChatlistSnapshot({int? accountId});
+  Future<void> notifyNetworkAvailable();
+  Future<void> notifyNetworkLost();
+  Future<bool> performBackgroundFetch(Duration timeout);
+  Future<void> backfillChatHistory({
+    required int chatId,
+    required String chatJid,
+    required int desiredWindow,
+    int? beforeMessageId,
+    DateTime? beforeTimestamp,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    int? accountId,
+  });
+  Future<String?> connectivityDetails({int? accountId});
+  Future<DeltaChatSendCapabilities> chatSendCapabilities({
+    required int chatId,
+    int? accountId,
+  });
+  Future<DeltaContactPublicKeyRemoval> removeContactPublicKey({
+    required String address,
+    required String fingerprint,
+    required int contactId,
+    required int chatId,
+    int? accountId,
+  });
+  Future<List<int>> accountIds();
+  Future<int> createAccount({bool closed = false});
+  Future<void> ensureAccountSession(int? accountId);
+  Future<bool> removeAccount(int accountId);
+  Future<String?> getCoreConfig(String key, {int? accountId});
+  Future<String?> getOauth2Url({
+    required String address,
+    required String redirectUri,
+    int? accountId,
+  });
+  Future<void> setCoreConfig({
+    required String key,
+    required String value,
+    int? accountId,
+  });
+  Future<bool> setCoreConfigIfSupported({
+    required String key,
+    required String value,
+    int? accountId,
+  });
+  Future<DeltaOpenPgpKeyMetadata> inspectOpenPgpKey({
+    required String armored,
+    required String expectedAddress,
+    required DeltaOpenPgpKeyKind expectedKind,
+    int? accountId,
+  });
+  Future<DeltaContactPublicKeyImport> importContactPublicKey({
+    required String address,
+    required String displayName,
+    required String armoredPublicKey,
+    int? accountId,
+  });
+  Future<EmailDeltaImexResult> runImex({
+    required int mode,
+    required String path,
+    int? accountId,
+    Duration timeout = const Duration(minutes: 2),
+  });
+  Future<void> cancelImex({int? accountId});
+  Future<void> registerPushToken(String token);
+  @override
+  Future<int> sendText({
+    required int chatId,
+    required String body,
+    String? subject,
+    String? shareId,
+    String? localBodyOverride,
+    String? htmlBody,
+    String? quotingStanzaId,
+    int? accountId,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
+  });
+  @override
+  Future<int> sendAttachment({
+    required int chatId,
+    required EmailAttachment attachment,
+    String? subject,
+    String? shareId,
+    String? captionOverride,
+    String? htmlCaption,
+    String? quotingStanzaId,
+    int? accountId,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
+  });
+  Future<bool> blockContact(String address, {int? accountId});
+  Future<bool> unblockContact(String address, {int? accountId});
+  Future<bool> markNoticedChat(int chatId, {int? accountId});
+  Future<bool> markSeenMessages(List<int> messageIds, {int? accountId});
+  Future<int> getFreshMessageCount(int chatId, {int? accountId});
+  Future<DeltaFreshMessageCount> getFreshMessageCountSafe(
+    int chatId, {
+    int? accountId,
+  });
+  Future<List<DeltaChatlistEntry>> getChatlist({int flags = 0, int? accountId});
+  Future<DeltaChat?> getChat(int chatId, {int? accountId});
+  Future<List<int>> getFreshMessageIds({int? accountId});
+  Future<bool> deleteMessages(List<int> messageIds, {int? accountId});
+  Future<bool> forwardMessages({
+    required List<int> messageIds,
+    required int toChatId,
+    int? accountId,
+  });
+  Future<List<int>> searchMessages({
+    required int chatId,
+    required String query,
+    int? accountId,
+  });
+  Future<List<int>> getChatMessageIds({
+    required int chatId,
+    int? beforeMessageId,
+    int? accountId,
+  });
+  Future<void> hydrateMessages(List<int> messageIds, {int? accountId});
+  Future<bool> setChatVisibility({
+    required int chatId,
+    required int visibility,
+    int? accountId,
+  });
+  Future<bool> downloadFullMessage(int messageId, {int? accountId});
+  Future<bool> resendMessages(List<int> messageIds, {int? accountId});
+  Future<int> sendTextWithQuote({
+    required int chatId,
+    required String body,
+    required int quotedMessageId,
+    String? quotedStanzaId,
+    String? subject,
+    String? htmlBody,
+    int? accountId,
+    bool forcePlaintext = false,
+    bool skipAutocrypt = false,
+  });
+  Future<DeltaQuotedMessage?> getQuotedMessage(int messageId, {int? accountId});
+  Future<bool> setDraft({
+    required int chatId,
+    DeltaMessage? message,
+    int? accountId,
+  });
+  Future<DeltaMessage?> getDraft(int chatId, {int? accountId});
+  Future<DeltaMessage?> getMessage(int messageId, {int? accountId});
+  Future<String?> getMessageMimeHeaders(int messageId, {int? accountId});
+  Future<String?> getMessageRfc724Mid(int messageId, {int? accountId});
+  Future<String?> getMessageInfo(int messageId, {int? accountId});
+  Future<String?> getMessageDebugInfo(int messageId, {int? accountId});
+  Future<String?> getMessageFullHtml(int messageId, {int? accountId});
+  Future<DeltaMessageRfc822Body?> getMessageRfc822Body(
+    int messageId, {
+    int? accountId,
+  });
+  Future<List<int>> getContactIds({
+    int flags = 0,
+    String? query,
+    int? accountId,
+  });
+  Future<List<int>> getBlockedContactIds({int? accountId});
+  Future<bool> deleteContact(int contactId, {int? accountId});
+  Future<DeltaContact?> getContact(int contactId, {int? accountId});
+  Future<void> deleteStorageArtifacts({String? databasePrefix});
+  @override
+  Future<void> dispose({bool requestWorkerDispose = true});
+}
+
+class EmailDeltaTransport implements EmailDeltaRuntime {
   EmailDeltaTransport({
     required Future<XmppDatabase> Function() databaseBuilder,
+    Future<File> Function(String prefix)? deltaDatabaseFileBuilder,
     Future<T> Function<T>(Future<T> Function() operation)?
     databaseOperationTracker,
     DeltaSafe? deltaSafe,
     Logger? logger,
     AppLocalizations Function()? localizationsProvider,
     String? Function()? xmppSelfJidProvider,
+    bool persistEvents = true,
   }) : _databaseBuilder = databaseBuilder,
+       _deltaDatabaseFileBuilder = deltaDatabaseFileBuilder,
        _databaseOperationTracker = databaseOperationTracker,
        _deltaSafe = deltaSafe ?? DeltaSafe(),
        _log = logger ?? Logger('EmailDeltaTransport'),
        _localizationsProvider = localizationsProvider,
-       _xmppSelfJidProvider = xmppSelfJidProvider;
+       _xmppSelfJidProvider = xmppSelfJidProvider,
+       _persistEvents = persistEvents;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
+  final Future<File> Function(String prefix)? _deltaDatabaseFileBuilder;
   Future<T> Function<T>(Future<T> Function() operation)?
   _databaseOperationTracker;
   final DeltaSafe _deltaSafe;
   final Logger _log;
   final AppLocalizations Function()? _localizationsProvider;
   final String? Function()? _xmppSelfJidProvider;
+  final bool _persistEvents;
 
   DeltaAccountsHandle? _accounts;
   DeltaContextHandle? _context;
@@ -208,6 +448,7 @@ class EmailDeltaTransport implements ChatTransport {
   Map<String, bool> _emailEncryptionBetaEnabledByAddress =
       const <String, bool>{};
 
+  @override
   void updateDatabaseOperationTracker(
     Future<T> Function<T>(Future<T> Function() operation)? tracker,
   ) {
@@ -222,6 +463,7 @@ class EmailDeltaTransport implements ChatTransport {
     return tracker(operation);
   }
 
+  @override
   void updateEmailEncryptionBetaSettings(Map<String, bool> enabledByAddress) {
     final normalized = <String, bool>{};
     for (final entry in enabledByAddress.entries) {
@@ -308,11 +550,13 @@ class EmailDeltaTransport implements ChatTransport {
       _context?.events() ??
       const Stream<DeltaCoreEvent>.empty();
 
+  @override
   String? get selfJid => _selfJidForAccount(_defaultAccountId);
 
+  @override
   void hydrateAccountAddress({required String address, int? accountId}) {
     if (address.isEmpty) return;
-    final resolvedAccountId = _resolveAccountId(accountId);
+    final resolvedAccountId = _resolveAccountIdForRequest(accountId);
     if (resolvedAccountId == null) return;
     _accountAddresses[resolvedAccountId] = address;
     _primaryAccountId ??= resolvedAccountId;
@@ -342,6 +586,9 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     hydrateAccountAddress(address: normalizedAddress, accountId: accountId);
+    if (!_persistEvents) {
+      return;
+    }
     final db = await _databaseBuilder();
     final xmppSelfJid = _xmppSelfJidProvider?.call();
     await db.removeDeltaPlaceholderDuplicates(
@@ -380,6 +627,7 @@ class EmailDeltaTransport implements ChatTransport {
     _databasePassphrase = databasePassphrase;
   }
 
+  @override
   Future<bool> isConfigured({int? accountId}) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return false;
@@ -389,6 +637,7 @@ class EmailDeltaTransport implements ChatTransport {
     return session?.context.isConfigured ?? false;
   }
 
+  @override
   Future<void> deconfigureAccount({int? accountId}) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -709,6 +958,7 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
+  @override
   Future<void> stopEventDeliveryForLogout() =>
       _stopEventDelivery(_DeltaEventDeliveryBlockReason.logout);
 
@@ -744,12 +994,13 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   @override
-  Future<void> dispose() async {
+  Future<void> dispose({bool requestWorkerDispose = true}) async {
     await stop();
     await _teardownContext();
     _eventListeners.clear();
   }
 
+  @override
   Future<bool> bootstrapFromCore({int? accountId}) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return false;
@@ -761,13 +1012,14 @@ class EmailDeltaTransport implements ChatTransport {
     }
     var didBootstrap = false;
     for (final session in sessions) {
-      if (await session.consumer.bootstrapFromCore()) {
+      if (await session.consumer?.bootstrapFromCore() == true) {
         didBootstrap = true;
       }
     }
     return didBootstrap;
   }
 
+  @override
   Future<void> refreshChatlistSnapshot({int? accountId}) =>
       _trackCoreOperation(() => _refreshChatlistSnapshot(accountId: accountId));
 
@@ -785,12 +1037,13 @@ class EmailDeltaTransport implements ChatTransport {
       if (!_isCurrentCoreOperationEpoch(epoch)) {
         return;
       }
-      await session.consumer.refreshChatlistSnapshot(
+      await session.consumer?.refreshChatlistSnapshot(
         isCurrent: () => _isCurrentCoreOperationEpoch(epoch),
       );
     }
   }
 
+  @override
   Future<void> notifyNetworkAvailable() async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -804,6 +1057,7 @@ class EmailDeltaTransport implements ChatTransport {
     await _context?.maybeNetworkAvailable();
   }
 
+  @override
   Future<void> notifyNetworkLost() async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -817,6 +1071,7 @@ class EmailDeltaTransport implements ChatTransport {
     await _context?.maybeNetworkLost();
   }
 
+  @override
   Future<bool> performBackgroundFetch(Duration timeout) async {
     if (_ioRunning || _eventDeliveryBlockedForLogout) {
       return false;
@@ -882,6 +1137,7 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
+  @override
   Future<void> backfillChatHistory({
     required int chatId,
     required String chatJid,
@@ -920,6 +1176,7 @@ class EmailDeltaTransport implements ChatTransport {
     return session?.context.connectivity();
   }
 
+  @override
   Future<String?> connectivityDetails({int? accountId}) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return null;
@@ -929,6 +1186,7 @@ class EmailDeltaTransport implements ChatTransport {
     return session?.context.connectivityDetails();
   }
 
+  @override
   Future<DeltaChatSendCapabilities> chatSendCapabilities({
     required int chatId,
     int? accountId,
@@ -945,6 +1203,7 @@ class EmailDeltaTransport implements ChatTransport {
     return context.chatSendCapabilities(chatId);
   }
 
+  @override
   Future<DeltaContactPublicKeyRemoval> removeContactPublicKey({
     required String address,
     required String fingerprint,
@@ -966,22 +1225,32 @@ class EmailDeltaTransport implements ChatTransport {
     );
   }
 
+  @override
   bool get accountsSupported => _accountsSupported;
 
+  @override
   bool get accountsActive => _accounts != null;
 
+  @override
   int get activeAccountId => _defaultAccountId ?? DeltaAccountDefaults.legacyId;
 
+  @override
   bool get isIoRunning => _ioRunning;
 
+  @override
+  bool get persistsAppStateInternally => _persistEvents;
+
+  @override
   void setPrimaryAccountId(int? accountId) {
     _primaryAccountId = accountId;
   }
 
+  @override
   String? selfJidForAccount(int accountId) {
     return _selfJidForAccount(accountId);
   }
 
+  @override
   Future<List<int>> accountIds() async {
     await _ensureContextReady();
     final accounts = _accounts;
@@ -994,6 +1263,7 @@ class EmailDeltaTransport implements ChatTransport {
     return const <int>[DeltaAccountDefaults.legacyId];
   }
 
+  @override
   Future<int> createAccount({bool closed = false}) async {
     await _ensureContextReady();
     final accounts = _accounts;
@@ -1003,11 +1273,13 @@ class EmailDeltaTransport implements ChatTransport {
     return accounts.addAccount(closed: closed);
   }
 
+  @override
   Future<void> ensureAccountSession(int? accountId) async {
     await _ensureContextReady();
     await _ensureSession(accountId: accountId);
   }
 
+  @override
   Future<bool> removeAccount(int accountId) async {
     await _ensureContextReady();
     final accounts = _accounts;
@@ -1025,6 +1297,7 @@ class EmailDeltaTransport implements ChatTransport {
     return removed;
   }
 
+  @override
   Future<String?> getCoreConfig(String key, {int? accountId}) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return null;
@@ -1038,6 +1311,7 @@ class EmailDeltaTransport implements ChatTransport {
     return context.getConfig(key);
   }
 
+  @override
   Future<String?> getOauth2Url({
     required String address,
     required String redirectUri,
@@ -1055,6 +1329,7 @@ class EmailDeltaTransport implements ChatTransport {
     return context.getOauth2Url(address: address, redirectUri: redirectUri);
   }
 
+  @override
   Future<void> setCoreConfig({
     required String key,
     required String value,
@@ -1072,6 +1347,7 @@ class EmailDeltaTransport implements ChatTransport {
     await context.setConfig(key: key, value: value);
   }
 
+  @override
   Future<bool> setCoreConfigIfSupported({
     required String key,
     required String value,
@@ -1089,6 +1365,7 @@ class EmailDeltaTransport implements ChatTransport {
     return context.setConfigIfSupported(key: key, value: value);
   }
 
+  @override
   Future<DeltaOpenPgpKeyMetadata> inspectOpenPgpKey({
     required String armored,
     required String expectedAddress,
@@ -1111,6 +1388,7 @@ class EmailDeltaTransport implements ChatTransport {
     );
   }
 
+  @override
   Future<DeltaContactPublicKeyImport> importContactPublicKey({
     required String address,
     required String displayName,
@@ -1133,6 +1411,7 @@ class EmailDeltaTransport implements ChatTransport {
     );
   }
 
+  @override
   Future<EmailDeltaImexResult> runImex({
     required int mode,
     required String path,
@@ -1214,6 +1493,7 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
+  @override
   Future<void> cancelImex({int? accountId}) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -1227,6 +1507,7 @@ class EmailDeltaTransport implements ChatTransport {
     await context.stopOngoingProcess();
   }
 
+  @override
   Future<void> registerPushToken(String token) async {
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
@@ -1240,31 +1521,39 @@ class EmailDeltaTransport implements ChatTransport {
     _log.finer('Delta accounts unavailable; deferring push token registration');
   }
 
-  int? get _defaultAccountId => _resolveAccountId(null);
-
-  int? _resolveAccountId(int? accountId) {
-    final requestedAccountId = accountId;
-    if (requestedAccountId != null) {
-      if (requestedAccountId == DeltaAccountDefaults.legacyId &&
-          _accounts != null) {
-        final primary = _primaryAccountId;
-        if (primary != null) {
-          return primary;
-        }
-        if (_accountSessions.isNotEmpty) {
-          return _accountSessions.keys.first;
-        }
-      }
-      return requestedAccountId;
+  int? get _defaultAccountId {
+    final primary = _primaryAccountId;
+    if (primary != null) {
+      return primary;
     }
-    final context = _context;
-    if (context == null) {
-      if (_accountSessions.isEmpty) {
-        return DeltaAccountDefaults.legacyId;
-      }
+    const singleSessionCount = 1;
+    if (_accountSessions.length == singleSessionCount) {
       return _accountSessions.keys.first;
     }
-    return context.accountId ?? DeltaAccountDefaults.legacyId;
+    final context = _context;
+    if (context == null) return null;
+    final contextAccountId = context.accountId;
+    if (contextAccountId != null) {
+      return contextAccountId;
+    }
+    return _accounts == null ? DeltaAccountDefaults.legacyId : null;
+  }
+
+  int? _resolveAccountIdForRequest(int? accountId) {
+    if (accountId == null) {
+      return _defaultAccountId;
+    }
+    if (accountId != DeltaAccountDefaults.legacyId) {
+      return accountId;
+    }
+    if (_accounts == null) {
+      return _context == null ? null : DeltaAccountDefaults.legacyId;
+    }
+    const singleSessionCount = 1;
+    if (_accountSessions.length == singleSessionCount) {
+      return _accountSessions.keys.first;
+    }
+    return null;
   }
 
   String _selfJidForAddress(String? address) {
@@ -1276,7 +1565,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   String? _selfJidForAccount(int? accountId) {
-    final resolvedId = _resolveAccountId(accountId);
+    final resolvedId = _resolveAccountIdForRequest(accountId);
     if (resolvedId == null) {
       return null;
     }
@@ -1288,7 +1577,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   Future<_DeltaAccountSession?> _ensureSession({int? accountId}) async {
-    final resolvedId = _resolveAccountId(accountId);
+    final resolvedId = _resolveAccountIdForRequest(accountId);
     if (resolvedId == null) {
       return null;
     }
@@ -1319,20 +1608,22 @@ class EmailDeltaTransport implements ChatTransport {
     if (existing != null) {
       return existing;
     }
-    final consumer = DeltaEventConsumer(
-      databaseBuilder: _databaseBuilder,
-      context: context,
-      localizationsProvider: _localizationsProvider,
-      selfJidProvider: () => _selfJidForAccount(accountId),
-      xmppSelfJidProvider: _xmppSelfJidProvider,
-      emailEncryptionBetaEnabledForAddress: (_, address) {
-        final normalized = normalizedAddressValue(address);
-        return normalized != null &&
-            _emailEncryptionBetaEnabledByAddress[normalized] == true;
-      },
-      logger: _log,
-      databaseOperationTracker: _trackDatabaseOperation,
-    );
+    final consumer = _persistEvents
+        ? DeltaEventConsumer(
+            databaseBuilder: _databaseBuilder,
+            core: DeltaContextEventCore(context),
+            localizationsProvider: _localizationsProvider,
+            selfJidProvider: () => _selfJidForAccount(accountId),
+            xmppSelfJidProvider: _xmppSelfJidProvider,
+            emailEncryptionBetaEnabledForAddress: (_, address) {
+              final normalized = normalizedAddressValue(address);
+              return normalized != null &&
+                  _emailEncryptionBetaEnabledByAddress[normalized] == true;
+            },
+            logger: _log,
+            databaseOperationTracker: _trackDatabaseOperation,
+          )
+        : null;
     final session = _DeltaAccountSession(
       accountId: accountId,
       context: context,
@@ -1409,9 +1700,13 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     final subscription = session.context.events().listen((event) {
+      final scopedEvent = _deltaEventForAccount(
+        event: event,
+        accountId: session.accountId,
+      );
       unawaited(
         _trackEventOperation(
-          () => _handleEvent(event: event, consumer: session.consumer),
+          () => _handleEvent(event: scopedEvent, consumer: session.consumer),
         ),
       );
     });
@@ -1448,10 +1743,6 @@ class EmailDeltaTransport implements ChatTransport {
     if (accountId != null && accountId != DeltaAccountDefaults.legacyId) {
       return accountId;
     }
-    final primary = _primaryAccountId;
-    if (primary != null) {
-      return primary;
-    }
     const int singleSessionCount = 1;
     if (_accountSessions.length == singleSessionCount) {
       return _accountSessions.keys.first;
@@ -1473,17 +1764,19 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     final session = await _ensureSession(accountId: accountId);
-    final consumer = session?.consumer;
-    if (consumer == null) {
+    if (session == null) {
       _log.warning('Delta event for account $accountId without session.');
       return;
     }
-    await _handleEvent(event: event, consumer: consumer);
+    await _handleEvent(
+      event: _deltaEventForAccount(event: event, accountId: accountId),
+      consumer: session.consumer,
+    );
   }
 
   Future<void> _handleEvent({
     required DeltaCoreEvent event,
-    required DeltaEventConsumer consumer,
+    required DeltaEventConsumer? consumer,
   }) async {
     try {
       final notifyBeforeHandle = event.type == DeltaEventCode.chatDeleted;
@@ -1492,7 +1785,7 @@ class EmailDeltaTransport implements ChatTransport {
           listener(event);
         }
       }
-      await consumer.handle(event);
+      await consumer?.handle(event);
       if (!notifyBeforeHandle) {
         for (final listener in List.of(_eventListeners)) {
           listener(event);
@@ -1749,6 +2042,16 @@ class EmailDeltaTransport implements ChatTransport {
     final context = session.context;
     final resolvedAccountId = session.accountId;
     final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    if (!_persistEvents) {
+      return context.sendText(
+        chatId: chatId,
+        message: body,
+        subject: subjectForDeltaCore(subject),
+        html: htmlBody,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
+      );
+    }
     final Chat chat = await _requireReadyOutgoingChat(
       chatId: chatId,
       accountId: resolvedAccountId,
@@ -1796,8 +2099,11 @@ class EmailDeltaTransport implements ChatTransport {
     );
     await _scheduleOriginIdHydration(
       context: context,
-      msgId: msgId,
-      accountId: resolvedAccountId,
+      id: _DeltaChatMessageId(
+        accountId: resolvedAccountId,
+        chatId: chatId,
+        msgId: msgId,
+      ),
     );
     return msgId;
   }
@@ -1822,17 +2128,31 @@ class EmailDeltaTransport implements ChatTransport {
     final context = session.context;
     final resolvedAccountId = session.accountId;
     final sanitizedSubject = sanitizeEmailSubjectValue(subject);
-    final Chat chat = await _requireReadyOutgoingChat(
-      chatId: chatId,
-      accountId: resolvedAccountId,
-      context: context,
-    );
     final coreSubject = subjectForDeltaCore(subject);
     final sanitizedFileName = sanitizeEmailAttachmentFilename(
       attachment.fileName,
       fallbackPath: attachment.path,
     );
     final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
+    if (!_persistEvents) {
+      return context.sendFileMessage(
+        chatId: chatId,
+        viewType: _viewTypeFor(attachment),
+        filePath: attachment.path,
+        fileName: sanitizedFileName,
+        mimeType: sanitizedMimeType,
+        text: attachment.caption,
+        subject: coreSubject,
+        html: htmlCaption,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
+      );
+    }
+    final Chat chat = await _requireReadyOutgoingChat(
+      chatId: chatId,
+      accountId: resolvedAccountId,
+      context: context,
+    );
     final DateTime sentAt = DateTime.timestamp();
     final String pendingStanzaId = _pendingOutgoingStanzaId();
     final FileMetadataData pendingMetadata = _pendingMetadataForAttachment(
@@ -1885,8 +2205,11 @@ class EmailDeltaTransport implements ChatTransport {
     );
     await _scheduleOriginIdHydration(
       context: context,
-      msgId: msgId,
-      accountId: resolvedAccountId,
+      id: _DeltaChatMessageId(
+        accountId: resolvedAccountId,
+        chatId: chatId,
+        msgId: msgId,
+      ),
     );
     await _scheduleAttachmentMetadataHydration(
       context: context,
@@ -1940,6 +2263,9 @@ class EmailDeltaTransport implements ChatTransport {
       accountId: session.accountId,
     );
     final chatId = await context.createChatByContactId(contactId);
+    if (!_persistEvents) {
+      return chatId;
+    }
     await _ensureChat(chatId, accountId: session.accountId, context: context);
     return chatId;
   }
@@ -2237,8 +2563,10 @@ class EmailDeltaTransport implements ChatTransport {
     DeltaContextHandle? context,
   }) async {
     final db = await _databaseBuilder();
-    final resolvedAccountId =
-        _resolveAccountId(accountId) ?? DeltaAccountDefaults.legacyId;
+    final resolvedAccountId = _resolveAccountIdForRequest(accountId);
+    if (resolvedAccountId == null) {
+      throw StateError('Delta account is unavailable');
+    }
     final existing = await db.getChatByDeltaChatId(
       chatId,
       accountId: resolvedAccountId,
@@ -2334,23 +2662,17 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<void> _scheduleOriginIdHydration({
     required DeltaContextHandle context,
-    required int msgId,
-    required int accountId,
+    required _DeltaChatMessageId id,
   }) async {
-    _queueOriginIdHydration(
-      context: context,
-      msgId: msgId,
-      accountId: accountId,
-    );
+    _queueOriginIdHydration(context: context, id: id);
   }
 
   void _queueOriginIdHydration({
     required DeltaContextHandle context,
-    required int msgId,
-    required int accountId,
+    required _DeltaChatMessageId id,
   }) {
     final epoch = _coreOperationEpoch;
-    final key = '$accountId:$msgId';
+    final key = '${id.accountId}:${id.msgId}';
     if (_originIdHydrationPending.contains(key)) {
       return;
     }
@@ -2358,8 +2680,7 @@ class EmailDeltaTransport implements ChatTransport {
     _originIdHydrationQueue = _runOriginIdHydration(
       previous: _originIdHydrationQueue,
       context: context,
-      msgId: msgId,
-      accountId: accountId,
+      id: id,
       key: key,
       epoch: epoch,
     );
@@ -2368,8 +2689,7 @@ class EmailDeltaTransport implements ChatTransport {
   Future<void> _runOriginIdHydration({
     required Future<void> previous,
     required DeltaContextHandle context,
-    required int msgId,
-    required int accountId,
+    required _DeltaChatMessageId id,
     required String key,
     required int epoch,
   }) async {
@@ -2378,12 +2698,7 @@ class EmailDeltaTransport implements ChatTransport {
       return;
     }
     try {
-      await _hydrateOriginId(
-        context: context,
-        msgId: msgId,
-        accountId: accountId,
-        epoch: epoch,
-      );
+      await _hydrateOriginId(context: context, id: id, epoch: epoch);
     } on Exception catch (error, stackTrace) {
       _log.fine(_originIdHydrationFailedLog, error, stackTrace);
     } finally {
@@ -2434,16 +2749,14 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<void> _hydrateOriginId({
     required DeltaContextHandle context,
-    required int msgId,
-    required int accountId,
+    required _DeltaChatMessageId id,
     required int epoch,
   }) async {
-    final stanzaId = deltaMessageStanzaId(msgId);
-    final String? selfJid = _selfJidForAccount(accountId);
+    final String? selfJid = _selfJidForAccount(id.accountId);
     if (!_isCurrentCoreOperationEpoch(epoch)) {
       return;
     }
-    final originId = await _resolveMessageOriginId(context, msgId);
+    final originId = await _resolveMessageOriginId(context, id.msgId);
     if (originId == null || !_isCurrentCoreOperationEpoch(epoch)) {
       return;
     }
@@ -2452,9 +2765,7 @@ class EmailDeltaTransport implements ChatTransport {
       if (!_isCurrentCoreOperationEpoch(epoch)) {
         return;
       }
-      final existing =
-          await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
-          await db.getMessageByStanzaID(stanzaId);
+      final existing = await _lookupStoredDeltaMessage(db, id);
       if (existing == null) {
         return;
       }
@@ -2469,6 +2780,36 @@ class EmailDeltaTransport implements ChatTransport {
         emailSelfJid: selfJid,
       );
     });
+  }
+
+  Future<Message?> _lookupStoredDeltaMessage(
+    XmppDatabase db,
+    _DeltaChatMessageId id,
+  ) async {
+    final scoped = await db.getMessageByDeltaId(
+      id.msgId,
+      deltaAccountId: id.accountId,
+      deltaChatId: id.chatId,
+    );
+    if (scoped != null && _storedDeltaLocatorMatches(scoped, id)) {
+      return scoped;
+    }
+    final legacy = await db.getMessageByStanzaID(
+      deltaMessageStanzaId(id.msgId),
+    );
+    if (legacy == null || !_storedDeltaLocatorMatches(legacy, id)) {
+      return null;
+    }
+    return legacy;
+  }
+
+  bool _storedDeltaLocatorMatches(Message message, _DeltaChatMessageId id) {
+    if (message.deltaMsgId != id.msgId ||
+        message.deltaAccountId != id.accountId) {
+      return false;
+    }
+    final deltaChatId = message.deltaChatId;
+    return deltaChatId == null || deltaChatId == id.chatId;
   }
 
   Future<String?> _resolveMessageOriginId(
@@ -2516,6 +2857,10 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   Future<File> _deltaDatabaseFile(String prefix) async {
+    final builder = _deltaDatabaseFileBuilder;
+    if (builder != null) {
+      return builder(prefix);
+    }
     final normalized = '${prefix}_email';
     return dbFileFor(normalized);
   }
@@ -2548,12 +2893,14 @@ class EmailDeltaTransport implements ChatTransport {
     }
   }
 
+  @override
   void addEventListener(void Function(DeltaCoreEvent event) listener) {
     if (!_eventListeners.contains(listener)) {
       _eventListeners.add(listener);
     }
   }
 
+  @override
   void removeEventListener(void Function(DeltaCoreEvent event) listener) {
     _eventListeners.remove(listener);
   }
@@ -2644,6 +2991,7 @@ class EmailDeltaTransport implements ChatTransport {
     await _deleteDatabaseArtifacts(databaseFile);
   }
 
+  @override
   Future<void> deleteStorageArtifacts({String? databasePrefix}) async {
     final explicitPrefix = databasePrefix?.trim();
     final normalizedExplicitPrefix = tryNormalizeAppOwnedPathSegment(
@@ -2673,6 +3021,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Blocks an email contact in DeltaChat core.
   ///
   /// Returns true if the contact was found and blocked.
+  @override
   Future<bool> blockContact(String address, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2689,6 +3038,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Unblocks an email contact in DeltaChat core.
   ///
   /// Returns true if the contact was found and unblocked.
+  @override
   Future<bool> unblockContact(String address, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2705,6 +3055,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Marks a chat as noticed in core, clearing unread badges.
   ///
   /// Returns true if the operation succeeded.
+  @override
   Future<bool> markNoticedChat(int chatId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2718,6 +3069,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Marks messages as seen, triggering MDN if enabled.
   ///
   /// Returns true if the operation succeeded.
+  @override
   Future<bool> markSeenMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return true;
     await _ensureContextReady();
@@ -2730,6 +3082,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Returns the count of fresh (unread) messages in a chat.
+  @override
   Future<int> getFreshMessageCount(int chatId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2740,7 +3093,47 @@ class EmailDeltaTransport implements ChatTransport {
     return context.getFreshMessageCount(chatId);
   }
 
+  @override
+  Future<DeltaFreshMessageCount> getFreshMessageCountSafe(
+    int chatId, {
+    int? accountId,
+  }) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return const DeltaFreshMessageCount.unsupported();
+    }
+    return context.getFreshMessageCountSafe(chatId);
+  }
+
+  @override
+  Future<List<DeltaChatlistEntry>> getChatlist({
+    int flags = 0,
+    int? accountId,
+  }) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return const <DeltaChatlistEntry>[];
+    }
+    return context.getChatlist(flags: flags);
+  }
+
+  @override
+  Future<DeltaChat?> getChat(int chatId, {int? accountId}) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return null;
+    }
+    return context.getChat(chatId);
+  }
+
   /// Returns all fresh (unread) message IDs across all chats.
+  @override
   Future<List<int>> getFreshMessageIds({int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2754,6 +3147,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Deletes messages from core and server.
   ///
   /// Returns true if the operation succeeded.
+  @override
   Future<bool> deleteMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return true;
     await _ensureContextReady();
@@ -2768,6 +3162,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Forwards messages to another chat.
   ///
   /// Returns true if the operation succeeded.
+  @override
   Future<bool> forwardMessages({
     required List<int> messageIds,
     required int toChatId,
@@ -2786,6 +3181,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Searches messages in a chat.
   ///
   /// Pass chatId=0 to search all chats.
+  @override
   Future<List<int>> searchMessages({
     required int chatId,
     required String query,
@@ -2800,6 +3196,7 @@ class EmailDeltaTransport implements ChatTransport {
     return context.searchMessages(chatId: chatId, query: query);
   }
 
+  @override
   Future<List<int>> getChatMessageIds({
     required int chatId,
     int? beforeMessageId,
@@ -2820,6 +3217,7 @@ class EmailDeltaTransport implements ChatTransport {
     );
   }
 
+  @override
   Future<void> hydrateMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return;
     await _ensureContextReady();
@@ -2838,6 +3236,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Sets the visibility of a chat (normal, archived, pinned).
   ///
   /// Returns true if the operation succeeded.
+  @override
   Future<bool> setChatVisibility({
     required int chatId,
     required int visibility,
@@ -2855,6 +3254,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Triggers download of full message content for partial messages.
   ///
   /// Returns true if the download was initiated.
+  @override
   Future<bool> downloadFullMessage(int messageId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2868,6 +3268,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Resends failed messages.
   ///
   /// Returns true if the resend was initiated.
+  @override
   Future<bool> resendMessages(List<int> messageIds, {int? accountId}) async {
     if (messageIds.isEmpty) return true;
     await _ensureContextReady();
@@ -2882,6 +3283,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Sends a text message with a quote reference to another message.
   ///
   /// Returns the new message ID.
+  @override
   Future<int> sendTextWithQuote({
     required int chatId,
     required String body,
@@ -2900,6 +3302,17 @@ class EmailDeltaTransport implements ChatTransport {
     final context = session.context;
     final resolvedAccountId = session.accountId;
     final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    if (!_persistEvents) {
+      return context.sendTextWithQuote(
+        chatId: chatId,
+        message: body,
+        quotedMessageId: quotedMessageId,
+        subject: subjectForDeltaCore(subject),
+        html: htmlBody,
+        forcePlaintext: forcePlaintext,
+        skipAutocrypt: skipAutocrypt,
+      );
+    }
     final Chat chat = await _requireReadyOutgoingChat(
       chatId: chatId,
       accountId: resolvedAccountId,
@@ -2945,13 +3358,17 @@ class EmailDeltaTransport implements ChatTransport {
     );
     await _scheduleOriginIdHydration(
       context: context,
-      msgId: msgId,
-      accountId: resolvedAccountId,
+      id: _DeltaChatMessageId(
+        accountId: resolvedAccountId,
+        chatId: chatId,
+        msgId: msgId,
+      ),
     );
     return msgId;
   }
 
   /// Gets the quoted message info for a message.
+  @override
   Future<DeltaQuotedMessage?> getQuotedMessage(
     int messageId, {
     int? accountId,
@@ -2968,6 +3385,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Sets the draft for a chat.
   ///
   /// Pass null message to clear the draft.
+  @override
   Future<bool> setDraft({
     required int chatId,
     DeltaMessage? message,
@@ -2983,6 +3401,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets the draft for a chat.
+  @override
   Future<DeltaMessage?> getDraft(int chatId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -2994,6 +3413,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets a message by ID from core.
+  @override
   Future<DeltaMessage?> getMessage(int messageId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -3005,6 +3425,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets raw MIME headers by message ID from core.
+  @override
   Future<String?> getMessageMimeHeaders(int messageId, {int? accountId}) async {
     if (messageId <= _deltaMessageIdUnset) return null;
     await _ensureContextReady();
@@ -3015,6 +3436,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets the RFC 724 Message-ID stored by Delta Core.
+  @override
   Future<String?> getMessageRfc724Mid(int messageId, {int? accountId}) async {
     if (messageId <= _deltaMessageIdUnset) return null;
     await _ensureContextReady();
@@ -3024,7 +3446,28 @@ class EmailDeltaTransport implements ChatTransport {
     return context.getMessageRfc724Mid(messageId);
   }
 
+  @override
+  Future<String?> getMessageInfo(int messageId, {int? accountId}) async {
+    if (messageId <= _deltaMessageIdUnset) return null;
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) return null;
+    return context.getMessageInfo(messageId);
+  }
+
+  @override
+  Future<String?> getMessageDebugInfo(int messageId, {int? accountId}) async {
+    if (messageId <= _deltaMessageIdUnset) return null;
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) return null;
+    return context.getMessageDebugInfo(messageId);
+  }
+
   /// Gets HTML synthesized from the stored raw MIME for a message.
+  @override
   Future<String?> getMessageFullHtml(int messageId, {int? accountId}) async {
     if (messageId <= _deltaMessageIdUnset) return null;
     await _ensureContextReady();
@@ -3035,6 +3478,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets body-only plain text and HTML parsed from the stored RFC822 MIME.
+  @override
   Future<DeltaMessageRfc822Body?> getMessageRfc822Body(
     int messageId, {
     int? accountId,
@@ -3050,6 +3494,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Gets contact IDs from core.
   ///
   /// Use flags from [DeltaContactListFlags] to filter results.
+  @override
   Future<List<int>> getContactIds({
     int flags = 0,
     String? query,
@@ -3065,6 +3510,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets blocked contact IDs from core.
+  @override
   Future<List<int>> getBlockedContactIds({int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -3078,6 +3524,7 @@ class EmailDeltaTransport implements ChatTransport {
   /// Deletes a contact from core.
   ///
   /// Returns true if the contact was deleted.
+  @override
   Future<bool> deleteContact(int contactId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
@@ -3089,6 +3536,7 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets a contact by ID from core.
+  @override
   Future<DeltaContact?> getContact(int contactId, {int? accountId}) async {
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);

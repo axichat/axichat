@@ -167,12 +167,14 @@ abstract interface class XmppDatabase implements Database {
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
+    int? deltaChatId,
     String? chatJid,
   });
 
   Future<List<Message>> getMessagesByDeltaIds(
     Iterable<int> deltaMsgIds, {
     int? deltaAccountId,
+    int? deltaChatId,
     String? chatJid,
   });
 
@@ -751,6 +753,8 @@ abstract interface class XmppDatabase implements Database {
   Future<void> createChat(Chat chat);
 
   Future<void> updateChat(Chat chat);
+
+  Future<void> markDirectChatXmppCapable(String jid);
 
   Future<void> updateChatSettingsSyncState(Chat chat);
 
@@ -2006,6 +2010,11 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     file,
     executor ?? _openDatabase(file, passphrase),
   );
+
+  factory XmppDrift.remote({
+    required File file,
+    required DatabaseConnection connection,
+  }) => XmppDrift._(file, connection);
 
   final _log = Logger('XmppDrift');
   final File _file;
@@ -3304,12 +3313,16 @@ WHERE transport = ${MessageTransport.email.index}
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
+    int? deltaChatId,
     String? chatJid,
   }) {
     final query = select(messages)
       ..where((tbl) => tbl.deltaMsgId.equals(deltaMsgId));
     if (deltaAccountId != null) {
       query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
+    }
+    if (deltaChatId != null) {
+      query.where((tbl) => tbl.deltaChatId.equals(deltaChatId));
     }
     if (chatJid != null) {
       query.where((tbl) => tbl.chatJid.equals(chatJid));
@@ -3321,6 +3334,7 @@ WHERE transport = ${MessageTransport.email.index}
   Future<List<Message>> getMessagesByDeltaIds(
     Iterable<int> deltaMsgIds, {
     int? deltaAccountId,
+    int? deltaChatId,
     String? chatJid,
   }) async {
     final normalized = deltaMsgIds
@@ -3334,6 +3348,9 @@ WHERE transport = ${MessageTransport.email.index}
       ..where((tbl) => tbl.deltaMsgId.isIn(normalized));
     if (deltaAccountId != null) {
       query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
+    }
+    if (deltaChatId != null) {
+      query.where((tbl) => tbl.deltaChatId.equals(deltaChatId));
     }
     if (chatJid != null) {
       query.where((tbl) => tbl.chatJid.equals(chatJid));
@@ -7606,6 +7623,30 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
 
   @override
+  Future<void> markDirectChatXmppCapable(String jid) async {
+    await _markDirectChatsXmppCapable([jid]);
+  }
+
+  Future<void> _markDirectChatsXmppCapable(Iterable<String> jids) async {
+    final normalizedJids = jids
+        .map((jid) => bareAddress(jid) ?? jid.trim())
+        .where((jid) => jid.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalizedJids.isEmpty) return;
+
+    for (final batch in _chunked(normalizedJids, batchSize: 900)) {
+      await (update(chats)..where(
+            (tbl) =>
+                tbl.jid.isIn(batch) &
+                tbl.type.equals(ChatType.chat.index) &
+                tbl.transport.equals(MessageTransport.email.index),
+          ))
+          .write(const ChatsCompanion(transport: Value(MessageTransport.xmpp)));
+    }
+  }
+
+  @override
   Future<void> updateChatSettingsSyncState(Chat chat) {
     return (update(chats)..where((row) => row.jid.equals(chat.jid))).write(
       ChatsCompanion(
@@ -7644,8 +7685,10 @@ ORDER BY pinned_at DESC, message_reference_id DESC
     required bool archived,
     required String contactJid,
   }) async {
-    await customUpdate(
-      '''
+    await transaction(() async {
+      await _markDirectChatsXmppCapable([jid]);
+      await customUpdate(
+        '''
 UPDATE chats
 SET last_change_timestamp = CASE
       WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
@@ -7657,17 +7700,18 @@ SET last_change_timestamp = CASE
     contact_jid = ?
 WHERE jid = ?
 ''',
-      variables: [
-        Variable<DateTime>(lastChangeTimestamp),
-        Variable<DateTime>(lastChangeTimestamp),
-        Variable<bool>(muted),
-        Variable<bool>(favorited),
-        Variable<bool>(archived),
-        Variable<String>(contactJid),
-        Variable<String>(jid),
-      ],
-      updates: {chats},
-    );
+        variables: [
+          Variable<DateTime>(lastChangeTimestamp),
+          Variable<DateTime>(lastChangeTimestamp),
+          Variable<bool>(muted),
+          Variable<bool>(favorited),
+          Variable<bool>(archived),
+          Variable<String>(contactJid),
+          Variable<String>(jid),
+        ],
+        updates: {chats},
+      );
+    });
   }
 
   @override
@@ -8384,6 +8428,7 @@ WHERE jid = ?
       await createChat(
         Chat.fromJid(item.jid).copyWith(lastChangeTimestamp: emptyTimestamp),
       );
+      await _markDirectChatsXmppCapable([item.jid]);
       await rosterAccessor.insertOrUpdateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
@@ -8393,6 +8438,7 @@ WHERE jid = ?
   Future<void> saveRosterItemOnly(RosterItem item) async {
     _log.info('Saving roster item without creating chat');
     await transaction(() async {
+      await _markDirectChatsXmppCapable([item.jid]);
       await rosterAccessor.insertOrUpdateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
@@ -8406,6 +8452,7 @@ WHERE jid = ?
         batch.insertAll(roster, items, mode: InsertMode.insertOrReplace);
       });
       final jids = items.map((item) => item.jid).toList(growable: false);
+      await _markDirectChatsXmppCapable(jids);
       for (final batch in _chunked(jids, batchSize: 900)) {
         await (delete(invites)..where((tbl) => tbl.jid.isIn(batch))).go();
       }
@@ -8438,6 +8485,7 @@ WHERE jid = ?
         batch.insertAll(roster, items, mode: InsertMode.insertOrReplace);
       });
       final jids = items.map((item) => item.jid).toList(growable: false);
+      await _markDirectChatsXmppCapable(jids);
       for (final batch in _chunked(jids, batchSize: 900)) {
         await (delete(invites)..where((tbl) => tbl.jid.isIn(batch))).go();
       }
@@ -8448,6 +8496,7 @@ WHERE jid = ?
   Future<void> updateRosterItem(RosterItem item) async {
     _log.info('Updating roster item');
     await transaction(() async {
+      await _markDirectChatsXmppCapable([item.jid]);
       await rosterAccessor.updateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
@@ -8461,6 +8510,7 @@ WHERE jid = ?
         batch.insertAll(roster, items, mode: InsertMode.insertOrReplace);
       });
       final jids = items.map((item) => item.jid).toList(growable: false);
+      await _markDirectChatsXmppCapable(jids);
       for (final batch in _chunked(jids, batchSize: 900)) {
         await (delete(invites)..where((tbl) => tbl.jid.isIn(batch))).go();
       }

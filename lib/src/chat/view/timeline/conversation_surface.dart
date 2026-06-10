@@ -184,6 +184,8 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.loadingMessages,
     required this.mainTimelineItems,
     required this.messageListOptions,
+    required this.onRenderedMessagesChanged,
+    required this.renderedMessagesHydrationKey,
     required this.typingVisible,
     required this.typingAvatars,
     required this.typingAvatarPaths,
@@ -298,6 +300,8 @@ class _ChatMainConversationSection extends StatelessWidget {
   final bool loadingMessages;
   final List<ChatTimelineItem> mainTimelineItems;
   final MessageListOptions messageListOptions;
+  final ValueChanged<List<Message>> onRenderedMessagesChanged;
+  final Object? renderedMessagesHydrationKey;
   final bool typingVisible;
   final List<String> typingAvatars;
   final Map<String, String> typingAvatarPaths;
@@ -588,6 +592,8 @@ class _ChatMainConversationSection extends StatelessWidget {
         messageList: _ChatMainTimelineList(
           items: mainTimelineItems,
           messageListOptions: messageListOptions,
+          onRenderedMessagesChanged: onRenderedMessagesChanged,
+          renderedMessagesHydrationKey: renderedMessagesHydrationKey,
           state: state,
           chatEntity: chatEntity,
           currentUserId: currentUserId,
@@ -894,14 +900,10 @@ class _ChatPinnedPanelSection extends StatelessWidget {
         );
       },
       resolvedHtmlBodyFor: (message) {
-        final deltaMessageId = message.deltaMsgId;
-        if (deltaMessageId == null) {
-          return message.htmlBody;
-        }
-        if (message.hasRfc822BodyContent) {
-          return message.htmlBody;
-        }
-        return emailFullHtmlByDeltaId[deltaMessageId] ?? message.htmlBody;
+        return resolvedEmailHtmlBodyForMessage(
+          message: message,
+          emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+        );
       },
       resolvedQuotedTextFor: (message) {
         final deltaMessageId = message.deltaMsgId;

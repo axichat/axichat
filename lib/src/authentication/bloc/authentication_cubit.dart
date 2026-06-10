@@ -174,7 +174,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
     EndpointConfig? initialEndpointConfig,
-    EndpointResolver endpointResolver = const EndpointResolver(),
     Duration authRequestTimeout = const Duration(minutes: 1),
     Duration xmppReconnectPauseDelay = const Duration(minutes: 1),
     Future<void> Function()? beforeStickyReconnect,
@@ -183,7 +182,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
        _xmppService = xmppService,
        _emailService = emailService,
        _foregroundRuntimeController = foregroundRuntimeController,
-       _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
        _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
        _beforeStickyReconnect = beforeStickyReconnect,
@@ -312,7 +310,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   EmailService? _emailService;
-  final EndpointResolver _endpointResolver;
   late final http.Client _httpClient;
   late final http.Client? _ownedHttpClient;
   late final provisioning.EmailProvisioningClient?
@@ -1478,9 +1475,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (state is! AuthenticationComplete) {
       return;
     }
-    await _triggerEmailReconnect(
-      waitForNetworkAvailable: false,
-      recovery: emailRecovery,
+    unawaited(
+      _triggerEmailReconnect(
+        waitForNetworkAvailable: false,
+        recovery: emailRecovery,
+      ),
     );
     if (state is! AuthenticationComplete) {
       return;
@@ -1504,13 +1503,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (!endpointConfig.xmppEnabled) {
       _log.fine(
         'Skipping sticky-session XMPP reconnect: source=$source xmppDisabled=true',
-      );
-      return;
-    }
-    if (_xmppService.connected) {
-      _log.info(
-        'Skipping sticky-session XMPP reconnect because XMPP is already connected. '
-        'source=$source',
       );
       return;
     }
@@ -1646,7 +1638,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String databasePassphrase,
     required bool passwordPreHashed,
     required bool reuseExistingSession,
-    required EndpointOverride? endpoint,
   }) async {
     await _beforeXmppConnect?.call(jid);
     return _xmppService
@@ -1657,7 +1648,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           databasePassphrase: databasePassphrase,
           preHashed: passwordPreHashed,
           reuseExistingSession: reuseExistingSession,
-          endpoint: endpoint,
         )
         .timeout(
           _authRequestTimeout,
@@ -2320,14 +2310,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final reuseExistingSession =
           _xmppService.databasesInitialized && _xmppService.myJid == accountJid;
 
-      EndpointOverride? xmppEndpoint;
-      if (xmppEnabled) {
-        xmppEndpoint = await _endpointResolver.resolveXmpp(config);
-        if (_stopLoginIfCancelled(loginAttempt)) {
-          return;
-        }
-      }
-
       applyEmailSessionCredentials();
 
       if (xmppEnabled) {
@@ -2339,7 +2321,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             databasePassphrase: ensuredDatabasePassphrase,
             passwordPreHashed: passwordPreHashed,
             reuseExistingSession: reuseExistingSession,
-            endpoint: xmppEndpoint,
           );
           passwordPreHashed = true;
           await _markXmppConnected();
@@ -2378,7 +2359,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               databasePrefixStorageKey: databasePrefixStorageKey,
               databasePassphraseStorageKey: databasePassphraseStorageKey,
               pendingAvatar: pendingAvatar,
-              endpoint: xmppEndpoint,
             );
             if (resumeResult.isResumed) {
               authenticationCommitted = true;
@@ -2441,7 +2421,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               databasePrefixStorageKey: databasePrefixStorageKey,
               databasePassphraseStorageKey: databasePassphraseStorageKey,
               pendingAvatar: pendingAvatar,
-              endpoint: xmppEndpoint,
             );
             if (resumeResult.isResumed) {
               authenticationCommitted = true;
@@ -2477,6 +2456,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         deferredEmailProvisioningCompleter = Completer<void>();
         _deferredEmailProvisioningCompleter =
             deferredEmailProvisioningCompleter;
+        final emailReconnectGeneration = _emailReconnectGeneration;
         await _finalizeAuthentication(
           config: config,
           jid: accountJid,
@@ -2508,6 +2488,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               allowOfflineOnRecoverable: allowOfflineEmail,
               allowRetries: !hasStoredDatabaseSecrets,
               mode: emailProvisioningMode,
+              emailReconnectGeneration: emailReconnectGeneration,
             );
           } on Exception catch (error, stackTrace) {
             _log.warning(
@@ -2525,10 +2506,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             if (!deferredEmailProvisioningCompleter!.isCompleted) {
               deferredEmailProvisioningCompleter.complete();
             }
-            if (_stickyAuthActive &&
+            if (_emailReconnectGenerationIsCurrent(emailReconnectGeneration) &&
+                _stickyAuthActive &&
                 _xmppService.connectionState == ConnectionState.connected &&
                 sameNormalizedAddressValue(_xmppService.myJid, accountJid)) {
-              final emailReconnectGeneration = _emailReconnectGeneration;
               unawaited(
                 _resumeEmailReconnectIfPossible(
                   jid: accountJid,
@@ -2542,6 +2523,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
 
+      final emailReconnectGeneration = _emailReconnectGeneration;
       final provisioningStatus = await _provisionEmailWithRetry(
         displayName: displayName,
         databasePrefix: ensuredDatabasePrefix,
@@ -2554,6 +2536,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         allowOfflineOnRecoverable: allowOfflineEmail,
         allowRetries: !hasStoredDatabaseSecrets,
         mode: emailProvisioningMode,
+        emailReconnectGeneration: emailReconnectGeneration,
       );
       if (provisioningStatus.shouldAbort) {
         if (provisioningStatus.shouldWipeCredentials) {
@@ -2713,7 +2696,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool passwordPreHashed,
     required String? skippedPasswordRaw,
     required AvatarUploadPayload? pendingAvatar,
-    EndpointOverride? endpoint,
     String? password,
     String? emailPassword,
     provisioning.EmailProvisioningCredentials? emailCredentials,
@@ -2725,7 +2707,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePassphrase: databasePassphrase,
         password: password,
         preHashed: passwordPreHashed,
-        endpoint: endpoint,
       );
       await _markXmppConnected();
     } on Exception catch (error, stackTrace) {
@@ -2733,6 +2714,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return _ResumeResult.blockedTransient;
     }
 
+    final emailReconnectGeneration = _emailReconnectGeneration;
     final provisioningStatus = await _provisionEmailWithRetry(
       displayName: displayName,
       databasePrefix: databasePrefix,
@@ -2747,6 +2729,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       mode: enforceEmailProvisioning
           ? _EmailProvisioningMode.blocking
           : _EmailProvisioningMode.deferred,
+      emailReconnectGeneration: emailReconnectGeneration,
     );
     if (provisioningStatus.shouldAbort) {
       await _xmppService.disconnect();
@@ -2782,6 +2765,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool allowOfflineOnRecoverable,
     required bool allowRetries,
     required _EmailProvisioningMode mode,
+    required int emailReconnectGeneration,
     String? emailPassword,
     provisioning.EmailProvisioningCredentials? emailCredentials,
     bool persistCredentials = true,
@@ -2793,7 +2777,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     var attempts = 0;
     var delay = initialDelay;
     final start = DateTime.timestamp();
-    final emailReconnectGeneration = _emailReconnectGeneration;
     while (true) {
       if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
         return _ProvisioningStatus.blockedTransient;
