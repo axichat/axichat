@@ -385,6 +385,10 @@ final class _EmailRuntimeEventCore implements DeltaEventCore {
       _transport.getMessage(messageId, accountId: _accountId);
 
   @override
+  Future<List<DeltaMessage>> getMessages(List<int> messageIds) =>
+      _transport.getMessages(messageIds, accountId: _accountId);
+
+  @override
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId) =>
       _transport.getFreshMessageCountSafe(chatId, accountId: _accountId);
 

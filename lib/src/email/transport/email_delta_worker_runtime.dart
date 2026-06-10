@@ -1591,6 +1591,18 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       });
 
   @override
+  Future<List<DeltaMessage>> getMessages(
+    List<int> messageIds, {
+    int? accountId,
+  }) async {
+    final result = await _invoke<List<Object?>>('getMessages', {
+      'messageIds': messageIds,
+      'accountId': accountId,
+    });
+    return result.whereType<DeltaMessage>().toList(growable: false);
+  }
+
+  @override
   Future<String?> getMessageMimeHeaders(int messageId, {int? accountId}) =>
       _invoke<String?>('getMessageMimeHeaders', {
         'messageId': messageId,
@@ -2098,6 +2110,11 @@ final class _EmailDeltaWorkerServer {
       case 'getMessage':
         return _transport.getMessage(
           payload['messageId'] as int,
+          accountId: payload['accountId'] as int?,
+        );
+      case 'getMessages':
+        return _transport.getMessages(
+          _intListValue(payload['messageIds']),
           accountId: payload['accountId'] as int?,
         );
       case 'getMessageMimeHeaders':

@@ -140,6 +140,7 @@ abstract interface class DeltaEventCore {
     int? beforeMessageId,
   });
   Future<DeltaMessage?> getMessage(int messageId);
+  Future<List<DeltaMessage>> getMessages(List<int> messageIds);
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId);
   Future<bool> downloadFullMessage(int messageId);
   Future<String?> getMessageRfc724Mid(int messageId);
@@ -194,6 +195,18 @@ final class DeltaContextEventCore implements DeltaEventCore {
   @override
   Future<DeltaMessage?> getMessage(int messageId) =>
       _context.getMessage(messageId);
+
+  @override
+  Future<List<DeltaMessage>> getMessages(List<int> messageIds) async {
+    final messages = <DeltaMessage>[];
+    for (final messageId in messageIds) {
+      final message = await _context.getMessage(messageId);
+      if (message != null) {
+        messages.add(message);
+      }
+    }
+    return messages;
+  }
 
   @override
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId) =>
@@ -639,16 +652,18 @@ class DeltaEventConsumer {
       if (filteredMsgIds.isEmpty) {
         continue;
       }
-      const int startIndex = 0;
-      for (var index = startIndex; index < filteredMsgIds.length; index++) {
-        final msg = await _core.getMessage(filteredMsgIds[index]);
-        if (msg == null) continue;
-        await _ingestDeltaMessage(
-          chatId: chatId,
-          msg: msg,
-          chat: chat,
-          skipSystemChatCheck: true,
-        );
+      const int batchSize = 32;
+      for (var index = 0; index < filteredMsgIds.length; index += batchSize) {
+        final batch = filteredMsgIds.skip(index).take(batchSize).toList();
+        final messages = await _core.getMessages(batch);
+        for (final msg in messages) {
+          await _ingestDeltaMessage(
+            chatId: chatId,
+            msg: msg,
+            chat: chat,
+            skipSystemChatCheck: true,
+          );
+        }
       }
 
       final stored = await db.getChatByDeltaChatId(

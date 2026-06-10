@@ -386,6 +386,11 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
   });
   Future<DeltaMessage?> getDraft(int chatId, {int? accountId});
   Future<DeltaMessage?> getMessage(int messageId, {int? accountId});
+
+  Future<List<DeltaMessage>> getMessages(
+    List<int> messageIds, {
+    int? accountId,
+  });
   Future<String?> getMessageMimeHeaders(int messageId, {int? accountId});
   Future<String?> getMessageRfc724Mid(int messageId, {int? accountId});
   Future<String?> getMessageInfo(int messageId, {int? accountId});
@@ -3402,6 +3407,27 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       return null;
     }
     return context.getMessage(messageId);
+  }
+
+  @override
+  Future<List<DeltaMessage>> getMessages(
+    List<int> messageIds, {
+    int? accountId,
+  }) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return const <DeltaMessage>[];
+    }
+    final messages = <DeltaMessage>[];
+    for (final messageId in messageIds) {
+      final message = await context.getMessage(messageId);
+      if (message != null) {
+        messages.add(message);
+      }
+    }
+    return messages;
   }
 
   /// Gets raw MIME headers by message ID from core.
