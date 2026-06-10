@@ -291,6 +291,9 @@ void main() {
       () => database.getEmailMessagesWithDeltaAccountNotIn(any()),
     ).thenAnswer((_) async => const <Message>[]);
     when(
+      () => database.getUnboundEmailMessagesOlderThan(any()),
+    ).thenAnswer((_) async => const <Message>[]);
+    when(
       () => transport.getChatlist(
         flags: any(named: 'flags'),
         accountId: any(named: 'accountId'),

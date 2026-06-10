@@ -1633,8 +1633,7 @@ class _ChatState extends State<Chat> {
         ? false
         : _isOneTimeAttachmentAllowed(messageModel.stanzaID);
     final locate = context.read;
-    final attachmentUsesEmailProtocol =
-        isEmailChat || messageModel.isEmailBacked;
+    final attachmentUsesEmailProtocol = messageModel.isEmailBacked;
     final emailDownloadDelegate = attachmentUsesEmailProtocol
         ? AttachmentDownloadDelegate(() async {
             return locate<ChatBloc>().downloadFullEmailMessage(messageModel);
@@ -2701,8 +2700,7 @@ class _ChatState extends State<Chat> {
     final chatDefaultTransport = isEmailChat
         ? MessageTransport.email
         : MessageTransport.xmpp;
-    final messageUsesEmailBackedProtocol =
-        isEmailChat || messageModel.isEmailBacked;
+    final messageUsesEmailBackedProtocol = messageModel.isEmailBacked;
     final canReact = messageModel.canSendXmppReaction(
       chatDefaultTransport: chatDefaultTransport,
     );

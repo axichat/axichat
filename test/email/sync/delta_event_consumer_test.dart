@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
-import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
@@ -139,12 +138,6 @@ void main() {
         emailSelfJid: any(named: 'emailSelfJid'),
       ),
     ).thenAnswer((_) async => 0);
-    when(
-      () => database.getPendingOutgoingDeltaMessages(
-        deltaAccountId: any(named: 'deltaAccountId'),
-        deltaChatId: any(named: 'deltaChatId'),
-      ),
-    ).thenAnswer((_) async => const <Message>[]);
     when(() => context.getChat(any())).thenAnswer(
       (invocation) async => DeltaChat(
         id: invocation.positionalArguments.first as int,
@@ -174,44 +167,6 @@ void main() {
         isEncrypted: true,
       ),
     );
-  });
-
-  test('attachment fallback ignores Delta text that repeats the subject', () {
-    final pending = PendingOutgoingEmailSignature.fromOutgoing(
-      subject: 'Photos',
-      fileName: 'photo.jpg',
-      fileMime: 'image/jpeg',
-      fileSizeBytes: 1234,
-    );
-    final incoming = PendingOutgoingEmailSignature.fromOutgoing(
-      subject: 'Photos',
-      text: 'Photos',
-      filePath: '/delta/copied/blob',
-      fileMime: 'image/jpeg',
-      fileSizeBytes: 1234,
-    );
-
-    expect(pending.matches(incoming), isFalse);
-    expect(pending.matchesAttachmentFileFallback(incoming), isTrue);
-  });
-
-  test('attachment fallback preserves pending caption that equals subject', () {
-    final pending = PendingOutgoingEmailSignature.fromOutgoing(
-      subject: 'Photos',
-      text: 'Photos',
-      fileName: 'photo.jpg',
-      fileMime: 'image/jpeg',
-      fileSizeBytes: 1234,
-    );
-    final incoming = PendingOutgoingEmailSignature.fromOutgoing(
-      subject: 'Photos',
-      filePath: '/delta/copied/blob',
-      fileMime: 'image/jpeg',
-      fileSizeBytes: 1234,
-    );
-
-    expect(pending.matches(incoming), isFalse);
-    expect(pending.matchesAttachmentFileFallback(incoming), isFalse);
   });
 
   test('persists incoming timestamps from Delta core', () async {
@@ -2324,12 +2279,6 @@ void main() {
         ),
       ).thenAnswer((_) async => null);
       when(
-        () => database.getPendingOutgoingDeltaMessages(
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async => [existingXmppAttachment]);
-      when(
         () => database.getFileMetadata(xmppMetadata.id),
       ).thenAnswer((_) async => xmppMetadata);
       when(
@@ -2866,75 +2815,6 @@ void main() {
         verify(() => database.updateMessage(captureAny())).captured.single
             as Message;
     expect(updated.body, 'A much longer actual email body');
-  });
-
-  test('accepts newer Delta timestamps for pending outgoing email', () async {
-    const chatId = 33;
-    const msgId = 93;
-    final chat = Chat(
-      jid: 'alice@example.com',
-      title: 'Alice',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-      transport: MessageTransport.email,
-      encryptionProtocol: EncryptionProtocol.none,
-      deltaChatId: chatId,
-    );
-    final deltaTimestamp = DateTime.utc(2024, 1, 1, 12, 10);
-    final existing = Message(
-      stanzaID: 'dc-pending-local-newer',
-      senderJid: 'me@example.com',
-      chatJid: chat.jid,
-      timestamp: DateTime.utc(2024, 1, 1, 12),
-      originID: 'existing-origin',
-      body: 'Hello',
-      deltaAccountId: DeltaAccountDefaults.legacyId,
-      deltaChatId: chatId,
-      deltaMsgId: msgId,
-    );
-    final deltaMessage = DeltaMessage(
-      id: msgId,
-      chatId: chatId,
-      text: 'Hello',
-      timestamp: deltaTimestamp,
-      isOutgoing: true,
-    );
-
-    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
-    when(
-      () => context.getMessageRfc724Mid(msgId),
-    ).thenAnswer((_) async => 'existing-origin');
-    when(
-      () => database.getChatByDeltaChatId(
-        chatId,
-        accountId: DeltaAccountDefaults.legacyId,
-      ),
-    ).thenAnswer((_) async => chat);
-    when(
-      () => database.getMessageByStanzaID('dc-msg-93'),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getMessageByDeltaId(
-        msgId,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async => existing);
-    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
-    when(() => database.updateMessage(any())).thenAnswer((_) async {});
-
-    await consumer.handle(
-      DeltaCoreEvent(
-        type: DeltaEventType.msgsChanged.code,
-        data1: chatId,
-        data2: msgId,
-      ),
-    );
-
-    final updated =
-        verify(() => database.updateMessage(captureAny())).captured.single
-            as Message;
-    expect(updated.timestamp, deltaTimestamp);
   });
 
   test(
@@ -3507,6 +3387,7 @@ void main() {
           contactAddress: 'chat-99@delta.chat',
         ),
       );
+      when(() => context.getChat(chatId)).thenAnswer((_) async => null);
       when(
         () => database.getEmailChatAccountsForAccount(
           DeltaAccountDefaults.legacyId,
@@ -3559,6 +3440,81 @@ void main() {
         ),
       ).called(1);
       verifyNever(() => database.removeChat(chat.jid));
+    },
+  );
+
+  test(
+    'refreshChatlistSnapshot keeps chats transiently missing from the chatlist',
+    () async {
+      const chatId = 18;
+      final chat = Chat(
+        jid: 'transient@axi.im',
+        title: 'Transient',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.xmpp,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+        emailAddress: 'transient@example.com',
+      );
+      when(() => context.getChatlist()).thenAnswer(
+        (_) async => const [
+          DeltaChatlistEntry(chatId: 99, msgId: DeltaMessageId.dayMarker),
+        ],
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(() => context.getChat(99)).thenAnswer(
+        (_) async => const DeltaChat(
+          id: 99,
+          name: 'System',
+          contactAddress: 'chat-99@delta.chat',
+        ),
+      );
+      when(() => context.getChat(chatId)).thenAnswer(
+        (_) async => const DeltaChat(
+          id: chatId,
+          name: 'Transient',
+          contactAddress: 'transient@example.com',
+        ),
+      );
+      when(
+        () => database.getEmailChatAccountsForAccount(
+          DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => const [
+          EmailChatAccountData(
+            chatJid: 'transient@axi.im',
+            deltaAccountId: DeltaAccountDefaults.legacyId,
+            deltaChatId: chatId,
+          ),
+        ],
+      );
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await consumer.refreshChatlistSnapshot();
+
+      verifyNever(
+        () => database.deleteEmailChatAccount(
+          chatJid: any(named: 'chatJid'),
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      );
+      verifyNever(
+        () => database.trimChatMessages(
+          jid: any(named: 'jid'),
+          maxMessages: any(named: 'maxMessages'),
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
+      verifyNever(() => database.removeChat(any()));
     },
   );
 
@@ -4001,680 +3957,6 @@ void main() {
     },
   );
 
-  test('does not match a stale pending outgoing email hours later', () async {
-    const chatId = 9;
-    const msgId = 41;
-    final chat = Chat(
-      jid: 'alice@example.com',
-      title: 'Alice',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-      transport: MessageTransport.email,
-      encryptionProtocol: EncryptionProtocol.none,
-      deltaChatId: chatId,
-    );
-    final stalePending = Message(
-      stanzaID: 'dc-pending-1',
-      senderJid: 'me@example.com',
-      chatJid: chat.jid,
-      timestamp: DateTime.utc(2024, 1, 1, 9),
-      subject: 'Status',
-      body: 'ok',
-      originID: 'pending-origin',
-      deltaAccountId: DeltaAccountDefaults.legacyId,
-      deltaChatId: chatId,
-    );
-    final deltaTimestamp = DateTime.utc(2024, 1, 1, 15);
-    final deltaMessage = DeltaMessage(
-      id: msgId,
-      chatId: chatId,
-      subject: 'Status',
-      text: 'ok',
-      timestamp: deltaTimestamp,
-      isOutgoing: true,
-    );
-
-    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
-    when(
-      () => database.getChatByDeltaChatId(
-        chatId,
-        accountId: DeltaAccountDefaults.legacyId,
-      ),
-    ).thenAnswer((_) async => chat);
-    when(
-      () => database.upsertEmailChatAccount(
-        chatJid: chat.jid,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.getMessageByStanzaID('dc-msg-$msgId'),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getMessageByDeltaId(
-        msgId,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getMessageByDeltaId(msgId, chatJid: chat.jid),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getPendingOutgoingDeltaMessages(
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async => [stalePending]);
-    when(() => database.updateChat(any())).thenAnswer((_) async {});
-    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
-
-    await consumer.handle(
-      DeltaCoreEvent(
-        type: DeltaEventType.msgsChanged.code,
-        data1: chatId,
-        data2: msgId,
-      ),
-    );
-
-    final persisted =
-        verify(
-              () => database.saveMessage(
-                captureAny(),
-                selfJid: any(named: 'selfJid'),
-              ),
-            ).captured.first
-            as Message;
-    expect(persisted.stanzaID, isNotEmpty);
-    expect(persisted.deltaMsgId, msgId);
-    expect(persisted.timestamp, deltaTimestamp);
-    verifyNever(() => database.updateMessage(any()));
-  });
-
-  test(
-    'matches a pending outgoing email when Delta uses the empty-subject sentinel',
-    () async {
-      const chatId = 12;
-      const msgId = 52;
-      final chat = Chat(
-        jid: 'alice@example.com',
-        title: 'Alice',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-        transport: MessageTransport.email,
-        encryptionProtocol: EncryptionProtocol.none,
-        deltaChatId: chatId,
-      );
-      final pending = Message(
-        stanzaID: 'dc-pending-nosubject',
-        senderJid: 'me@example.com',
-        chatJid: chat.jid,
-        timestamp: DateTime.utc(2024, 1, 1, 9),
-        body: 'Body without subject',
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      );
-      final deltaMessage = DeltaMessage(
-        id: msgId,
-        chatId: chatId,
-        subject: '\u2060',
-        text: 'Body without subject',
-        timestamp: DateTime.utc(2024, 1, 1, 9, 0, 30),
-        isOutgoing: true,
-      );
-
-      when(
-        () => context.getMessage(msgId),
-      ).thenAnswer((_) async => deltaMessage);
-      when(
-        () => database.getChatByDeltaChatId(
-          chatId,
-          accountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer((_) async => chat);
-      when(
-        () => database.upsertEmailChatAccount(
-          chatJid: chat.jid,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getMessageByDeltaId(
-          msgId,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getMessageByDeltaId(msgId, chatJid: chat.jid),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getPendingOutgoingDeltaMessages(
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async => [pending]);
-      when(() => database.updateMessage(any())).thenAnswer((_) async {});
-      when(() => database.updateChat(any())).thenAnswer((_) async {});
-      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
-
-      await consumer.handle(
-        DeltaCoreEvent(
-          type: DeltaEventType.msgsChanged.code,
-          data1: chatId,
-          data2: msgId,
-        ),
-      );
-
-      verifyNever(
-        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
-      );
-      expect(
-        verify(() => database.updateMessage(captureAny())).captured.any(
-          (value) =>
-              value is Message &&
-              value.stanzaID == pending.stanzaID &&
-              value.deltaMsgId == msgId &&
-              value.subject == null,
-        ),
-        isTrue,
-      );
-    },
-  );
-
-  test(
-    'matches attachment-only pending outgoing email when Delta omits file name',
-    () async {
-      const chatId = 12;
-      const msgId = 53;
-      final chat = Chat(
-        jid: 'alice@example.com',
-        title: 'Alice',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-        transport: MessageTransport.email,
-        encryptionProtocol: EncryptionProtocol.none,
-        deltaChatId: chatId,
-      );
-      final pendingMetadata = FileMetadataData(
-        id: 'pending-attachment',
-        filename: 'photo.jpg',
-        path: '/local/photo.jpg',
-        mimeType: 'image/jpeg',
-        sizeBytes: 1234,
-      );
-      final pending = Message(
-        stanzaID: 'dc-pending-attachment-message',
-        senderJid: 'me@example.com',
-        chatJid: chat.jid,
-        timestamp: DateTime.utc(2024, 1, 1, 9),
-        id: 'message-row-53',
-        fileMetadataID: pendingMetadata.id,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      );
-      final deltaMessage = DeltaMessage(
-        id: msgId,
-        chatId: chatId,
-        filePath: '/delta/copied/blob',
-        fileMime: 'image/jpeg',
-        fileSize: 1234,
-        timestamp: DateTime.utc(2024, 1, 1, 9, 0, 30),
-        isOutgoing: true,
-        state: DeltaMessageState.outDelivered,
-      );
-
-      when(
-        () => context.getMessage(msgId),
-      ).thenAnswer((_) async => deltaMessage);
-      when(
-        () => database.getChatByDeltaChatId(
-          chatId,
-          accountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer((_) async => chat);
-      when(
-        () => database.upsertEmailChatAccount(
-          chatJid: chat.jid,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getMessageByDeltaId(
-          msgId,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getMessageByDeltaId(msgId, chatJid: chat.jid),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getPendingOutgoingDeltaMessages(
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async => [pending]);
-      when(
-        () => database.getFileMetadata(pendingMetadata.id),
-      ).thenAnswer((_) async => pendingMetadata);
-      when(
-        () => database.getFileMetadata(deltaFileMetadataId(msgId)),
-      ).thenAnswer((_) async => null);
-      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
-      when(
-        () => database.replaceMessageAttachments(
-          messageId: pending.id!,
-          fileMetadataIds: any<List<String>>(named: 'fileMetadataIds'),
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.deleteFileMetadata(pendingMetadata.id),
-      ).thenAnswer((_) async {});
-      when(() => database.updateMessage(any())).thenAnswer((_) async {});
-      when(() => database.updateChat(any())).thenAnswer((_) async {});
-
-      await consumer.handle(
-        DeltaCoreEvent(
-          type: DeltaEventType.msgsChanged.code,
-          data1: chatId,
-          data2: msgId,
-        ),
-      );
-
-      verifyNever(
-        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
-      );
-      expect(
-        verify(() => database.updateMessage(captureAny())).captured.any(
-          (value) =>
-              value is Message &&
-              value.stanzaID == pending.stanzaID &&
-              value.deltaMsgId == msgId &&
-              value.acked &&
-              value.received &&
-              value.fileMetadataID == deltaFileMetadataId(msgId),
-        ),
-        isTrue,
-      );
-      final savedMetadata =
-          verify(() => database.saveFileMetadata(captureAny())).captured.single
-              as FileMetadataData;
-      expect(savedMetadata.id, deltaFileMetadataId(msgId));
-      expect(savedMetadata.filename, 'photo.jpg');
-      expect(savedMetadata.path, '/delta/copied/blob');
-      final directAttachmentMetadata =
-          verify(
-                () => database.updateMessageAttachment(
-                  stanzaID: pending.stanzaID,
-                  metadata: captureAny<FileMetadataData>(named: 'metadata'),
-                ),
-              ).captured.single
-              as FileMetadataData;
-      expect(directAttachmentMetadata.id, deltaFileMetadataId(msgId));
-      final replacementIds =
-          verify(
-                () => database.replaceMessageAttachments(
-                  messageId: pending.id!,
-                  fileMetadataIds: captureAny<List<String>>(
-                    named: 'fileMetadataIds',
-                  ),
-                ),
-              ).captured.single
-              as List<String>;
-      expect(replacementIds, [deltaFileMetadataId(msgId)]);
-      verify(() => database.deleteFileMetadata(pendingMetadata.id)).called(1);
-    },
-  );
-
-  test(
-    'matches captioned attachment pending outgoing email when Delta omits file name',
-    () async {
-      const chatId = 12;
-      const msgId = 54;
-      final chat = Chat(
-        jid: 'alice@example.com',
-        title: 'Alice',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-        transport: MessageTransport.email,
-        encryptionProtocol: EncryptionProtocol.none,
-        deltaChatId: chatId,
-      );
-      final pendingMetadata = FileMetadataData(
-        id: 'pending-captioned-attachment',
-        filename: 'photo.jpg',
-        path: '/local/photo.jpg',
-        mimeType: 'image/jpeg',
-        sizeBytes: 1234,
-      );
-      final pending = Message(
-        stanzaID: 'dc-pending-captioned-attachment-message',
-        senderJid: 'me@example.com',
-        chatJid: chat.jid,
-        timestamp: DateTime.utc(2024, 1, 1, 9),
-        body: 'Caption',
-        fileMetadataID: pendingMetadata.id,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      );
-      final deltaMessage = DeltaMessage(
-        id: msgId,
-        chatId: chatId,
-        text: 'Caption',
-        filePath: '/delta/copied/blob',
-        fileMime: 'image/jpeg',
-        fileSize: 1234,
-        timestamp: DateTime.utc(2024, 1, 1, 9, 0, 30),
-        isOutgoing: true,
-        state: DeltaMessageState.outDelivered,
-      );
-
-      when(
-        () => context.getMessage(msgId),
-      ).thenAnswer((_) async => deltaMessage);
-      when(
-        () => database.getChatByDeltaChatId(
-          chatId,
-          accountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer((_) async => chat);
-      when(
-        () => database.upsertEmailChatAccount(
-          chatJid: chat.jid,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getMessageByDeltaId(
-          msgId,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-        ),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getMessageByDeltaId(msgId, chatJid: chat.jid),
-      ).thenAnswer((_) async => null);
-      when(
-        () => database.getPendingOutgoingDeltaMessages(
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
-        ),
-      ).thenAnswer((_) async => [pending]);
-      when(
-        () => database.getFileMetadata(pendingMetadata.id),
-      ).thenAnswer((_) async => pendingMetadata);
-      when(
-        () => database.getFileMetadata(deltaFileMetadataId(msgId)),
-      ).thenAnswer((_) async => null);
-      when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
-      when(() => database.updateMessage(any())).thenAnswer((_) async {});
-      when(() => database.updateChat(any())).thenAnswer((_) async {});
-
-      await consumer.handle(
-        DeltaCoreEvent(
-          type: DeltaEventType.msgsChanged.code,
-          data1: chatId,
-          data2: msgId,
-        ),
-      );
-
-      verifyNever(
-        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
-      );
-      expect(
-        verify(() => database.updateMessage(captureAny())).captured.any(
-          (value) =>
-              value is Message &&
-              value.stanzaID == pending.stanzaID &&
-              value.deltaMsgId == msgId &&
-              value.body == 'Caption' &&
-              value.acked &&
-              value.received &&
-              value.fileMetadataID == deltaFileMetadataId(msgId),
-        ),
-        isTrue,
-      );
-    },
-  );
-
-  test('does not match attachment fallback when caption differs', () async {
-    const chatId = 12;
-    const msgId = 55;
-    final chat = Chat(
-      jid: 'alice@example.com',
-      title: 'Alice',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-      transport: MessageTransport.email,
-      encryptionProtocol: EncryptionProtocol.none,
-      deltaChatId: chatId,
-    );
-    final pendingMetadata = FileMetadataData(
-      id: 'pending-different-caption-attachment',
-      filename: 'photo.jpg',
-      path: '/local/photo.jpg',
-      mimeType: 'image/jpeg',
-      sizeBytes: 1234,
-    );
-    final pending = Message(
-      stanzaID: 'dc-pending-different-caption-attachment-message',
-      senderJid: 'me@example.com',
-      chatJid: chat.jid,
-      timestamp: DateTime.utc(2024, 1, 1, 9),
-      subject: 'Photos',
-      body: 'Original caption',
-      fileMetadataID: pendingMetadata.id,
-      deltaAccountId: DeltaAccountDefaults.legacyId,
-      deltaChatId: chatId,
-    );
-    final deltaMessage = DeltaMessage(
-      id: msgId,
-      chatId: chatId,
-      subject: 'Photos',
-      text: 'Different caption',
-      filePath: '/delta/copied/blob',
-      fileMime: 'image/jpeg',
-      fileSize: 1234,
-      timestamp: DateTime.utc(2024, 1, 1, 9, 0, 30),
-      isOutgoing: true,
-      state: DeltaMessageState.outDelivered,
-    );
-
-    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
-    when(
-      () => database.getChatByDeltaChatId(
-        chatId,
-        accountId: DeltaAccountDefaults.legacyId,
-      ),
-    ).thenAnswer((_) async => chat);
-    when(
-      () => database.upsertEmailChatAccount(
-        chatJid: chat.jid,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.getMessageByStanzaID('dc-msg-$msgId'),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getMessageByDeltaId(
-        msgId,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-      ),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getMessageByDeltaId(msgId, chatJid: chat.jid),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getPendingOutgoingDeltaMessages(
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async => [pending]);
-    when(
-      () => database.getFileMetadata(pendingMetadata.id),
-    ).thenAnswer((_) async => pendingMetadata);
-    when(
-      () => database.getFileMetadata(deltaFileMetadataId(msgId)),
-    ).thenAnswer((_) async => null);
-    when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
-    when(() => database.updateChat(any())).thenAnswer((_) async {});
-
-    await consumer.handle(
-      DeltaCoreEvent(
-        type: DeltaEventType.msgsChanged.code,
-        data1: chatId,
-        data2: msgId,
-      ),
-    );
-
-    final persisted =
-        verify(
-              () => database.saveMessage(
-                captureAny(),
-                selfJid: any(named: 'selfJid'),
-              ),
-            ).captured.first
-            as Message;
-    expect(persisted.stanzaID, isNotEmpty);
-    expect(persisted.deltaMsgId, msgId);
-    expect(persisted.body, 'Different caption');
-    verifyNever(() => database.updateMessage(any()));
-  });
-
-  test('does not match ambiguous attachment fallback candidates', () async {
-    const chatId = 12;
-    const msgId = 56;
-    final chat = Chat(
-      jid: 'alice@example.com',
-      title: 'Alice',
-      type: ChatType.chat,
-      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
-      transport: MessageTransport.email,
-      encryptionProtocol: EncryptionProtocol.none,
-      deltaChatId: chatId,
-    );
-    final firstMetadata = FileMetadataData(
-      id: 'pending-ambiguous-attachment-one',
-      filename: 'one.jpg',
-      path: '/local/one.jpg',
-      mimeType: 'image/jpeg',
-      sizeBytes: 1234,
-    );
-    final secondMetadata = FileMetadataData(
-      id: 'pending-ambiguous-attachment-two',
-      filename: 'two.jpg',
-      path: '/local/two.jpg',
-      mimeType: 'image/jpeg',
-      sizeBytes: 1234,
-    );
-    final pendingTimestamp = DateTime.utc(2024, 1, 1, 9);
-    final firstPending = Message(
-      stanzaID: 'dc-pending-ambiguous-attachment-message-one',
-      senderJid: 'me@example.com',
-      chatJid: chat.jid,
-      timestamp: pendingTimestamp,
-      fileMetadataID: firstMetadata.id,
-      deltaAccountId: DeltaAccountDefaults.legacyId,
-      deltaChatId: chatId,
-    );
-    final secondPending = Message(
-      stanzaID: 'dc-pending-ambiguous-attachment-message-two',
-      senderJid: 'me@example.com',
-      chatJid: chat.jid,
-      timestamp: pendingTimestamp,
-      fileMetadataID: secondMetadata.id,
-      deltaAccountId: DeltaAccountDefaults.legacyId,
-      deltaChatId: chatId,
-    );
-    final deltaMessage = DeltaMessage(
-      id: msgId,
-      chatId: chatId,
-      filePath: '/delta/copied/blob',
-      fileMime: 'image/jpeg',
-      fileSize: 1234,
-      timestamp: DateTime.utc(2024, 1, 1, 9, 0, 30),
-      isOutgoing: true,
-      state: DeltaMessageState.outDelivered,
-    );
-
-    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
-    when(
-      () => database.getChatByDeltaChatId(
-        chatId,
-        accountId: DeltaAccountDefaults.legacyId,
-      ),
-    ).thenAnswer((_) async => chat);
-    when(
-      () => database.upsertEmailChatAccount(
-        chatJid: chat.jid,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.getMessageByStanzaID('dc-msg-$msgId'),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getMessageByDeltaId(
-        msgId,
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-      ),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getMessageByDeltaId(msgId, chatJid: chat.jid),
-    ).thenAnswer((_) async => null);
-    when(
-      () => database.getPendingOutgoingDeltaMessages(
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
-      ),
-    ).thenAnswer((_) async => [firstPending, secondPending]);
-    when(
-      () => database.getFileMetadata(firstMetadata.id),
-    ).thenAnswer((_) async => firstMetadata);
-    when(
-      () => database.getFileMetadata(secondMetadata.id),
-    ).thenAnswer((_) async => secondMetadata);
-    when(
-      () => database.getFileMetadata(deltaFileMetadataId(msgId)),
-    ).thenAnswer((_) async => null);
-    when(() => database.saveFileMetadata(any())).thenAnswer((_) async {});
-    when(() => database.updateChat(any())).thenAnswer((_) async {});
-
-    await consumer.handle(
-      DeltaCoreEvent(
-        type: DeltaEventType.msgsChanged.code,
-        data1: chatId,
-        data2: msgId,
-      ),
-    );
-
-    final persisted =
-        verify(
-              () => database.saveMessage(
-                captureAny(),
-                selfJid: any(named: 'selfJid'),
-              ),
-            ).captured.first
-            as Message;
-    expect(persisted.stanzaID, isNotEmpty);
-    expect(persisted.deltaMsgId, msgId);
-    verifyNever(() => database.updateMessage(any()));
-  });
-
   test(
     'ingests peer emails that match the sync placeholder copy outside the self chat',
     () async {
@@ -4826,4 +4108,62 @@ void main() {
       );
     },
   );
+
+  test('outgoing echo without a bound row stores a separate row', () async {
+    const chatId = 44;
+    const msgId = 144;
+    final chat = Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      transport: MessageTransport.email,
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: chatId,
+    );
+    final deltaMessage = DeltaMessage(
+      id: msgId,
+      chatId: chatId,
+      text: 'Echo body',
+      timestamp: DateTime.utc(2024, 1, 2, 9),
+      isOutgoing: true,
+    );
+
+    when(() => context.getMessage(msgId)).thenAnswer((_) async => deltaMessage);
+    when(
+      () => database.getChatByDeltaChatId(
+        chatId,
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).thenAnswer((_) async => chat);
+    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+    when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+    await consumer.handle(
+      DeltaCoreEvent(
+        type: DeltaEventType.msgsChanged.code,
+        data1: chatId,
+        data2: msgId,
+      ),
+    );
+
+    verifyNever(
+      () => database.getPendingOutgoingDeltaMessages(
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
+    );
+    verifyNever(() => database.updateMessage(any()));
+    final saved =
+        verify(
+              () => database.saveMessage(
+                captureAny(),
+                selfJid: any(named: 'selfJid'),
+              ),
+            ).captured.single
+            as Message;
+    expect(saved.deltaMsgId, msgId);
+    expect(saved.deltaChatId, chatId);
+    expect(saved.body, 'Echo body');
+  });
 }

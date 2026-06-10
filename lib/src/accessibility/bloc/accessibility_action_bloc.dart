@@ -39,7 +39,7 @@ class AccessibilityActionBloc
     on<AccessibilityDataUpdated>(_onDataUpdated);
     on<AccessibilityDraftIdUpdated>(_onDraftIdUpdated);
 
-    _chatSubscription = _chatsService.chatsStream().listen(
+    _chatSubscription = _chatsService.allChatsStream().listen(
       (items) => add(AccessibilityDataUpdated(chats: items)),
     );
     _draftSubscription = _messageService.draftsStream().listen(

@@ -2213,7 +2213,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _roomRosterSubscription = xmppService.rosterStream().listen((items) {
       add(_RoomRosterUpdated(items));
     });
-    _roomChatsSubscription = _chatsService.chatsStream().listen((items) {
+    _roomChatsSubscription = _chatsService.allChatsStream().listen((items) {
       add(_RoomChatsUpdated(items));
     });
     _roomSelfAvatarSubscription = xmppService.selfAvatarStream.listen(

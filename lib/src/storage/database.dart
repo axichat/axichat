@@ -183,6 +183,8 @@ abstract interface class XmppDatabase implements Database {
     List<int> validAccountIds,
   );
 
+  Future<List<Message>> getUnboundEmailMessagesOlderThan(DateTime cutoff);
+
   Future<List<Message>> getMessagesByReferenceIds(
     Iterable<String> messageIds, {
     String? chatJid,
@@ -685,6 +687,14 @@ abstract interface class XmppDatabase implements Database {
   Stream<List<Chat>> watchChats({required int start, required int end});
 
   Future<List<Chat>> getChats({required int start, required int end});
+
+  Stream<List<Chat>> watchHomeChats({required int recentLimit});
+
+  Future<List<Chat>> getHomeChats({required int recentLimit});
+
+  Stream<List<Chat>> watchAllChats();
+
+  Future<List<Chat>> getAllChats();
 
   Stream<List<Chat>> watchUnreadChatsForFolderBadges();
 
@@ -1744,6 +1754,31 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   Future<List<Chat>> selectRange({required int start, required int end}) =>
       _orderedRangeQuery(start: start, end: end).get();
 
+  Stream<List<Chat>> watchHome({required int recentLimit}) =>
+      _homeQuery(recentLimit: recentLimit).watch();
+
+  Future<List<Chat>> selectHome({required int recentLimit}) =>
+      _homeQuery(recentLimit: recentLimit).get();
+
+  SimpleSelectStatement<$ChatsTable, Chat> _homeQuery({
+    required int recentLimit,
+  }) {
+    final recentJids = selectOnly(table)
+      ..addColumns([table.jid])
+      ..orderBy([
+        OrderingTerm(
+          expression: table.lastChangeTimestamp,
+          mode: OrderingMode.desc,
+        ),
+        OrderingTerm(expression: table.jid, mode: OrderingMode.asc),
+      ])
+      ..limit(recentLimit);
+    return _orderedQuery()..where(
+      (tbl) =>
+          tbl.unreadCount.isBiggerThanValue(0) | tbl.jid.isInQuery(recentJids),
+    );
+  }
+
   Stream<List<Chat>> watchUnreadForFolderBadges() =>
       _unreadFolderBadgeQuery().watch();
 
@@ -2529,6 +2564,7 @@ WHERE transport = ${MessageTransport.email.index}
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
         await _repairRestoredArchiveJids();
+        await repairMixedChatTransports();
       },
     );
   }
@@ -3372,6 +3408,19 @@ WHERE transport = ${MessageTransport.email.index}
         (tbl) =>
             tbl.deltaMsgId.isNotNull() &
             tbl.deltaAccountId.isNotIn(validAccountIds),
+      );
+    return query.get();
+  }
+
+  @override
+  Future<List<Message>> getUnboundEmailMessagesOlderThan(DateTime cutoff) {
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.deltaChatId.isNotNull() &
+            tbl.deltaMsgId.isNull() &
+            tbl.error.equalsValue(MessageError.none) &
+            tbl.timestamp.isSmallerThanValue(cutoff),
       );
     return query.get();
   }
@@ -7313,6 +7362,26 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   @override
+  Stream<List<Chat>> watchHomeChats({required int recentLimit}) {
+    return chatsAccessor.watchHome(recentLimit: recentLimit);
+  }
+
+  @override
+  Future<List<Chat>> getHomeChats({required int recentLimit}) {
+    return chatsAccessor.selectHome(recentLimit: recentLimit);
+  }
+
+  @override
+  Stream<List<Chat>> watchAllChats() {
+    return chatsAccessor.watchAll();
+  }
+
+  @override
+  Future<List<Chat>> getAllChats() {
+    return chatsAccessor.selectAll();
+  }
+
+  @override
   Stream<List<Chat>> watchUnreadChatsForFolderBadges() {
     return chatsAccessor.watchUnreadForFolderBadges();
   }
@@ -7631,13 +7700,31 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       pseudoMessageType: lastMessage?.pseudoMessageType,
       pseudoMessageData: lastMessage?.pseudoMessageData,
     );
+    final resolvedTransport = await _resolveCreatedChatTransport(chat);
 
     return await chatsAccessor.insertOne(
       chat.copyWith(
+        transport: resolvedTransport,
         lastMessage: lastMessagePreview,
         lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
       ),
     );
+  }
+
+  Future<MessageTransport> _resolveCreatedChatTransport(Chat chat) async {
+    if (chat.transport != MessageTransport.email ||
+        chat.type != ChatType.chat) {
+      return chat.transport;
+    }
+    final bareJid = bareAddress(chat.jid) ?? chat.jid.trim();
+    if (bareJid.isEmpty) {
+      return chat.transport;
+    }
+    final rosterItem = await rosterAccessor.selectOne(bareJid);
+    if (rosterItem == null) {
+      return chat.transport;
+    }
+    return MessageTransport.xmpp;
   }
 
   @override
@@ -7646,6 +7733,18 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   @override
   Future<void> markDirectChatXmppCapable(String jid) async {
     await _markDirectChatsXmppCapable([jid]);
+  }
+
+  Future<void> repairMixedChatTransports() async {
+    final rosterItems = await rosterAccessor.selectAll();
+    if (rosterItems.isEmpty) {
+      return;
+    }
+    final jids = rosterItems
+        .map((item) => bareAddress(item.jid) ?? item.jid.trim())
+        .where((jid) => jid.isNotEmpty)
+        .toList(growable: false);
+    await _markDirectChatsXmppCapable(jids);
   }
 
   Future<void> _markDirectChatsXmppCapable(Iterable<String> jids) async {

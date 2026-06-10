@@ -593,6 +593,25 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         return items;
       });
 
+  Stream<List<Chat>> homeChatsStream({
+    int recentLimit = _defaultChatPreloadLimit,
+  }) =>
+      createPaginatedStream<Chat, XmppDatabase>(
+        watchFunction: (db) async =>
+            db.watchHomeChats(recentLimit: recentLimit).map(sortChats),
+        getFunction: (db) async =>
+            sortChats(await db.getHomeChats(recentLimit: recentLimit)),
+      ).map((items) {
+        _cacheSortedChatList(chats: items, limit: recentLimit);
+        return items;
+      });
+
+  Stream<List<Chat>> allChatsStream() =>
+      createPaginatedStream<Chat, XmppDatabase>(
+        watchFunction: (db) async => db.watchAllChats().map(sortChats),
+        getFunction: (db) async => sortChats(await db.getAllChats()),
+      );
+
   Future<List<Chat>?> preloadChatList({
     int limit = _defaultChatPreloadLimit,
   }) async {

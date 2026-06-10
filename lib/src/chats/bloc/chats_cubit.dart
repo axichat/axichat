@@ -208,7 +208,7 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   StreamSubscription<List<Chat>> _listenToChats({required int limit}) =>
       _chatsService
-          .chatsStream(start: 0, end: limit)
+          .homeChatsStream(recentLimit: limit)
           .listen((items) => _updateChats(items));
 
   Future<void> loadMoreChats() async {

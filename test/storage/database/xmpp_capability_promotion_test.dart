@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:axichat/src/common/transport.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:drift/native.dart';
@@ -246,6 +247,79 @@ void main() {
       expect(await database.getChat(newJid), isNull);
       expect(await database.getRosterItem(existingJid), isNotNull);
       expect(await database.getRosterItem(newJid), isNotNull);
+    },
+  );
+
+  test(
+    'email chat created for a roster contact lands as XMPP transport',
+    () async {
+      const jid = 'late-delta@axi.im';
+      await database.saveRosterItemsOnly([RosterItem.fromJid(jid)]);
+
+      await database.createChat(
+        Chat(
+          jid: jid,
+          title: 'Late Delta',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+          transport: MessageTransport.email,
+          deltaChatId: 21,
+          emailAddress: 'late-delta@example.com',
+        ),
+      );
+
+      final chat = await database.getChat(jid);
+      expect(chat?.transport, MessageTransport.xmpp);
+      expect(chat?.deltaChatId, 21);
+      expect(chat?.emailAddress, 'late-delta@example.com');
+    },
+  );
+
+  test(
+    'email chat created without roster evidence stays email transport',
+    () async {
+      const jid = 'pure-email@example.com';
+      await database.createChat(
+        Chat(
+          jid: jid,
+          title: 'Pure Email',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+          transport: MessageTransport.email,
+          deltaChatId: 22,
+        ),
+      );
+
+      expect((await database.getChat(jid))?.transport, MessageTransport.email);
+    },
+  );
+
+  test(
+    'repairMixedChatTransports flips email chats with roster evidence',
+    () async {
+      const jid = 'repair-me@axi.im';
+      await database.createChat(
+        Chat(
+          jid: jid,
+          title: 'Repair Me',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+          transport: MessageTransport.email,
+          deltaChatId: 23,
+        ),
+      );
+      await database.saveRosterItemsOnly([RosterItem.fromJid(jid)]);
+      await (database.update(
+        database.chats,
+      )..where((tbl) => tbl.jid.equals(jid))).write(
+        const ChatsCompanion(transport: Value(MessageTransport.email)),
+      );
+
+      await database.repairMixedChatTransports();
+
+      final chat = await database.getChat(jid);
+      expect(chat?.transport, MessageTransport.xmpp);
+      expect(chat?.deltaChatId, 23);
     },
   );
 }

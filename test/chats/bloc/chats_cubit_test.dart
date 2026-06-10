@@ -58,6 +58,9 @@ void main() {
       ),
     ).thenAnswer((_) => chatsStreamController.stream);
     when(
+      () => xmppService.homeChatsStream(recentLimit: any(named: 'recentLimit')),
+    ).thenAnswer((_) => chatsStreamController.stream);
+    when(
       () => xmppService.recipientAddressSuggestionsStream(),
     ).thenAnswer((_) => const Stream<List<String>>.empty());
     when(
@@ -92,8 +95,8 @@ void main() {
 
     await cubit.loadMoreChats();
 
-    verify(() => xmppService.chatsStream(start: 0, end: 50)).called(1);
-    verify(() => xmppService.chatsStream(start: 0, end: 100)).called(1);
+    verify(() => xmppService.homeChatsStream(recentLimit: 50)).called(1);
+    verify(() => xmppService.homeChatsStream(recentLimit: 100)).called(1);
   });
 
   test('spam search filters and query are applied in cubit', () async {
@@ -497,6 +500,11 @@ void main() {
       ),
     ).thenAnswer((_) => const Stream<List<Chat>>.empty());
     when(
+      () => xmppMucService.homeChatsStream(
+        recentLimit: any(named: 'recentLimit'),
+      ),
+    ).thenAnswer((_) => const Stream<List<Chat>>.empty());
+    when(
       () => xmppMucService.recipientAddressSuggestionsStream(),
     ).thenAnswer((_) => const Stream<List<String>>.empty());
     when(
@@ -530,6 +538,11 @@ void main() {
       () => xmppMucService.chatsStream(
         start: any(named: 'start'),
         end: any(named: 'end'),
+      ),
+    ).thenAnswer((_) => const Stream<List<Chat>>.empty());
+    when(
+      () => xmppMucService.homeChatsStream(
+        recentLimit: any(named: 'recentLimit'),
       ),
     ).thenAnswer((_) => const Stream<List<Chat>>.empty());
     when(

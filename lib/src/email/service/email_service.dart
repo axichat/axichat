@@ -830,6 +830,12 @@ class EmailService {
   bool _imapCapabilitiesResolved = false;
 
   bool _deltaAccountRepairCompleted = false;
+
+  bool _orphanedPendingEmailSweepCompleted = false;
+
+  Future<bool>? _backgroundFetchInFlight;
+
+  static const Duration _orphanedPendingEmailCutoff = Duration(minutes: 10);
   Timer? _imapSyncTimer;
   Object? _imapSyncLoopToken;
   final EmailAsyncQueue _imapSyncQueue = EmailAsyncQueue();
@@ -3939,6 +3945,22 @@ class EmailService {
 
   Future<bool> performBackgroundFetch({
     Duration timeout = _imapSyncFetchTimeout,
+  }) {
+    final active = _backgroundFetchInFlight;
+    if (active != null) {
+      return active;
+    }
+    final task = _performBackgroundFetchExclusive(timeout: timeout);
+    _backgroundFetchInFlight = task;
+    return task.whenComplete(() {
+      if (identical(_backgroundFetchInFlight, task)) {
+        _backgroundFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<bool> _performBackgroundFetchExclusive({
+    required Duration timeout,
   }) async {
     if (_nativeCleanupPending || _blocksRuntimeReentry) {
       return false;
@@ -6214,7 +6236,27 @@ class EmailService {
       return false;
     }
     await _repairStoredDeltaAccountIdsOnce();
+    await _failOrphanedPendingEmailOnce();
     return true;
+  }
+
+  Future<void> _failOrphanedPendingEmailOnce() async {
+    if (_orphanedPendingEmailSweepCompleted) {
+      return;
+    }
+    _orphanedPendingEmailSweepCompleted = true;
+    final cutoff = DateTime.timestamp().subtract(_orphanedPendingEmailCutoff);
+    final db = await _databaseBuilder();
+    final orphans = await db.getUnboundEmailMessagesOlderThan(cutoff);
+    for (final orphan in orphans) {
+      await db.saveMessageError(
+        stanzaID: orphan.stanzaID,
+        error: MessageError.emailSendFailure,
+      );
+    }
+    if (orphans.isNotEmpty) {
+      _log.info('Failed ${orphans.length} orphaned pending email sends.');
+    }
   }
 
   Future<void> _repairStoredDeltaAccountIdsOnce() async {

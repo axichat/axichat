@@ -15,7 +15,6 @@ import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
-import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
 import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart'
@@ -546,6 +545,7 @@ class DeltaEventConsumer {
   DateTime? _archivedChatlistFetchedAt;
   final Set<int> _archivedChatIds = <int>{};
   final EmailAsyncQueue _autoDownloadQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _eventQueue = EmailAsyncQueue();
   final EmailAsyncQueue _originIdHydrationQueue = EmailAsyncQueue();
   final Set<int> _originIdHydrationPending = <int>{};
   final Map<String, int> _learnedAutocryptContactKeyChatIds = <String, int>{};
@@ -735,6 +735,10 @@ class DeltaEventConsumer {
           continue;
         }
         if (!knownChatIds.contains(deltaChatId)) {
+          if (await _core.getChat(deltaChatId) != null) {
+            continue;
+          }
+          if (cancelled()) return;
           final chat = await db.getChat(emailChatAccount.chatJid);
           if (chat == null) {
             await db.deleteEmailChatAccount(
@@ -975,9 +979,14 @@ class DeltaEventConsumer {
     return imported;
   }
 
-  Future<void> handle(DeltaCoreEvent event) async {
+  Future<void> handle(DeltaCoreEvent event) {
+    return _eventQueue.run(() => _handleSerialized(event));
+  }
+
+  Future<void> _handleSerialized(DeltaCoreEvent event) async {
     final eventType = DeltaEventType.fromCode(event.type);
     if (eventType == null) {
+      _log.fine('Ignoring unknown Delta event code ${event.type}.');
       return;
     }
     switch (eventType) {
@@ -1318,43 +1327,6 @@ class DeltaEventConsumer {
         'existingChat=${existingByDeltaId.chatJid} '
         'existingDeltaChat=${existingByDeltaId.deltaChatId}.',
       );
-    }
-    final Message? persistedPending = msg.isOutgoing
-        ? await _matchPersistedOutgoingMessage(
-            db: db,
-            msg: msg,
-            chatId: chatId,
-            deltaAccountId: deltaAccountId,
-          )
-        : null;
-    if (persistedPending != null) {
-      final Message updatedPending = persistedPending.copyWith(
-        deltaMsgId: msg.id,
-        deltaChatId: chatId,
-        deltaAccountId: deltaAccountId,
-      );
-      if (updatedPending != persistedPending) {
-        await _logEmailPartDiagnostic(
-          stage: 'ingest-pending-bind',
-          eventChatId: chatId,
-          msg: msg,
-          resolvedChat: resolvedChat,
-          existingByDelta: persistedPending,
-          storedMessage: updatedPending,
-        );
-        await db.updateMessage(updatedPending);
-      }
-      await _updateExistingMessage(existing: updatedPending, msg: msg);
-      await _scheduleOriginIdHydrationIfNeeded(
-        existing: updatedPending,
-        id: _DeltaChatJidMessageId(
-          accountId: deltaAccountId,
-          chatId: chatId,
-          chatJid: resolvedChat.jid,
-          msgId: msg.id,
-        ),
-      );
-      return;
     }
     final String originId = await _resolveOriginIdForInitialStore(msg);
     final timestamp = msg.timestamp ?? DateTime.timestamp();
@@ -1813,112 +1785,6 @@ class DeltaEventConsumer {
         message.deltaChatId == chatId;
   }
 
-  Future<Message?> _matchPersistedOutgoingMessage({
-    required XmppDatabase db,
-    required DeltaMessage msg,
-    required int chatId,
-    required int deltaAccountId,
-  }) async {
-    const maxTimestampDelta = Duration(minutes: 2);
-    final maxTimestampDeltaMicros = maxTimestampDelta.inMicroseconds;
-    final PendingOutgoingEmailSignature incomingSignature =
-        PendingOutgoingEmailSignature.fromOutgoing(
-          subject: msg.subject,
-          text: msg.text,
-          html: msg.html,
-          fileName: msg.fileName,
-          filePath: msg.filePath,
-          fileMime: msg.fileMime,
-          fileSizeBytes: msg.fileSize,
-        );
-    if (incomingSignature.isEmpty) {
-      return null;
-    }
-    final List<Message> candidates = await db.getPendingOutgoingDeltaMessages(
-      deltaAccountId: deltaAccountId,
-      deltaChatId: chatId,
-    );
-    if (candidates.isEmpty) {
-      return null;
-    }
-    final int? incomingTimestampMicros = msg.timestamp?.microsecondsSinceEpoch;
-    Message? closestMatch;
-    int? closestDelta;
-    Message? fallbackMatch;
-    int? fallbackDelta;
-    int fallbackMatchCount = 0;
-    final Map<String, FileMetadataData?> metadataById =
-        <String, FileMetadataData?>{};
-    for (final Message candidate in candidates) {
-      if (!candidate.isPendingOutgoingEmail) {
-        continue;
-      }
-      if (!_isSelfPendingSender(candidate)) {
-        continue;
-      }
-      final String? metadataId = candidate.fileMetadataID?.trim();
-      FileMetadataData? metadata;
-      if (metadataId != null && metadataId.isNotEmpty) {
-        if (metadataById.containsKey(metadataId)) {
-          metadata = metadataById[metadataId];
-        } else {
-          metadata = await db.getFileMetadata(metadataId);
-          metadataById[metadataId] = metadata;
-        }
-      }
-      final PendingOutgoingEmailSignature candidateSignature =
-          PendingOutgoingEmailSignature.fromMessage(
-            message: candidate,
-            metadata: metadata,
-          );
-      final bool signaturesMatch = candidateSignature.matches(
-        incomingSignature,
-      );
-      final bool fallbackSignaturesMatch =
-          !signaturesMatch &&
-          incomingTimestampMicros != null &&
-          candidateSignature.matchesAttachmentFileFallback(incomingSignature);
-      if (!signaturesMatch && !fallbackSignaturesMatch) {
-        continue;
-      }
-      if (incomingTimestampMicros == null) {
-        return candidate;
-      }
-      final int? candidateTimestamp =
-          candidate.timestamp?.microsecondsSinceEpoch;
-      if (candidateTimestamp == null) {
-        if (signaturesMatch) {
-          return candidate;
-        }
-        continue;
-      }
-      final int delta = (candidateTimestamp - incomingTimestampMicros).abs();
-      if (delta > maxTimestampDeltaMicros) {
-        continue;
-      }
-      if (signaturesMatch && (closestDelta == null || delta < closestDelta)) {
-        closestDelta = delta;
-        closestMatch = candidate;
-        continue;
-      }
-      if (!fallbackSignaturesMatch) {
-        continue;
-      }
-      fallbackMatchCount++;
-      if (fallbackDelta == null || delta < fallbackDelta) {
-        fallbackDelta = delta;
-        fallbackMatch = candidate;
-      }
-    }
-    if (closestMatch != null) {
-      return closestMatch;
-    }
-    if (fallbackMatchCount == 1) {
-      return fallbackMatch;
-    }
-    return null;
-  }
-
   String _resolveOutgoingSenderJid(Chat chat) {
     final String resolvedSelf = _selfJid;
     if (resolvedSelf.isNotEmpty) {
@@ -1926,23 +1792,6 @@ class DeltaEventConsumer {
     }
     final String? fallback = chat.emailFromAddress.resolveDeltaPlaceholderJid();
     return fallback ?? _emptyJid;
-  }
-
-  bool _isSelfPendingSender(Message message) {
-    final String normalizedSender = normalizedAddressValueOrEmpty(
-      message.senderJid,
-    );
-    if (normalizedSender.isEmpty) {
-      return false;
-    }
-    if (normalizedSender.isDeltaPlaceholderJid) {
-      return true;
-    }
-    final String normalizedSelf = normalizedAddressValueOrEmpty(_selfJid);
-    if (normalizedSelf.isEmpty) {
-      return false;
-    }
-    return normalizedSender == normalizedSelf;
   }
 
   bool _isSelfEmailChat(Chat chat) {
