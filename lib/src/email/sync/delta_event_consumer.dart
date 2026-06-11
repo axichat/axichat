@@ -591,10 +591,7 @@ class DeltaEventConsumer {
 
   int get _deltaAccountId => _core.accountId;
 
-  Future<bool> bootstrapFromCore() =>
-      runExclusive(_bootstrapFromCoreSerialized);
-
-  Future<bool> _bootstrapFromCoreSerialized() async {
+  Future<bool> bootstrapFromCore() async {
     final int deltaAccountId = _deltaAccountId;
     final chatlist = await _core.getChatlist();
     final archivedChatlist = await _core.getChatlist(
@@ -633,73 +630,101 @@ class DeltaEventConsumer {
         continue;
       }
       didBootstrap = true;
-      final chat = await _ensureChat(chatId);
-      var updated = chat;
-      final isArchived = archivedChatIds.contains(chatId);
-      if (updated.archived != isArchived) {
-        updated = updated.copyWith(archived: isArchived);
-      }
-      if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
-        final last = await _core.getMessage(entry.msgId);
-        if (last == null ||
-            !_isHiddenMultiDeviceSyncMessage(last, chat: chat)) {
-          final timestamp = last?.timestamp;
-          final preview = _previewTextForDeltaMessage(last, chat: chat);
-          if (timestamp != null && timestamp != updated.lastChangeTimestamp) {
-            updated = updated.copyWith(lastChangeTimestamp: timestamp);
-          }
-          if (preview != null &&
-              preview.isNotEmpty &&
-              preview != updated.lastMessage) {
-            updated = updated.copyWith(lastMessage: preview);
-          }
-        }
-      }
-      if (updated != chat) {
-        await db.updateChat(updated);
-      }
+      await runExclusive(
+        () => _bootstrapChatSummary(
+          entry: entry,
+          archivedChatIds: archivedChatIds,
+          db: db,
+        ),
+      );
     }
 
     for (final chatId in entriesByChatId.keys) {
       if (await _isDeltaSystemChat(chatId)) {
         continue;
       }
-      final chat = await _ensureChat(chatId);
-      final msgIds = await _core.getChatMessageIds(chatId: chatId);
-      final filteredMsgIds = msgIds
-          .where((id) => !_isDeltaMessageMarkerId(id))
-          .toList();
-      if (filteredMsgIds.isEmpty) {
-        continue;
-      }
-      const int batchSize = 32;
-      for (var index = 0; index < filteredMsgIds.length; index += batchSize) {
-        final end = index + batchSize > filteredMsgIds.length
-            ? filteredMsgIds.length
-            : index + batchSize;
-        final batch = filteredMsgIds.sublist(index, end);
-        final messages = await _core.getMessages(batch);
-        for (final msg in messages) {
-          await _ingestDeltaMessage(
-            chatId: chatId,
-            msg: msg,
-            chat: chat,
-            skipSystemChatCheck: true,
-          );
-        }
-      }
-
-      final stored = await db.getChatByDeltaChatId(
-        chatId,
-        accountId: deltaAccountId,
+      await runExclusive(
+        () => _bootstrapChatMessages(
+          chatId: chatId,
+          deltaAccountId: deltaAccountId,
+          db: db,
+        ),
       );
-      if (stored != null) {
-        await _refreshStoredChatSummary(chatJid: stored.jid, db: db);
-      }
-      await _updateUnreadCount(chatId);
     }
 
     return didBootstrap;
+  }
+
+  Future<void> _bootstrapChatSummary({
+    required DeltaChatlistEntry entry,
+    required Set<int> archivedChatIds,
+    required XmppDatabase db,
+  }) async {
+    final chatId = entry.chatId;
+    final chat = await _ensureChat(chatId);
+    var updated = chat;
+    final isArchived = archivedChatIds.contains(chatId);
+    if (updated.archived != isArchived) {
+      updated = updated.copyWith(archived: isArchived);
+    }
+    if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
+      final last = await _core.getMessage(entry.msgId);
+      if (last == null || !_isHiddenMultiDeviceSyncMessage(last, chat: chat)) {
+        final timestamp = last?.timestamp;
+        final preview = _previewTextForDeltaMessage(last, chat: chat);
+        if (timestamp != null && timestamp != updated.lastChangeTimestamp) {
+          updated = updated.copyWith(lastChangeTimestamp: timestamp);
+        }
+        if (preview != null &&
+            preview.isNotEmpty &&
+            preview != updated.lastMessage) {
+          updated = updated.copyWith(lastMessage: preview);
+        }
+      }
+    }
+    if (updated != chat) {
+      await db.updateChat(updated);
+    }
+  }
+
+  Future<void> _bootstrapChatMessages({
+    required int chatId,
+    required int deltaAccountId,
+    required XmppDatabase db,
+  }) async {
+    final chat = await _ensureChat(chatId);
+    final msgIds = await _core.getChatMessageIds(chatId: chatId);
+    final filteredMsgIds = msgIds
+        .where((id) => !_isDeltaMessageMarkerId(id))
+        .toList();
+    if (filteredMsgIds.isEmpty) {
+      return;
+    }
+    const int batchSize = 32;
+    for (var index = 0; index < filteredMsgIds.length; index += batchSize) {
+      final end = index + batchSize > filteredMsgIds.length
+          ? filteredMsgIds.length
+          : index + batchSize;
+      final batch = filteredMsgIds.sublist(index, end);
+      final messages = await _core.getMessages(batch);
+      for (final msg in messages) {
+        await _ingestDeltaMessage(
+          chatId: chatId,
+          msg: msg,
+          chat: chat,
+          skipSystemChatCheck: true,
+        );
+      }
+    }
+
+    final stored = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: deltaAccountId,
+    );
+    if (stored != null) {
+      await _refreshStoredChatSummary(chatJid: stored.jid, db: db);
+    }
+    await _updateUnreadCount(chatId);
   }
 
   Future<void> refreshChatlistSnapshot({bool Function()? isCurrent}) async {
