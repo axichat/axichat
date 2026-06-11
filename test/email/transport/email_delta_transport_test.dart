@@ -1788,11 +1788,194 @@ void main() {
     expect(operations, contains('getCoreConfig'));
   });
 
-  test('worker runtime restarts after background fetch timeout', () async {
+  test(
+    'worker survives an RPC timeout when the health probe succeeds',
+    () async {
+      final operations = <String>[];
+      final workerReceivePorts = <ReceivePort>[];
+      final runtime = EmailDeltaWorkerRuntime(
+        debugBackgroundFetchRpcGracePeriod: const Duration(milliseconds: 20),
+        debugWorkerStarter:
+            ({
+              required mainPort,
+              required deltaDatabasePath,
+              required databasePrefix,
+              required databasePassphrase,
+              required emailEncryptionBetaEnabledByAddress,
+              required xmppSelfJid,
+            }) async {
+              var initialized = false;
+              final receivePort = ReceivePort(
+                'fake-email-delta-worker-timeout',
+              );
+              workerReceivePorts.add(receivePort);
+              receivePort.listen((message) {
+                final request = (message as Map).cast<Object?, Object?>();
+                final id = request['id'] as int;
+                final method = request['method'] as String;
+                final op = method.substring('axichat.email.'.length);
+                operations.add(op);
+                void respond(Object? result) {
+                  mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+                }
+
+                switch (op) {
+                  case 'runtimeState':
+                    respond({
+                      'accountsSupported': true,
+                      'accountsActive': initialized,
+                      'activeAccountId': initialized ? 7 : 0,
+                      'isIoRunning': false,
+                      'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                    });
+                    return;
+                  case 'ensureInitialized':
+                    initialized = true;
+                    respond(null);
+                    return;
+                  case 'performBackgroundFetch':
+                    return;
+                  case 'accountIds':
+                    respond({
+                      'accountIds': <int>[7],
+                      'state': {
+                        'accountsSupported': true,
+                        'accountsActive': true,
+                        'activeAccountId': 7,
+                        'isIoRunning': false,
+                        'selfJids': {'7': 'me@example.com'},
+                      },
+                    });
+                    return;
+                  case 'dispose':
+                    respond(null);
+                    receivePort.close();
+                    return;
+                  default:
+                    respond(null);
+                    return;
+                }
+              });
+              return receivePort.sendPort;
+            },
+      );
+      addTearDown(() async {
+        await runtime.dispose(requestWorkerDispose: false);
+        for (final receivePort in workerReceivePorts) {
+          receivePort.close();
+        }
+      });
+
+      await runtime.ensureInitialized(
+        databasePrefix: 'worker_runtime_timeout_test',
+        databasePassphrase: 'passphrase',
+      );
+
+      Object? uncaughtError;
+      await runZonedGuarded(
+        () async {
+          await expectLater(
+            runtime.performBackgroundFetch(const Duration(milliseconds: 20)),
+            throwsA(
+              isA<EmailDeltaWorkerRuntimeException>().having(
+                (error) => error.message,
+                'message',
+                'Delta worker performBackgroundFetch timed out.',
+              ),
+            ),
+          );
+        },
+        (error, _) {
+          uncaughtError = error;
+        },
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      operations.clear();
+      expect(uncaughtError, isNull);
+      expect(await runtime.accountIds(), [7]);
+      expect(operations, ['accountIds']);
+      expect(workerReceivePorts, hasLength(1));
+    },
+  );
+
+  test('worker delivers events again after dispose and restart', () async {
+    final mainPorts = <SendPort>[];
+    final workerReceivePorts = <ReceivePort>[];
+    final runtime = EmailDeltaWorkerRuntime(
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            mainPorts.add(mainPort);
+            final receivePort = ReceivePort('fake-email-delta-worker-events');
+            workerReceivePorts.add(receivePort);
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              if (op == 'runtimeState') {
+                mainPort.send({
+                  'jsonrpc': '2.0',
+                  'id': id,
+                  'result': {
+                    'accountsSupported': true,
+                    'accountsActive': true,
+                    'activeAccountId': 7,
+                    'isIoRunning': false,
+                    'selfJids': {'7': 'me@example.com'},
+                  },
+                });
+                return;
+              }
+              mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': null});
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(() async {
+      await runtime.dispose(requestWorkerDispose: false);
+      for (final receivePort in workerReceivePorts) {
+        receivePort.close();
+      }
+    });
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_event_revival_test',
+      databasePassphrase: 'passphrase',
+    );
+    await runtime.dispose(requestWorkerDispose: false);
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_event_revival_test',
+      databasePassphrase: 'passphrase',
+    );
+    final received = <DeltaCoreEvent>[];
+    final subscription = runtime.events.listen(received.add);
+    addTearDown(subscription.cancel);
+    mainPorts.last.send({
+      'jsonrpc': '2.0',
+      'method': 'axichat.email.event',
+      'params': {'event': DeltaCoreEvent(type: 2005, data1: 7, data2: 70)},
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(received, hasLength(1));
+    expect(received.single.data2, 70);
+  });
+
+  test('worker restarts when the health probe also times out', () async {
     final operations = <String>[];
     final workerReceivePorts = <ReceivePort>[];
     final runtime = EmailDeltaWorkerRuntime(
       debugBackgroundFetchRpcGracePeriod: const Duration(milliseconds: 20),
+      debugWorkerHealthProbeTimeout: const Duration(milliseconds: 20),
       debugWorkerStarter:
           ({
             required mainPort,
@@ -1803,7 +1986,9 @@ void main() {
             required xmppSelfJid,
           }) async {
             var initialized = false;
-            final receivePort = ReceivePort('fake-email-delta-worker-timeout');
+            var sawBackgroundFetch = false;
+            final receivePort = ReceivePort('fake-email-delta-worker-hung');
+            final workerIndex = workerReceivePorts.length;
             workerReceivePorts.add(receivePort);
             receivePort.listen((message) {
               final request = (message as Map).cast<Object?, Object?>();
@@ -1815,6 +2000,13 @@ void main() {
                 mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
               }
 
+              if (workerIndex == 0 && op == 'performBackgroundFetch') {
+                sawBackgroundFetch = true;
+                return;
+              }
+              if (workerIndex == 0 && sawBackgroundFetch && op != 'dispose') {
+                return;
+              }
               switch (op) {
                 case 'runtimeState':
                   respond({
@@ -1828,8 +2020,6 @@ void main() {
                 case 'ensureInitialized':
                   initialized = true;
                   respond(null);
-                  return;
-                case 'performBackgroundFetch':
                   return;
                 case 'accountIds':
                   respond({
@@ -1863,33 +2053,18 @@ void main() {
     });
 
     await runtime.ensureInitialized(
-      databasePrefix: 'worker_runtime_timeout_test',
+      databasePrefix: 'worker_runtime_probe_restart_test',
       databasePassphrase: 'passphrase',
     );
 
-    Object? uncaughtError;
-    await runZonedGuarded(
-      () async {
-        await expectLater(
-          runtime.performBackgroundFetch(const Duration(milliseconds: 20)),
-          throwsA(
-            isA<EmailDeltaWorkerRuntimeException>().having(
-              (error) => error.message,
-              'message',
-              'Delta worker performBackgroundFetch timed out.',
-            ),
-          ),
-        );
-      },
-      (error, _) {
-        uncaughtError = error;
-      },
+    await expectLater(
+      runtime.performBackgroundFetch(const Duration(milliseconds: 20)),
+      throwsA(isA<EmailDeltaWorkerRuntimeException>()),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
-    operations.clear();
-    expect(uncaughtError, isNull);
     expect(await runtime.accountIds(), [7]);
-    expect(operations, ['ensureInitialized', 'accountIds']);
+    expect(workerReceivePorts, hasLength(2));
   });
 
   test('worker runtime forced dispose skips queued dispose request', () async {

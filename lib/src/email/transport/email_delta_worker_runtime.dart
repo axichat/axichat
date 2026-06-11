@@ -636,6 +636,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     Logger? logger,
     @visibleForTesting
     Duration debugBackgroundFetchRpcGracePeriod = const Duration(seconds: 5),
+    Duration debugWorkerHealthProbeTimeout = const Duration(seconds: 10),
     @visibleForTesting
     Future<SendPort> Function({
       required SendPort mainPort,
@@ -648,11 +649,13 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     debugWorkerStarter,
   }) : _xmppSelfJidProvider = xmppSelfJidProvider,
        _backgroundFetchRpcGracePeriod = debugBackgroundFetchRpcGracePeriod,
+       _workerHealthProbeTimeout = debugWorkerHealthProbeTimeout,
        _debugWorkerStarter = debugWorkerStarter,
        _log = logger ?? Logger('EmailDeltaWorkerRuntime');
 
   final String? Function()? _xmppSelfJidProvider;
   final Duration _backgroundFetchRpcGracePeriod;
+  final Duration _workerHealthProbeTimeout;
   final Future<SendPort> Function({
     required SendPort mainPort,
     required String deltaDatabasePath,
@@ -663,8 +666,9 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   })?
   _debugWorkerStarter;
   final Logger _log;
-  final StreamController<DeltaCoreEvent> _events =
+  StreamController<DeltaCoreEvent> _events =
       StreamController<DeltaCoreEvent>.broadcast(sync: true);
+  bool _workerHealthProbeInFlight = false;
   final List<void Function(DeltaCoreEvent event)> _eventListeners = [];
   final Map<int, Completer<Object?>> _pending = {};
   Map<String, bool> _emailEncryptionBetaEnabledByAddress =
@@ -818,6 +822,9 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     final deltaDatabaseFile = await _deltaDatabaseFileFor(databasePrefix);
     final receivePort = ReceivePort('email-delta-worker-main');
     final ready = Completer<SendPort>();
+    if (_events.isClosed) {
+      _events = StreamController<DeltaCoreEvent>.broadcast(sync: true);
+    }
     _receivePort = receivePort;
     _receiveSubscription = receivePort.listen((message) {
       final readyPort = _readyPortFromMessage(message);
@@ -985,9 +992,9 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     activePort.send(_emailDeltaRpcRequest(id, op, payload));
     final result = await completer.future.timeout(
       timeout,
-      onTimeout: () async {
+      onTimeout: () {
         _pending.remove(id);
-        await _stopWorker(clearInitialization: false, requestDispose: false);
+        _probeWorkerHealthAfterTimeout();
         throw EmailDeltaWorkerRuntimeException('Delta worker $op timed out.');
       },
     );
@@ -995,6 +1002,33 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       _workerInitialized = true;
     }
     return result as T;
+  }
+
+  void _probeWorkerHealthAfterTimeout() {
+    if (_workerHealthProbeInFlight) {
+      return;
+    }
+    _workerHealthProbeInFlight = true;
+    unawaited(() async {
+      try {
+        await _invoke<Object?>(
+          'runtimeState',
+          const {},
+          timeout: _workerHealthProbeTimeout,
+        );
+      } on Exception {
+        _log.warning(
+          'Delta worker unresponsive after RPC timeout; restarting.',
+        );
+        try {
+          await _stopWorker(clearInitialization: false);
+        } on Exception catch (error, stackTrace) {
+          _log.warning('Delta worker restart failed.', error, stackTrace);
+        }
+      } finally {
+        _workerHealthProbeInFlight = false;
+      }
+    }());
   }
 
   Future<void> _ensureWorkerInitializedForRequest(String op) async {
@@ -1598,7 +1632,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     final result = await _invoke<List<Object?>>('getMessages', {
       'messageIds': messageIds,
       'accountId': accountId,
-    }, timeout: const Duration(seconds: 180));
+    });
     return result.whereType<DeltaMessage>().toList(growable: false);
   }
 
