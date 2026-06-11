@@ -575,12 +575,6 @@ abstract interface class XmppBase {
 
   Future<void> runBootstrapOperations(XmppBootstrapTrigger trigger) async {}
 
-  void beginSignupPostLoginWorkHold() {}
-
-  Future<void> releaseSignupPostLoginWorkHold() async {}
-
-  bool get signupPostLoginWorkHeld => false;
-
   XmppForegroundSocketState get foregroundSocketState =>
       XmppForegroundSocketState.uninitialized;
 
@@ -1386,18 +1380,11 @@ class XmppService extends XmppBase
       _streamNegotiationsDone.complete();
     }
     await _connection.completeReconnect();
-    final trigger = event.resumed
-        ? XmppBootstrapTrigger.resumedNegotiation
-        : XmppBootstrapTrigger.fullNegotiation;
-    if (_signupPostLoginWorkHeld) {
-      _deferredSignupPostLoginTrigger = trigger;
-      _xmppLogger.info(
-        'Deferring signup post-login XMPP work until welcome flow releases it. '
-        'trigger=$trigger',
-      );
-      return;
-    }
-    await _runAutomaticPostNegotiationWork(trigger);
+    await _runAutomaticPostNegotiationWork(
+      event.resumed
+          ? XmppBootstrapTrigger.resumedNegotiation
+          : XmppBootstrapTrigger.fullNegotiation,
+    );
     // Connection handling is automatic in moxxmpp v0.5.0.
   }
 
@@ -1422,37 +1409,6 @@ class XmppService extends XmppBase
       unawaited(_runBootstrapOperations(trigger, pass: pass));
     }
   }
-
-  @override
-  void beginSignupPostLoginWorkHold() {
-    _signupPostLoginWorkHeld = true;
-    _deferredSignupPostLoginTrigger = null;
-    _xmppLogger.info('Holding signup post-login XMPP work.');
-  }
-
-  @override
-  Future<void> releaseSignupPostLoginWorkHold() async {
-    final trigger = _deferredSignupPostLoginTrigger;
-    if (!_signupPostLoginWorkHeld && trigger == null) {
-      return;
-    }
-    _signupPostLoginWorkHeld = false;
-    _deferredSignupPostLoginTrigger = null;
-    _xmppLogger.info(
-      'Releasing signup post-login XMPP work. '
-      'trigger=$trigger connectionState=$connectionState',
-    );
-    if (trigger == null || connectionState != ConnectionState.connected) {
-      return;
-    }
-    fireAndForget(() async {
-      await Future<void>.delayed(Duration.zero);
-      await _runAutomaticPostNegotiationWork(trigger);
-    }, operationName: 'XmppService.releaseSignupPostLoginWorkHold');
-  }
-
-  @override
-  bool get signupPostLoginWorkHeld => _signupPostLoginWorkHeld;
 
   @override
   XmppForegroundSocketState get foregroundSocketState {
@@ -1722,8 +1678,6 @@ class XmppService extends XmppBase
   final int _staleConnectionTimeoutThreshold = 3;
   var _consecutiveConnectTimeouts = 0;
   DateTime? _lastForegroundSocketMigrationAttempt;
-  bool _signupPostLoginWorkHeld = false;
-  XmppBootstrapTrigger? _deferredSignupPostLoginTrigger;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
 
@@ -3959,8 +3913,6 @@ class XmppService extends XmppBase
     _xmppLogger.info(
       'Resetting${e == null ? '' : ' due to ${e.runtimeType}'}...',
     );
-    _signupPostLoginWorkHeld = false;
-    _deferredSignupPostLoginTrigger = null;
     _demoSeedAttempted = false;
     _demoOfflineMode = false;
     _resetDemoScript();

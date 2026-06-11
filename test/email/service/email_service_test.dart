@@ -291,9 +291,6 @@ void main() {
       () => database.getEmailMessagesWithDeltaAccountNotIn(any()),
     ).thenAnswer((_) async => const <Message>[]);
     when(
-      () => database.getUnboundEmailMessagesOlderThan(any()),
-    ).thenAnswer((_) async => const <Message>[]);
-    when(
       () => transport.getChatlist(
         flags: any(named: 'flags'),
         accountId: any(named: 'accountId'),
@@ -6418,8 +6415,107 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  test('sendMessage records the sent row bound to its delta message', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    when(() => transport.persistsAppStateInternally).thenReturn(false);
+    when(
+      () => transport.isConfigured(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => true);
+    when(
+      () => transport.ensureChatForAddress(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => 91);
+    when(
+      () => transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
+    ).thenAnswer(
+      (_) async => DeltaMessage(
+        id: 123,
+        chatId: 91,
+        text: 'First send',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+        isOutgoing: true,
+      ),
+    );
+    when(
+      () => transport.sendText(
+        chatId: 91,
+        body: 'First send',
+        subject: any(named: 'subject'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
+        accountId: DeltaAccountDefaults.legacyId,
+        forcePlaintext: true,
+        skipAutocrypt: true,
+      ),
+    ).thenAnswer((_) async => 123);
+
+    Message? savedRow;
+    when(
+      () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+    ).thenAnswer((invocation) async {
+      savedRow = invocation.positionalArguments.single as Message;
+    });
+    when(() => database.getMessageByStanzaID(any())).thenAnswer((
+      invocation,
+    ) async {
+      final stanzaId = invocation.positionalArguments.single as String;
+      if (stanzaId == savedRow?.stanzaID) {
+        return savedRow;
+      }
+      return null;
+    });
+
+    final chat = Chat(
+      jid: 'peer@axi.im',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 88,
+      emailAddress: 'peer@example.com',
+      emailFromAddress: 'alice@example.org',
+    );
+
+    final msgId = await service.sendMessage(chat: chat, body: 'First send');
+
+    expect(msgId, 123);
+    expect(savedRow?.stanzaID, isNotEmpty);
+    expect(savedRow?.deltaMsgId, 123);
+    expect(savedRow?.deltaChatId, 91);
+    expect(savedRow?.deltaAccountId, DeltaAccountDefaults.legacyId);
+    expect(savedRow?.timestamp, DateTime.utc(2024, 1, 2, 3, 4, 5));
+    verifyNever(() => database.updateMessage(any()));
+    verifyNever(
+      () => database.replaceMessageStanzaID(
+        currentStanzaID: any(named: 'currentStanzaID'),
+        message: any(named: 'message'),
+      ),
+    );
+
+    addTearDown(service.shutdown);
+  });
+
   test(
-    'sendMessage persists outgoing row when runtime owns only Delta core',
+    'sendMessage claims the echo row when the event ingested it first',
     () async {
       final service = EmailService(
         credentialStore: credentialStore,
@@ -6475,167 +6571,15 @@ void main() {
         ),
       ).thenAnswer((_) async => 123);
 
-      Message? savedPending;
-      String? replacedStanzaId;
-      Message? replacementMessage;
+      Message? savedRow;
+      Message? claimed;
       when(
         () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
       ).thenAnswer((invocation) async {
-        savedPending = invocation.positionalArguments.single as Message;
-      });
-      when(() => database.getMessageByStanzaID(any())).thenAnswer((
-        invocation,
-      ) async {
-        final stanzaId = invocation.positionalArguments.single as String;
-        if (stanzaId == savedPending?.stanzaID) {
-          return savedPending;
-        }
-        return null;
-      });
-      when(
-        () => database.replaceMessageStanzaID(
-          currentStanzaID: any(named: 'currentStanzaID'),
-          message: any(named: 'message'),
-        ),
-      ).thenAnswer((invocation) async {
-        replacedStanzaId =
-            invocation.namedArguments[#currentStanzaID] as String;
-        replacementMessage = invocation.namedArguments[#message] as Message;
-      });
-
-      final chat = Chat(
-        jid: 'peer@axi.im',
-        title: 'Peer',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.now(),
-        deltaChatId: 88,
-        emailAddress: 'peer@example.com',
-        emailFromAddress: 'alice@example.org',
-      );
-
-      final msgId = await service.sendMessage(chat: chat, body: 'First send');
-
-      expect(msgId, 123);
-      expect(savedPending?.stanzaID, isNotEmpty);
-      expect(savedPending?.deltaMsgId, isNull);
-      expect(replacedStanzaId, isNull);
-      expect(replacementMessage, isNull);
-      final bound =
-          verify(() => database.updateMessage(captureAny())).captured.last
-              as Message;
-      expect(bound.stanzaID, savedPending?.stanzaID);
-      expect(bound.deltaMsgId, 123);
-      expect(bound.deltaChatId, 91);
-      expect(bound.deltaAccountId, DeltaAccountDefaults.legacyId);
-      verify(
-        () => transport.sendText(
-          chatId: 91,
-          body: 'First send',
-          subject: any(named: 'subject'),
-          shareId: any(named: 'shareId'),
-          localBodyOverride: any(named: 'localBodyOverride'),
-          htmlBody: any(named: 'htmlBody'),
-          quotingStanzaId: any(named: 'quotingStanzaId'),
-          accountId: DeltaAccountDefaults.legacyId,
-          forcePlaintext: true,
-          skipAutocrypt: true,
-        ),
-      ).called(1);
-
-      addTearDown(service.shutdown);
-    },
-  );
-
-  test(
-    'sendMessage promotes pending row after Delta event saved final row',
-    () async {
-      final service = EmailService(
-        credentialStore: credentialStore,
-        databaseBuilder: () async => database,
-        transport: transport,
-        notificationService: notificationService,
-        foregroundBridge: foregroundBridge,
-      );
-
-      await service.ensureProvisioned(
-        displayName: 'Alice',
-        databasePrefix: 'alice',
-        databasePassphrase: 'passphrase',
-        jid: 'alice@example.org',
-        passwordOverride: 'password',
-      );
-
-      when(() => transport.persistsAppStateInternally).thenReturn(false);
-      when(
-        () => transport.isConfigured(accountId: any(named: 'accountId')),
-      ).thenAnswer((_) async => true);
-      when(
-        () => transport.ensureChatForAddress(
-          address: any(named: 'address'),
-          displayName: any(named: 'displayName'),
-          accountId: any(named: 'accountId'),
-        ),
-      ).thenAnswer((_) async => 91);
-      when(
-        () =>
-            transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
-      ).thenAnswer(
-        (_) async => DeltaMessage(
-          id: 123,
-          chatId: 91,
-          text: 'First send',
-          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
-          isOutgoing: true,
-        ),
-      );
-      when(
-        () => transport.sendText(
-          chatId: 91,
-          body: 'First send',
-          subject: any(named: 'subject'),
-          shareId: any(named: 'shareId'),
-          localBodyOverride: any(named: 'localBodyOverride'),
-          htmlBody: any(named: 'htmlBody'),
-          quotingStanzaId: any(named: 'quotingStanzaId'),
-          accountId: DeltaAccountDefaults.legacyId,
-          forcePlaintext: true,
-          skipAutocrypt: true,
-        ),
-      ).thenAnswer((_) async => 123);
-
-      Message? savedPending;
-      Message? mergedPending;
-      String? replacedStanzaId;
-      Message? replacementMessage;
-      when(
-        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
-      ).thenAnswer((invocation) async {
-        savedPending = invocation.positionalArguments.single as Message;
-      });
-      when(() => database.getMessageByStanzaID(any())).thenAnswer((
-        invocation,
-      ) async {
-        final stanzaId = invocation.positionalArguments.single as String;
-        if (stanzaId == savedPending?.stanzaID) {
-          return savedPending;
-        }
-        if (stanzaId == 'dc-msg-123') {
-          return Message(
-            stanzaID: 'dc-msg-123',
-            senderJid: 'alice@example.org',
-            chatJid: 'peer@axi.im',
-            timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
-            body: 'First send',
-            acked: true,
-            deltaChatId: 91,
-            deltaMsgId: 123,
-            deltaAccountId: DeltaAccountDefaults.legacyId,
-          );
-        }
-        return null;
+        savedRow = invocation.positionalArguments.single as Message;
       });
       when(() => database.updateMessage(any())).thenAnswer((invocation) async {
-        mergedPending = invocation.positionalArguments.single as Message;
+        claimed = invocation.positionalArguments.single as Message;
       });
       when(
         () => database.getMessageByDeltaId(
@@ -6645,27 +6589,16 @@ void main() {
         ),
       ).thenAnswer(
         (_) async => Message(
-          stanzaID: 'dc-msg-123',
+          stanzaID: 'echo-row',
           senderJid: 'alice@example.org',
           chatJid: 'peer@axi.im',
           timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
-          body: 'First send',
           acked: true,
           deltaChatId: 91,
           deltaMsgId: 123,
           deltaAccountId: DeltaAccountDefaults.legacyId,
         ),
       );
-      when(
-        () => database.replaceMessageStanzaID(
-          currentStanzaID: any(named: 'currentStanzaID'),
-          message: any(named: 'message'),
-        ),
-      ).thenAnswer((invocation) async {
-        replacedStanzaId =
-            invocation.namedArguments[#currentStanzaID] as String;
-        replacementMessage = invocation.namedArguments[#message] as Message;
-      });
 
       final chat = Chat(
         jid: 'peer@axi.im',
@@ -6680,152 +6613,14 @@ void main() {
       final msgId = await service.sendMessage(chat: chat, body: 'First send');
 
       expect(msgId, 123);
-      expect(savedPending?.stanzaID, isNotEmpty);
-      expect(mergedPending?.stanzaID, savedPending?.stanzaID);
-      expect(mergedPending?.acked, isTrue);
-      expect(mergedPending?.deltaMsgId, 123);
-      expect(replacedStanzaId, isNull);
-      expect(replacementMessage, isNull);
-      verify(
-        () => database.deleteMessage(
-          'dc-msg-123',
-          selfJid: 'alice@example.org',
-          emailSelfJid: 'alice@example.org',
-        ),
-      ).called(1);
-
-      addTearDown(service.shutdown);
-    },
-  );
-
-  test(
-    'sendMessage does not merge pending row with incompatible dc-msg row',
-    () async {
-      final service = EmailService(
-        credentialStore: credentialStore,
-        databaseBuilder: () async => database,
-        transport: transport,
-        notificationService: notificationService,
-        foregroundBridge: foregroundBridge,
-      );
-
-      await service.ensureProvisioned(
-        displayName: 'Alice',
-        databasePrefix: 'alice',
-        databasePassphrase: 'passphrase',
-        jid: 'alice@example.org',
-        passwordOverride: 'password',
-      );
-
-      when(() => transport.persistsAppStateInternally).thenReturn(false);
-      when(
-        () => transport.isConfigured(accountId: any(named: 'accountId')),
-      ).thenAnswer((_) async => true);
-      when(
-        () => transport.ensureChatForAddress(
-          address: any(named: 'address'),
-          displayName: any(named: 'displayName'),
-          accountId: any(named: 'accountId'),
-        ),
-      ).thenAnswer((_) async => 91);
-      when(
-        () =>
-            transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
-      ).thenAnswer(
-        (_) async => DeltaMessage(
-          id: 123,
-          chatId: 91,
-          text: 'First send',
-          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
-          isOutgoing: true,
-        ),
-      );
-      when(
-        () => transport.sendText(
-          chatId: 91,
-          body: 'First send',
-          subject: any(named: 'subject'),
-          shareId: any(named: 'shareId'),
-          localBodyOverride: any(named: 'localBodyOverride'),
-          htmlBody: any(named: 'htmlBody'),
-          quotingStanzaId: any(named: 'quotingStanzaId'),
-          accountId: DeltaAccountDefaults.legacyId,
-          forcePlaintext: true,
-          skipAutocrypt: true,
-        ),
-      ).thenAnswer((_) async => 123);
-
-      Message? savedPending;
-      final replacements = <Message>[];
-      when(
-        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
-      ).thenAnswer((invocation) async {
-        savedPending = invocation.positionalArguments.single as Message;
-      });
-      when(() => database.getMessageByStanzaID(any())).thenAnswer((
-        invocation,
-      ) async {
-        final stanzaId = invocation.positionalArguments.single as String;
-        if (stanzaId == savedPending?.stanzaID) {
-          return savedPending;
-        }
-        if (stanzaId == 'dc-msg-123') {
-          return Message(
-            stanzaID: 'dc-msg-123',
-            senderJid: 'alice@example.org',
-            chatJid: 'other@axi.im',
-            timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
-            body: 'Other chat send',
-            acked: true,
-            deltaChatId: 92,
-            deltaMsgId: 123,
-            deltaAccountId: DeltaAccountDefaults.legacyId,
-          );
-        }
-        return null;
-      });
-      when(
-        () => database.replaceMessageStanzaID(
-          currentStanzaID: any(named: 'currentStanzaID'),
-          message: any(named: 'message'),
-        ),
-      ).thenAnswer((invocation) async {
-        replacements.add(invocation.namedArguments[#message] as Message);
-      });
-      when(
-        () => database.getMessageByDeltaId(
-          123,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: 91,
-        ),
-      ).thenAnswer((_) async => null);
-      Message? boundPending;
-      when(() => database.updateMessage(any())).thenAnswer((invocation) async {
-        boundPending = invocation.positionalArguments.single as Message;
-      });
-
-      final chat = Chat(
-        jid: 'peer@axi.im',
-        title: 'Peer',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.now(),
-        deltaChatId: 88,
-        emailAddress: 'peer@example.com',
-        emailFromAddress: 'alice@example.org',
-      );
-
-      final msgId = await service.sendMessage(chat: chat, body: 'First send');
-
-      expect(msgId, 123);
-      expect(savedPending?.stanzaID, isNotEmpty);
-      expect(replacements, isEmpty);
-      expect(boundPending?.stanzaID, savedPending?.stanzaID);
-      expect(boundPending?.chatJid, 'peer@axi.im');
-      expect(boundPending?.deltaChatId, 91);
-      expect(boundPending?.deltaMsgId, 123);
+      expect(savedRow, isNull);
+      expect(claimed?.stanzaID, 'echo-row');
+      expect(claimed?.body, 'First send');
+      expect(claimed?.acked, isTrue);
+      expect(claimed?.deltaMsgId, 123);
       verifyNever(
         () => database.deleteMessage(
-          'dc-msg-123',
+          any(),
           selfJid: any(named: 'selfJid'),
           emailSelfJid: any(named: 'emailSelfJid'),
         ),

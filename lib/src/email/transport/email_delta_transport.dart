@@ -12,7 +12,6 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
@@ -62,11 +61,8 @@ const String _emailAccountNotReadyError =
     'Email account not hydrated; wait for email sync.';
 const String _accountHydrationFailedLog =
     'Failed to hydrate email account address.';
-const String _originIdHydrationFailedLog = 'Failed to hydrate Delta origin ID.';
 const String _attachmentHydrationFailedLog =
     'Failed to hydrate attachment metadata.';
-const String _missingOutgoingDeltaIdError =
-    'Outgoing email message missing delta ID.';
 const int _deltaMessageIdUnset = DeltaMessageId.none;
 const bool _defaultScheduleAccountHydration = true;
 const Set<String> _deltaSensitiveConfigKeys = <String>{
@@ -77,18 +73,6 @@ const Set<String> _deltaSensitiveConfigKeys = <String>{
 enum _DeltaSecurityModeResolution { auto, ssl, startTls, plain, unknown }
 
 enum _DeltaEventDeliveryBlockReason { stopped, logout }
-
-final class _DeltaChatMessageId {
-  const _DeltaChatMessageId({
-    required this.accountId,
-    required this.chatId,
-    required this.msgId,
-  });
-
-  final int accountId;
-  final int chatId;
-  final int msgId;
-}
 
 Map<String, String> _sanitizeDeltaConfigForLog(Map<String, String> config) {
   final sanitized = <String, String>{};
@@ -491,8 +475,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
   final Set<int> _activeImexAccountIds = <int>{};
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
-  Future<void> _originIdHydrationQueue = Future<void>.value();
-  final Set<String> _originIdHydrationPending = <String>{};
   final Set<Future<void>> _activeEventOperations = <Future<void>>{};
   final Set<Future<void>> _activeCoreOperations = <Future<void>>{};
   int _coreOperationEpoch = 0;
@@ -544,7 +526,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
 
   void _invalidateCoreOperationEpoch() {
     _coreOperationEpoch += 1;
-    _originIdHydrationPending.clear();
   }
 
   bool _isCurrentCoreOperationEpoch(int epoch) => epoch == _coreOperationEpoch;
@@ -956,8 +937,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       eventDeliveryStackTrace = stackTrace;
     }
     await _awaitActiveCoreOperations();
-    await _originIdHydrationQueue;
-    _originIdHydrationQueue = Future<void>.value();
     if (eventDeliveryError != null) {
       Error.throwWithStackTrace(eventDeliveryError, eventDeliveryStackTrace!);
     }
@@ -2063,54 +2042,26 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       context: context,
     );
     final coreSubject = subjectForDeltaCore(subject);
-    final DateTime sentAt = DateTime.timestamp();
-    final String pendingStanzaId = _pendingOutgoingStanzaId();
-    await _recordOutgoing(
+    return _sendAndRecordOutgoing(
+      context: context,
       chatId: chatId,
       accountId: resolvedAccountId,
       chat: chat,
-      body: body,
-      subject: sanitizedSubject,
-      quotingStanzaId: quotingStanzaId,
-      shareId: shareId,
-      localBodyOverride: localBodyOverride,
-      htmlBody: htmlBody,
-      timestamp: sentAt,
-      stanzaId: pendingStanzaId,
-    );
-    int msgId;
-    try {
-      msgId = await context.sendText(
+      send: () => context.sendText(
         chatId: chatId,
         message: body,
         subject: coreSubject,
         html: htmlBody,
         forcePlaintext: forcePlaintext,
         skipAutocrypt: skipAutocrypt,
-      );
-    } on Exception {
-      await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
-      rethrow;
-    }
-    final deltaMessage = await context.getMessage(msgId);
-    await _markOutgoingMessageSent(
-      stanzaId: pendingStanzaId,
-      msgId: msgId,
-      accountId: resolvedAccountId,
-      chatId: chatId,
-      shareId: shareId,
-      timestamp: deltaMessage?.timestamp,
-      encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
-    );
-    await _scheduleOriginIdHydration(
-      context: context,
-      id: _DeltaChatMessageId(
-        accountId: resolvedAccountId,
-        chatId: chatId,
-        msgId: msgId,
       ),
+      body: body,
+      subject: sanitizedSubject,
+      quotingStanzaId: quotingStanzaId,
+      shareId: shareId,
+      localBodyOverride: localBodyOverride,
+      htmlBody: htmlBody,
     );
-    return msgId;
   }
 
   @override
@@ -2158,29 +2109,12 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       accountId: resolvedAccountId,
       context: context,
     );
-    final DateTime sentAt = DateTime.timestamp();
-    final String pendingStanzaId = _pendingOutgoingStanzaId();
-    final FileMetadataData pendingMetadata = _pendingMetadataForAttachment(
-      attachment,
-      pendingStanzaId,
-    );
-    await _recordOutgoing(
+    final int msgId = await _sendAndRecordOutgoing(
+      context: context,
       chatId: chatId,
       accountId: resolvedAccountId,
       chat: chat,
-      body: attachment.caption,
-      subject: sanitizedSubject,
-      quotingStanzaId: quotingStanzaId,
-      metadata: pendingMetadata,
-      shareId: shareId,
-      localBodyOverride: captionOverride,
-      htmlBody: htmlCaption,
-      timestamp: sentAt,
-      stanzaId: pendingStanzaId,
-    );
-    int msgId;
-    try {
-      msgId = await context.sendFileMessage(
+      send: () => context.sendFileMessage(
         chatId: chatId,
         viewType: _viewTypeFor(attachment),
         filePath: attachment.path,
@@ -2191,35 +2125,19 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         html: htmlCaption,
         forcePlaintext: forcePlaintext,
         skipAutocrypt: skipAutocrypt,
-      );
-    } on Exception {
-      await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
-      rethrow;
-    }
-    final FileMetadataData metadata = _metadataForAttachment(attachment, msgId);
-    final deltaMessage = await context.getMessage(msgId);
-    await _markOutgoingMessageSent(
-      stanzaId: pendingStanzaId,
-      msgId: msgId,
-      accountId: resolvedAccountId,
-      chatId: chatId,
-      shareId: shareId,
-      metadata: metadata,
-      timestamp: deltaMessage?.timestamp,
-      encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
-    );
-    await _scheduleOriginIdHydration(
-      context: context,
-      id: _DeltaChatMessageId(
-        accountId: resolvedAccountId,
-        chatId: chatId,
-        msgId: msgId,
       ),
+      body: attachment.caption,
+      subject: sanitizedSubject,
+      quotingStanzaId: quotingStanzaId,
+      shareId: shareId,
+      localBodyOverride: captionOverride,
+      htmlBody: htmlCaption,
+      metadataForMsg: (msgId) => _metadataForAttachment(attachment, msgId),
     );
     await _scheduleAttachmentMetadataHydration(
       context: context,
       msgId: msgId,
-      metadata: metadata,
+      metadata: _metadataForAttachment(attachment, msgId),
     );
     return msgId;
   }
@@ -2304,13 +2222,71 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     return chat;
   }
 
-  String _pendingOutgoingStanzaId() => uuid.v4();
+  Future<int> _sendAndRecordOutgoing({
+    required DeltaContextHandle context,
+    required int chatId,
+    required int accountId,
+    required Chat chat,
+    required Future<int> Function() send,
+    String? body,
+    String? subject,
+    String? quotingStanzaId,
+    String? shareId,
+    String? localBodyOverride,
+    String? htmlBody,
+    FileMetadataData Function(int msgId)? metadataForMsg,
+  }) async {
+    final int msgId;
+    try {
+      msgId = await send();
+    } on Exception {
+      await _recordOutgoing(
+        chatId: chatId,
+        accountId: accountId,
+        chat: chat,
+        stanzaId: uuid.v4(),
+        body: body,
+        subject: subject,
+        quotingStanzaId: quotingStanzaId,
+        shareId: shareId,
+        localBodyOverride: localBodyOverride,
+        htmlBody: htmlBody,
+        error: MessageError.emailSendFailure,
+      );
+      rethrow;
+    }
+    final deltaMessage = await context.getMessage(msgId);
+    String? originId;
+    try {
+      originId = await _resolveMessageOriginId(context, msgId);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to resolve sent message origin.', error, stackTrace);
+    }
+    await _recordOutgoing(
+      chatId: chatId,
+      accountId: accountId,
+      chat: chat,
+      msgId: msgId,
+      stanzaId: uuid.v4(),
+      originId: originId,
+      body: body,
+      subject: subject,
+      quotingStanzaId: quotingStanzaId,
+      metadata: metadataForMsg?.call(msgId),
+      shareId: shareId,
+      localBodyOverride: localBodyOverride,
+      htmlBody: htmlBody,
+      timestamp: deltaMessage?.timestamp,
+      encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
+    );
+    return msgId;
+  }
 
   Future<void> _recordOutgoing({
     required int chatId,
     required int accountId,
+    required String stanzaId,
     int? msgId,
-    String? stanzaId,
     Chat? chat,
     String? originId,
     String? body,
@@ -2321,197 +2297,42 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     String? localBodyOverride,
     String? htmlBody,
     DateTime? timestamp,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+    MessageError error = MessageError.none,
   }) async {
     final XmppDatabase db = await _databaseBuilder();
     final Chat resolvedChat =
         chat ?? await _ensureChat(chatId, accountId: accountId);
-    final int deltaAccountId = accountId;
-    final int? resolvedMsgId = msgId;
-    final String resolvedStanzaId =
-        stanzaId ??
-        (resolvedMsgId == null
-            ? throw StateError(_missingOutgoingDeltaIdError)
-            : deltaScopedMessageStorageStanzaId(
-                accountId: deltaAccountId,
-                chatId: chatId,
-                msgId: resolvedMsgId,
-              ));
     if (metadata != null) {
       await db.saveFileMetadata(metadata);
     }
     final displayBody = localBodyOverride ?? body;
     final trimmedBody = displayBody?.trim();
-    final resolvedTimestamp = timestamp ?? DateTime.timestamp();
+    final senderJid = _resolveOutgoingSenderJid(
+      chat: resolvedChat,
+      accountId: accountId,
+    );
     final message = Message(
-      stanzaID: resolvedStanzaId,
-      senderJid: _resolveOutgoingSenderJid(
-        chat: resolvedChat,
-        accountId: deltaAccountId,
-      ),
+      stanzaID: stanzaId,
+      senderJid: senderJid,
       chatJid: resolvedChat.jid,
-      timestamp: resolvedTimestamp,
+      timestamp: timestamp ?? DateTime.timestamp(),
       originID: originId,
       body: trimmedBody?.isNotEmpty == true ? trimmedBody : null,
       htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
       subject: subject,
       quoting: quotingStanzaId,
-      encryptionProtocol: EncryptionProtocol.none,
+      encryptionProtocol: encryptionProtocol,
+      error: error,
       acked: false,
       received: false,
       deltaChatId: chatId,
-      deltaMsgId: resolvedMsgId,
-      deltaAccountId: deltaAccountId,
+      deltaMsgId: msgId,
+      deltaAccountId: accountId,
       fileMetadataID: metadata?.id,
     );
-    await db.saveMessage(
-      message,
-      selfJid: _resolveOutgoingSenderJid(
-        chat: resolvedChat,
-        accountId: deltaAccountId,
-      ),
-    );
-    if (shareId != null && resolvedMsgId != null) {
-      await db.insertMessageCopy(
-        shareId: shareId,
-        dcMsgId: resolvedMsgId,
-        dcChatId: chatId,
-        dcAccountId: deltaAccountId,
-      );
-    }
-  }
-
-  Future<void> _markOutgoingMessageSent({
-    required String stanzaId,
-    required int msgId,
-    required int accountId,
-    required int chatId,
-    String? shareId,
-    FileMetadataData? metadata,
-    DateTime? timestamp,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
-  }) async {
-    final XmppDatabase db = await _databaseBuilder();
-    final Message? existing = await db.getMessageByStanzaID(stanzaId);
-    final String? previousMetadataId = existing?.fileMetadataID;
-    final String? messageId = existing?.id;
-    if (metadata != null) {
-      await db.saveFileMetadata(metadata);
-    }
-    if (existing == null) {
-      if (shareId != null) {
-        await db.insertMessageCopy(
-          shareId: shareId,
-          dcMsgId: msgId,
-          dcChatId: chatId,
-          dcAccountId: accountId,
-        );
-      }
-      return;
-    }
-    final Message? duplicateCandidate = await db.getMessageByDeltaId(
-      msgId,
-      deltaAccountId: accountId,
-      deltaChatId: chatId,
-    );
-    final bool staleClaim =
-        duplicateCandidate != null &&
-        duplicateCandidate.stanzaID != existing.stanzaID &&
-        (duplicateCandidate.chatJid != existing.chatJid ||
-            duplicateCandidate.senderJid != existing.senderJid);
-    if (staleClaim) {
-      await db.clearMessageDeltaHandles(duplicateCandidate.stanzaID);
-    }
-    final Message? duplicateMessage =
-        duplicateCandidate == null ||
-            duplicateCandidate.stanzaID == existing.stanzaID ||
-            staleClaim
-        ? null
-        : duplicateCandidate;
-    Message next = existing;
-    if (existing.deltaMsgId != msgId ||
-        existing.deltaChatId != chatId ||
-        existing.deltaAccountId != accountId ||
-        existing.encryptionProtocol != encryptionProtocol ||
-        (timestamp != null && existing.timestamp != timestamp) ||
-        (metadata != null && existing.fileMetadataID != metadata.id)) {
-      next = existing.copyWith(
-        deltaMsgId: msgId,
-        deltaChatId: chatId,
-        deltaAccountId: accountId,
-        encryptionProtocol: encryptionProtocol,
-        fileMetadataID: metadata?.id ?? existing.fileMetadataID,
-      );
-      if (timestamp != null && next.timestamp != timestamp) {
-        next = next.copyWith(timestamp: timestamp);
-      }
-    }
-    if (next.error == MessageError.emailSendFailure) {
-      next = next.copyWith(error: MessageError.none);
-    }
-    if (duplicateMessage != null) {
-      final String? duplicateOriginId = duplicateMessage.originID?.trim();
-      final bool hasSuccessfulState =
-          next.acked ||
-          next.received ||
-          next.displayed ||
-          duplicateMessage.acked ||
-          duplicateMessage.received ||
-          duplicateMessage.displayed;
-      final MessageError mergedError;
-      if (duplicateMessage.error != MessageError.none && !hasSuccessfulState) {
-        mergedError = duplicateMessage.error;
-      } else if (hasSuccessfulState && next.error != MessageError.none) {
-        mergedError = MessageError.none;
-      } else {
-        mergedError = next.error;
-      }
-      next = next.copyWith(
-        originID:
-            duplicateOriginId != null &&
-                duplicateOriginId.isNotEmpty &&
-                next.originID?.trim().isNotEmpty != true
-            ? duplicateOriginId
-            : next.originID,
-        acked: next.acked || duplicateMessage.acked,
-        received: next.received || duplicateMessage.received,
-        displayed: next.displayed || duplicateMessage.displayed,
-        error: mergedError,
-      );
-    }
-    if (next != existing) {
-      await db.updateMessage(next);
-    }
-    if (metadata != null && messageId != null) {
-      if (previousMetadataId != metadata.id) {
-        final removedIds = await db.deleteMessageAttachments(messageId);
-        await db.addMessageAttachment(
-          messageId: messageId,
-          fileMetadataId: metadata.id,
-        );
-        for (final removedId in removedIds) {
-          await db.deleteFileMetadata(removedId);
-        }
-      } else {
-        await db.addMessageAttachment(
-          messageId: messageId,
-          fileMetadataId: metadata.id,
-        );
-      }
-    }
-    if (metadata != null &&
-        previousMetadataId != null &&
-        previousMetadataId.isNotEmpty &&
-        previousMetadataId != metadata.id) {
-      await db.deleteFileMetadata(previousMetadataId);
-    }
-    if (duplicateMessage != null) {
-      await db.deleteMessage(
-        duplicateMessage.stanzaID,
-        selfJid: existing.senderJid,
-        emailSelfJid: existing.senderJid,
-      );
-    }
-    if (shareId != null) {
+    await _claimOutgoingRow(db: db, message: message, selfJid: senderJid);
+    if (shareId != null && msgId != null) {
       await db.insertMessageCopy(
         shareId: shareId,
         dcMsgId: msgId,
@@ -2521,11 +2342,47 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     }
   }
 
-  Future<void> _markOutgoingMessageFailed({required String stanzaId}) async {
-    final XmppDatabase db = await _databaseBuilder();
-    await db.saveMessageError(
-      stanzaID: stanzaId,
-      error: MessageError.emailSendFailure,
+  Future<void> _claimOutgoingRow({
+    required XmppDatabase db,
+    required Message message,
+    required String selfJid,
+  }) async {
+    final msgId = message.deltaMsgId;
+    if (msgId == null) {
+      await db.saveMessage(message, selfJid: selfJid);
+      return;
+    }
+    final echo = await db.getMessageByDeltaId(
+      msgId,
+      deltaAccountId: message.deltaAccountId,
+      deltaChatId: message.deltaChatId,
+    );
+    if (echo != null) {
+      await db.updateMessage(_withOutgoingPresentation(echo, message));
+      return;
+    }
+    await db.saveMessage(message, selfJid: selfJid);
+    final persisted = await db.getMessageByStanzaID(message.stanzaID);
+    if (persisted != null) {
+      return;
+    }
+    final racedEcho = await db.getMessageByDeltaId(
+      msgId,
+      deltaAccountId: message.deltaAccountId,
+      deltaChatId: message.deltaChatId,
+    );
+    if (racedEcho != null) {
+      await db.updateMessage(_withOutgoingPresentation(racedEcho, message));
+    }
+  }
+
+  Message _withOutgoingPresentation(Message row, Message outgoing) {
+    return row.copyWith(
+      body: outgoing.body ?? row.body,
+      htmlBody: outgoing.htmlBody ?? row.htmlBody,
+      subject: outgoing.subject ?? row.subject,
+      quoting: outgoing.quoting ?? row.quoting,
+      fileMetadataID: outgoing.fileMetadataID ?? row.fileMetadataID,
     );
   }
 
@@ -2611,26 +2468,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     return chat;
   }
 
-  FileMetadataData _pendingMetadataForAttachment(
-    EmailAttachment attachment,
-    String stanzaId,
-  ) {
-    final sanitizedFileName = sanitizeEmailAttachmentFilename(
-      attachment.fileName,
-      fallbackPath: attachment.path,
-    );
-    final sanitizedMimeType = sanitizeEmailMimeType(attachment.mimeType);
-    return FileMetadataData(
-      id: stanzaId,
-      filename: sanitizedFileName,
-      path: attachment.path,
-      mimeType: sanitizedMimeType,
-      sizeBytes: attachment.sizeBytes,
-      width: attachment.width,
-      height: attachment.height,
-    );
-  }
-
   FileMetadataData _metadataForAttachment(
     EmailAttachment attachment,
     int msgId,
@@ -2649,52 +2486,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       width: attachment.width,
       height: attachment.height,
     );
-  }
-
-  Future<void> _scheduleOriginIdHydration({
-    required DeltaContextHandle context,
-    required _DeltaChatMessageId id,
-  }) async {
-    _queueOriginIdHydration(context: context, id: id);
-  }
-
-  void _queueOriginIdHydration({
-    required DeltaContextHandle context,
-    required _DeltaChatMessageId id,
-  }) {
-    final epoch = _coreOperationEpoch;
-    final key = '${id.accountId}:${id.msgId}';
-    if (_originIdHydrationPending.contains(key)) {
-      return;
-    }
-    _originIdHydrationPending.add(key);
-    _originIdHydrationQueue = _runOriginIdHydration(
-      previous: _originIdHydrationQueue,
-      context: context,
-      id: id,
-      key: key,
-      epoch: epoch,
-    );
-  }
-
-  Future<void> _runOriginIdHydration({
-    required Future<void> previous,
-    required DeltaContextHandle context,
-    required _DeltaChatMessageId id,
-    required String key,
-    required int epoch,
-  }) async {
-    await previous;
-    if (!_isCurrentCoreOperationEpoch(epoch)) {
-      return;
-    }
-    try {
-      await _hydrateOriginId(context: context, id: id, epoch: epoch);
-    } on Exception catch (error, stackTrace) {
-      _log.fine(_originIdHydrationFailedLog, error, stackTrace);
-    } finally {
-      _originIdHydrationPending.remove(key);
-    }
   }
 
   Future<void> _scheduleAttachmentMetadataHydration({
@@ -2736,80 +2527,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       final db = await _databaseBuilder();
       await db.saveFileMetadata(updatedMetadata);
     });
-  }
-
-  Future<void> _hydrateOriginId({
-    required DeltaContextHandle context,
-    required _DeltaChatMessageId id,
-    required int epoch,
-  }) async {
-    final String? selfJid = _selfJidForAccount(id.accountId);
-    if (!_isCurrentCoreOperationEpoch(epoch)) {
-      return;
-    }
-    final originId = await _resolveMessageOriginId(context, id.msgId);
-    if (originId == null) {
-      _log.info('Origin ID hydration exhausted for Delta msg ${id.msgId}.');
-      return;
-    }
-    if (!_isCurrentCoreOperationEpoch(epoch)) {
-      return;
-    }
-    await _trackDatabaseOperation(() async {
-      final db = await _databaseBuilder();
-      if (!_isCurrentCoreOperationEpoch(epoch)) {
-        return;
-      }
-      final existing = await _lookupStoredDeltaMessage(db, id);
-      if (existing == null) {
-        return;
-      }
-      final existingOrigin = normalizeEmailMessageId(existing.originID);
-      if (existingOrigin == originId) {
-        return;
-      }
-      if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
-        return;
-      }
-      await db.updateMessageOriginId(
-        stanzaID: existing.stanzaID,
-        originID: originId,
-      );
-      final staleOrigin = existing.originID?.trim();
-      if (staleOrigin != null && staleOrigin.isNotEmpty) {
-        await db.rebindMessageCollectionMembershipReferences(
-          chatJid: existing.chatJid,
-          oldReferenceId: staleOrigin,
-          newReferenceId: originId,
-        );
-      }
-      await db.repairUnreadCountForChat(
-        existing.chatJid,
-        selfJid: _xmppSelfJidProvider?.call(),
-        emailSelfJid: selfJid,
-      );
-    });
-  }
-
-  Future<Message?> _lookupStoredDeltaMessage(
-    XmppDatabase db,
-    _DeltaChatMessageId id,
-  ) async {
-    final scoped = await db.getMessageByDeltaId(
-      id.msgId,
-      deltaAccountId: id.accountId,
-      deltaChatId: id.chatId,
-    );
-    if (scoped == null || !_storedDeltaLocatorMatches(scoped, id)) {
-      return null;
-    }
-    return scoped;
-  }
-
-  bool _storedDeltaLocatorMatches(Message message, _DeltaChatMessageId id) {
-    return message.deltaMsgId == id.msgId &&
-        message.deltaAccountId == id.accountId &&
-        message.deltaChatId == id.chatId;
   }
 
   Future<String?> _resolveMessageOriginId(
@@ -3333,22 +3050,12 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       context: context,
     );
     final coreSubject = subjectForDeltaCore(subject);
-    final DateTime sentAt = DateTime.timestamp();
-    final String pendingStanzaId = _pendingOutgoingStanzaId();
-    await _recordOutgoing(
+    return _sendAndRecordOutgoing(
+      context: context,
       chatId: chatId,
       accountId: resolvedAccountId,
       chat: chat,
-      body: body,
-      subject: sanitizedSubject,
-      quotingStanzaId: quotedStanzaId,
-      htmlBody: htmlBody,
-      timestamp: sentAt,
-      stanzaId: pendingStanzaId,
-    );
-    int msgId;
-    try {
-      msgId = await context.sendTextWithQuote(
+      send: () => context.sendTextWithQuote(
         chatId: chatId,
         message: body,
         quotedMessageId: quotedMessageId,
@@ -3356,29 +3063,12 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         html: htmlBody,
         forcePlaintext: forcePlaintext,
         skipAutocrypt: skipAutocrypt,
-      );
-    } on Exception {
-      await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
-      rethrow;
-    }
-    final deltaMessage = await context.getMessage(msgId);
-    await _markOutgoingMessageSent(
-      stanzaId: pendingStanzaId,
-      msgId: msgId,
-      accountId: resolvedAccountId,
-      chatId: chatId,
-      timestamp: deltaMessage?.timestamp,
-      encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
-    );
-    await _scheduleOriginIdHydration(
-      context: context,
-      id: _DeltaChatMessageId(
-        accountId: resolvedAccountId,
-        chatId: chatId,
-        msgId: msgId,
       ),
+      body: body,
+      subject: sanitizedSubject,
+      quotingStanzaId: quotedStanzaId,
+      htmlBody: htmlBody,
     );
-    return msgId;
   }
 
   /// Gets the quoted message info for a message.

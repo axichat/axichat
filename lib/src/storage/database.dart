@@ -135,11 +135,6 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> deleteMessagesByStanzaIds(Iterable<String> stanzaIds);
 
-  Future<List<Message>> getPendingOutgoingDeltaMessages({
-    required int deltaAccountId,
-    required int deltaChatId,
-  });
-
   Future<List<Message>> searchChatMessages({
     required String jid,
     String? query,
@@ -198,8 +193,6 @@ abstract interface class XmppDatabase implements Database {
   Future<List<Message>> getEmailMessagesWithDeltaAccountNotIn(
     List<int> validAccountIds,
   );
-
-  Future<List<Message>> getUnboundEmailMessagesOlderThan(DateTime cutoff);
 
   Future<List<Message>> getMessagesByReferenceIds(
     Iterable<String> messageIds, {
@@ -3136,25 +3129,6 @@ WHERE transport = ${MessageTransport.email.index}
   }
 
   @override
-  Future<List<Message>> getPendingOutgoingDeltaMessages({
-    required int deltaAccountId,
-    required int deltaChatId,
-  }) async {
-    final query = select(messages)
-      ..where(
-        (tbl) =>
-            tbl.deltaMsgId.isNull() &
-            tbl.deltaChatId.equals(deltaChatId) &
-            tbl.deltaAccountId.equals(deltaAccountId),
-      )
-      ..orderBy([
-        (tbl) =>
-            OrderingTerm(expression: tbl.timestamp, mode: OrderingMode.desc),
-      ]);
-    return query.get();
-  }
-
-  @override
   Future<List<Message>> searchChatMessages({
     required String jid,
     String? query,
@@ -3467,22 +3441,6 @@ WHERE transport = ${MessageTransport.email.index}
         (tbl) =>
             tbl.deltaMsgId.isNotNull() &
             tbl.deltaAccountId.isNotIn(validAccountIds),
-      );
-    return query.get();
-  }
-
-  @override
-  Future<List<Message>> getUnboundEmailMessagesOlderThan(DateTime cutoff) {
-    final query = select(messages)
-      ..where(
-        (tbl) =>
-            tbl.deltaChatId.isNotNull() &
-            tbl.deltaMsgId.isNull() &
-            tbl.error.equalsValue(MessageError.none) &
-            tbl.acked.equals(false) &
-            tbl.received.equals(false) &
-            tbl.displayed.equals(false) &
-            tbl.timestamp.isSmallerThanValue(cutoff),
       );
     return query.get();
   }

@@ -4187,12 +4187,6 @@ void main() {
       ),
     );
 
-    verifyNever(
-      () => database.getPendingOutgoingDeltaMessages(
-        deltaAccountId: any(named: 'deltaAccountId'),
-        deltaChatId: any(named: 'deltaChatId'),
-      ),
-    );
     verifyNever(() => database.updateMessage(any()));
     final saved =
         verify(

@@ -411,35 +411,6 @@ void main() {
     expect(find.text('Welcome to Axichat'), findsOneWidget);
     expect(find.text('Set up account recovery'), findsNothing);
   });
-
-  testWidgets('account welcome gate releases post-login hold after unmount', (
-    tester,
-  ) async {
-    final recoveryWelcomeDismissed = Completer<bool>();
-    final settingsCubit = _settingsCubit();
-    final authenticationCubit = _authenticationCubit(
-      state: const AuthenticationComplete(),
-    );
-    when(
-      () => settingsCubit.recoveryWelcomeDismissedFor(any()),
-    ).thenAnswer((_) => recoveryWelcomeDismissed.future);
-    await _pumpEmailForwardingApp(
-      tester,
-      settingsCubit: settingsCubit,
-      authenticationCubit: authenticationCubit,
-      xmppService: _xmppService(jid: 'alice@axi.im'),
-      child: const AccountWelcomeGate(child: SizedBox.shrink()),
-    );
-    await tester.pump();
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    recoveryWelcomeDismissed.complete(false);
-    await tester.pump();
-
-    verify(
-      () => authenticationCubit.releaseSignupPostLoginWorkHold(),
-    ).called(1);
-  });
 }
 
 Future<void> _pumpEmailForwardingApp(
@@ -610,9 +581,6 @@ _MockAuthenticationCubit _authenticationCubit({
   when(
     () => authenticationCubit.currentEmailPasswordForAccount(any()),
   ).thenAnswer((_) async => currentEmailPassword);
-  when(
-    () => authenticationCubit.releaseSignupPostLoginWorkHold(),
-  ).thenAnswer((_) async {});
   return authenticationCubit;
 }
 

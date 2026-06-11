@@ -3060,14 +3060,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  void beginSignupPostLoginWorkHold() {
-    _xmppService.beginSignupPostLoginWorkHold();
-  }
-
-  Future<void> releaseSignupPostLoginWorkHold() async {
-    await _xmppService.releaseSignupPostLoginWorkHold();
-  }
-
   Future<void> _persistLoginSecrets({
     required EndpointConfig config,
     required String jid,
@@ -3266,7 +3258,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     _activeSignupCredentialKey = _normalizeSignupKey(username, host);
     var signupComplete = false;
-    var signupPostLoginWorkHoldStarted = false;
     var xmppRegistrationSucceeded = false;
     provisioning.EmailProvisioningCredentials? emailProvisioningCredentials;
     try {
@@ -3315,8 +3306,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           rememberMe: rememberMe,
         );
       }
-      beginSignupPostLoginWorkHold();
-      signupPostLoginWorkHoldStarted = true;
       await login(
         username: username,
         password: password,
@@ -3354,9 +3343,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     } finally {
       _activeSignupCredentialKey = null;
-      if (!signupComplete && signupPostLoginWorkHoldStarted) {
-        await releaseSignupPostLoginWorkHold();
-      }
       if (signupComplete) {
         await _removePendingAccountDeletion(username: username, host: host);
       }

@@ -47,32 +47,6 @@ class MockXmppService extends Mock implements XmppService {
     );
     return result is bool ? result : false;
   }
-
-  @override
-  bool get signupPostLoginWorkHeld {
-    final result = super.noSuchMethod(
-      Invocation.getter(#signupPostLoginWorkHeld),
-    );
-    return result is bool ? result : false;
-  }
-
-  @override
-  void beginSignupPostLoginWorkHold() {
-    super.noSuchMethod(
-      Invocation.method(#beginSignupPostLoginWorkHold, const []),
-    );
-  }
-
-  @override
-  Future<void> releaseSignupPostLoginWorkHold() {
-    final result = super.noSuchMethod(
-      Invocation.method(#releaseSignupPostLoginWorkHold, const []),
-    );
-    if (result is Future<void>) {
-      return result;
-    }
-    return Future<void>.value();
-  }
 }
 
 class MockXmppConnection extends Mock implements XmppConnection {

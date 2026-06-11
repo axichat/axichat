@@ -1069,7 +1069,7 @@ void main() {
     });
 
     test(
-      'Signup post-login hold defers carbons and bootstrap until released.',
+      'Stream negotiations run carbons and bootstrap immediately.',
       () async {
         stubUnsafeBootstrapManagersUnavailable();
         when(() => mockConnection.carbonsEnabled).thenReturn(false);
@@ -1083,19 +1083,10 @@ void main() {
           () => mockConnection.requestBlocklist(),
         ).thenAnswer((_) async => null);
 
-        xmppService.beginSignupPostLoginWorkHold();
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
 
-        await pumpEventQueue();
-
-        expect(xmppService.signupPostLoginWorkHeld, isTrue);
-        verifyNever(() => mockConnection.enableCarbons());
-        verifyNever(() => mockConnection.requestRoster());
-
-        await xmppService.releaseSignupPostLoginWorkHold();
         await pumpEventQueue(times: 10);
 
-        expect(xmppService.signupPostLoginWorkHeld, isFalse);
         verify(() => mockConnection.enableCarbons()).called(1);
         verify(() => mockConnection.requestRoster()).called(1);
       },

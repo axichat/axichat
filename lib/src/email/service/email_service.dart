@@ -695,8 +695,6 @@ class EmailService {
   };
   static const int _minimumHistoryWindow = 1;
   static const bool _includePseudoMessagesInBackfill = false;
-  static const String _missingOutgoingDeltaIdError =
-      'Outgoing email message missing delta ID.';
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
 
@@ -835,11 +833,8 @@ class EmailService {
 
   bool _deltaAccountRepairCompleted = false;
 
-  bool _orphanedPendingEmailSweepCompleted = false;
-
   Future<bool>? _backgroundFetchInFlight;
 
-  static const Duration _orphanedPendingEmailCutoff = Duration(minutes: 10);
   Timer? _imapSyncTimer;
   Object? _imapSyncLoopToken;
   final EmailAsyncQueue _imapSyncQueue = EmailAsyncQueue();
@@ -2609,8 +2604,6 @@ class EmailService {
     );
   }
 
-  String _pendingOutgoingStanzaId() => const Uuid().v4();
-
   String _resolveOutgoingSenderJid({
     required Chat chat,
     required int accountId,
@@ -2628,24 +2621,6 @@ class EmailService {
       return accountSender;
     }
     return deltaAnonUserJid;
-  }
-
-  FileMetadataData _pendingMetadataForAttachment(
-    EmailAttachment attachment,
-    String stanzaId,
-  ) {
-    return FileMetadataData(
-      id: stanzaId,
-      filename: sanitizeEmailAttachmentFilename(
-        attachment.fileName,
-        fallbackPath: attachment.path,
-      ),
-      path: attachment.path,
-      mimeType: sanitizeEmailMimeType(attachment.mimeType),
-      sizeBytes: attachment.sizeBytes,
-      width: attachment.width,
-      height: attachment.height,
-    );
   }
 
   FileMetadataData _metadataForAttachment(
@@ -2666,12 +2641,95 @@ class EmailService {
     );
   }
 
+  Future<int> _sendAndRecordEmail({
+    required int chatId,
+    required Chat chat,
+    required int accountId,
+    required String operation,
+    required Future<int> Function() send,
+    String? body,
+    String? subject,
+    String? quotingStanzaId,
+    String? shareId,
+    String? localBodyOverride,
+    String? htmlBody,
+    FileMetadataData Function(int msgId, DeltaMessage? deltaMessage)?
+    metadataForMsg,
+  }) async {
+    final record = !_transport.persistsAppStateInternally;
+    final int msgId;
+    try {
+      msgId = await _guardDeltaOperation(operation: operation, body: send);
+    } on Exception {
+      if (record) {
+        await _recordOutgoingEmail(
+          chatId: chatId,
+          accountId: accountId,
+          chat: chat,
+          stanzaId: _outgoingEmailRowKey(),
+          body: body,
+          subject: subject,
+          quotingStanzaId: quotingStanzaId,
+          shareId: shareId,
+          localBodyOverride: localBodyOverride,
+          htmlBody: htmlBody,
+          error: MessageError.emailSendFailure,
+        );
+      }
+      rethrow;
+    }
+    if (record) {
+      final deltaMessage = await _transport.getMessage(
+        msgId,
+        accountId: accountId,
+      );
+      await _recordOutgoingEmail(
+        chatId: chatId,
+        accountId: accountId,
+        chat: chat,
+        msgId: msgId,
+        stanzaId: _outgoingEmailRowKey(),
+        originId: await _resolveSentEmailOriginId(msgId, accountId: accountId),
+        body: body,
+        subject: subject,
+        quotingStanzaId: quotingStanzaId,
+        metadata: metadataForMsg?.call(msgId, deltaMessage),
+        shareId: shareId,
+        localBodyOverride: localBodyOverride,
+        htmlBody: htmlBody,
+        timestamp: deltaMessage?.timestamp,
+        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
+      );
+    }
+    return msgId;
+  }
+
+  String _outgoingEmailRowKey() => const Uuid().v4();
+
+  Future<String?> _resolveSentEmailOriginId(
+    int msgId, {
+    required int accountId,
+  }) async {
+    try {
+      final mid = normalizeEmailMessageId(
+        await _transport.getMessageRfc724Mid(msgId, accountId: accountId),
+      );
+      if (mid == null || isDeltaGeneratedMessageId(mid)) {
+        return null;
+      }
+      return mid;
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to resolve sent email origin.', error, stackTrace);
+      return null;
+    }
+  }
+
   Future<void> _recordOutgoingEmail({
     required int chatId,
     required int accountId,
     required Chat chat,
+    required String stanzaId,
     int? msgId,
-    String? stanzaId,
     String? originId,
     String? body,
     String? subject,
@@ -2681,18 +2739,10 @@ class EmailService {
     String? localBodyOverride,
     String? htmlBody,
     DateTime? timestamp,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+    MessageError error = MessageError.none,
   }) async {
     final db = await _databaseBuilder();
-    final int? resolvedMsgId = msgId;
-    final resolvedStanzaId =
-        stanzaId ??
-        (resolvedMsgId == null
-            ? throw StateError(_missingOutgoingDeltaIdError)
-            : deltaScopedMessageStorageStanzaId(
-                accountId: accountId,
-                chatId: chatId,
-                msgId: resolvedMsgId,
-              ));
     if (metadata != null) {
       await db.saveFileMetadata(metadata);
     }
@@ -2703,7 +2753,7 @@ class EmailService {
       accountId: accountId,
     );
     final message = Message(
-      stanzaID: resolvedStanzaId,
+      stanzaID: stanzaId,
       senderJid: senderJid,
       chatJid: chat.jid,
       timestamp: timestamp ?? DateTime.timestamp(),
@@ -2712,181 +2762,17 @@ class EmailService {
       htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
       subject: subject,
       quoting: quotingStanzaId,
-      encryptionProtocol: EncryptionProtocol.none,
+      encryptionProtocol: encryptionProtocol,
+      error: error,
       acked: false,
       received: false,
       deltaChatId: chatId,
-      deltaMsgId: resolvedMsgId,
+      deltaMsgId: msgId,
       deltaAccountId: accountId,
       fileMetadataID: metadata?.id,
     );
-    await db.saveMessage(message, selfJid: senderJid);
-    if (shareId != null && resolvedMsgId != null) {
-      await db.insertMessageCopy(
-        shareId: shareId,
-        dcMsgId: resolvedMsgId,
-        dcChatId: chatId,
-        dcAccountId: accountId,
-      );
-    }
-  }
-
-  Future<void> _markOutgoingEmailSent({
-    required String stanzaId,
-    required int msgId,
-    required int accountId,
-    required int chatId,
-    String? shareId,
-    FileMetadataData? metadata,
-    DateTime? timestamp,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
-  }) {
-    return _deltaConsumerForAccount(accountId).runExclusive(
-      () => _markOutgoingEmailSentSerialized(
-        stanzaId: stanzaId,
-        msgId: msgId,
-        accountId: accountId,
-        chatId: chatId,
-        shareId: shareId,
-        metadata: metadata,
-        timestamp: timestamp,
-        encryptionProtocol: encryptionProtocol,
-      ),
-    );
-  }
-
-  Future<void> _markOutgoingEmailSentSerialized({
-    required String stanzaId,
-    required int msgId,
-    required int accountId,
-    required int chatId,
-    String? shareId,
-    FileMetadataData? metadata,
-    DateTime? timestamp,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
-  }) async {
-    final db = await _databaseBuilder();
-    final existing = await db.getMessageByStanzaID(stanzaId);
-    final previousMetadataId = existing?.fileMetadataID;
-    final messageId = existing?.id;
-    if (metadata != null) {
-      await db.saveFileMetadata(metadata);
-    }
-    if (existing == null) {
-      if (shareId != null) {
-        await db.insertMessageCopy(
-          shareId: shareId,
-          dcMsgId: msgId,
-          dcChatId: chatId,
-          dcAccountId: accountId,
-        );
-      }
-      return;
-    }
-    final duplicateCandidate = await db.getMessageByDeltaId(
-      msgId,
-      deltaAccountId: accountId,
-      deltaChatId: chatId,
-    );
-    final staleClaim =
-        duplicateCandidate != null &&
-        duplicateCandidate.stanzaID != existing.stanzaID &&
-        (duplicateCandidate.chatJid != existing.chatJid ||
-            duplicateCandidate.senderJid != existing.senderJid);
-    if (staleClaim) {
-      await db.clearMessageDeltaHandles(duplicateCandidate.stanzaID);
-    }
-    final duplicateMessage =
-        duplicateCandidate == null ||
-            duplicateCandidate.stanzaID == existing.stanzaID ||
-            staleClaim
-        ? null
-        : duplicateCandidate;
-    var next = existing;
-    if (existing.deltaMsgId != msgId ||
-        existing.deltaChatId != chatId ||
-        existing.deltaAccountId != accountId ||
-        existing.encryptionProtocol != encryptionProtocol ||
-        (timestamp != null && existing.timestamp != timestamp) ||
-        (metadata != null && existing.fileMetadataID != metadata.id)) {
-      next = existing.copyWith(
-        deltaMsgId: msgId,
-        deltaChatId: chatId,
-        deltaAccountId: accountId,
-        encryptionProtocol: encryptionProtocol,
-        fileMetadataID: metadata?.id ?? existing.fileMetadataID,
-      );
-      if (timestamp != null && next.timestamp != timestamp) {
-        next = next.copyWith(timestamp: timestamp);
-      }
-    }
-    if (next.error == MessageError.emailSendFailure) {
-      next = next.copyWith(error: MessageError.none);
-    }
-    if (duplicateMessage != null) {
-      final duplicateOriginId = duplicateMessage.originID?.trim();
-      final hasSuccessfulState =
-          next.acked ||
-          next.received ||
-          next.displayed ||
-          duplicateMessage.acked ||
-          duplicateMessage.received ||
-          duplicateMessage.displayed;
-      final MessageError mergedError;
-      if (duplicateMessage.error != MessageError.none && !hasSuccessfulState) {
-        mergedError = duplicateMessage.error;
-      } else if (hasSuccessfulState && next.error != MessageError.none) {
-        mergedError = MessageError.none;
-      } else {
-        mergedError = next.error;
-      }
-      next = next.copyWith(
-        originID:
-            duplicateOriginId != null &&
-                duplicateOriginId.isNotEmpty &&
-                next.originID?.trim().isNotEmpty != true
-            ? duplicateOriginId
-            : next.originID,
-        acked: next.acked || duplicateMessage.acked,
-        received: next.received || duplicateMessage.received,
-        displayed: next.displayed || duplicateMessage.displayed,
-        error: mergedError,
-      );
-    }
-    if (next != existing) {
-      await db.updateMessage(next);
-    }
-    if (metadata != null && messageId != null) {
-      if (previousMetadataId != metadata.id) {
-        final removedIds = await db.deleteMessageAttachments(messageId);
-        await db.addMessageAttachment(
-          messageId: messageId,
-          fileMetadataId: metadata.id,
-        );
-        for (final removedId in removedIds) {
-          await db.deleteFileMetadata(removedId);
-        }
-      } else {
-        await db.addMessageAttachment(
-          messageId: messageId,
-          fileMetadataId: metadata.id,
-        );
-      }
-    }
-    if (metadata != null &&
-        previousMetadataId != null &&
-        previousMetadataId.isNotEmpty &&
-        previousMetadataId != metadata.id) {
-      await db.deleteFileMetadata(previousMetadataId);
-    }
-    if (duplicateMessage != null) {
-      await db.deleteMessage(
-        duplicateMessage.stanzaID,
-        selfJid: existing.senderJid,
-        emailSelfJid: existing.senderJid,
-      );
-    }
-    if (shareId != null) {
+    await _claimOutgoingEmailRow(db: db, message: message, selfJid: senderJid);
+    if (shareId != null && msgId != null) {
       await db.insertMessageCopy(
         shareId: shareId,
         dcMsgId: msgId,
@@ -2896,11 +2782,47 @@ class EmailService {
     }
   }
 
-  Future<void> _markOutgoingEmailFailed({required String stanzaId}) async {
-    final db = await _databaseBuilder();
-    await db.saveMessageError(
-      stanzaID: stanzaId,
-      error: MessageError.emailSendFailure,
+  Future<void> _claimOutgoingEmailRow({
+    required XmppDatabase db,
+    required Message message,
+    required String selfJid,
+  }) async {
+    final msgId = message.deltaMsgId;
+    if (msgId == null) {
+      await db.saveMessage(message, selfJid: selfJid);
+      return;
+    }
+    final echo = await db.getMessageByDeltaId(
+      msgId,
+      deltaAccountId: message.deltaAccountId,
+      deltaChatId: message.deltaChatId,
+    );
+    if (echo != null) {
+      await db.updateMessage(_withOutgoingPresentation(echo, message));
+      return;
+    }
+    await db.saveMessage(message, selfJid: selfJid);
+    final persisted = await db.getMessageByStanzaID(message.stanzaID);
+    if (persisted != null) {
+      return;
+    }
+    final racedEcho = await db.getMessageByDeltaId(
+      msgId,
+      deltaAccountId: message.deltaAccountId,
+      deltaChatId: message.deltaChatId,
+    );
+    if (racedEcho != null) {
+      await db.updateMessage(_withOutgoingPresentation(racedEcho, message));
+    }
+  }
+
+  Message _withOutgoingPresentation(Message row, Message outgoing) {
+    return row.copyWith(
+      body: outgoing.body ?? row.body,
+      htmlBody: outgoing.htmlBody ?? row.htmlBody,
+      subject: outgoing.subject ?? row.subject,
+      quoting: outgoing.quoting ?? row.quoting,
+      fileMetadataID: outgoing.fileMetadataID ?? row.fileMetadataID,
     );
   }
 
@@ -2965,62 +2887,30 @@ class EmailService {
         participants: participants,
       );
     }
-    final pendingStanzaId = _transport.persistsAppStateInternally
-        ? null
-        : _pendingOutgoingStanzaId();
-    if (pendingStanzaId != null) {
-      await _recordOutgoingEmail(
+    final int msgId = await _sendAndRecordEmail(
+      chatId: chatId,
+      chat: binding.chat,
+      accountId: binding.deltaAccountId,
+      operation: 'send email message',
+      send: () => _transport.sendText(
         chatId: chatId,
-        accountId: binding.deltaAccountId,
-        chat: binding.chat,
         body: payload.transmitText,
         subject: normalizedSubject,
-        quotingStanzaId: quotedStanzaId,
         shareId: shareId,
         localBodyOverride: payload.displayText,
         htmlBody: payload.htmlBody,
-        timestamp: DateTime.timestamp(),
-        stanzaId: pendingStanzaId,
-      );
-    }
-    final int msgId;
-    try {
-      msgId = await _guardDeltaOperation(
-        operation: 'send email message',
-        body: () => _transport.sendText(
-          chatId: chatId,
-          body: payload.transmitText,
-          subject: normalizedSubject,
-          shareId: shareId,
-          localBodyOverride: payload.displayText,
-          htmlBody: payload.htmlBody,
-          quotingStanzaId: quotedStanzaId,
-          accountId: binding.deltaAccountId,
-          forcePlaintext: mode.forcePlaintext,
-          skipAutocrypt: mode.skipAutocrypt,
-        ),
-      );
-    } on Exception {
-      if (pendingStanzaId != null) {
-        await _markOutgoingEmailFailed(stanzaId: pendingStanzaId);
-      }
-      rethrow;
-    }
-    if (pendingStanzaId != null) {
-      final deltaMessage = await _transport.getMessage(
-        msgId,
+        quotingStanzaId: quotedStanzaId,
         accountId: binding.deltaAccountId,
-      );
-      await _markOutgoingEmailSent(
-        stanzaId: pendingStanzaId,
-        msgId: msgId,
-        accountId: binding.deltaAccountId,
-        chatId: chatId,
-        shareId: shareId,
-        timestamp: deltaMessage?.timestamp,
-        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
-      );
-    }
+        forcePlaintext: mode.forcePlaintext,
+        skipAutocrypt: mode.skipAutocrypt,
+      ),
+      body: payload.transmitText,
+      subject: normalizedSubject,
+      quotingStanzaId: quotedStanzaId,
+      shareId: shareId,
+      localBodyOverride: payload.displayText,
+      htmlBody: payload.htmlBody,
+    );
     if (shareId != null) {
       final db = await _databaseBuilder();
       await db.assignShareOriginator(
@@ -3119,80 +3009,46 @@ class EmailService {
         participants: participants,
       );
     }
-    final pendingStanzaId = _transport.persistsAppStateInternally
-        ? null
-        : _pendingOutgoingStanzaId();
     final pendingAttachment = effectiveAttachment.copyWith(
       caption: payload.transmitText,
     );
-    if (pendingStanzaId != null) {
-      await _recordOutgoingEmail(
+    final int msgId = await _sendAndRecordEmail(
+      chatId: chatId,
+      chat: binding.chat,
+      accountId: binding.deltaAccountId,
+      operation: 'send email attachment',
+      send: () => _transport.sendAttachment(
         chatId: chatId,
-        accountId: binding.deltaAccountId,
-        chat: binding.chat,
-        body: pendingAttachment.caption,
+        attachment: pendingAttachment,
         subject: normalizedSubject,
+        shareId: shareId,
+        captionOverride: payload.displayText,
+        htmlCaption: payload.htmlBody,
         quotingStanzaId: effectiveQuotedStanzaId,
-        metadata: _pendingMetadataForAttachment(
-          pendingAttachment,
-          pendingStanzaId,
-        ),
-        shareId: shareId,
-        localBodyOverride: payload.displayText,
-        htmlBody: payload.htmlBody,
-        timestamp: DateTime.timestamp(),
-        stanzaId: pendingStanzaId,
-      );
-    }
-    final int msgId;
-    try {
-      msgId = await _guardDeltaOperation(
-        operation: 'send email attachment',
-        body: () => _transport.sendAttachment(
-          chatId: chatId,
-          attachment: pendingAttachment,
-          subject: normalizedSubject,
-          shareId: shareId,
-          captionOverride: payload.displayText,
-          htmlCaption: payload.htmlBody,
-          quotingStanzaId: effectiveQuotedStanzaId,
-          accountId: binding.deltaAccountId,
-          forcePlaintext: mode.forcePlaintext,
-          skipAutocrypt: mode.skipAutocrypt,
-        ),
-      );
-    } on Exception {
-      if (pendingStanzaId != null) {
-        await _markOutgoingEmailFailed(stanzaId: pendingStanzaId);
-      }
-      rethrow;
-    }
-    if (pendingStanzaId != null) {
-      final metadata = _metadataForAttachment(pendingAttachment, msgId);
-      final deltaMessage = await _transport.getMessage(
-        msgId,
         accountId: binding.deltaAccountId,
-      );
-      final hydratedMetadata = deltaMessage == null
-          ? metadata
-          : metadata.copyWith(
-              path: deltaMessage.filePath ?? metadata.path,
-              mimeType: deltaMessage.fileMime ?? metadata.mimeType,
-              sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
-              width: deltaMessage.width ?? metadata.width,
-              height: deltaMessage.height ?? metadata.height,
-            );
-      await _markOutgoingEmailSent(
-        stanzaId: pendingStanzaId,
-        msgId: msgId,
-        accountId: binding.deltaAccountId,
-        chatId: chatId,
-        shareId: shareId,
-        metadata: hydratedMetadata,
-        timestamp: deltaMessage?.timestamp,
-        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
-      );
-    }
+        forcePlaintext: mode.forcePlaintext,
+        skipAutocrypt: mode.skipAutocrypt,
+      ),
+      body: pendingAttachment.caption,
+      subject: normalizedSubject,
+      quotingStanzaId: effectiveQuotedStanzaId,
+      shareId: shareId,
+      localBodyOverride: payload.displayText,
+      htmlBody: payload.htmlBody,
+      metadataForMsg: (msgId, deltaMessage) {
+        final metadata = _metadataForAttachment(pendingAttachment, msgId);
+        if (deltaMessage == null) {
+          return metadata;
+        }
+        return metadata.copyWith(
+          path: deltaMessage.filePath ?? metadata.path,
+          mimeType: deltaMessage.fileMime ?? metadata.mimeType,
+          sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
+          width: deltaMessage.width ?? metadata.width,
+          height: deltaMessage.height ?? metadata.height,
+        );
+      },
+    );
     if (shareId != null) {
       final db = await _databaseBuilder();
       await db.assignShareOriginator(
@@ -6270,27 +6126,7 @@ class EmailService {
       return false;
     }
     await _repairStoredDeltaAccountIdsOnce();
-    await _failOrphanedPendingEmailOnce();
     return true;
-  }
-
-  Future<void> _failOrphanedPendingEmailOnce() async {
-    if (_orphanedPendingEmailSweepCompleted) {
-      return;
-    }
-    _orphanedPendingEmailSweepCompleted = true;
-    final cutoff = DateTime.timestamp().subtract(_orphanedPendingEmailCutoff);
-    final db = await _databaseBuilder();
-    final orphans = await db.getUnboundEmailMessagesOlderThan(cutoff);
-    for (final orphan in orphans) {
-      await db.saveMessageError(
-        stanzaID: orphan.stanzaID,
-        error: MessageError.emailSendFailure,
-      );
-    }
-    if (orphans.isNotEmpty) {
-      _log.info('Failed ${orphans.length} orphaned pending email sends.');
-    }
   }
 
   Future<void> _repairStoredDeltaAccountIdsOnce() async {
@@ -8698,59 +8534,27 @@ class EmailService {
       htmlBody: htmlBody,
       subject: null,
     );
-    final pendingStanzaId = _transport.persistsAppStateInternally
-        ? null
-        : _pendingOutgoingStanzaId();
-    if (pendingStanzaId != null) {
-      await _recordOutgoingEmail(
+    return _sendAndRecordEmail(
+      chatId: chatId,
+      chat: binding.chat,
+      accountId: binding.deltaAccountId,
+      operation: 'send reply',
+      send: () => _transport.sendTextWithQuote(
         chatId: chatId,
-        accountId: binding.deltaAccountId,
-        chat: binding.chat,
         body: payload.displayText,
+        quotedMessageId: quotedMsgId,
+        quotedStanzaId: quotedMessage.stanzaID,
         subject: normalizedSubject,
-        quotingStanzaId: quotedMessage.stanzaID,
         htmlBody: payload.htmlBody,
-        timestamp: DateTime.timestamp(),
-        stanzaId: pendingStanzaId,
-      );
-    }
-    final int msgId;
-    try {
-      msgId = await _guardDeltaOperation(
-        operation: 'send reply',
-        body: () => _transport.sendTextWithQuote(
-          chatId: chatId,
-          body: payload.displayText,
-          quotedMessageId: quotedMsgId,
-          quotedStanzaId: quotedMessage.stanzaID,
-          subject: normalizedSubject,
-          htmlBody: payload.htmlBody,
-          accountId: binding.deltaAccountId,
-          forcePlaintext: mode.forcePlaintext,
-          skipAutocrypt: mode.skipAutocrypt,
-        ),
-      );
-    } on Exception {
-      if (pendingStanzaId != null) {
-        await _markOutgoingEmailFailed(stanzaId: pendingStanzaId);
-      }
-      rethrow;
-    }
-    if (pendingStanzaId != null) {
-      final deltaMessage = await _transport.getMessage(
-        msgId,
         accountId: binding.deltaAccountId,
-      );
-      await _markOutgoingEmailSent(
-        stanzaId: pendingStanzaId,
-        msgId: msgId,
-        accountId: binding.deltaAccountId,
-        chatId: chatId,
-        timestamp: deltaMessage?.timestamp,
-        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
-      );
-    }
-    return msgId;
+        forcePlaintext: mode.forcePlaintext,
+        skipAutocrypt: mode.skipAutocrypt,
+      ),
+      body: payload.displayText,
+      subject: normalizedSubject,
+      quotingStanzaId: quotedMessage.stanzaID,
+      htmlBody: payload.htmlBody,
+    );
   }
 
   /// Gets the quoted message info for a message.
