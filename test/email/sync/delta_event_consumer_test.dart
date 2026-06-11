@@ -4166,4 +4166,156 @@ void main() {
     expect(saved.deltaChatId, chatId);
     expect(saved.body, 'Echo body');
   });
+
+  test(
+    'bootstrap hydrates messages in batches without per-message fetches',
+    () async {
+      const chatId = 31;
+      final msgIds = List<int>.generate(70, (index) => 100 + index);
+      final chat = Chat(
+        jid: 'budget@example.com',
+        title: 'Budget',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final countingCore = CountingDeltaEventCore(
+        DeltaContextEventCore(context),
+      );
+      final countingConsumer = DeltaEventConsumer(
+        databaseBuilder: () async => database,
+        core: countingCore,
+        selfJidProvider: () => 'me@example.com',
+      );
+
+      when(() => context.getChatlist()).thenAnswer(
+        (_) async => [DeltaChatlistEntry(chatId: chatId, msgId: msgIds.last)],
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(() => context.getFreshMessageCountSafe(chatId)).thenAnswer(
+        (_) async => const DeltaFreshMessageCount(count: 0, supported: true),
+      );
+      when(
+        () => context.getChatMessageIds(chatId: chatId),
+      ).thenAnswer((_) async => msgIds);
+      when(() => context.getMessage(any())).thenAnswer((invocation) async {
+        final id = invocation.positionalArguments.first as int;
+        return DeltaMessage(
+          id: id,
+          chatId: chatId,
+          text: 'Bulk email $id',
+          timestamp: DateTime.utc(2024, 1, 2).add(Duration(minutes: id)),
+        );
+      });
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+
+      await countingConsumer.bootstrapFromCore();
+
+      expect(countingCore.batchSizes, [32, 32, 6]);
+      expect(countingCore.singleFetches, 1);
+    },
+  );
+}
+
+class CountingDeltaEventCore implements DeltaEventCore {
+  CountingDeltaEventCore(this._inner);
+
+  final DeltaEventCore _inner;
+  int singleFetches = 0;
+  final List<int> batchSizes = <int>[];
+
+  @override
+  int get accountId => _inner.accountId;
+
+  @override
+  bool get supportsMessageRfc724Mid => _inner.supportsMessageRfc724Mid;
+
+  @override
+  bool get supportsMessageInfo => _inner.supportsMessageInfo;
+
+  @override
+  bool get supportsMessageDebugInfo => _inner.supportsMessageDebugInfo;
+
+  @override
+  Future<List<DeltaChatlistEntry>> getChatlist({int flags = 0}) =>
+      _inner.getChatlist(flags: flags);
+
+  @override
+  Future<List<int>> getChatMessageIds({
+    required int chatId,
+    int? beforeMessageId,
+  }) => _inner.getChatMessageIds(
+    chatId: chatId,
+    beforeMessageId: beforeMessageId,
+  );
+
+  @override
+  Future<DeltaMessage?> getMessage(int messageId) {
+    singleFetches++;
+    return _inner.getMessage(messageId);
+  }
+
+  @override
+  Future<List<DeltaMessage>> getMessages(List<int> messageIds) {
+    batchSizes.add(messageIds.length);
+    return _inner.getMessages(messageIds);
+  }
+
+  @override
+  Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId) =>
+      _inner.getFreshMessageCountSafe(chatId);
+
+  @override
+  Future<bool> downloadFullMessage(int messageId) =>
+      _inner.downloadFullMessage(messageId);
+
+  @override
+  Future<String?> getMessageRfc724Mid(int messageId) =>
+      _inner.getMessageRfc724Mid(messageId);
+
+  @override
+  Future<String?> getMessageInfo(int messageId) =>
+      _inner.getMessageInfo(messageId);
+
+  @override
+  Future<String?> getMessageMimeHeaders(int messageId) =>
+      _inner.getMessageMimeHeaders(messageId);
+
+  @override
+  Future<String?> getMessageDebugInfo(int messageId) =>
+      _inner.getMessageDebugInfo(messageId);
+
+  @override
+  Future<DeltaMessageRfc822Body?> getMessageRfc822Body(int messageId) =>
+      _inner.getMessageRfc822Body(messageId);
+
+  @override
+  Future<DeltaContactPublicKeyImport> importContactPublicKey({
+    required String address,
+    required String displayName,
+    required String armoredPublicKey,
+  }) => _inner.importContactPublicKey(
+    address: address,
+    displayName: displayName,
+    armoredPublicKey: armoredPublicKey,
+  );
+
+  @override
+  Future<DeltaChatSendCapabilities> chatSendCapabilities(int chatId) =>
+      _inner.chatSendCapabilities(chatId);
+
+  @override
+  Future<DeltaChat?> getChat(int chatId) => _inner.getChat(chatId);
 }
