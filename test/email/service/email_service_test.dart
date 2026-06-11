@@ -454,6 +454,10 @@ void main() {
       ),
     ).thenAnswer((_) async => null);
     when(
+      () =>
+          transport.getQuotedMessage(any(), accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => null);
+    when(
       () => transport.getMessageRfc822Body(
         any(),
         accountId: any(named: 'accountId'),
@@ -6433,6 +6437,65 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  void stubConsumerIngestPath({required Chat chat}) {
+    when(
+      () => transport.getChat(91, accountId: any(named: 'accountId')),
+    ).thenAnswer(
+      (_) async => const DeltaChat(
+        id: 91,
+        name: 'Peer',
+        contactAddress: 'peer@example.com',
+      ),
+    );
+    when(
+      () =>
+          database.getChatByDeltaChatId(91, accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => chat);
+    when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+    when(
+      () => database.repairChatSummaryPreservingTimestamp(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.repairUnreadCountForChat(
+        any(),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async => 0);
+    when(
+      () => database.getChatMessages(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async => const <Message>[]);
+    when(
+      () =>
+          database.getMessagesByOriginID(any(), chatJid: any(named: 'chatJid')),
+    ).thenAnswer((_) async => const <Message>[]);
+    when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+    when(
+      () => database.isEmailAddressBlocked(any()),
+    ).thenAnswer((_) async => false);
+    when(
+      () => database.isEmailAddressSpam(any()),
+    ).thenAnswer((_) async => false);
+    when(
+      () => database.getEmailBlocklistEntry(any()),
+    ).thenAnswer((_) async => null);
+    when(
+      () => database.upsertEmailChatAccount(
+        chatJid: any(named: 'chatJid'),
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.ensureEmailEncryptionStatusMarkerForChat(any()),
+    ).thenAnswer((_) async {});
+  }
+
   test('sendMessage records the sent row bound to its delta message', () async {
     final service = EmailService(
       credentialStore: credentialStore,
@@ -6487,6 +6550,24 @@ void main() {
       ),
     ).thenAnswer((_) async => 123);
 
+    final chat = Chat(
+      jid: 'peer@axi.im',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 88,
+      emailAddress: 'peer@example.com',
+      emailFromAddress: 'alice@example.org',
+    );
+    stubConsumerIngestPath(chat: chat);
+
+    when(
+      () => database.getMessageByDeltaId(
+        any(),
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
+    ).thenAnswer((_) async => null);
     Message? savedRow;
     when(
       () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
@@ -6503,6 +6584,73 @@ void main() {
       return null;
     });
 
+    final msgId = await service.sendMessage(chat: chat, body: 'First send');
+
+    expect(msgId, 123);
+    expect(savedRow?.stanzaID, isNotEmpty);
+    expect(savedRow?.deltaMsgId, 123);
+    expect(savedRow?.deltaChatId, 91);
+    expect(savedRow?.deltaAccountId, DeltaAccountDefaults.legacyId);
+    expect(savedRow?.timestamp, DateTime.utc(2024, 1, 2, 3, 4, 5));
+    expect(savedRow?.body, 'First send');
+
+    addTearDown(service.shutdown);
+  });
+
+  test('sendMessage hydration updates the already-ingested echo row', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    when(() => transport.persistsAppStateInternally).thenReturn(false);
+    when(
+      () => transport.isConfigured(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => true);
+    when(
+      () => transport.ensureChatForAddress(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => 91);
+    when(
+      () => transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
+    ).thenAnswer(
+      (_) async => DeltaMessage(
+        id: 123,
+        chatId: 91,
+        text: 'First send',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+        isOutgoing: true,
+      ),
+    );
+    when(
+      () => transport.sendText(
+        chatId: 91,
+        body: 'First send',
+        subject: any(named: 'subject'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
+        accountId: DeltaAccountDefaults.legacyId,
+        forcePlaintext: true,
+        skipAutocrypt: true,
+      ),
+    ).thenAnswer((_) async => 123);
+
     final chat = Chat(
       jid: 'peer@axi.im',
       title: 'Peer',
@@ -6512,135 +6660,54 @@ void main() {
       emailAddress: 'peer@example.com',
       emailFromAddress: 'alice@example.org',
     );
+    stubConsumerIngestPath(chat: chat);
+
+    Message? savedRow;
+    Message? claimed;
+    when(
+      () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+    ).thenAnswer((invocation) async {
+      savedRow = invocation.positionalArguments.single as Message;
+    });
+    when(() => database.updateMessage(any())).thenAnswer((invocation) async {
+      claimed = invocation.positionalArguments.single as Message;
+    });
+    when(
+      () => database.getMessageByDeltaId(
+        123,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: 91,
+      ),
+    ).thenAnswer(
+      (_) async => Message(
+        stanzaID: 'echo-row',
+        senderJid: 'alice@example.org',
+        chatJid: 'peer@axi.im',
+        timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
+        acked: true,
+        deltaChatId: 91,
+        deltaMsgId: 123,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+      ),
+    );
 
     final msgId = await service.sendMessage(chat: chat, body: 'First send');
 
     expect(msgId, 123);
-    expect(savedRow?.stanzaID, isNotEmpty);
-    expect(savedRow?.deltaMsgId, 123);
-    expect(savedRow?.deltaChatId, 91);
-    expect(savedRow?.deltaAccountId, DeltaAccountDefaults.legacyId);
-    expect(savedRow?.timestamp, DateTime.utc(2024, 1, 2, 3, 4, 5));
-    verifyNever(() => database.updateMessage(any()));
+    expect(savedRow, isNull);
+    expect(claimed?.stanzaID, 'echo-row');
+    expect(claimed?.acked, isTrue);
+    expect(claimed?.deltaMsgId, 123);
+    verifyNever(
+      () => database.deleteMessage(
+        any(),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    );
 
     addTearDown(service.shutdown);
   });
-
-  test(
-    'sendMessage claims the echo row when the event ingested it first',
-    () async {
-      final service = EmailService(
-        credentialStore: credentialStore,
-        databaseBuilder: () async => database,
-        transport: transport,
-        notificationService: notificationService,
-        foregroundBridge: foregroundBridge,
-      );
-
-      await service.ensureProvisioned(
-        displayName: 'Alice',
-        databasePrefix: 'alice',
-        databasePassphrase: 'passphrase',
-        jid: 'alice@example.org',
-        passwordOverride: 'password',
-      );
-
-      when(() => transport.persistsAppStateInternally).thenReturn(false);
-      when(
-        () => transport.isConfigured(accountId: any(named: 'accountId')),
-      ).thenAnswer((_) async => true);
-      when(
-        () => transport.ensureChatForAddress(
-          address: any(named: 'address'),
-          displayName: any(named: 'displayName'),
-          accountId: any(named: 'accountId'),
-        ),
-      ).thenAnswer((_) async => 91);
-      when(
-        () =>
-            transport.getMessage(123, accountId: DeltaAccountDefaults.legacyId),
-      ).thenAnswer(
-        (_) async => DeltaMessage(
-          id: 123,
-          chatId: 91,
-          text: 'First send',
-          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
-          isOutgoing: true,
-        ),
-      );
-      when(
-        () => transport.sendText(
-          chatId: 91,
-          body: 'First send',
-          subject: any(named: 'subject'),
-          shareId: any(named: 'shareId'),
-          localBodyOverride: any(named: 'localBodyOverride'),
-          htmlBody: any(named: 'htmlBody'),
-          quotingStanzaId: any(named: 'quotingStanzaId'),
-          accountId: DeltaAccountDefaults.legacyId,
-          forcePlaintext: true,
-          skipAutocrypt: true,
-        ),
-      ).thenAnswer((_) async => 123);
-
-      Message? savedRow;
-      Message? claimed;
-      when(
-        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
-      ).thenAnswer((invocation) async {
-        savedRow = invocation.positionalArguments.single as Message;
-      });
-      when(() => database.updateMessage(any())).thenAnswer((invocation) async {
-        claimed = invocation.positionalArguments.single as Message;
-      });
-      when(
-        () => database.getMessageByDeltaId(
-          123,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: 91,
-        ),
-      ).thenAnswer(
-        (_) async => Message(
-          stanzaID: 'echo-row',
-          senderJid: 'alice@example.org',
-          chatJid: 'peer@axi.im',
-          timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
-          acked: true,
-          deltaChatId: 91,
-          deltaMsgId: 123,
-          deltaAccountId: DeltaAccountDefaults.legacyId,
-        ),
-      );
-
-      final chat = Chat(
-        jid: 'peer@axi.im',
-        title: 'Peer',
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.now(),
-        deltaChatId: 88,
-        emailAddress: 'peer@example.com',
-        emailFromAddress: 'alice@example.org',
-      );
-
-      final msgId = await service.sendMessage(chat: chat, body: 'First send');
-
-      expect(msgId, 123);
-      expect(savedRow, isNull);
-      expect(claimed?.stanzaID, 'echo-row');
-      expect(claimed?.body, 'First send');
-      expect(claimed?.acked, isTrue);
-      expect(claimed?.deltaMsgId, 123);
-      verifyNever(
-        () => database.deleteMessage(
-          any(),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: any(named: 'emailSelfJid'),
-        ),
-      );
-
-      addTearDown(service.shutdown);
-    },
-  );
 
   test(
     'sendMessage normalizes direct recipient addresses to bare JIDs',

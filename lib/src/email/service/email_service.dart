@@ -13,7 +13,6 @@ import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
-import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
@@ -2626,24 +2625,6 @@ class EmailService {
     return deltaAnonUserJid;
   }
 
-  FileMetadataData _metadataForAttachment(
-    EmailAttachment attachment,
-    int msgId,
-  ) {
-    return FileMetadataData(
-      id: deltaFileMetadataId(msgId),
-      filename: sanitizeEmailAttachmentFilename(
-        attachment.fileName,
-        fallbackPath: attachment.path,
-      ),
-      path: attachment.path,
-      mimeType: sanitizeEmailMimeType(attachment.mimeType),
-      sizeBytes: attachment.sizeBytes,
-      width: attachment.width,
-      height: attachment.height,
-    );
-  }
-
   Future<int> _sendAndRecordEmail({
     required int chatId,
     required Chat chat,
@@ -2656,8 +2637,6 @@ class EmailService {
     String? shareId,
     String? localBodyOverride,
     String? htmlBody,
-    FileMetadataData Function(int msgId, DeltaMessage? deltaMessage)?
-    metadataForMsg,
   }) async {
     final record = !_transport.persistsAppStateInternally;
     final int msgId;
@@ -2665,175 +2644,97 @@ class EmailService {
       msgId = await _guardDeltaOperation(operation: operation, body: send);
     } on Exception {
       if (record) {
-        await _recordOutgoingEmail(
+        await _recordFailedOutgoingEmail(
           chatId: chatId,
           accountId: accountId,
           chat: chat,
-          stanzaId: _outgoingEmailRowKey(),
           body: body,
           subject: subject,
           quotingStanzaId: quotingStanzaId,
-          shareId: shareId,
           localBodyOverride: localBodyOverride,
           htmlBody: htmlBody,
-          error: MessageError.emailSendFailure,
         );
       }
       rethrow;
     }
     if (record) {
-      final deltaMessage = await _transport.getMessage(
-        msgId,
-        accountId: accountId,
-      );
-      await _recordOutgoingEmail(
-        chatId: chatId,
-        accountId: accountId,
-        chat: chat,
-        msgId: msgId,
-        stanzaId: _outgoingEmailRowKey(),
-        originId: await _resolveSentEmailOriginId(msgId, accountId: accountId),
-        body: body,
-        subject: subject,
-        quotingStanzaId: quotingStanzaId,
-        metadata: metadataForMsg?.call(msgId, deltaMessage),
-        shareId: shareId,
-        localBodyOverride: localBodyOverride,
-        htmlBody: htmlBody,
-        timestamp: deltaMessage?.timestamp,
-        encryptionProtocol: _encryptionProtocolForDelta(deltaMessage),
-      );
+      await _deltaConsumerForAccount(accountId).hydrateMessage(msgId);
+      final db = await _databaseBuilder();
+      if (shareId != null) {
+        await db.insertMessageCopy(
+          shareId: shareId,
+          dcMsgId: msgId,
+          dcChatId: chatId,
+          dcAccountId: accountId,
+        );
+      }
+      if (quotingStanzaId != null) {
+        await _patchOutgoingEmailQuote(
+          db: db,
+          msgId: msgId,
+          accountId: accountId,
+          chatId: chatId,
+          quotingStanzaId: quotingStanzaId,
+        );
+      }
     }
     return msgId;
   }
 
-  String _outgoingEmailRowKey() => const Uuid().v4();
-
-  Future<String?> _resolveSentEmailOriginId(
-    int msgId, {
+  Future<void> _patchOutgoingEmailQuote({
+    required XmppDatabase db,
+    required int msgId,
     required int accountId,
+    required int chatId,
+    required String quotingStanzaId,
   }) async {
-    try {
-      final mid = normalizeEmailMessageId(
-        await _transport.getMessageRfc724Mid(msgId, accountId: accountId),
-      );
-      if (mid == null || isDeltaGeneratedMessageId(mid)) {
-        return null;
-      }
-      return mid;
-    } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to resolve sent email origin.', error, stackTrace);
-      return null;
+    final row = await db.getMessageByDeltaId(
+      msgId,
+      deltaAccountId: accountId,
+      deltaChatId: chatId,
+    );
+    if (row == null || row.quoting != null) {
+      return;
     }
+    await db.updateMessage(row.copyWith(quoting: quotingStanzaId));
   }
 
-  Future<void> _recordOutgoingEmail({
+  Future<void> _recordFailedOutgoingEmail({
     required int chatId,
     required int accountId,
     required Chat chat,
-    required String stanzaId,
-    int? msgId,
-    String? originId,
     String? body,
     String? subject,
     String? quotingStanzaId,
-    FileMetadataData? metadata,
-    String? shareId,
     String? localBodyOverride,
     String? htmlBody,
-    DateTime? timestamp,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
-    MessageError error = MessageError.none,
   }) async {
     final db = await _databaseBuilder();
-    if (metadata != null) {
-      await db.saveFileMetadata(metadata);
-    }
     final displayBody = localBodyOverride ?? body;
     final trimmedBody = displayBody?.trim();
     final senderJid = _resolveOutgoingSenderJid(
       chat: chat,
       accountId: accountId,
     );
-    final message = Message(
-      stanzaID: stanzaId,
-      senderJid: senderJid,
-      chatJid: chat.jid,
-      timestamp: timestamp ?? DateTime.timestamp(),
-      originID: originId,
-      body: trimmedBody?.isNotEmpty == true ? trimmedBody : null,
-      htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
-      subject: subject,
-      quoting: quotingStanzaId,
-      encryptionProtocol: encryptionProtocol,
-      error: error,
-      acked: false,
-      received: false,
-      deltaChatId: chatId,
-      deltaMsgId: msgId,
-      deltaAccountId: accountId,
-      fileMetadataID: metadata?.id,
-    );
-    await _claimOutgoingEmailRow(db: db, message: message, selfJid: senderJid);
-    if (shareId != null && msgId != null) {
-      await db.insertMessageCopy(
-        shareId: shareId,
-        dcMsgId: msgId,
-        dcChatId: chatId,
-        dcAccountId: accountId,
-      );
-    }
-  }
-
-  Future<void> _claimOutgoingEmailRow({
-    required XmppDatabase db,
-    required Message message,
-    required String selfJid,
-  }) async {
-    final msgId = message.deltaMsgId;
-    if (msgId == null) {
-      await db.saveMessage(message, selfJid: selfJid);
-      return;
-    }
-    final echo = await db.getMessageByDeltaId(
-      msgId,
-      deltaAccountId: message.deltaAccountId,
-      deltaChatId: message.deltaChatId,
-    );
-    if (echo != null) {
-      await db.updateMessage(_withOutgoingPresentation(echo, message));
-      return;
-    }
-    await db.saveMessage(message, selfJid: selfJid);
-    final persisted = await db.getMessageByStanzaID(message.stanzaID);
-    if (persisted != null) {
-      return;
-    }
-    final racedEcho = await db.getMessageByDeltaId(
-      msgId,
-      deltaAccountId: message.deltaAccountId,
-      deltaChatId: message.deltaChatId,
-    );
-    if (racedEcho != null) {
-      await db.updateMessage(_withOutgoingPresentation(racedEcho, message));
-    }
-  }
-
-  Message _withOutgoingPresentation(Message row, Message outgoing) {
-    return row.copyWith(
-      body: outgoing.body ?? row.body,
-      htmlBody: outgoing.htmlBody ?? row.htmlBody,
-      subject: outgoing.subject ?? row.subject,
-      quoting: outgoing.quoting ?? row.quoting,
-      fileMetadataID: outgoing.fileMetadataID ?? row.fileMetadataID,
+    await db.saveMessage(
+      Message(
+        stanzaID: _outgoingEmailRowKey(),
+        senderJid: senderJid,
+        chatJid: chat.jid,
+        timestamp: DateTime.timestamp(),
+        body: trimmedBody?.isNotEmpty == true ? trimmedBody : null,
+        htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
+        subject: subject,
+        quoting: quotingStanzaId,
+        error: MessageError.emailSendFailure,
+        deltaChatId: chatId,
+        deltaAccountId: accountId,
+      ),
+      selfJid: senderJid,
     );
   }
 
-  EncryptionProtocol _encryptionProtocolForDelta(DeltaMessage? message) {
-    return message?.showPadlock == true
-        ? EncryptionProtocol.openPgp
-        : EncryptionProtocol.none;
-  }
+  String _outgoingEmailRowKey() => const Uuid().v4();
 
   Future<int> sendMessage({
     required Chat chat,
@@ -3038,19 +2939,6 @@ class EmailService {
       shareId: shareId,
       localBodyOverride: payload.displayText,
       htmlBody: payload.htmlBody,
-      metadataForMsg: (msgId, deltaMessage) {
-        final metadata = _metadataForAttachment(pendingAttachment, msgId);
-        if (deltaMessage == null) {
-          return metadata;
-        }
-        return metadata.copyWith(
-          path: deltaMessage.filePath ?? metadata.path,
-          mimeType: deltaMessage.fileMime ?? metadata.mimeType,
-          sizeBytes: deltaMessage.fileSize ?? metadata.sizeBytes,
-          width: deltaMessage.width ?? metadata.width,
-          height: deltaMessage.height ?? metadata.height,
-        );
-      },
     );
     if (shareId != null) {
       final db = await _databaseBuilder();
