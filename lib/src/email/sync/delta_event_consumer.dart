@@ -1480,8 +1480,7 @@ class DeltaEventConsumer {
       chatId: chatId,
       msg: msg,
     );
-    final String originId =
-        nativeOriginId ?? _derivedOriginIdForStoredMessage(message, msg);
+    final String originId = nativeOriginId ?? _derivedOriginIdForMessage(msg);
     if (nativeOriginId == null) {
       message = message.copyWith(originID: originId);
     }
@@ -2256,14 +2255,14 @@ class DeltaEventConsumer {
     }
   }
 
-  String _derivedOriginIdForStoredMessage(Message message, DeltaMessage msg) {
+  String _derivedOriginIdForMessage(DeltaMessage msg) {
     _log.info(
       'No usable Message-ID for Delta msg ${msg.id}; using derived key.',
     );
     return derivedEmailMessageKey(
-      subject: message.subject,
-      timestamp: message.timestamp,
-      bodyText: message.body,
+      subject: msg.subject,
+      timestamp: msg.timestamp,
+      bodyText: msg.text,
     );
   }
 
