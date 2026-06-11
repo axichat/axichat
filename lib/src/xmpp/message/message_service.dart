@@ -4708,6 +4708,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   StreamController<_CalendarSyncWork> _calendarSyncQueue =
       StreamController<_CalendarSyncWork>();
   StreamSubscription<void>? _calendarSyncQueueSubscription;
+  int _calendarSyncWorkCompletions = 0;
   Completer<void> _calendarSyncAbortSignal = Completer<void>();
   Duration _calendarSyncMamPageIdleTimeout = _calendarSyncDispatchTimeout;
   final Map<({String mamId, String queryId}), Completer<void>>
@@ -10936,6 +10937,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         completionStackTrace = abortStackTrace;
       }
     } finally {
+      _calendarSyncWorkCompletions++;
       _completeCalendarSyncMamWork(
         work,
         error: completionError,
@@ -10987,13 +10989,23 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
-  Future<T> _awaitCalendarSyncQueueWork<T>(Future<T> future) {
-    return Future.any<T>([
-      future.timeout(_calendarSyncDispatchTimeout),
-      _calendarSyncAbortSignal.future.then<T>(
-        (_) => throw XmppAbortedException(),
-      ),
-    ]);
+  Future<T> _awaitCalendarSyncQueueWork<T>(Future<T> future) async {
+    final abort = _calendarSyncAbortSignal.future.then<T>(
+      (_) => throw XmppAbortedException(),
+    );
+    while (true) {
+      final progressMark = _calendarSyncWorkCompletions;
+      try {
+        return await Future.any<T>([
+          future.timeout(_calendarSyncDispatchTimeout),
+          abort,
+        ]);
+      } on TimeoutException {
+        if (_calendarSyncWorkCompletions == progressMark) {
+          rethrow;
+        }
+      }
+    }
   }
 
   Future<void> _waitForCalendarSyncMamResults({
