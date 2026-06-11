@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class AxiEmailHtmlPreview extends StatelessWidget {
+class AxiEmailHtmlPreview extends StatefulWidget {
   const AxiEmailHtmlPreview({
     super.key,
     required this.html,
@@ -32,21 +32,68 @@ class AxiEmailHtmlPreview extends StatelessWidget {
   final Future<void> Function()? onOriginalContentUnblocked;
 
   @override
+  State<AxiEmailHtmlPreview> createState() => _AxiEmailHtmlPreviewState();
+}
+
+class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
+  late String _normalizedHtmlBody;
+  late bool _hasRenderableRemoteImages;
+  late bool _hasBlockedHtmlContent;
+  late bool _hasCidHtmlImages;
+  late String _preparedHtmlBodyForFallback;
+
+  @override
+  void initState() {
+    super.initState();
+    _deriveFromHtml();
+  }
+
+  @override
+  void didUpdateWidget(covariant AxiEmailHtmlPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.html != widget.html) {
+      _deriveFromHtml();
+    }
+  }
+
+  void _deriveFromHtml() {
+    _normalizedHtmlBody = widget.html.trim();
+    if (_normalizedHtmlBody.isEmpty) {
+      _hasRenderableRemoteImages = false;
+      _hasBlockedHtmlContent = false;
+      _hasCidHtmlImages = false;
+      _preparedHtmlBodyForFallback = '';
+      return;
+    }
+    _hasRenderableRemoteImages =
+        HtmlContentCodec.containsRenderableRemoteImages(_normalizedHtmlBody);
+    _hasBlockedHtmlContent = HtmlContentCodec.containsBlockedWebViewContent(
+      _normalizedHtmlBody,
+    );
+    _hasCidHtmlImages = HtmlContentCodec.containsCidImages(_normalizedHtmlBody);
+    _preparedHtmlBodyForFallback =
+        HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+          _normalizedHtmlBody,
+          allowRemoteImages: false,
+        );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final normalizedHtmlBody = html.trim();
+    final normalizedHtmlBody = _normalizedHtmlBody;
     if (normalizedHtmlBody.isEmpty) {
       return const SizedBox.shrink();
     }
+    final shouldLoadSafeRemoteImages = widget.shouldLoadSafeRemoteImages;
+    final onLinkTap = widget.onLinkTap;
+    final onRemoteImagesApproved = widget.onRemoteImagesApproved;
+    final onOriginalContentUnblocked = widget.onOriginalContentUnblocked;
     final hasBlockedRemoteHtmlImages =
-        !shouldLoadSafeRemoteImages &&
-        HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody);
-    final hasBlockedHtmlContent =
-        HtmlContentCodec.containsBlockedWebViewContent(normalizedHtmlBody);
-    final hasCidHtmlImages = HtmlContentCodec.containsCidImages(
-      normalizedHtmlBody,
-    );
+        !shouldLoadSafeRemoteImages && _hasRenderableRemoteImages;
+    final hasBlockedHtmlContent = _hasBlockedHtmlContent;
+    final hasCidHtmlImages = _hasCidHtmlImages;
     final emailHtmlContentMode =
-        hasBlockedHtmlContent && originalContentUnblocked
+        hasBlockedHtmlContent && widget.originalContentUnblocked
         ? EmailHtmlContentMode.originalPassive
         : EmailHtmlContentMode.safe;
     final isOriginalEmailContent =
@@ -54,11 +101,7 @@ class AxiEmailHtmlPreview extends StatelessWidget {
     final allowRemoteImagesInWebView = emailHtmlContentMode.allowsRemoteImages(
       shouldLoadSafeRemoteImages: shouldLoadSafeRemoteImages,
     );
-    final preparedHtmlBodyForFallback =
-        HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-          normalizedHtmlBody,
-          allowRemoteImages: false,
-        );
+    final preparedHtmlBodyForFallback = _preparedHtmlBodyForFallback;
     final Widget? emailHtmlLoadingFallback =
         preparedHtmlBodyForFallback.trim().isEmpty
         ? null

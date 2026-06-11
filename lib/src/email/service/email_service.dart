@@ -7922,13 +7922,20 @@ class EmailService {
   Future<Map<int, List<int>>> _deltaIdsByResolvedAccountForMessages(
     List<Message> messages,
   ) async {
+    if (messages.isEmpty) {
+      return const {};
+    }
+    final validAccounts = (await _transport.accountIds()).toSet();
     final idsByAccount = <int, LinkedHashSet<int>>{};
     for (final message in messages) {
       final deltaId = message.deltaMsgId;
       if (deltaId == null) {
         continue;
       }
-      final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+      final storedAccountId = message.deltaAccountId;
+      final accountId = validAccounts.contains(storedAccountId)
+          ? storedAccountId
+          : await _resolveDeltaAccountIdForStoredMessage(message);
       if (accountId == null) {
         continue;
       }
