@@ -8,7 +8,6 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
 import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -109,12 +108,6 @@ void main() {
     when(() => context.supportsMessageRfc724Mid).thenReturn(true);
     when(() => context.supportsMessageInfo).thenReturn(true);
     when(() => context.getMessageInfo(any())).thenAnswer((_) async => null);
-    when(
-      () => database.replaceMessageStanzaID(
-        currentStanzaID: any(named: 'currentStanzaID'),
-        message: any(named: 'message'),
-      ),
-    ).thenAnswer((_) async {});
   });
 
   StreamController<DeltaCoreEvent> stubInitializedSingleContext() {
@@ -142,14 +135,6 @@ void main() {
       () => database.replaceDeltaPlaceholderSelfJids(
         deltaAccountId: DeltaAccountDefaults.legacyId,
         resolvedAddress: 'me@example.com',
-        placeholderJids: any(named: 'placeholderJids'),
-        selfJid: any(named: 'selfJid'),
-        emailSelfJid: 'me@example.com',
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: DeltaAccountDefaults.legacyId,
         placeholderJids: any(named: 'placeholderJids'),
         selfJid: any(named: 'selfJid'),
         emailSelfJid: 'me@example.com',
@@ -213,14 +198,6 @@ void main() {
         () => database.replaceDeltaPlaceholderSelfJids(
           deltaAccountId: DeltaAccountDefaults.legacyId,
           resolvedAddress: 'me@example.com',
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: any(named: 'emailSelfJid'),
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: DeltaAccountDefaults.legacyId,
           placeholderJids: any(named: 'placeholderJids'),
           selfJid: any(named: 'selfJid'),
           emailSelfJid: any(named: 'emailSelfJid'),
@@ -300,12 +277,6 @@ void main() {
       expect(savedRow.deltaAccountId, DeltaAccountDefaults.legacyId);
       expect(savedRow.originID, 'origin@example.com');
       verifyNever(() => database.updateMessage(any()));
-      verifyNever(
-        () => database.replaceMessageStanzaID(
-          currentStanzaID: any(named: 'currentStanzaID'),
-          message: any(named: 'message'),
-        ),
-      );
     },
   );
 
@@ -329,7 +300,7 @@ void main() {
       emailFromAddress: 'me@example.com',
     );
     final sentTimestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
-    final deltaStanzaId = deltaMessageStanzaId(msgId);
+    final deltaStanzaId = 'dc-msg-$msgId';
     final duplicateMessage = Message(
       stanzaID: deltaStanzaId,
       senderJid: 'me@example.com',
@@ -348,7 +319,6 @@ void main() {
     );
     Message? pendingMessage;
     Message? updatedPending;
-    Message? replacementMessage;
 
     when(
       () => deltaSafe.createAccounts(directory: any(named: 'directory')),
@@ -377,14 +347,6 @@ void main() {
       () => database.replaceDeltaPlaceholderSelfJids(
         deltaAccountId: DeltaAccountDefaults.legacyId,
         resolvedAddress: 'me@example.com',
-        placeholderJids: any(named: 'placeholderJids'),
-        selfJid: any(named: 'selfJid'),
-        emailSelfJid: any(named: 'emailSelfJid'),
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: DeltaAccountDefaults.legacyId,
         placeholderJids: any(named: 'placeholderJids'),
         selfJid: any(named: 'selfJid'),
         emailSelfJid: any(named: 'emailSelfJid'),
@@ -461,14 +423,6 @@ void main() {
     when(() => database.updateMessage(any())).thenAnswer((invocation) async {
       updatedPending = invocation.positionalArguments.first as Message;
     });
-    when(
-      () => database.replaceMessageStanzaID(
-        currentStanzaID: any(named: 'currentStanzaID'),
-        message: any(named: 'message'),
-      ),
-    ).thenAnswer((invocation) async {
-      replacementMessage = invocation.namedArguments[#message] as Message;
-    });
     await transport.ensureInitialized(
       databasePrefix: 'email_delta_transport_test',
       databasePassphrase: 'test-passphrase',
@@ -498,7 +452,6 @@ void main() {
     final updated = updatedPending;
     expect(updated, isNotNull);
     expect(updated!.stanzaID, deltaStanzaId);
-    expect(replacementMessage, isNull);
     return updated;
   }
 
@@ -649,14 +602,6 @@ void main() {
           emailSelfJid: any(named: 'emailSelfJid'),
         ),
       ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: any(named: 'deltaAccountId'),
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: any(named: 'emailSelfJid'),
-        ),
-      ).thenAnswer((_) async {});
 
       await transport.ensureInitialized(
         databasePrefix: 'email_delta_transport_test',
@@ -735,14 +680,6 @@ void main() {
           emailSelfJid: any(named: 'emailSelfJid'),
         ),
       ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: any(named: 'deltaAccountId'),
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: any(named: 'emailSelfJid'),
-        ),
-      ).thenAnswer((_) async {});
 
       await transport.ensureInitialized(
         databasePrefix: 'email_delta_transport_test',
@@ -810,14 +747,6 @@ void main() {
       () => database.replaceDeltaPlaceholderSelfJids(
         deltaAccountId: any(named: 'deltaAccountId'),
         resolvedAddress: any(named: 'resolvedAddress'),
-        placeholderJids: any(named: 'placeholderJids'),
-        selfJid: any(named: 'selfJid'),
-        emailSelfJid: any(named: 'emailSelfJid'),
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: any(named: 'deltaAccountId'),
         placeholderJids: any(named: 'placeholderJids'),
         selfJid: any(named: 'selfJid'),
         emailSelfJid: any(named: 'emailSelfJid'),
@@ -965,14 +894,6 @@ void main() {
           emailSelfJid: 'me@example.com',
         ),
       ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: accountId,
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: 'me@example.com',
-        ),
-      ).thenAnswer((_) async {});
 
       await transport.ensureInitialized(
         databasePrefix: 'email_delta_transport_test',
@@ -1038,14 +959,6 @@ void main() {
           emailSelfJid: 'me@example.com',
         ),
       ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: accountId,
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: 'me@example.com',
-        ),
-      ).thenAnswer((_) async {});
 
       await transport.ensureInitialized(
         databasePrefix: 'email_delta_transport_test',
@@ -1094,14 +1007,6 @@ void main() {
         () => database.replaceDeltaPlaceholderSelfJids(
           deltaAccountId: accountId,
           resolvedAddress: 'me@example.com',
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: 'me@example.com',
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: accountId,
           placeholderJids: any(named: 'placeholderJids'),
           selfJid: any(named: 'selfJid'),
           emailSelfJid: 'me@example.com',
@@ -1157,14 +1062,6 @@ void main() {
       () => database.replaceDeltaPlaceholderSelfJids(
         deltaAccountId: accountId,
         resolvedAddress: 'me@example.com',
-        placeholderJids: any(named: 'placeholderJids'),
-        selfJid: any(named: 'selfJid'),
-        emailSelfJid: 'me@example.com',
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: accountId,
         placeholderJids: any(named: 'placeholderJids'),
         selfJid: any(named: 'selfJid'),
         emailSelfJid: 'me@example.com',
@@ -1227,14 +1124,6 @@ void main() {
         () => database.replaceDeltaPlaceholderSelfJids(
           deltaAccountId: accountId,
           resolvedAddress: 'me@example.com',
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: 'me@example.com',
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: accountId,
           placeholderJids: any(named: 'placeholderJids'),
           selfJid: any(named: 'selfJid'),
           emailSelfJid: 'me@example.com',
@@ -1326,14 +1215,6 @@ void main() {
         () => database.replaceDeltaPlaceholderSelfJids(
           deltaAccountId: any(named: 'deltaAccountId'),
           resolvedAddress: any(named: 'resolvedAddress'),
-          placeholderJids: any(named: 'placeholderJids'),
-          selfJid: any(named: 'selfJid'),
-          emailSelfJid: any(named: 'emailSelfJid'),
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => database.removeDeltaPlaceholderDuplicates(
-          deltaAccountId: any(named: 'deltaAccountId'),
           placeholderJids: any(named: 'placeholderJids'),
           selfJid: any(named: 'selfJid'),
           emailSelfJid: any(named: 'emailSelfJid'),
@@ -1464,14 +1345,6 @@ void main() {
       () => database.replaceDeltaPlaceholderSelfJids(
         deltaAccountId: accountId,
         resolvedAddress: 'me@example.com',
-        placeholderJids: any(named: 'placeholderJids'),
-        selfJid: any(named: 'selfJid'),
-        emailSelfJid: 'me@example.com',
-      ),
-    ).thenAnswer((_) async {});
-    when(
-      () => database.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: accountId,
         placeholderJids: any(named: 'placeholderJids'),
         selfJid: any(named: 'selfJid'),
         emailSelfJid: 'me@example.com',

@@ -6,41 +6,6 @@ const String _deltaScopedMessageStoragePrefix = 'dc-local-msg';
 const String _deltaPendingOutgoingStanzaPrefix = 'dc-pending';
 const String _deltaMessageStanzaSeparator = '-';
 
-String deltaMessageStanzaId(int msgId) =>
-    '$_deltaMessageStanzaPrefix$_deltaMessageStanzaSeparator$msgId';
-
-String deltaScopedMessageStorageStanzaId({
-  required int accountId,
-  required int chatId,
-  required int msgId,
-}) {
-  return '$_deltaScopedMessageStoragePrefix'
-      '$_deltaMessageStanzaSeparator$accountId'
-      '$_deltaMessageStanzaSeparator$chatId'
-      '$_deltaMessageStanzaSeparator$msgId';
-}
-
-String deltaPendingOutgoingStanzaId(String uniqueId) {
-  final trimmed = uniqueId.trim();
-  if (trimmed.isEmpty) {
-    throw const FormatException(
-      'Pending Delta stanza id suffix cannot be empty.',
-    );
-  }
-  return '$_deltaPendingOutgoingStanzaPrefix'
-      '$_deltaMessageStanzaSeparator$trimmed';
-}
-
-bool isPendingOutgoingDeltaStanzaId(String stanzaId) {
-  final pendingPrefix =
-      '$_deltaPendingOutgoingStanzaPrefix$_deltaMessageStanzaSeparator';
-  return stanzaId.startsWith(pendingPrefix) &&
-      stanzaId.length > pendingPrefix.length;
-}
-
-String deltaPendingOutgoingStanzaLikePattern() =>
-    '$_deltaPendingOutgoingStanzaPrefix$_deltaMessageStanzaSeparator%';
-
 bool isDeviceLocalDeltaStanzaId(String stanzaId) {
   const separator = _deltaMessageStanzaSeparator;
   return stanzaId.startsWith('$_deltaMessageStanzaPrefix$separator') ||

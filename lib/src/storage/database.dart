@@ -244,11 +244,6 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> updateMessage(Message message);
 
-  Future<void> replaceMessageStanzaID({
-    required String currentStanzaID,
-    required Message message,
-  });
-
   Future<void> ensureEmailEncryptionStatusMarkerForChat(String chatJid);
 
   Future<int> countUnreadMessagesForChat(
@@ -515,13 +510,6 @@ abstract interface class XmppDatabase implements Database {
   Future<void> replaceDeltaPlaceholderSelfJids({
     required int deltaAccountId,
     required String resolvedAddress,
-    required List<String> placeholderJids,
-    String? selfJid,
-    String? emailSelfJid,
-  });
-
-  Future<void> removeDeltaPlaceholderDuplicates({
-    required int deltaAccountId,
     required List<String> placeholderJids,
     String? selfJid,
     String? emailSelfJid,
@@ -4610,142 +4598,6 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   @override
-  Future<void> removeDeltaPlaceholderDuplicates({
-    required int deltaAccountId,
-    required List<String> placeholderJids,
-    String? selfJid,
-    String? emailSelfJid,
-  }) async {
-    const String deltaKeySeparator = '|';
-    final normalizedPlaceholders = placeholderJids
-        .map(normalizedAddressValue)
-        .whereType<String>()
-        .where((jid) => jid.isNotEmpty)
-        .toList(growable: false);
-    if (normalizedPlaceholders.isEmpty) {
-      return;
-    }
-    final placeholderMessages =
-        await (select(messages)..where(
-              (tbl) =>
-                  tbl.deltaAccountId.equals(deltaAccountId) &
-                  tbl.deltaMsgId.isNotNull() &
-                  tbl.senderJid.isIn(normalizedPlaceholders),
-            ))
-            .get();
-    if (placeholderMessages.isEmpty) {
-      return;
-    }
-    final deltaIds = placeholderMessages
-        .map((message) => message.deltaMsgId)
-        .whereType<int>()
-        .toSet();
-    if (deltaIds.isEmpty) {
-      return;
-    }
-    final relatedMessages =
-        await (select(messages)..where(
-              (tbl) =>
-                  tbl.deltaAccountId.equals(deltaAccountId) &
-                  tbl.deltaMsgId.isIn(deltaIds),
-            ))
-            .get();
-    final messagesByKey = <String, List<Message>>{};
-    for (final message in relatedMessages) {
-      final deltaMsgId = message.deltaMsgId;
-      if (deltaMsgId == null) {
-        continue;
-      }
-      final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
-      final entries = messagesByKey[key] ?? <Message>[];
-      entries.add(message);
-      messagesByKey[key] = entries;
-    }
-    final messagesToDelete = <Message>[];
-    for (final message in placeholderMessages) {
-      final deltaMsgId = message.deltaMsgId;
-      if (deltaMsgId == null) {
-        continue;
-      }
-      final key = '${message.chatJid}$deltaKeySeparator$deltaMsgId';
-      final candidates = messagesByKey[key] ?? const <Message>[];
-      final hasNonPlaceholder = candidates.any((candidate) {
-        final sender = normalizedAddressValueOrEmpty(candidate.senderJid);
-        return !normalizedPlaceholders.contains(sender);
-      });
-      if (hasNonPlaceholder) {
-        messagesToDelete.add(message);
-      }
-    }
-    if (messagesToDelete.isEmpty) {
-      return;
-    }
-    final stanzaIds = messagesToDelete
-        .map((message) => message.stanzaID)
-        .toSet()
-        .toList(growable: false);
-    final messageIds = messagesToDelete
-        .map((message) => message.id)
-        .whereType<String>()
-        .toSet()
-        .toList(growable: false);
-    final metadataIds = <String>{};
-    for (final message in messagesToDelete) {
-      final directMetadataId = message.fileMetadataID?.trim();
-      if (directMetadataId != null && directMetadataId.isNotEmpty) {
-        metadataIds.add(directMetadataId);
-      }
-    }
-    if (messageIds.isNotEmpty) {
-      final attachments = await messageAttachmentsAccessor.selectForMessages(
-        messageIds,
-      );
-      for (final attachment in attachments) {
-        final metadataId = attachment.fileMetadataId;
-        if (metadataId.isNotEmpty) {
-          metadataIds.add(metadataId);
-        }
-      }
-    }
-    final affectedChats = messagesToDelete
-        .map((message) => message.chatJid)
-        .toSet();
-    await transaction(() async {
-      for (final batch in _chunked(stanzaIds, batchSize: 900)) {
-        await (delete(
-          reactions,
-        )..where((tbl) => tbl.messageID.isIn(batch))).go();
-        await (delete(
-          reactionStates,
-        )..where((tbl) => tbl.messageID.isIn(batch))).go();
-        await (delete(
-          pinnedMessages,
-        )..where((tbl) => tbl.messageStanzaId.isIn(batch))).go();
-        await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(batch))).go();
-      }
-      if (messageIds.isNotEmpty) {
-        for (final batch in _chunked(messageIds, batchSize: 900)) {
-          await messageAttachmentsAccessor.deleteForMessages(batch);
-        }
-      }
-    });
-    for (final metadataId in metadataIds) {
-      await _deleteFileMetadataIfOrphaned(metadataId);
-    }
-    for (final chatJid in affectedChats) {
-      await repairUnreadCountForChat(
-        chatJid,
-        selfJid: selfJid,
-        emailSelfJid: emailSelfJid ?? normalizedPlaceholders.first,
-      );
-      await _refreshChatSummaryAfterTrim(
-        jid: chatJid,
-        selfJid: selfJid,
-        emailSelfJid: emailSelfJid ?? normalizedPlaceholders.first,
-      );
-    }
-  }
-
   @override
   Future<void> clearMessageHistory() async {
     _log.info('Clearing message history...');
@@ -5091,67 +4943,6 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   @override
-  Future<void> replaceMessageStanzaID({
-    required String currentStanzaID,
-    required Message message,
-  }) async {
-    final normalizedCurrentStanzaID = currentStanzaID.trim();
-    if (normalizedCurrentStanzaID.isEmpty) {
-      return;
-    }
-    _log.fine('Replacing message stanza id');
-    final normalizedMessage = message.copyWith(
-      fileMetadataID: _normalizedFileMetadataIdOrNull(message.fileMetadataID),
-    );
-    await (update(
-      messages,
-    )..where((tbl) => tbl.stanzaID.equals(normalizedCurrentStanzaID))).write(
-      MessagesCompanion(
-        id: Value(normalizedMessage.id ?? uuid.v4()),
-        stanzaID: Value(normalizedMessage.stanzaID),
-        originID: Value(normalizedMessage.originID),
-        mucStanzaId: Value(normalizedMessage.mucStanzaId),
-        occupantID: Value(normalizedMessage.occupantID),
-        senderJid: Value(normalizedMessage.senderJid),
-        senderRealJid: Value(normalizedMessage.senderRealJid),
-        chatJid: Value(normalizedMessage.chatJid),
-        body: Value(normalizedMessage.body),
-        subject: Value(normalizedMessage.subject),
-        htmlBody: Value(normalizedMessage.htmlBody),
-        timestamp: Value(normalizedMessage.timestamp ?? DateTime.timestamp()),
-        error: Value(normalizedMessage.error),
-        warning: Value(normalizedMessage.warning),
-        encryptionProtocol: Value(normalizedMessage.encryptionProtocol),
-        trust: Value(normalizedMessage.trust),
-        trusted: Value(normalizedMessage.trusted),
-        deviceID: Value(normalizedMessage.deviceID),
-        noStore: Value(normalizedMessage.noStore),
-        acked: Value(normalizedMessage.acked),
-        received: Value(normalizedMessage.received),
-        displayed: Value(normalizedMessage.displayed),
-        edited: Value(normalizedMessage.edited),
-        retracted: Value(normalizedMessage.retracted),
-        isFileUploadNotification: Value(
-          normalizedMessage.isFileUploadNotification,
-        ),
-        fileDownloading: Value(normalizedMessage.fileDownloading),
-        fileUploading: Value(normalizedMessage.fileUploading),
-        fileMetadataID: Value(normalizedMessage.fileMetadataID),
-        quoting: Value(normalizedMessage.quoting),
-        quotingReferenceKind: Value(normalizedMessage.quotingReferenceKind),
-        stickerPackID: Value(normalizedMessage.stickerPackID),
-        pseudoMessageType: Value(normalizedMessage.pseudoMessageType),
-        pseudoMessageData: Value(normalizedMessage.pseudoMessageData),
-        manualSendAgainStanzaID: Value(
-          normalizedMessage.manualSendAgainStanzaID,
-        ),
-        deltaChatId: Value(normalizedMessage.deltaChatId),
-        deltaMsgId: Value(normalizedMessage.deltaMsgId),
-        deltaAccountId: Value(normalizedMessage.deltaAccountId),
-      ),
-    );
-  }
-
   @override
   Future<void> ensureEmailEncryptionStatusMarkerForChat(String chatJid) async {
     final normalizedChatJid = chatJid.trim();

@@ -432,14 +432,6 @@ Future<void> connectSuccessfully(
     ),
   ).thenAnswer((_) async {});
   when(
-    () => mockDatabase.removeDeltaPlaceholderDuplicates(
-      deltaAccountId: any(named: 'deltaAccountId'),
-      placeholderJids: any(named: 'placeholderJids'),
-      selfJid: any(named: 'selfJid'),
-      emailSelfJid: any(named: 'emailSelfJid'),
-    ),
-  ).thenAnswer((_) async {});
-  when(
     () => mockDatabase.getChats(
       start: any(named: 'start'),
       end: any(named: 'end'),

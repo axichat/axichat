@@ -577,12 +577,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     }
     final db = await _databaseBuilder();
     final xmppSelfJid = _xmppSelfJidProvider?.call();
-    await db.removeDeltaPlaceholderDuplicates(
-      deltaAccountId: accountId,
-      placeholderJids: deltaPlaceholderJids,
-      selfJid: xmppSelfJid,
-      emailSelfJid: normalizedAddress,
-    );
     await db.replaceDeltaPlaceholderSelfJids(
       deltaAccountId: accountId,
       resolvedAddress: normalizedAddress,

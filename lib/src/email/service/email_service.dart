@@ -47,7 +47,6 @@ import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
@@ -4902,13 +4901,7 @@ class EmailService {
     if (scoped != null && _storedDeltaLocatorMatches(scoped, id)) {
       return scoped;
     }
-    final legacy = await db.getMessageByStanzaID(
-      deltaMessageStanzaId(id.msgId),
-    );
-    if (legacy == null || !_storedDeltaLocatorMatches(legacy, id)) {
-      return null;
-    }
-    return legacy;
+    return null;
   }
 
   bool _storedDeltaLocatorMatches(Message message, _DeltaChatMessageId id) {
@@ -5080,7 +5073,7 @@ class EmailService {
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to raise notification for email message '
-        '${deltaMessageStanzaId(msgId)} accountId=$accountId',
+        'dc-msg-$msgId accountId=$accountId',
         error,
         stackTrace,
       );
@@ -5167,7 +5160,7 @@ class EmailService {
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to raise reaction notification for email message '
-        '${deltaMessageStanzaId(msgId)} accountId=$accountId',
+        'dc-msg-$msgId accountId=$accountId',
         error,
         stackTrace,
       );
@@ -5236,7 +5229,7 @@ class EmailService {
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to raise webxdc notification for email message '
-        '${deltaMessageStanzaId(msgId)} accountId=$accountId',
+        'dc-msg-$msgId accountId=$accountId',
         error,
         stackTrace,
       );
@@ -6835,12 +6828,6 @@ class EmailService {
     await _trackAppDatabaseOperation(() async {
       final db = await _databaseBuilder();
       final xmppSelfJid = _xmppSelfJidProvider?.call();
-      await db.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: deltaAccountId,
-        placeholderJids: deltaPlaceholderJids,
-        selfJid: xmppSelfJid,
-        emailSelfJid: normalizedAddress,
-      );
       await db.replaceDeltaPlaceholderSelfJids(
         deltaAccountId: deltaAccountId,
         resolvedAddress: normalizedAddress,
@@ -8349,34 +8336,6 @@ class EmailService {
       }
     }
 
-    final missingIds = deltaIdSet
-        .where((deltaId) => !messagesByDeltaId.containsKey(deltaId))
-        .toList(growable: false);
-    if (missingIds.isNotEmpty) {
-      final stanzaIds = missingIds
-          .map(deltaMessageStanzaId)
-          .toList(growable: false);
-      final stanzaMatches = await db.getMessagesByStanzaIds(stanzaIds);
-      final messagesByStanzaId = <String, Message>{
-        for (final message in stanzaMatches) message.stanzaID: message,
-      };
-      for (final deltaId in missingIds) {
-        final stanzaId = deltaMessageStanzaId(deltaId);
-        final message = messagesByStanzaId[stanzaId];
-        if (message != null &&
-            _storedDeltaLocatorMatches(
-              message,
-              _DeltaChatMessageId(
-                chatId: chat == null ? null : chatId,
-                msgId: deltaId,
-                accountId: deltaAccountId,
-              ),
-            )) {
-          messagesByDeltaId[deltaId] = message;
-        }
-      }
-    }
-
     final remainingIds = deltaIdSet
         .where((deltaId) => !messagesByDeltaId.containsKey(deltaId))
         .toList(growable: false);
@@ -8390,31 +8349,6 @@ class EmailService {
       for (final message in hydrated) {
         final deltaId = message.deltaMsgId;
         if (deltaId != null) {
-          messagesByDeltaId[deltaId] = message;
-        }
-      }
-      final stanzaIds = remainingIds
-          .map(deltaMessageStanzaId)
-          .toList(growable: false);
-      final stanzaMatches = await db.getMessagesByStanzaIds(stanzaIds);
-      final messagesByStanzaId = <String, Message>{
-        for (final message in stanzaMatches) message.stanzaID: message,
-      };
-      for (final deltaId in remainingIds) {
-        if (messagesByDeltaId.containsKey(deltaId)) {
-          continue;
-        }
-        final stanzaId = deltaMessageStanzaId(deltaId);
-        final message = messagesByStanzaId[stanzaId];
-        if (message != null &&
-            _storedDeltaLocatorMatches(
-              message,
-              _DeltaChatMessageId(
-                chatId: chat == null ? null : chatId,
-                msgId: deltaId,
-                accountId: deltaAccountId,
-              ),
-            )) {
           messagesByDeltaId[deltaId] = message;
         }
       }

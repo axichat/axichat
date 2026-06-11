@@ -511,14 +511,6 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
-      () => database.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: any(named: 'deltaAccountId'),
-        placeholderJids: any(named: 'placeholderJids'),
-        selfJid: any(named: 'selfJid'),
-        emailSelfJid: any(named: 'emailSelfJid'),
-      ),
-    ).thenAnswer((_) async {});
-    when(
       () => database.getDeltaChatIdsForAccount(
         chatJid: any(named: 'chatJid'),
         deltaAccountId: any(named: 'deltaAccountId'),
@@ -542,12 +534,6 @@ void main() {
     ).thenAnswer((_) async {});
     when(() => database.updateChat(any())).thenAnswer((_) async {});
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
-    when(
-      () => database.replaceMessageStanzaID(
-        currentStanzaID: any(named: 'currentStanzaID'),
-        message: any(named: 'message'),
-      ),
-    ).thenAnswer((_) async {});
     when(
       () => database.deleteMessage(
         any(),
@@ -765,7 +751,11 @@ void main() {
       );
 
       when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
       ).thenAnswer((_) async => message);
       when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
 
@@ -848,7 +838,11 @@ void main() {
     );
 
     when(
-      () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      () => database.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
     ).thenAnswer((_) async => staleMessage);
 
     final service = EmailService(
@@ -2132,10 +2126,18 @@ void main() {
       );
 
       when(
-        () => database.getMessageByStanzaID('dc-msg-$firstMsgId'),
+        () => database.getMessageByDeltaId(
+          firstMsgId,
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
       ).thenAnswer((_) async => firstMessage);
       when(
-        () => database.getMessageByStanzaID('dc-msg-$secondMsgId'),
+        () => database.getMessageByDeltaId(
+          secondMsgId,
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
       ).thenAnswer((_) async => secondMessage);
       when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
 
@@ -2258,7 +2260,11 @@ void main() {
       );
 
       when(
-        () => database.getMessageByStanzaID('dc-msg-$secondMsgId'),
+        () => database.getMessageByDeltaId(
+          secondMsgId,
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
       ).thenAnswer((_) async => secondMessage);
       when(
         () => database.getEmailMessagesByRfcGroup(
@@ -2357,10 +2363,18 @@ void main() {
     );
 
     when(
-      () => database.getMessageByStanzaID('dc-msg-$firstMsgId'),
+      () => database.getMessageByDeltaId(
+        firstMsgId,
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
     ).thenAnswer((_) async => firstMessage);
     when(
-      () => database.getMessageByStanzaID('dc-msg-$secondMsgId'),
+      () => database.getMessageByDeltaId(
+        secondMsgId,
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
     ).thenAnswer((_) async => secondMessage);
     when(
       () => database.getEmailMessagesByRfcGroup(
@@ -2454,7 +2468,11 @@ void main() {
         emailAddress: 'peer@example.com',
       );
       when(
-        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
       ).thenAnswer((_) async => message);
       when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
 
@@ -6504,12 +6522,6 @@ void main() {
     expect(savedRow?.deltaAccountId, DeltaAccountDefaults.legacyId);
     expect(savedRow?.timestamp, DateTime.utc(2024, 1, 2, 3, 4, 5));
     verifyNever(() => database.updateMessage(any()));
-    verifyNever(
-      () => database.replaceMessageStanzaID(
-        currentStanzaID: any(named: 'currentStanzaID'),
-        message: any(named: 'message'),
-      ),
-    );
 
     addTearDown(service.shutdown);
   });
