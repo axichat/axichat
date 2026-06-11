@@ -1131,6 +1131,9 @@ extension MessageReferenceIds on Message {
   }
 
   MessageReference? collectionReference({required bool isGroupChat}) {
+    if (isEmailBacked) {
+      return _originReference;
+    }
     if (isGroupChat) {
       return _mucStanzaReference;
     }

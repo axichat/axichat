@@ -8143,6 +8143,96 @@ void main() {
     );
 
     test(
+      'setMessageCollectionMembership keeps email row keys off the wire',
+      () async {
+        final transport = RecordingMessageCollectionsPubSubTransport();
+        final manager = MessageCollectionsPubSubManager()
+          ..register(
+            _messageCollectionsTestAttributes(
+              pubSubManager: transport,
+              accountJid: 'owner@example.com/resource',
+            ),
+          );
+
+        when(
+          () => mockConnection.getManager<MessageCollectionsPubSubManager>(),
+        ).thenReturn(manager);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        final chat = Chat.fromJid('friend@example.com');
+        final message = Message(
+          stanzaID: 'c2a9c6d2-2f4e-4d2a-9a51-0d6f5d8f3b21',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: 'Email body',
+          timestamp: DateTime.timestamp().toUtc(),
+          originID: 'thread-1234@mail.example.com',
+          deltaAccountId: 7,
+          deltaChatId: 11,
+          deltaMsgId: 42,
+        );
+
+        final changed = await xmppService.setMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chat: chat,
+          message: message,
+          active: true,
+        );
+
+        expect(changed, isTrue);
+        final payload = MessageCollectionSyncPayload.fromXml(
+          transport.publishedItems.values.single,
+        );
+        expect(payload, isNotNull);
+        expect(payload!.messageReferenceId, 'thread-1234@mail.example.com');
+        expect(payload.messageStanzaId, isNull);
+
+        final entry = await database.getMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chatJid: chat.jid,
+          messageReferenceId: 'thread-1234@mail.example.com',
+        );
+        expect(entry, isNotNull);
+        expect(entry!.messageStanzaId, isNull);
+        expect(entry.deltaMsgId, 42);
+      },
+    );
+
+    test(
+      'setMessageCollectionMembership rejects unbound pending email rows',
+      () async {
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        final chat = Chat.fromJid('friend@example.com');
+        final message = Message(
+          stanzaID: '7f1d9b34-58c0-4a8e-b7a4-1f2e3d4c5b6a',
+          senderJid: 'owner@example.com',
+          chatJid: chat.jid,
+          body: 'Pending outgoing email',
+          timestamp: DateTime.timestamp().toUtc(),
+          deltaAccountId: 7,
+          deltaChatId: 11,
+        );
+
+        final changed = await xmppService.setMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chat: chat,
+          message: message,
+          active: true,
+        );
+
+        expect(changed, isFalse);
+      },
+    );
+
+    test(
       'removeMessageCollectionMembership tombstones only the membership',
       () async {
         final transport = RecordingMessageCollectionsPubSubTransport();

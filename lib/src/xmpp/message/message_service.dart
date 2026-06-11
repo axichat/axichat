@@ -4172,7 +4172,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         collectionId: normalizedCollectionId,
         chatJid: normalizedChatJid,
         messageReferenceId: messageReferenceId,
-        messageStanzaId: message.trimmedStanzaId,
+        messageStanzaId: message.isEmailBacked ? null : message.trimmedStanzaId,
         messageOriginId: message.trimmedOriginId,
         messageMucStanzaId: message.trimmedMucStanzaId,
         deltaAccountId: message.deltaMsgId == null
@@ -4266,7 +4266,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         chatJid: normalizedChatJid,
         canonicalMessageReferenceId: canonicalId,
         aliases: normalizedAliases,
-        messageStanzaId: message.trimmedStanzaId,
+        messageStanzaId: message.isEmailBacked ? null : message.trimmedStanzaId,
         messageOriginId: message.trimmedOriginId,
         messageMucStanzaId: message.trimmedMucStanzaId,
         deltaAccountId: message.deltaMsgId == null
@@ -5095,7 +5095,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       collectionId: entry.collectionId,
       chatJid: entry.chatJid,
       messageReferenceId: entry.messageReferenceId,
-      messageStanzaId: entry.messageStanzaId,
+      messageStanzaId: entry.deltaMsgId == null ? entry.messageStanzaId : null,
       messageOriginId: entry.messageOriginId,
       messageMucStanzaId: entry.messageMucStanzaId,
       updatedAt: entry.addedAt.toUtc(),
