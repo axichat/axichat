@@ -61,6 +61,9 @@ void main() {
       () => xmppService.homeChatsStream(recentLimit: any(named: 'recentLimit')),
     ).thenAnswer((_) => chatsStreamController.stream);
     when(
+      () => xmppService.allChatsStream(),
+    ).thenAnswer((_) => chatsStreamController.stream);
+    when(
       () => xmppService.recipientAddressSuggestionsStream(),
     ).thenAnswer((_) => const Stream<List<String>>.empty());
     when(

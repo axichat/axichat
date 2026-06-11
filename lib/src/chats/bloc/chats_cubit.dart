@@ -206,10 +206,34 @@ class ChatsCubit extends Cubit<ChatsState> {
     return super.close();
   }
 
-  StreamSubscription<List<Chat>> _listenToChats({required int limit}) =>
-      _chatsService
-          .homeChatsStream(recentLimit: limit)
-          .listen((items) => _updateChats(items));
+  bool _searchingAllChats = false;
+
+  StreamSubscription<List<Chat>> _listenToChats({required int limit}) {
+    final stream = _searchingAllChats
+        ? _chatsService.allChatsStream()
+        : _chatsService.homeChatsStream(recentLimit: limit);
+    return stream.listen((items) => _updateChats(items));
+  }
+
+  Future<void> _setSearchScope({required bool searchActive}) async {
+    if (_searchingAllChats == searchActive) {
+      return;
+    }
+    _searchingAllChats = searchActive;
+    final pending = _chatListResubscribeTask;
+    if (pending != null) {
+      await pending;
+    }
+    final task = _replaceChatsSubscription(limit: _chatListLimit);
+    _chatListResubscribeTask = task;
+    try {
+      await task;
+    } finally {
+      if (identical(_chatListResubscribeTask, task)) {
+        _chatListResubscribeTask = null;
+      }
+    }
+  }
 
   Future<void> loadMoreChats() async {
     final items = state.items;
@@ -300,6 +324,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         selectedChats: derived.selectedChats,
       ),
     );
+    unawaited(_setSearchScope(searchActive: active || state.spamSearchActive));
   }
 
   void updateSpamSearchSnapshot({
@@ -331,6 +356,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         spamVisibleItems: spamVisibleItems,
       ),
     );
+    unawaited(_setSearchScope(searchActive: active || state.searchActive));
   }
 
   void updateRosterContacts(Set<String> contacts) {
