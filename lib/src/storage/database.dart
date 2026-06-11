@@ -2130,7 +2130,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 60;
+  int get schemaVersion => 61;
 
   @override
   MigrationStrategy get migration {
@@ -2600,6 +2600,13 @@ WHERE transport = ${MessageTransport.email.index}
         }
         if (from < 60) {
           await migrateMessageIdentityToLadder();
+        }
+        if (from < 61) {
+          final removed = await _collapseDuplicateDeltaLocatorRows();
+          if (removed > 0) {
+            _log.info('Collapsed $removed duplicate delta-locator rows.');
+          }
+          await m.createIndex(messagesDeltaLocator);
         }
       },
       beforeOpen: (_) async {
@@ -3894,6 +3901,18 @@ WHERE transport = ${MessageTransport.email.index}
       }
       final persisted = await messagesAccessor.selectOne(message.stanzaID);
       if (persisted == null) {
+        if (messageToSave.deltaMsgId != null &&
+            messageToSave.deltaChatId != null) {
+          final locatorOwner = await getMessageByDeltaId(
+            messageToSave.deltaMsgId!,
+            deltaAccountId: messageToSave.deltaAccountId,
+            deltaChatId: messageToSave.deltaChatId,
+          );
+          if (locatorOwner != null) {
+            _log.fine('Delta locator already claimed; ignoring duplicate row.');
+            return;
+          }
+        }
         _log.warning('Message insert ignored; retrying with upsert');
         await into(messages).insertOnConflictUpdate(messageToSave);
         if (shouldUpdateChatSummary) {
@@ -7983,6 +8002,66 @@ WHERE jid = ?
     await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
       ChatsCompanion(archived: Value(archived)),
     );
+  }
+
+  Future<int> _collapseDuplicateDeltaLocatorRows() async {
+    final count = countAll();
+    final duplicateGroups = selectOnly(messages)
+      ..addColumns([
+        messages.deltaAccountId,
+        messages.deltaChatId,
+        messages.deltaMsgId,
+        count,
+      ])
+      ..where(
+        messages.deltaMsgId.isNotNull() & messages.deltaChatId.isNotNull(),
+      )
+      ..groupBy([
+        messages.deltaAccountId,
+        messages.deltaChatId,
+        messages.deltaMsgId,
+      ], having: count.isBiggerThanValue(1));
+    final groups = await duplicateGroups.get();
+    var removed = 0;
+    for (final group in groups) {
+      removed += await _deleteExtraDeltaLocatorRows(
+        deltaAccountId: group.read(messages.deltaAccountId),
+        deltaChatId: group.read(messages.deltaChatId),
+        deltaMsgId: group.read(messages.deltaMsgId),
+      );
+    }
+    return removed;
+  }
+
+  Future<int> _deleteExtraDeltaLocatorRows({
+    required int? deltaAccountId,
+    required int? deltaChatId,
+    required int? deltaMsgId,
+  }) async {
+    if (deltaAccountId == null || deltaChatId == null || deltaMsgId == null) {
+      return 0;
+    }
+    final rows =
+        await (select(messages)
+              ..where(
+                (tbl) =>
+                    tbl.deltaAccountId.equals(deltaAccountId) &
+                    tbl.deltaChatId.equals(deltaChatId) &
+                    tbl.deltaMsgId.equals(deltaMsgId),
+              )
+              ..orderBy([
+                (tbl) => OrderingTerm.asc(tbl.timestamp),
+                (tbl) => OrderingTerm.asc(tbl.stanzaID),
+              ]))
+            .get();
+    var removed = 0;
+    for (final extra in rows.skip(1)) {
+      await (delete(
+        messages,
+      )..where((tbl) => tbl.stanzaID.equals(extra.stanzaID))).go();
+      removed++;
+    }
+    return removed;
   }
 
   Future<void> migrateMessageIdentityToLadder() async {

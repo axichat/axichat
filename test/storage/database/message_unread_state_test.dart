@@ -569,7 +569,7 @@ void main() {
   );
 
   test(
-    'removing Delta placeholder duplicates repairs mixed unread count',
+    'duplicate delta locators are refused so mixed unread counts stay exact',
     () async {
       final chat = Chat(
         jid: 'peer@axi.im',
@@ -615,21 +615,12 @@ void main() {
         selfJid: 'self@example.com',
       );
 
-      expect((await db.getChat(chat.jid))?.unreadCount, 1);
-
-      await db.removeDeltaPlaceholderDuplicates(
-        deltaAccountId: DeltaAccountDefaults.legacyId,
-        placeholderJids: deltaPlaceholderJids,
-        selfJid: 'self@axi.im',
-        emailSelfJid: 'self@example.com',
-      );
-
+      expect(await db.getMessageByStanzaID('duplicate-email-real'), isNull);
       expect(
         await db.getMessageByStanzaID('duplicate-email-placeholder'),
-        isNull,
+        isNotNull,
       );
-      expect(await db.getMessageByStanzaID('duplicate-email-real'), isNotNull);
-      expect((await db.getChat(chat.jid))?.unreadCount, 0);
+      expect((await db.getChat(chat.jid))?.unreadCount, 1);
     },
   );
 

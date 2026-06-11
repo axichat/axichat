@@ -224,4 +224,65 @@ void main() {
       expect(untouched?.deltaChatId, isNull);
     });
   });
+
+  group('delta locator uniqueness (v61)', () {
+    test('second row with an identical delta locator is refused', () async {
+      final first = Message(
+        stanzaID: 'row-a',
+        senderJid: 'alice@example.com',
+        chatJid: 'alice@example.com',
+        body: 'first',
+        timestamp: DateTime.utc(2026, 1, 1),
+        deltaAccountId: 1,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+      );
+      final duplicate = Message(
+        stanzaID: 'row-b',
+        senderJid: 'alice@example.com',
+        chatJid: 'alice@example.com',
+        body: 'duplicate',
+        timestamp: DateTime.utc(2026, 1, 2),
+        deltaAccountId: 1,
+        deltaChatId: 7,
+        deltaMsgId: 42,
+      );
+
+      await database.saveMessage(first);
+      await database.saveMessage(duplicate);
+
+      final stored = await database.getMessagesByDeltaIds(
+        const [42],
+        deltaAccountId: 1,
+        deltaChatId: 7,
+      );
+      expect(stored, hasLength(1));
+      expect(stored.single.stanzaID, 'row-a');
+      expect(await database.getMessageByStanzaID('row-b'), isNull);
+    });
+
+    test('rows without full delta locators stay unconstrained', () async {
+      await database.saveMessage(
+        Message(
+          stanzaID: 'xmpp-a',
+          senderJid: 'bob@example.com',
+          chatJid: 'bob@example.com',
+          body: 'one',
+          timestamp: DateTime.utc(2026, 1, 1),
+        ),
+      );
+      await database.saveMessage(
+        Message(
+          stanzaID: 'xmpp-b',
+          senderJid: 'bob@example.com',
+          chatJid: 'bob@example.com',
+          body: 'two',
+          timestamp: DateTime.utc(2026, 1, 2),
+        ),
+      );
+
+      expect(await database.getMessageByStanzaID('xmpp-a'), isNotNull);
+      expect(await database.getMessageByStanzaID('xmpp-b'), isNotNull);
+    });
+  });
 }

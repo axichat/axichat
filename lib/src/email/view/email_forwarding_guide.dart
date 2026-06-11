@@ -576,13 +576,11 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
     }
     final accountJid = _resolveForwardingAddress(context.read<XmppService>());
     if (accountJid.isEmpty || _dialogShownForAccount == accountJid) {
-      await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
     final settingsCubit = context.read<SettingsCubit>();
     if (!_debugAlwaysShowWelcome &&
         await settingsCubit.accountWelcomeShownFor(accountJid)) {
-      await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
     final showEmailOnboarding = settingsCubit.state.endpointConfig.smtpEnabled;
@@ -592,11 +590,9 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
       accountJid: accountJid,
     );
     if (!mounted) {
-      await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
     if (!showEmailOnboarding && !showRecoveryPrompt) {
-      await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
     _dialogShownForAccount = accountJid;
@@ -604,28 +600,21 @@ class _AccountWelcomeGateState extends State<AccountWelcomeGate> {
       await settingsCubit.markAccountWelcomeShownFor(accountJid);
     }
     if (!mounted) {
-      await authenticationCubit.releaseSignupPostLoginWorkHold();
       return;
     }
-    try {
-      final dialog = showFadeScaleDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AccountWelcomeDialog(
-          accountJid: accountJid,
-          showEmailOnboarding: showEmailOnboarding,
-          showRecoveryPrompt: showRecoveryPrompt,
-          onRecoveryDismissed: () =>
-              settingsCubit.dismissRecoveryWelcomeFor(accountJid),
-          onRecoveryConfigured: () =>
-              settingsCubit.dismissRecoveryWelcomeFor(accountJid),
-        ),
-      );
-      unawaited(authenticationCubit.releaseSignupPostLoginWorkHold());
-      await dialog;
-    } finally {
-      await authenticationCubit.releaseSignupPostLoginWorkHold();
-    }
+    await showFadeScaleDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AccountWelcomeDialog(
+        accountJid: accountJid,
+        showEmailOnboarding: showEmailOnboarding,
+        showRecoveryPrompt: showRecoveryPrompt,
+        onRecoveryDismissed: () =>
+            settingsCubit.dismissRecoveryWelcomeFor(accountJid),
+        onRecoveryConfigured: () =>
+            settingsCubit.dismissRecoveryWelcomeFor(accountJid),
+      ),
+    );
     if (!mounted || _debugAlwaysShowWelcome) {
       return;
     }
