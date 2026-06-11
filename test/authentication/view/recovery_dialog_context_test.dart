@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
     as provisioning;
+import 'package:axichat/src/authentication/password_safety.dart';
 import 'package:axichat/src/authentication/view/recovery_dialog.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -24,6 +26,7 @@ void main() {
     await tester.pumpWidget(
       _RecoveryHarness(
         settingsCubit: settingsCubit,
+        authenticationCubit: _authenticationCubit(),
         showOpener: showOpener,
         childBuilder: (context) => AxiButton.primary(
           onPressed: () {
@@ -53,6 +56,7 @@ void main() {
     await tester.pumpWidget(
       _RecoveryHarness(
         settingsCubit: settingsCubit,
+        authenticationCubit: _authenticationCubit(),
         showOpener: showOpener,
         childBuilder: (context) => AxiButton.primary(
           onPressed: () {
@@ -87,6 +91,7 @@ void main() {
     await tester.pumpWidget(
       _RecoveryHarness(
         settingsCubit: settingsCubit,
+        authenticationCubit: _authenticationCubit(),
         showOpener: showOpener,
         childBuilder: (context) => AxiButton.primary(
           onPressed: () {
@@ -141,6 +146,7 @@ void main() {
     await tester.pumpWidget(
       _RecoveryHarness(
         settingsCubit: settingsCubit,
+        authenticationCubit: _authenticationCubit(),
         showOpener: showOpener,
         childBuilder: (context) => AxiButton.primary(
           onPressed: () {
@@ -201,6 +207,7 @@ void main() {
     await tester.pumpWidget(
       _RecoveryHarness(
         settingsCubit: settingsCubit,
+        authenticationCubit: _authenticationCubit(),
         showOpener: showOpener,
         childBuilder: (context) => AxiButton.primary(
           onPressed: () {
@@ -270,6 +277,7 @@ void main() {
     await tester.pumpWidget(
       _RecoveryHarness(
         settingsCubit: settingsCubit,
+        authenticationCubit: _authenticationCubit(),
         showOpener: showOpener,
         childBuilder: (context) => AxiButton.primary(
           onPressed: () {
@@ -314,6 +322,120 @@ void main() {
       ),
     ).called(1);
   });
+
+  testWidgets('recovery reset requires acknowledgement for breached password', (
+    tester,
+  ) async {
+    final settingsCubit = _settingsCubit();
+    final authenticationCubit = _authenticationCubit(
+      result: PasswordBreachCheckResult.breached,
+    );
+    when(
+      () => settingsCubit.startRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        recoveryEmail: 'recovery@example.com',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryEmailChallenge(challenge: 'challenge-id'),
+    );
+    when(
+      () => settingsCubit.verifyRecoveryEmailReset(
+        accountJid: 'alice@axi.im',
+        challenge: 'challenge-id',
+        code: '123456',
+      ),
+    ).thenAnswer(
+      (_) async =>
+          const provisioning.RecoveryResetToken(resetToken: 'reset-token'),
+    );
+    when(
+      () => settingsCubit.resetPasswordWithRecovery(
+        accountJid: any(named: 'accountJid'),
+        resetToken: any(named: 'resetToken'),
+        newPassword: any(named: 'newPassword'),
+      ),
+    ).thenAnswer((_) async {});
+    final showOpener = ValueNotifier<bool>(true);
+    addTearDown(showOpener.dispose);
+
+    await tester.pumpWidget(
+      _RecoveryHarness(
+        settingsCubit: settingsCubit,
+        authenticationCubit: authenticationCubit,
+        showOpener: showOpener,
+        childBuilder: (context) => AxiButton.primary(
+          onPressed: () {
+            unawaited(
+              showAccountRecoveryDialog(
+                context,
+                initialUsername: 'alice@axi.im',
+              ),
+            );
+          },
+          child: const Text('Open account recovery'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open account recovery'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Email code'));
+    await tester.pumpAndSettle();
+    tester
+            .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+            .last
+            .controller
+            ?.text =
+        'recovery@example.com';
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(ShadInput).first, '123456');
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('I understand the risk'), findsNothing);
+    _expectAbove(
+      tester,
+      find.text('Confirm new password'),
+      find.text('Password strength'),
+    );
+
+    final passwordFields = tester
+        .widgetList<AxiTextFormField>(find.byType(AxiTextFormField))
+        .toList();
+    passwordFields[0].controller?.text = 'CorrectHorseBatteryStaple2026!';
+    passwordFields[1].controller?.text = 'CorrectHorseBatteryStaple2026!';
+    await tester.pump();
+
+    expect(find.text('I understand the risk'), findsNothing);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Check the box above to continue.'), findsOneWidget);
+    verifyNever(
+      () => settingsCubit.resetPasswordWithRecovery(
+        accountJid: any(named: 'accountJid'),
+        resetToken: any(named: 'resetToken'),
+        newPassword: any(named: 'newPassword'),
+      ),
+    );
+
+    await tester.tap(find.text('I understand the risk'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => settingsCubit.resetPasswordWithRecovery(
+        accountJid: 'alice@axi.im',
+        resetToken: 'reset-token',
+        newPassword: 'CorrectHorseBatteryStaple2026!',
+      ),
+    ).called(1);
+  });
 }
 
 void _expectDestructiveText(WidgetTester tester, String message) {
@@ -332,11 +454,13 @@ void _expectAbove(WidgetTester tester, Finder upper, Finder lower) {
 class _RecoveryHarness extends StatelessWidget {
   const _RecoveryHarness({
     required this.settingsCubit,
+    required this.authenticationCubit,
     required this.showOpener,
     required this.childBuilder,
   });
 
   final SettingsCubit settingsCubit;
+  final AuthenticationCubit authenticationCubit;
   final ValueNotifier<bool> showOpener;
   final WidgetBuilder childBuilder;
 
@@ -351,8 +475,11 @@ class _RecoveryHarness extends StatelessWidget {
       theme: theme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: BlocProvider<SettingsCubit>.value(
-        value: settingsCubit,
+      home: MultiBlocProvider(
+        providers: [
+          BlocProvider<SettingsCubit>.value(value: settingsCubit),
+          BlocProvider<AuthenticationCubit>.value(value: authenticationCubit),
+        ],
         child: Scaffold(
           body: Center(
             child: ValueListenableBuilder<bool>(
@@ -381,4 +508,20 @@ SettingsCubit _settingsCubit() {
   return cubit;
 }
 
+AuthenticationCubit _authenticationCubit({
+  PasswordBreachCheckResult result = PasswordBreachCheckResult.safe,
+}) {
+  final cubit = _MockAuthenticationCubit();
+  when(() => cubit.state).thenReturn(const AuthenticationNone());
+  when(
+    () => cubit.stream,
+  ).thenAnswer((_) => const Stream<AuthenticationState>.empty());
+  when(
+    () => cubit.checkPasswordBreach(password: any(named: 'password')),
+  ).thenAnswer((_) async => result);
+  return cubit;
+}
+
 class _MockSettingsCubit extends Mock implements SettingsCubit {}
+
+class _MockAuthenticationCubit extends Mock implements AuthenticationCubit {}

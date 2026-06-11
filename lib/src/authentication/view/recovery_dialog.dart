@@ -2,8 +2,11 @@
 // Copyright (C) 2026-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
     as provisioning;
+import 'package:axichat/src/authentication/password_safety.dart';
+import 'package:axichat/src/authentication/view/password_safety_widgets.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -16,13 +19,17 @@ Future<String?> showAccountRecoveryDialog(
   BuildContext context, {
   String? initialUsername,
 }) async {
-  if (!context.read<SettingsCubit>().state.endpointConfig.isAxiImDomain) {
+  final locate = context.read;
+  if (!locate<SettingsCubit>().state.endpointConfig.isAxiImDomain) {
     return null;
   }
+  final checkPasswordBreach = locate<AuthenticationCubit>().checkPasswordBreach;
   return showFadeScaleDialog<String>(
     context: context,
-    builder: (dialogContext) =>
-        AccountRecoveryDialog(initialUsername: initialUsername),
+    builder: (dialogContext) => AccountRecoveryDialog(
+      initialUsername: initialUsername,
+      checkPasswordBreach: checkPasswordBreach,
+    ),
   );
 }
 
@@ -52,9 +59,15 @@ enum _RecoveryStep {
 enum _RecoveryMethod { email, totp }
 
 class AccountRecoveryDialog extends StatefulWidget {
-  const AccountRecoveryDialog({super.key, this.initialUsername});
+  const AccountRecoveryDialog({
+    super.key,
+    this.initialUsername,
+    required this.checkPasswordBreach,
+  });
 
   final String? initialUsername;
+  final Future<PasswordBreachCheckResult> Function({required String password})
+  checkPasswordBreach;
 
   @override
   State<AccountRecoveryDialog> createState() => _AccountRecoveryDialogState();
@@ -72,7 +85,14 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
   String? _challenge;
   String? _resetToken;
   String? _errorText;
+  AuthPasswordRisk? _acknowledgedPasswordRisk;
+  PasswordBreachCheckResult? _breachCheckResult;
+  String? _lastBreachCheckedPassword;
+  String _lastNewPasswordValue = '';
   bool _loading = false;
+  bool _showPasswordRiskPrompt = false;
+  bool _showPasswordRiskError = false;
+  int _passwordRiskResetTick = 0;
 
   @override
   void initState() {
@@ -82,7 +102,8 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
     );
     _recoveryEmailController = TextEditingController();
     _codeController = TextEditingController();
-    _newPasswordController = TextEditingController();
+    _newPasswordController = TextEditingController()
+      ..addListener(_handleNewPasswordChanged);
     _newPasswordConfirmController = TextEditingController();
   }
 
@@ -96,9 +117,47 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
     super.dispose();
   }
 
+  void _handleNewPasswordChanged() {
+    if (!mounted) return;
+    final password = _newPasswordController.text;
+    if (_lastNewPasswordValue == password) {
+      return;
+    }
+    setState(() {
+      _lastNewPasswordValue = password;
+      _clearPasswordSafetyState();
+    });
+  }
+
   String get _accountJid {
     final raw = _usernameController.text.trim().toLowerCase();
     return '$raw@${EndpointConfig.axiImDomain}';
+  }
+
+  AuthPasswordAssessment get _newPasswordAssessment =>
+      assessAuthPassword(_newPasswordController.text);
+
+  PasswordBreachCheckResult? get _currentBreachCheckResult =>
+      _lastBreachCheckedPassword == _newPasswordController.text
+      ? _breachCheckResult
+      : null;
+
+  AuthPasswordRisk? get _visiblePasswordRisk => authPasswordRiskForHostedPolicy(
+    assessment: _newPasswordAssessment,
+    breachCheckResult: _currentBreachCheckResult,
+  );
+
+  bool get _passwordRiskAcknowledged =>
+      _acknowledgedPasswordRisk != null &&
+      _acknowledgedPasswordRisk == _visiblePasswordRisk;
+
+  void _clearPasswordSafetyState() {
+    _acknowledgedPasswordRisk = null;
+    _breachCheckResult = null;
+    _lastBreachCheckedPassword = null;
+    _showPasswordRiskPrompt = false;
+    _showPasswordRiskError = false;
+    _passwordRiskResetTick++;
   }
 
   bool _validateForm() {
@@ -154,6 +213,7 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
           _resetToken = null;
           _newPasswordController.clear();
           _newPasswordConfirmController.clear();
+          _clearPasswordSafetyState();
           if (_method == _RecoveryMethod.email) {
             _challenge = null;
             _codeController.clear();
@@ -297,11 +357,35 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
       });
       return;
     }
+    final passwordSnapshot = _newPasswordController.text;
     setState(() {
       _loading = true;
       _errorText = null;
     });
     try {
+      if (_currentBreachCheckResult == null) {
+        final breachCheckResult = await widget.checkPasswordBreach(
+          password: passwordSnapshot,
+        );
+        if (!mounted) {
+          return;
+        }
+        if (_newPasswordController.text != passwordSnapshot) {
+          return;
+        }
+        setState(() {
+          _breachCheckResult = breachCheckResult;
+          _lastBreachCheckedPassword = passwordSnapshot;
+        });
+      }
+      final passwordRisk = _visiblePasswordRisk;
+      if (passwordRisk != null && !_passwordRiskAcknowledged) {
+        setState(() {
+          _showPasswordRiskPrompt = true;
+          _showPasswordRiskError = true;
+        });
+        return;
+      }
       await context.read<SettingsCubit>().resetPasswordWithRecovery(
         accountJid: _accountJid,
         resetToken: resetToken,
@@ -392,6 +476,23 @@ class _AccountRecoveryDialogState extends State<AccountRecoveryDialog> {
               codeController: _codeController,
               newPasswordController: _newPasswordController,
               newPasswordConfirmController: _newPasswordConfirmController,
+              newPasswordAssessment: _newPasswordAssessment,
+              passwordRisk: _showPasswordRiskPrompt
+                  ? _visiblePasswordRisk
+                  : null,
+              passwordRiskAcknowledged: _passwordRiskAcknowledged,
+              showPasswordRiskError: _showPasswordRiskError,
+              passwordRiskResetTick: _passwordRiskResetTick,
+              onPasswordRiskChanged: (value) {
+                setState(() {
+                  _acknowledgedPasswordRisk = value
+                      ? _visiblePasswordRisk
+                      : null;
+                  if (value) {
+                    _showPasswordRiskError = false;
+                  }
+                });
+              },
               enabled: !_loading,
             ),
             if (_step == _RecoveryStep.method) ...[
@@ -458,6 +559,12 @@ class _RecoveryStepContent extends StatelessWidget {
     required this.codeController,
     required this.newPasswordController,
     required this.newPasswordConfirmController,
+    required this.newPasswordAssessment,
+    required this.passwordRisk,
+    required this.passwordRiskAcknowledged,
+    required this.showPasswordRiskError,
+    required this.passwordRiskResetTick,
+    required this.onPasswordRiskChanged,
     required this.enabled,
   });
 
@@ -469,6 +576,12 @@ class _RecoveryStepContent extends StatelessWidget {
   final TextEditingController codeController;
   final TextEditingController newPasswordController;
   final TextEditingController newPasswordConfirmController;
+  final AuthPasswordAssessment newPasswordAssessment;
+  final AuthPasswordRisk? passwordRisk;
+  final bool passwordRiskAcknowledged;
+  final bool showPasswordRiskError;
+  final int passwordRiskResetTick;
+  final ValueChanged<bool> onPasswordRiskChanged;
   final bool enabled;
 
   @override
@@ -510,6 +623,12 @@ class _RecoveryStepContent extends StatelessWidget {
       _RecoveryStep.newPassword => _RecoveryNewPasswordFields(
         newPasswordController: newPasswordController,
         confirmController: newPasswordConfirmController,
+        assessment: newPasswordAssessment,
+        passwordRisk: passwordRisk,
+        passwordRiskAcknowledged: passwordRiskAcknowledged,
+        showPasswordRiskError: showPasswordRiskError,
+        passwordRiskResetTick: passwordRiskResetTick,
+        onPasswordRiskChanged: onPasswordRiskChanged,
         errorText: errorText,
         enabled: enabled,
       ),
@@ -667,17 +786,30 @@ class _RecoveryNewPasswordFields extends StatelessWidget {
   const _RecoveryNewPasswordFields({
     required this.newPasswordController,
     required this.confirmController,
+    required this.assessment,
+    required this.passwordRisk,
+    required this.passwordRiskAcknowledged,
+    required this.showPasswordRiskError,
+    required this.passwordRiskResetTick,
+    required this.onPasswordRiskChanged,
     required this.errorText,
     required this.enabled,
   });
 
   final TextEditingController newPasswordController;
   final TextEditingController confirmController;
+  final AuthPasswordAssessment assessment;
+  final AuthPasswordRisk? passwordRisk;
+  final bool passwordRiskAcknowledged;
+  final bool showPasswordRiskError;
+  final int passwordRiskResetTick;
+  final ValueChanged<bool> onPasswordRiskChanged;
   final String? errorText;
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -703,6 +835,24 @@ class _RecoveryNewPasswordFields extends StatelessWidget {
             }
             return null;
           },
+        ),
+        SizedBox(height: context.spacing.s),
+        AuthPasswordStrengthMeter(
+          assessment: assessment,
+          showBreachWarning: passwordRisk == AuthPasswordRisk.breached,
+          showSafetyUnavailableWarning:
+              passwordRisk == AuthPasswordRisk.unavailable,
+          animationDuration: animationDuration,
+        ),
+        SizedBox(height: context.spacing.s),
+        AuthPasswordRiskNotice(
+          risk: passwordRisk,
+          allowed: passwordRiskAcknowledged,
+          enabled: enabled,
+          showError: showPasswordRiskError,
+          animationDuration: animationDuration,
+          resetTick: passwordRiskResetTick,
+          onChanged: onPasswordRiskChanged,
         ),
       ],
     );

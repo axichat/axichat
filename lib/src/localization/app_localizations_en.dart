@@ -1430,6 +1430,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authPasswordPending => 'Checking password safety';
 
   @override
+  String get authPasswordStrength => 'Password strength';
+
+  @override
+  String get authPasswordBreached =>
+      'This password has been found in a hacked database.';
+
+  @override
+  String get authPasswordSafetyUnavailable =>
+      'Password safety could not be checked.';
+
+  @override
+  String get authPasswordStrengthNone => 'None';
+
+  @override
+  String get authPasswordStrengthWeak => 'Weak';
+
+  @override
+  String get authPasswordStrengthMedium => 'Medium';
+
+  @override
+  String get authPasswordStrengthStronger => 'Stronger';
+
+  @override
+  String get authPasswordRiskAcknowledgement => 'I understand the risk';
+
+  @override
+  String get authPasswordRiskError => 'Check the box above to continue.';
+
+  @override
+  String get authPasswordRiskAllowBreach =>
+      'Allow this password even though it appeared in a breach.';
+
+  @override
+  String get authPasswordRiskAllowWeak =>
+      'Allow this password even though it is considered weak.';
+
+  @override
+  String get authPasswordRiskAllowUnavailable =>
+      'Allow this password even though its breach status could not be checked.';
+
+  @override
   String get authSignupPending => 'Waiting for signup';
 
   @override

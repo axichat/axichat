@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:axichat/src/authentication/password_safety.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/address_tools.dart';
@@ -3453,6 +3454,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<bool> checkNotPwned({required String password}) async {
+    final result = await checkPasswordBreach(password: password);
+    return result == PasswordBreachCheckResult.safe;
+  }
+
+  Future<PasswordBreachCheckResult> checkPasswordBreach({
+    required String password,
+  }) async {
     final hash = sha1.convert(utf8.encode(password)).toString().toUpperCase();
     final subhash = hash.substring(0, 5);
     try {
@@ -3460,15 +3468,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           .get(Uri.parse('https://api.pwnedpasswords.com/range/$subhash'))
           .timeout(_authRequestTimeout);
       if (response.statusCode != 200) {
-        return false;
+        return PasswordBreachCheckResult.unavailable;
       }
       final bool isBreached = response.body.split('\r\n').any((entry) {
         final pwned = '$subhash${entry.split(':')[0]}';
         return pwned == hash;
       });
-      return !isBreached;
+      if (isBreached) {
+        return PasswordBreachCheckResult.breached;
+      }
+      return PasswordBreachCheckResult.safe;
     } on Exception catch (_) {
-      return false;
+      return PasswordBreachCheckResult.unavailable;
     }
   }
 

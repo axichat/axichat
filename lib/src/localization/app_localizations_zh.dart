@@ -1371,6 +1371,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authPasswordPending => '正在检查密码安全性';
 
   @override
+  String get authPasswordStrength => '密码强度';
+
+  @override
+  String get authPasswordBreached => '该密码出现在泄露的数据库中。';
+
+  @override
+  String get authPasswordSafetyUnavailable => '无法检查密码安全性。';
+
+  @override
+  String get authPasswordStrengthNone => '无';
+
+  @override
+  String get authPasswordStrengthWeak => '弱';
+
+  @override
+  String get authPasswordStrengthMedium => '中';
+
+  @override
+  String get authPasswordStrengthStronger => '较强';
+
+  @override
+  String get authPasswordRiskAcknowledgement => '我了解风险';
+
+  @override
+  String get authPasswordRiskError => '请勾选上方的复选框以继续。';
+
+  @override
+  String get authPasswordRiskAllowBreach => '即使此密码出现在泄漏中也允许使用。';
+
+  @override
+  String get authPasswordRiskAllowWeak => '即使此密码被视为弱也允许使用。';
+
+  @override
+  String get authPasswordRiskAllowUnavailable => '即使无法检查此密码是否出现在泄露中也允许使用。';
+
+  @override
   String get authSignupPending => '正在注册';
 
   @override
@@ -8162,6 +8198,42 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authPasswordPending => '正在檢查密碼安全性';
+
+  @override
+  String get authPasswordStrength => '密碼強度';
+
+  @override
+  String get authPasswordBreached => '此密碼出現在外洩的資料庫中。';
+
+  @override
+  String get authPasswordSafetyUnavailable => '無法檢查密碼安全性。';
+
+  @override
+  String get authPasswordStrengthNone => '無';
+
+  @override
+  String get authPasswordStrengthWeak => '弱';
+
+  @override
+  String get authPasswordStrengthMedium => '中';
+
+  @override
+  String get authPasswordStrengthStronger => '較強';
+
+  @override
+  String get authPasswordRiskAcknowledgement => '我了解風險';
+
+  @override
+  String get authPasswordRiskError => '請勾選上方的核取方塊以繼續。';
+
+  @override
+  String get authPasswordRiskAllowBreach => '即使此密碼出現在外洩中也允許使用。';
+
+  @override
+  String get authPasswordRiskAllowWeak => '即使此密碼被視為弱也允許使用。';
+
+  @override
+  String get authPasswordRiskAllowUnavailable => '即使無法檢查此密碼是否出現在外洩中也允許使用。';
 
   @override
   String get authSignupPending => '正在註冊';

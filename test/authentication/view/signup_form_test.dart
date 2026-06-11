@@ -54,6 +54,38 @@ void main() {
     expect(find.text('@selfhosted.example'), findsNothing);
     expect(find.text('Back'), findsOneWidget);
   });
+
+  testWidgets(
+    'Self-hosted weak signup password advances without breach check',
+    (tester) async {
+      await tester.pumpSignupForm(const EndpointConfig());
+
+      await tester.tap(find.text('Choose server'));
+      await tester.pumpAndSettle();
+      tester.enterEndpointDomain('selfhosted.example');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      tester.enterUsername('validusername');
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      final passwordInputs = tester
+          .widgetList<PasswordInput>(find.byType(PasswordInput))
+          .toList();
+      passwordInputs[0].controller.text = 'abc';
+      passwordInputs[1].controller.text = 'abc';
+      await tester.tap(find.text('Continue'));
+      await tester.pumpAndSettle();
+
+      verifyNever(
+        () => tester.authenticationCubit.checkPasswordBreach(
+          password: any(named: 'password'),
+        ),
+      );
+      expect(find.byType(PasswordInput), findsNothing);
+    },
+  );
 }
 
 extension on WidgetTester {

@@ -6,8 +6,10 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/password_safety.dart';
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/authentication/view/endpoint_config_sheet.dart';
+import 'package:axichat/src/authentication/view/password_safety_widgets.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/signup_avatar_selector.dart';
@@ -38,10 +40,6 @@ class SignupForm extends StatefulWidget {
   State<SignupForm> createState() => _SignupFormState();
 }
 
-enum _PasswordStrengthLevel { empty, weak, medium, stronger }
-
-enum _InsecurePasswordReason { weak, breached }
-
 enum _CaptchaLoadState { idle, loading, ready, failed }
 
 class _SignupFormState extends State<SignupForm>
@@ -58,13 +56,6 @@ class _SignupFormState extends State<SignupForm>
   late TextEditingController _captchaTextController;
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
   static final _usernamePattern = RegExp(r'^[a-z][a-z0-9._-]{3,19}$');
-  static final _digitCharacters = RegExp(r'[0-9]');
-  static final _lowercaseCharacters = RegExp(r'[a-z]');
-  static final _uppercaseCharacters = RegExp(r'[A-Z]');
-  static final _symbolCharacters = RegExp(r'[^A-Za-z0-9]');
-  static const double _maxEntropyBits = 120;
-  static const double _weakEntropyThreshold = 50;
-  static const double _strongEntropyThreshold = 80;
 
   final _formKeys = [
     GlobalKey<FormState>(),
@@ -72,16 +63,16 @@ class _SignupFormState extends State<SignupForm>
     GlobalKey<FormState>(),
   ];
 
-  bool allowInsecurePassword = false;
   bool rememberMe = true;
-  bool _passwordBreached = false;
-  String? _lastBreachedPassword;
+  AuthPasswordRisk? _acknowledgedPasswordRisk;
+  PasswordBreachCheckResult? _breachCheckResult;
+  String? _lastBreachCheckedPassword;
   bool _pwnedCheckInProgress = false;
-  bool _showAllowInsecureError = false;
-  bool _showBreachedError = false;
+  bool _showPasswordRiskPrompt = false;
+  bool _showPasswordRiskError = false;
   String _lastPasswordValue = '';
   bool _passwordWasSkipped = false;
-  int _allowInsecureResetTick = 0;
+  int _passwordRiskResetTick = 0;
   _CaptchaLoadState _captchaLoadState = _CaptchaLoadState.idle;
   String? _captchaSrcUrl;
   int _captchaAutoRetryAttempts = 0;
@@ -170,16 +161,14 @@ class _SignupFormState extends State<SignupForm>
       if (_passwordWasSkipped) {
         _passwordWasSkipped = false;
       }
-      _showAllowInsecureError = false;
-      _showBreachedError = false;
-      if (_passwordBreached && _lastBreachedPassword != password) {
-        _passwordBreached = false;
-        _lastBreachedPassword = null;
+      _showPasswordRiskPrompt = false;
+      _showPasswordRiskError = false;
+      _acknowledgedPasswordRisk = null;
+      _passwordRiskResetTick++;
+      if (_lastBreachCheckedPassword != password) {
+        _breachCheckResult = null;
+        _lastBreachCheckedPassword = null;
       }
-    }
-    if (_insecurePasswordReason == null && allowInsecurePassword) {
-      allowInsecurePassword = false;
-      _allowInsecureResetTick++;
     }
     setState(() {});
   }
@@ -435,55 +424,30 @@ class _SignupFormState extends State<SignupForm>
     }
   }
 
-  double get _passwordEntropyBits {
-    final password = _passwordTextController.text;
-    if (password.isEmpty) {
-      return 0;
+  AuthPasswordAssessment get _passwordAssessment =>
+      assessAuthPassword(_passwordTextController.text);
+
+  bool get _usesStrictPasswordPolicy =>
+      _resolvedSignupEndpointConfig?.isAxiImDomain ?? false;
+
+  PasswordBreachCheckResult? get _currentBreachCheckResult =>
+      _lastBreachCheckedPassword == _passwordTextController.text
+      ? _breachCheckResult
+      : null;
+
+  AuthPasswordRisk? get _visiblePasswordRisk {
+    if (!_usesStrictPasswordPolicy) {
+      return null;
     }
-    final pool = _estimateCharacterPool(password);
-    return password.length * (math.log(pool) / math.ln2);
+    return authPasswordRiskForHostedPolicy(
+      assessment: _passwordAssessment,
+      breachCheckResult: _currentBreachCheckResult,
+    );
   }
 
-  _PasswordStrengthLevel get _passwordStrengthLevel {
-    if (_passwordTextController.text.isEmpty) {
-      return _PasswordStrengthLevel.empty;
-    }
-    final entropy = _passwordEntropyBits;
-    if (entropy < _weakEntropyThreshold) {
-      return _PasswordStrengthLevel.weak;
-    }
-    if (entropy < _strongEntropyThreshold) {
-      return _PasswordStrengthLevel.medium;
-    }
-    return _PasswordStrengthLevel.stronger;
-  }
-
-  _InsecurePasswordReason? get _insecurePasswordReason {
-    if (_passwordBreached) {
-      return _InsecurePasswordReason.breached;
-    }
-    if (_passwordStrengthLevel == _PasswordStrengthLevel.weak) {
-      return _InsecurePasswordReason.weak;
-    }
-    return null;
-  }
-
-  int _estimateCharacterPool(String password) {
-    var pool = 0;
-    if (_digitCharacters.hasMatch(password)) {
-      pool += 10;
-    }
-    if (_lowercaseCharacters.hasMatch(password)) {
-      pool += 26;
-    }
-    if (_uppercaseCharacters.hasMatch(password)) {
-      pool += 26;
-    }
-    if (_symbolCharacters.hasMatch(password)) {
-      pool += 33;
-    }
-    return pool == 0 ? 1 : pool;
-  }
+  bool get _passwordRiskAcknowledged =>
+      _acknowledgedPasswordRisk != null &&
+      _acknowledgedPasswordRisk == _visiblePasswordRisk;
 
   bool get _isUsernameValid =>
       _usernamePattern.hasMatch(_jidTextController.text);
@@ -507,17 +471,11 @@ class _SignupFormState extends State<SignupForm>
         !config.requiresCustomSignupEndpoint;
   }
 
-  bool get _hasStartedPasswordConfirmation =>
-      _passwordTextController.text.isNotEmpty &&
-      _password2TextController.text.isNotEmpty;
-
-  _InsecurePasswordReason? get _visibleInsecurePasswordReason {
-    final reason = _insecurePasswordReason;
-    if (reason == _InsecurePasswordReason.weak &&
-        !_hasStartedPasswordConfirmation) {
+  AuthPasswordRisk? get _visibleSignupPasswordRisk {
+    if (!_showPasswordRiskPrompt) {
       return null;
     }
-    return reason;
+    return _visiblePasswordRisk;
   }
 
   int get _completedStepCount => [
@@ -543,55 +501,40 @@ class _SignupFormState extends State<SignupForm>
 
   Future<void> _advanceFromPasswordStep(BuildContext context) async {
     final passwordSnapshot = _passwordTextController.text;
-    if ((_passwordStrengthLevel == _PasswordStrengthLevel.weak ||
-            _passwordBreached) &&
-        !allowInsecurePassword) {
-      if (!mounted) return;
-      setState(() {
-        _showAllowInsecureError = true;
-        _showBreachedError = _passwordBreached;
-      });
-      return;
-    }
-
-    if (allowInsecurePassword) {
+    if (!_usesStrictPasswordPolicy) {
       _goToNextSignupStep();
       return;
     }
 
-    setState(() {
-      _pwnedCheckInProgress = true;
-    });
-    final notPwned = await context.read<AuthenticationCubit>().checkNotPwned(
-      password: passwordSnapshot,
-    );
-    if (!mounted) return;
-    final currentPassword = _passwordTextController.text;
-    if (currentPassword != passwordSnapshot) {
+    if (_currentBreachCheckResult == null) {
+      setState(() {
+        _pwnedCheckInProgress = true;
+      });
+      final breachCheckResult = await context
+          .read<AuthenticationCubit>()
+          .checkPasswordBreach(password: passwordSnapshot);
+      if (!mounted) return;
+      final currentPassword = _passwordTextController.text;
+      if (currentPassword != passwordSnapshot) {
+        setState(() {
+          _pwnedCheckInProgress = false;
+        });
+        return;
+      }
       setState(() {
         _pwnedCheckInProgress = false;
+        _breachCheckResult = breachCheckResult;
+        _lastBreachCheckedPassword = passwordSnapshot;
       });
-      return;
     }
-    setState(() {
-      _pwnedCheckInProgress = false;
-    });
-
-    if (!notPwned) {
+    final currentRisk = _visiblePasswordRisk;
+    if (currentRisk != null && !_passwordRiskAcknowledged) {
       setState(() {
-        _passwordBreached = true;
-        _lastBreachedPassword = passwordSnapshot;
-        _showBreachedError = true;
-        _showAllowInsecureError = true;
+        _showPasswordRiskPrompt = true;
+        _showPasswordRiskError = true;
       });
-      _formKeys[1].currentState?.validate();
       return;
     }
-
-    setState(() {
-      _passwordBreached = false;
-      _lastBreachedPassword = null;
-    });
     _goToNextSignupStep();
   }
 
@@ -613,11 +556,12 @@ class _SignupFormState extends State<SignupForm>
     setState(() {
       _passwordWasSkipped = true;
       rememberMe = true;
-      allowInsecurePassword = false;
-      _passwordBreached = false;
-      _lastBreachedPassword = null;
-      _showAllowInsecureError = false;
-      _showBreachedError = false;
+      _acknowledgedPasswordRisk = null;
+      _breachCheckResult = null;
+      _lastBreachCheckedPassword = null;
+      _showPasswordRiskPrompt = false;
+      _showPasswordRiskError = false;
+      _passwordRiskResetTick++;
     });
     _rememberMeFieldKey.currentState?.didChange(true);
     await context.read<AuthenticationCubit>().persistRememberMeChoice(true);
@@ -648,8 +592,7 @@ class _SignupFormState extends State<SignupForm>
     setState(() {
       _currentIndex = nextIndex;
       _errorText = null;
-      _showAllowInsecureError = false;
-      _showBreachedError = false;
+      _showPasswordRiskError = false;
     });
     focusNode?.requestFocus();
   }
@@ -742,9 +685,7 @@ class _SignupFormState extends State<SignupForm>
                       padding: globalErrorPadding,
                       child: AnimatedSwitcher(
                         duration: animationDuration,
-                        child:
-                            !_showBreachedError &&
-                                (errorText?.isNotEmpty ?? false)
+                        child: (errorText?.isNotEmpty ?? false)
                             ? Semantics(
                                 liveRegion: true,
                                 container: true,
@@ -1051,35 +992,34 @@ class _SignupFormState extends State<SignupForm>
                                   ),
                                   Padding(
                                     padding: fieldSpacing,
-                                    child: _SignupPasswordStrengthMeter(
-                                      entropyBits: _passwordEntropyBits,
-                                      maxEntropyBits: _maxEntropyBits,
-                                      strengthLevel: _passwordStrengthLevel,
+                                    child: AuthPasswordStrengthMeter(
+                                      assessment: _passwordAssessment,
                                       showBreachWarning:
-                                          _showBreachedError &&
-                                          _passwordBreached,
+                                          _visibleSignupPasswordRisk ==
+                                          AuthPasswordRisk.breached,
+                                      showSafetyUnavailableWarning:
+                                          _visibleSignupPasswordRisk ==
+                                          AuthPasswordRisk.unavailable,
                                       animationDuration: animationDuration,
                                     ),
                                   ),
                                   Padding(
                                     padding: fieldSpacing,
-                                    child: _SignupInsecurePasswordNotice(
-                                      reason: _visibleInsecurePasswordReason,
-                                      allowInsecurePassword:
-                                          allowInsecurePassword,
-                                      loading: isBusy,
-                                      pwnedCheckInProgress:
-                                          _pwnedCheckInProgress,
-                                      showAllowInsecureError:
-                                          _showAllowInsecureError,
+                                    child: AuthPasswordRiskNotice(
+                                      risk: _visibleSignupPasswordRisk,
+                                      allowed: _passwordRiskAcknowledged,
+                                      enabled:
+                                          !isBusy && !_pwnedCheckInProgress,
+                                      showError: _showPasswordRiskError,
                                       animationDuration: animationDuration,
-                                      resetTick: _allowInsecureResetTick,
+                                      resetTick: _passwordRiskResetTick,
                                       onChanged: (value) {
                                         setState(() {
-                                          allowInsecurePassword = value;
+                                          _acknowledgedPasswordRisk = value
+                                              ? _visibleSignupPasswordRisk
+                                              : null;
                                           if (value) {
-                                            _showAllowInsecureError = false;
-                                            _showBreachedError = false;
+                                            _showPasswordRiskError = false;
                                           }
                                         });
                                       },
@@ -1460,204 +1400,6 @@ class _SignupProgressMeter extends StatelessWidget {
         );
       },
     );
-  }
-}
-
-class _SignupPasswordStrengthMeter extends StatelessWidget {
-  const _SignupPasswordStrengthMeter({
-    required this.entropyBits,
-    required this.maxEntropyBits,
-    required this.strengthLevel,
-    required this.showBreachWarning,
-    required this.animationDuration,
-  });
-
-  final double entropyBits;
-  final double maxEntropyBits;
-  final _PasswordStrengthLevel strengthLevel;
-  final bool showBreachWarning;
-  final Duration animationDuration;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final motion = context.motion;
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    final targetBits = entropyBits.clamp(0.0, maxEntropyBits);
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: targetBits),
-      duration: animationDuration,
-      curve: Curves.easeInOut,
-      builder: (context, animatedBits, child) {
-        final normalized = (animatedBits / maxEntropyBits).clamp(0.0, 1.0);
-        final fillColor = _colorForLevel(strengthLevel, colors);
-        final barHeight = sizing.progressIndicatorBarHeight;
-        final barRadius = context.radius;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  context.l10n.signupPasswordStrength,
-                  style: context.textTheme.muted,
-                ),
-                Text(
-                  _labelForLevel(strengthLevel, context.l10n),
-                  style: context.textTheme.muted.copyWith(color: fillColor),
-                ),
-              ],
-            ),
-            SizedBox(height: spacing.s),
-            Stack(
-              children: [
-                Container(
-                  height: barHeight,
-                  decoration: BoxDecoration(
-                    color: colors.muted.withValues(alpha: motion.tapHoverAlpha),
-                    borderRadius: barRadius,
-                  ),
-                ),
-                FractionallySizedBox(
-                  widthFactor: normalized,
-                  child: Container(
-                    height: barHeight,
-                    decoration: BoxDecoration(
-                      color: fillColor,
-                      borderRadius: barRadius,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            AnimatedSwitcher(
-              duration: animationDuration,
-              child: showBreachWarning
-                  ? Padding(
-                      key: const ValueKey('breach-warning'),
-                      padding: EdgeInsets.only(top: spacing.s),
-                      child: Text(
-                        context.l10n.signupPasswordBreached,
-                        style: context.textTheme.muted.copyWith(
-                          color: colors.destructive,
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  static String _labelForLevel(
-    _PasswordStrengthLevel level,
-    AppLocalizations l10n,
-  ) {
-    switch (level) {
-      case _PasswordStrengthLevel.empty:
-        return l10n.signupStrengthNone;
-      case _PasswordStrengthLevel.weak:
-        return l10n.signupStrengthWeak;
-      case _PasswordStrengthLevel.medium:
-        return l10n.signupStrengthMedium;
-      case _PasswordStrengthLevel.stronger:
-        return l10n.signupStrengthStronger;
-    }
-  }
-
-  static Color _colorForLevel(
-    _PasswordStrengthLevel level,
-    ShadColorScheme colors,
-  ) {
-    switch (level) {
-      case _PasswordStrengthLevel.weak:
-      case _PasswordStrengthLevel.empty:
-        return colors.destructive;
-      case _PasswordStrengthLevel.medium:
-        return axiWarning;
-      case _PasswordStrengthLevel.stronger:
-        return axiGreen;
-    }
-  }
-}
-
-class _SignupInsecurePasswordNotice extends StatelessWidget {
-  const _SignupInsecurePasswordNotice({
-    required this.reason,
-    required this.allowInsecurePassword,
-    required this.loading,
-    required this.pwnedCheckInProgress,
-    required this.showAllowInsecureError,
-    required this.animationDuration,
-    required this.resetTick,
-    required this.onChanged,
-  });
-
-  final _InsecurePasswordReason? reason;
-  final bool allowInsecurePassword;
-  final bool loading;
-  final bool pwnedCheckInProgress;
-  final bool showAllowInsecureError;
-  final Duration animationDuration;
-  final int resetTick;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final destructiveTextStyle = context.textTheme.small.copyWith(
-      color: context.colorScheme.destructive,
-    );
-    return AnimatedSwitcher(
-      duration: animationDuration,
-      switchInCurve: Curves.easeIn,
-      switchOutCurve: Curves.easeOut,
-      child: reason == null
-          ? const SizedBox.shrink()
-          : Column(
-              key: ValueKey(reason),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AxiCheckboxFormField(
-                  key: ValueKey('${reason!.name}-$resetTick'),
-                  enabled: !loading && !pwnedCheckInProgress,
-                  initialValue: allowInsecurePassword,
-                  inputLabel: Text(context.l10n.signupRiskAcknowledgement),
-                  inputSublabel: Text(
-                    _reasonDescription(reason!, context.l10n),
-                  ),
-                  onChanged: onChanged,
-                ),
-                AnimatedOpacity(
-                  opacity: showAllowInsecureError && !allowInsecurePassword
-                      ? 1
-                      : 0,
-                  duration: animationDuration,
-                  child: Padding(
-                    padding: EdgeInsets.only(left: spacing.xs, top: spacing.xs),
-                    child: Text(
-                      context.l10n.signupRiskError,
-                      style: destructiveTextStyle,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-
-  static String _reasonDescription(
-    _InsecurePasswordReason reason,
-    AppLocalizations l10n,
-  ) {
-    if (reason == _InsecurePasswordReason.breached) {
-      return l10n.signupRiskAllowBreach;
-    }
-    return l10n.signupRiskAllowWeak;
   }
 }
 

@@ -1464,6 +1464,48 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authPasswordPending => 'Passwort wird geprüft';
 
   @override
+  String get authPasswordStrength => 'Passwortstärke';
+
+  @override
+  String get authPasswordBreached =>
+      'Dieses Passwort wurde in einer geleakten Datenbank gefunden.';
+
+  @override
+  String get authPasswordSafetyUnavailable =>
+      'Passwortsicherheit konnte nicht geprüft werden.';
+
+  @override
+  String get authPasswordStrengthNone => 'Keine';
+
+  @override
+  String get authPasswordStrengthWeak => 'Schwach';
+
+  @override
+  String get authPasswordStrengthMedium => 'Mittel';
+
+  @override
+  String get authPasswordStrengthStronger => 'Stärker';
+
+  @override
+  String get authPasswordRiskAcknowledgement => 'Ich verstehe das Risiko';
+
+  @override
+  String get authPasswordRiskError =>
+      'Zum Fortfahren das Kästchen oben ankreuzen.';
+
+  @override
+  String get authPasswordRiskAllowBreach =>
+      'Dieses Passwort trotz eines Leaks erlauben.';
+
+  @override
+  String get authPasswordRiskAllowWeak =>
+      'Dieses Passwort zulassen, obwohl es als schwach gilt.';
+
+  @override
+  String get authPasswordRiskAllowUnavailable =>
+      'Dieses Passwort erlauben, obwohl sein Leak-Status nicht geprüft werden konnte.';
+
+  @override
   String get authSignupPending => 'Registrierung läuft';
 
   @override

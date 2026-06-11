@@ -1460,6 +1460,48 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authPasswordPending => 'Comprobando seguridad de la contraseña';
 
   @override
+  String get authPasswordStrength => 'Fortaleza de la contraseña';
+
+  @override
+  String get authPasswordBreached =>
+      'Esta contraseña aparece en una base de datos filtrada.';
+
+  @override
+  String get authPasswordSafetyUnavailable =>
+      'No se pudo comprobar la seguridad de la contraseña.';
+
+  @override
+  String get authPasswordStrengthNone => 'Ninguna';
+
+  @override
+  String get authPasswordStrengthWeak => 'Débil';
+
+  @override
+  String get authPasswordStrengthMedium => 'Media';
+
+  @override
+  String get authPasswordStrengthStronger => 'Más fuerte';
+
+  @override
+  String get authPasswordRiskAcknowledgement => 'Entiendo el riesgo';
+
+  @override
+  String get authPasswordRiskError =>
+      'Marca la casilla de arriba para continuar.';
+
+  @override
+  String get authPasswordRiskAllowBreach =>
+      'Permitir esta contraseña aunque apareció en una filtración.';
+
+  @override
+  String get authPasswordRiskAllowWeak =>
+      'Permitir esta contraseña aunque se considere débil.';
+
+  @override
+  String get authPasswordRiskAllowUnavailable =>
+      'Permitir esta contraseña aunque no se pudo comprobar si apareció en una filtración.';
+
+  @override
   String get authSignupPending => 'Esperando registro';
 
   @override

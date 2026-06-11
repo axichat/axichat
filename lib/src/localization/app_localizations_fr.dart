@@ -1466,6 +1466,48 @@ class AppLocalizationsFr extends AppLocalizations {
       'Vérification de la sécurité du mot de passe';
 
   @override
+  String get authPasswordStrength => 'Robustesse du mot de passe';
+
+  @override
+  String get authPasswordBreached =>
+      'Ce mot de passe figure dans une base de données piratée.';
+
+  @override
+  String get authPasswordSafetyUnavailable =>
+      'Impossible de vérifier la sécurité du mot de passe.';
+
+  @override
+  String get authPasswordStrengthNone => 'Aucune';
+
+  @override
+  String get authPasswordStrengthWeak => 'Faible';
+
+  @override
+  String get authPasswordStrengthMedium => 'Moyenne';
+
+  @override
+  String get authPasswordStrengthStronger => 'Plus fort';
+
+  @override
+  String get authPasswordRiskAcknowledgement => 'Je comprends le risque';
+
+  @override
+  String get authPasswordRiskError =>
+      'Cochez la case ci-dessus pour continuer.';
+
+  @override
+  String get authPasswordRiskAllowBreach =>
+      'Autoriser ce mot de passe même s’il est apparu dans une fuite.';
+
+  @override
+  String get authPasswordRiskAllowWeak =>
+      'Autoriser ce mot de passe bien qu’il soit jugé faible.';
+
+  @override
+  String get authPasswordRiskAllowUnavailable =>
+      'Autoriser ce mot de passe même si son statut de fuite n’a pas pu être vérifié.';
+
+  @override
   String get authSignupPending => 'En attente de l’inscription';
 
   @override

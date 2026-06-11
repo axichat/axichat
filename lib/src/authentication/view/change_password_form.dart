@@ -3,6 +3,8 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/password_safety.dart';
+import 'package:axichat/src/authentication/view/password_safety_widgets.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -25,12 +27,21 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
   late TextEditingController _passwordTextController;
   late TextEditingController _newPasswordTextController;
   late TextEditingController _newPassword2TextController;
+  AuthPasswordRisk? _acknowledgedPasswordRisk;
+  PasswordBreachCheckResult? _breachCheckResult;
+  String? _lastBreachCheckedPassword;
+  String _lastNewPasswordValue = '';
+  bool _passwordSafetyCheckInProgress = false;
+  bool _showPasswordRiskPrompt = false;
+  bool _showPasswordRiskError = false;
+  int _passwordRiskResetTick = 0;
 
   @override
   void initState() {
     super.initState();
     _passwordTextController = TextEditingController();
-    _newPasswordTextController = TextEditingController();
+    _newPasswordTextController = TextEditingController()
+      ..addListener(_handleNewPasswordChanged);
     _newPassword2TextController = TextEditingController();
   }
 
@@ -42,23 +53,104 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     super.dispose();
   }
 
+  void _handleNewPasswordChanged() {
+    if (!mounted) return;
+    final password = _newPasswordTextController.text;
+    if (_lastNewPasswordValue == password) {
+      return;
+    }
+    setState(() {
+      _lastNewPasswordValue = password;
+      _acknowledgedPasswordRisk = null;
+      _showPasswordRiskPrompt = false;
+      _showPasswordRiskError = false;
+      _passwordRiskResetTick++;
+      if (_lastBreachCheckedPassword != password) {
+        _breachCheckResult = null;
+        _lastBreachCheckedPassword = null;
+      }
+    });
+  }
+
+  AuthPasswordAssessment get _newPasswordAssessment =>
+      assessAuthPassword(_newPasswordTextController.text);
+
+  PasswordBreachCheckResult? get _currentBreachCheckResult =>
+      _lastBreachCheckedPassword == _newPasswordTextController.text
+      ? _breachCheckResult
+      : null;
+
+  AuthPasswordRisk? _passwordRisk({required bool usesStrictPasswordPolicy}) {
+    if (!usesStrictPasswordPolicy) {
+      return null;
+    }
+    return authPasswordRiskForHostedPolicy(
+      assessment: _newPasswordAssessment,
+      breachCheckResult: _currentBreachCheckResult,
+    );
+  }
+
+  bool _passwordRiskAcknowledged(AuthPasswordRisk? risk) =>
+      risk != null && _acknowledgedPasswordRisk == risk;
+
+  void _clearPasswordSafetyState() {
+    _acknowledgedPasswordRisk = null;
+    _breachCheckResult = null;
+    _lastBreachCheckedPassword = null;
+    _showPasswordRiskPrompt = false;
+    _showPasswordRiskError = false;
+    _passwordRiskResetTick++;
+  }
+
   void _onPressed(BuildContext context) async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) return;
-    final passwordWasSkipped = context
-        .read<AuthenticationCubit>()
-        .passwordWasSkipped;
-    await context.read<AuthenticationCubit>().changePassword(
-      username: context.read<ProfileCubit>().state.username,
-      host: context.read<SettingsCubit>().state.endpointConfig.domain,
+    final locate = context.read;
+    final settingsState = locate<SettingsCubit>().state;
+    final usesStrictPasswordPolicy = settingsState.endpointConfig.isAxiImDomain;
+    final passwordSnapshot = _newPasswordTextController.text;
+    if (usesStrictPasswordPolicy && _currentBreachCheckResult == null) {
+      setState(() {
+        _passwordSafetyCheckInProgress = true;
+      });
+      final breachCheckResult = await locate<AuthenticationCubit>()
+          .checkPasswordBreach(password: passwordSnapshot);
+      if (!mounted) return;
+      if (_newPasswordTextController.text != passwordSnapshot) {
+        setState(() {
+          _passwordSafetyCheckInProgress = false;
+        });
+        return;
+      }
+      setState(() {
+        _passwordSafetyCheckInProgress = false;
+        _breachCheckResult = breachCheckResult;
+        _lastBreachCheckedPassword = passwordSnapshot;
+      });
+    }
+    final passwordRisk = _passwordRisk(
+      usesStrictPasswordPolicy: usesStrictPasswordPolicy,
+    );
+    if (passwordRisk != null && !_passwordRiskAcknowledged(passwordRisk)) {
+      setState(() {
+        _showPasswordRiskPrompt = true;
+        _showPasswordRiskError = true;
+      });
+      return;
+    }
+    final passwordWasSkipped = locate<AuthenticationCubit>().passwordWasSkipped;
+    await locate<AuthenticationCubit>().changePassword(
+      username: locate<ProfileCubit>().state.username,
+      host: settingsState.endpointConfig.domain,
       oldPassword: passwordWasSkipped ? '' : _passwordTextController.value.text,
       password: _newPasswordTextController.value.text,
       password2: _newPassword2TextController.value.text,
     );
-    if (!context.mounted) return;
+    if (!mounted) return;
     _passwordTextController.clear();
     _newPasswordTextController.clear();
     _newPassword2TextController.clear();
+    setState(_clearPasswordSafetyState);
   }
 
   @override
@@ -66,9 +158,22 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
         final loading = state is AuthenticationPasswordChangeInProgress;
+        final submitting = loading || _passwordSafetyCheckInProgress;
         final passwordWasSkipped = context.select<AuthenticationCubit, bool>(
           (cubit) => cubit.passwordWasSkipped,
         );
+        final usesStrictPasswordPolicy = context.select<SettingsCubit, bool>(
+          (cubit) => cubit.state.endpointConfig.isAxiImDomain,
+        );
+        final animationDuration = context.select<SettingsCubit, Duration>(
+          (cubit) => cubit.animationDuration,
+        );
+        final passwordRisk = _passwordRisk(
+          usesStrictPasswordPolicy: usesStrictPasswordPolicy,
+        );
+        final visiblePasswordRisk = _showPasswordRiskPrompt
+            ? passwordRisk
+            : null;
         final spacing = context.spacing;
         return Form(
           key: _formKey,
@@ -114,7 +219,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   padding: EdgeInsets.all(spacing.s),
                   child: PasswordInput(
                     placeholder: context.l10n.authPasswordCurrentPlaceholder,
-                    enabled: !loading,
+                    enabled: !submitting,
                     controller: _passwordTextController,
                   ),
                 ),
@@ -122,7 +227,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                 padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
                   placeholder: context.l10n.authPasswordNewPlaceholder,
-                  enabled: !loading,
+                  enabled: !submitting,
                   controller: _newPasswordTextController,
                 ),
               ),
@@ -130,7 +235,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                 padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(
                   placeholder: context.l10n.authPasswordConfirmNewPlaceholder,
-                  enabled: !loading,
+                  enabled: !submitting,
                   controller: _newPassword2TextController,
                   validator: (value) {
                     final newPassword = _newPasswordTextController.text;
@@ -143,10 +248,42 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   },
                 ),
               ),
+              Padding(
+                padding: EdgeInsets.all(spacing.s),
+                child: AuthPasswordStrengthMeter(
+                  assessment: _newPasswordAssessment,
+                  showBreachWarning:
+                      visiblePasswordRisk == AuthPasswordRisk.breached,
+                  showSafetyUnavailableWarning:
+                      visiblePasswordRisk == AuthPasswordRisk.unavailable,
+                  animationDuration: animationDuration,
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.all(spacing.s),
+                child: AuthPasswordRiskNotice(
+                  risk: visiblePasswordRisk,
+                  allowed: _passwordRiskAcknowledged(visiblePasswordRisk),
+                  enabled: !submitting,
+                  showError: _showPasswordRiskError,
+                  animationDuration: animationDuration,
+                  resetTick: _passwordRiskResetTick,
+                  onChanged: (value) {
+                    setState(() {
+                      _acknowledgedPasswordRisk = value
+                          ? visiblePasswordRisk
+                          : null;
+                      if (value) {
+                        _showPasswordRiskError = false;
+                      }
+                    });
+                  },
+                ),
+              ),
               SizedBox(height: spacing.s),
               AxiButton.primary(
-                loading: loading,
-                onPressed: loading ? null : () => _onPressed(context),
+                loading: submitting,
+                onPressed: submitting ? null : () => _onPressed(context),
                 child: Text(context.l10n.commonContinue),
               ),
             ],

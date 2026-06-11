@@ -2641,6 +2641,78 @@ abstract class AppLocalizations {
   /// **'Checking password safety'**
   String get authPasswordPending;
 
+  /// No description provided for @authPasswordStrength.
+  ///
+  /// In en, this message translates to:
+  /// **'Password strength'**
+  String get authPasswordStrength;
+
+  /// No description provided for @authPasswordBreached.
+  ///
+  /// In en, this message translates to:
+  /// **'This password has been found in a hacked database.'**
+  String get authPasswordBreached;
+
+  /// No description provided for @authPasswordSafetyUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Password safety could not be checked.'**
+  String get authPasswordSafetyUnavailable;
+
+  /// No description provided for @authPasswordStrengthNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get authPasswordStrengthNone;
+
+  /// No description provided for @authPasswordStrengthWeak.
+  ///
+  /// In en, this message translates to:
+  /// **'Weak'**
+  String get authPasswordStrengthWeak;
+
+  /// No description provided for @authPasswordStrengthMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get authPasswordStrengthMedium;
+
+  /// No description provided for @authPasswordStrengthStronger.
+  ///
+  /// In en, this message translates to:
+  /// **'Stronger'**
+  String get authPasswordStrengthStronger;
+
+  /// No description provided for @authPasswordRiskAcknowledgement.
+  ///
+  /// In en, this message translates to:
+  /// **'I understand the risk'**
+  String get authPasswordRiskAcknowledgement;
+
+  /// No description provided for @authPasswordRiskError.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the box above to continue.'**
+  String get authPasswordRiskError;
+
+  /// No description provided for @authPasswordRiskAllowBreach.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this password even though it appeared in a breach.'**
+  String get authPasswordRiskAllowBreach;
+
+  /// No description provided for @authPasswordRiskAllowWeak.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this password even though it is considered weak.'**
+  String get authPasswordRiskAllowWeak;
+
+  /// No description provided for @authPasswordRiskAllowUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this password even though its breach status could not be checked.'**
+  String get authPasswordRiskAllowUnavailable;
+
   /// No description provided for @authSignupPending.
   ///
   /// In en, this message translates to:

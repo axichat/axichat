@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/authentication/password_safety.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -107,4 +108,25 @@ void main() {
     expect(result, isFalse);
     expect(emitted, isEmpty);
   });
+
+  test(
+    'checkPasswordBreach returns unavailable for failed responses',
+    () async {
+      when(
+        () => httpClient.get(any()),
+      ).thenAnswer((_) async => http.Response('', 503));
+
+      final cubit = AuthenticationCubit(
+        credentialStore: credentialStore,
+        xmppService: xmppService,
+        httpClient: httpClient,
+        emailProvisioningClient: provisioningClient,
+      );
+      addTearDown(cubit.close);
+
+      final result = await cubit.checkPasswordBreach(password: 'password');
+
+      expect(result, PasswordBreachCheckResult.unavailable);
+    },
+  );
 }
