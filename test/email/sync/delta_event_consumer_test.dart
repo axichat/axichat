@@ -177,6 +177,7 @@ void main() {
     when(
       () => context.getMessageRfc822Body(any()),
     ).thenAnswer((_) async => null);
+    when(() => context.getQuotedMessage(any())).thenAnswer((_) async => null);
     when(() => context.chatSendCapabilities(any())).thenAnswer(
       (_) async => const DeltaChatSendCapabilities(
         exists: true,
@@ -4334,6 +4335,10 @@ class CountingDeltaEventCore implements DeltaEventCore {
   @override
   Future<DeltaMessageRfc822Body?> getMessageRfc822Body(int messageId) =>
       _inner.getMessageRfc822Body(messageId);
+
+  @override
+  Future<DeltaQuotedMessage?> getQuotedMessage(int messageId) =>
+      _inner.getQuotedMessage(messageId);
 
   @override
   Future<DeltaContactPublicKeyImport> importContactPublicKey({

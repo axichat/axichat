@@ -416,6 +416,10 @@ final class _EmailRuntimeEventCore implements DeltaEventCore {
       _transport.getMessageRfc822Body(messageId, accountId: _accountId);
 
   @override
+  Future<DeltaQuotedMessage?> getQuotedMessage(int messageId) =>
+      _transport.getQuotedMessage(messageId, accountId: _accountId);
+
+  @override
   Future<DeltaContactPublicKeyImport> importContactPublicKey({
     required String address,
     required String displayName,

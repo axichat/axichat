@@ -148,6 +148,7 @@ abstract interface class DeltaEventCore {
   Future<String?> getMessageMimeHeaders(int messageId);
   Future<String?> getMessageDebugInfo(int messageId);
   Future<DeltaMessageRfc822Body?> getMessageRfc822Body(int messageId);
+  Future<DeltaQuotedMessage?> getQuotedMessage(int messageId);
   Future<DeltaContactPublicKeyImport> importContactPublicKey({
     required String address,
     required String displayName,
@@ -235,6 +236,10 @@ final class DeltaContextEventCore implements DeltaEventCore {
   @override
   Future<DeltaMessageRfc822Body?> getMessageRfc822Body(int messageId) =>
       _context.getMessageRfc822Body(messageId);
+
+  @override
+  Future<DeltaQuotedMessage?> getQuotedMessage(int messageId) =>
+      _context.getQuotedMessage(messageId);
 
   @override
   Future<DeltaContactPublicKeyImport> importContactPublicKey({
@@ -1439,6 +1444,15 @@ class DeltaEventConsumer {
     if (nativeOriginId == null) {
       message = message.copyWith(originID: originId);
     }
+    if (isOutgoing) {
+      message = await _withReconstructedQuote(
+        db: db,
+        message: message,
+        msg: msg,
+        deltaAccountId: deltaAccountId,
+        chatId: chatId,
+      );
+    }
     await _logEmailPartDiagnostic(
       stage: 'ingest-new-before-store',
       eventChatId: chatId,
@@ -2199,6 +2213,38 @@ class DeltaEventConsumer {
       parsedHeaderMessageId: parsedHeaderMessageId,
     );
     return parsedHeaderMessageId;
+  }
+
+  Future<Message> _withReconstructedQuote({
+    required XmppDatabase db,
+    required Message message,
+    required DeltaMessage msg,
+    required int deltaAccountId,
+    required int chatId,
+  }) async {
+    if (message.quoting != null) {
+      return message;
+    }
+    final DeltaQuotedMessage? quoted;
+    try {
+      quoted = await _core.getQuotedMessage(msg.id);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to load Delta quote.', error, stackTrace);
+      return message;
+    }
+    final quotedDeltaId = quoted?.id;
+    if (quotedDeltaId == null) {
+      return message;
+    }
+    final quotedRow = await db.getMessageByDeltaId(
+      quotedDeltaId,
+      deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
+    );
+    if (quotedRow == null) {
+      return message;
+    }
+    return message.copyWith(quoting: quotedRow.stanzaID);
   }
 
   Future<String?> _resolveNativeOriginId(DeltaMessage msg) async {
