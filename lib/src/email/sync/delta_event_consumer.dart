@@ -563,21 +563,6 @@ class DeltaEventConsumer {
   final Set<int> _originIdHydrationPending = <int>{};
   final Set<int> _originIdHydrationExhausted = <int>{};
 
-  static final Object _eventQueueZoneKey = Object();
-
-  Future<T> runExclusive<T>(Future<T> Function() action) async {
-    if (Zone.current[_eventQueueZoneKey] == true) {
-      return action();
-    }
-    late T result;
-    await _eventQueue.run(
-      () => runZoned(() async {
-        result = await action();
-      }, zoneValues: {_eventQueueZoneKey: true}),
-    );
-    return result;
-  }
-
   final Map<String, int> _learnedAutocryptContactKeyChatIds = <String, int>{};
 
   AppLocalizations get _l10n =>
@@ -630,12 +615,10 @@ class DeltaEventConsumer {
         continue;
       }
       didBootstrap = true;
-      await runExclusive(
-        () => _bootstrapChatSummary(
-          entry: entry,
-          archivedChatIds: archivedChatIds,
-          db: db,
-        ),
+      await _bootstrapChatSummary(
+        entry: entry,
+        archivedChatIds: archivedChatIds,
+        db: db,
       );
     }
 
@@ -643,12 +626,10 @@ class DeltaEventConsumer {
       if (await _isDeltaSystemChat(chatId)) {
         continue;
       }
-      await runExclusive(
-        () => _bootstrapChatMessages(
-          chatId: chatId,
-          deltaAccountId: deltaAccountId,
-          db: db,
-        ),
+      await _bootstrapChatMessages(
+        chatId: chatId,
+        deltaAccountId: deltaAccountId,
+        db: db,
       );
     }
 
@@ -733,9 +714,7 @@ class DeltaEventConsumer {
       await inFlight;
       return;
     }
-    final future = runExclusive(
-      () => _refreshChatlistSnapshotInternal(isCurrent: isCurrent),
-    );
+    final future = _refreshChatlistSnapshotInternal(isCurrent: isCurrent);
     _chatlistRefreshInFlight = future;
     try {
       await future;
@@ -965,28 +944,6 @@ class DeltaEventConsumer {
     int? beforeMessageId,
     DateTime? beforeTimestamp,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
-  }) {
-    return runExclusive(
-      () => _backfillChatHistorySerialized(
-        chatId: chatId,
-        chatJid: chatJid,
-        desiredWindow: desiredWindow,
-        targetChat: targetChat,
-        beforeMessageId: beforeMessageId,
-        beforeTimestamp: beforeTimestamp,
-        filter: filter,
-      ),
-    );
-  }
-
-  Future<int> _backfillChatHistorySerialized({
-    required int chatId,
-    required String chatJid,
-    required int desiredWindow,
-    Chat? targetChat,
-    int? beforeMessageId,
-    DateTime? beforeTimestamp,
-    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
     const minimumHistoryWindow = 1;
     if (desiredWindow < minimumHistoryWindow) {
@@ -1067,7 +1024,7 @@ class DeltaEventConsumer {
   }
 
   Future<void> handle(DeltaCoreEvent event) {
-    return runExclusive(() => _handleSerialized(event));
+    return _eventQueue.run(() => _handleSerialized(event));
   }
 
   Future<void> _handleSerialized(DeltaCoreEvent event) async {
@@ -1337,12 +1294,10 @@ class DeltaEventConsumer {
     }
   }
 
-  Future<void> hydrateMessage(int msgId) {
-    return runExclusive(() async {
-      final msg = await _core.getMessage(msgId);
-      if (msg == null) return;
-      await _ingestDeltaMessage(chatId: msg.chatId, msg: msg);
-    });
+  Future<void> hydrateMessage(int msgId) async {
+    final msg = await _core.getMessage(msgId);
+    if (msg == null) return;
+    await _ingestDeltaMessage(chatId: msg.chatId, msg: msg);
   }
 
   Future<void> _ingestDeltaMessage({
