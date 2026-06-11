@@ -85,13 +85,20 @@ String? normalizeEmailMessageId(String? value) {
   final token = _extractMessageIdToken(trimmed);
   final normalized = token.replaceAll(_emailMessageIdWhitespaceRegex, '');
   if (normalized.isEmpty) return null;
-  return normalized.toLowerCase();
+  final atIndex = normalized.lastIndexOf('@');
+  if (atIndex < 0) {
+    return normalized.toLowerCase();
+  }
+  final idLeft = normalized.substring(0, atIndex);
+  final idRight = normalized.substring(atIndex).toLowerCase();
+  return '$idLeft$idRight';
 }
 
 bool isDeltaGeneratedMessageId(String? value) {
   final normalized = normalizeEmailMessageId(value);
   if (normalized == null) return false;
-  return normalized.startsWith(_deltaGeneratedMessageIdPrefix);
+  if (normalized.contains('@')) return false;
+  return normalized.toLowerCase().startsWith(_deltaGeneratedMessageIdPrefix);
 }
 
 bool isDerivedEmailMessageKey(String? value) =>
@@ -102,10 +109,10 @@ String derivedEmailMessageKey({
   required DateTime? timestamp,
   required String? bodyText,
 }) {
-  final material = <String?>[
-    subject?.trim(),
-    timestamp?.toUtc().microsecondsSinceEpoch.toString(),
-    bodyText?.trim(),
+  final material = <String>[
+    subject?.trim() ?? '',
+    timestamp?.toUtc().microsecondsSinceEpoch.toString() ?? '',
+    bodyText?.trim() ?? '',
   ].join(_derivedEmailMessageKeyFieldSeparator);
   final digest = crypto.sha256.convert(utf8.encode(material));
   return '$derivedEmailMessageKeyPrefix$digest';

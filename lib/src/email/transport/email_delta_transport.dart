@@ -2413,10 +2413,18 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       deltaAccountId: accountId,
       deltaChatId: chatId,
     );
+    final bool staleClaim =
+        duplicateCandidate != null &&
+        duplicateCandidate.stanzaID != existing.stanzaID &&
+        (duplicateCandidate.chatJid != existing.chatJid ||
+            duplicateCandidate.senderJid != existing.senderJid);
+    if (staleClaim) {
+      await db.clearMessageDeltaHandles(duplicateCandidate.stanzaID);
+    }
     final Message? duplicateMessage =
         duplicateCandidate == null ||
             duplicateCandidate.stanzaID == existing.stanzaID ||
-            duplicateCandidate.chatJid != existing.chatJid
+            staleClaim
         ? null
         : duplicateCandidate;
     Message next = existing;
@@ -2436,6 +2444,9 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       if (timestamp != null && next.timestamp != timestamp) {
         next = next.copyWith(timestamp: timestamp);
       }
+    }
+    if (next.error == MessageError.emailSendFailure) {
+      next = next.copyWith(error: MessageError.none);
     }
     if (duplicateMessage != null) {
       final String? duplicateOriginId = duplicateMessage.originID?.trim();
@@ -2468,14 +2479,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       );
     }
     if (next != existing) {
-      if (next.stanzaID == existing.stanzaID) {
-        await db.updateMessage(next);
-      } else {
-        await db.replaceMessageStanzaID(
-          currentStanzaID: existing.stanzaID,
-          message: next,
-        );
-      }
+      await db.updateMessage(next);
     }
     if (metadata != null && messageId != null) {
       if (previousMetadataId != metadata.id) {
@@ -2744,7 +2748,11 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       return;
     }
     final originId = await _resolveMessageOriginId(context, id.msgId);
-    if (originId == null || !_isCurrentCoreOperationEpoch(epoch)) {
+    if (originId == null) {
+      _log.info('Origin ID hydration exhausted for Delta msg ${id.msgId}.');
+      return;
+    }
+    if (!_isCurrentCoreOperationEpoch(epoch)) {
       return;
     }
     await _trackDatabaseOperation(() async {
@@ -2763,7 +2771,18 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
         return;
       }
-      await db.updateMessage(existing.copyWith(originID: originId));
+      await db.updateMessageOriginId(
+        stanzaID: existing.stanzaID,
+        originID: originId,
+      );
+      final staleOrigin = existing.originID?.trim();
+      if (staleOrigin != null && staleOrigin.isNotEmpty) {
+        await db.rebindMessageCollectionMembershipReferences(
+          chatJid: existing.chatJid,
+          oldReferenceId: staleOrigin,
+          newReferenceId: originId,
+        );
+      }
       await db.repairUnreadCountForChat(
         existing.chatJid,
         selfJid: _xmppSelfJidProvider?.call(),
@@ -2797,15 +2816,25 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     DeltaContextHandle context,
     int msgId,
   ) async {
-    final rfc724Mid = normalizeEmailMessageId(
-      await context.getMessageRfc724Mid(msgId),
-    );
+    String? rfc724Mid;
+    try {
+      rfc724Mid = normalizeEmailMessageId(
+        await context.getMessageRfc724Mid(msgId),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to load Delta RFC724 Message-ID.', error, stackTrace);
+    }
     if (rfc724Mid != null && !isDeltaGeneratedMessageId(rfc724Mid)) {
       return rfc724Mid;
     }
-    final infoMessageId = parseDeltaMessageInfoMessageId(
-      await context.getMessageInfo(msgId),
-    );
+    String? infoMessageId;
+    try {
+      infoMessageId = parseDeltaMessageInfoMessageId(
+        await context.getMessageInfo(msgId),
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to load Delta message info.', error, stackTrace);
+    }
     if (infoMessageId != null && !isDeltaGeneratedMessageId(infoMessageId)) {
       return infoMessageId;
     }
@@ -3422,9 +3451,17 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     }
     final messages = <DeltaMessage>[];
     for (final messageId in messageIds) {
-      final message = await context.getMessage(messageId);
-      if (message != null) {
-        messages.add(message);
+      try {
+        final message = await context.getMessage(messageId);
+        if (message != null) {
+          messages.add(message);
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.fine(
+          'Skipping unreadable Delta message $messageId in bulk fetch.',
+          error,
+          stackTrace,
+        );
       }
     }
     return messages;

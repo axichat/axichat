@@ -3164,6 +3164,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(nextState);
     _requestPresentationHydrationForMessages(
       pinnedItems.map((item) => item.message).whereType<Message>(),
+      hydrateEmailContent: true,
+      allowOffWindowEmailContentHydration: true,
     );
   }
 

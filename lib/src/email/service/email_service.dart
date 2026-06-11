@@ -2740,6 +2740,30 @@ class EmailService {
     FileMetadataData? metadata,
     DateTime? timestamp,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
+  }) {
+    return _deltaConsumerForAccount(accountId).runExclusive(
+      () => _markOutgoingEmailSentSerialized(
+        stanzaId: stanzaId,
+        msgId: msgId,
+        accountId: accountId,
+        chatId: chatId,
+        shareId: shareId,
+        metadata: metadata,
+        timestamp: timestamp,
+        encryptionProtocol: encryptionProtocol,
+      ),
+    );
+  }
+
+  Future<void> _markOutgoingEmailSentSerialized({
+    required String stanzaId,
+    required int msgId,
+    required int accountId,
+    required int chatId,
+    String? shareId,
+    FileMetadataData? metadata,
+    DateTime? timestamp,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
   }) async {
     final db = await _databaseBuilder();
     final existing = await db.getMessageByStanzaID(stanzaId);
@@ -2764,10 +2788,18 @@ class EmailService {
       deltaAccountId: accountId,
       deltaChatId: chatId,
     );
+    final staleClaim =
+        duplicateCandidate != null &&
+        duplicateCandidate.stanzaID != existing.stanzaID &&
+        (duplicateCandidate.chatJid != existing.chatJid ||
+            duplicateCandidate.senderJid != existing.senderJid);
+    if (staleClaim) {
+      await db.clearMessageDeltaHandles(duplicateCandidate.stanzaID);
+    }
     final duplicateMessage =
         duplicateCandidate == null ||
             duplicateCandidate.stanzaID == existing.stanzaID ||
-            duplicateCandidate.chatJid != existing.chatJid
+            staleClaim
         ? null
         : duplicateCandidate;
     var next = existing;
@@ -2787,6 +2819,9 @@ class EmailService {
       if (timestamp != null && next.timestamp != timestamp) {
         next = next.copyWith(timestamp: timestamp);
       }
+    }
+    if (next.error == MessageError.emailSendFailure) {
+      next = next.copyWith(error: MessageError.none);
     }
     if (duplicateMessage != null) {
       final duplicateOriginId = duplicateMessage.originID?.trim();
@@ -2819,14 +2854,7 @@ class EmailService {
       );
     }
     if (next != existing) {
-      if (next.stanzaID == existing.stanzaID) {
-        await db.updateMessage(next);
-      } else {
-        await db.replaceMessageStanzaID(
-          currentStanzaID: existing.stanzaID,
-          message: next,
-        );
-      }
+      await db.updateMessage(next);
     }
     if (metadata != null && messageId != null) {
       if (previousMetadataId != metadata.id) {
@@ -5839,12 +5867,14 @@ class EmailService {
       );
     }
     try {
-      await _bootstrapFromCoreOnMain();
+      final didBootstrap = await _bootstrapFromCoreOnMain();
       if (operationId != _bootstrapOperationIdForScope(scope) ||
           !_acceptsRuntimeWork) {
         return;
       }
-      await _credentialStore.write(key: bootstrapKey, value: true.toString());
+      if (didBootstrap) {
+        await _credentialStore.write(key: bootstrapKey, value: true.toString());
+      }
       if (operationId != _bootstrapOperationIdForScope(scope) ||
           !_acceptsRuntimeWork) {
         return;
@@ -6291,9 +6321,7 @@ class EmailService {
       await db.updateMessage(message.copyWith(deltaAccountId: resolved));
       return;
     }
-    await db.updateMessage(
-      message.copyWith(deltaMsgId: null, deltaChatId: null),
-    );
+    await db.clearMessageDeltaHandles(message.stanzaID);
   }
 
   Future<int> _sendDemoEmailMessage({

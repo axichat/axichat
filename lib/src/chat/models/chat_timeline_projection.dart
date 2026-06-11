@@ -994,6 +994,20 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       bodyTextTrimmed.isEmpty &&
       normalizedPendingEmailContentLabel != null &&
       normalizedPendingEmailContentLabel.isNotEmpty;
+  final emailSourceFallbackText =
+      isEmailMessage &&
+          hasRenderableEmailSourceContent &&
+          emailFullHtmlIsUnavailable &&
+          displayedBody.trim().isEmpty &&
+          !hasAttachment &&
+          !(showSubjectHeader && subjectText.isNotEmpty) &&
+          !message.retracted &&
+          !message.edited
+      ? rfcEmailBodyText(
+          message: message,
+          resolvedHtmlBody: resolvedForwardHtml,
+        ).trim()
+      : '';
   final renderedText = shouldReplaceInviteBody
       ? inviteLabel
       : shouldUseUnavailableEmailContentLabel
@@ -1004,6 +1018,8 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       ? bodyText.isNotEmpty
             ? errorLabelWithBody(message.error, bodyTextTrimmed)
             : errorLabel(message.error)
+      : emailSourceFallbackText.isNotEmpty
+      ? emailSourceFallbackText
       : displayedBody;
   final validatedAvailabilityMessage = message
       .validatedCalendarAvailabilityMessage(ownerJidForShare: ownerJidForShare);

@@ -561,6 +561,23 @@ class DeltaEventConsumer {
   final EmailAsyncQueue _eventQueue = EmailAsyncQueue();
   final EmailAsyncQueue _originIdHydrationQueue = EmailAsyncQueue();
   final Set<int> _originIdHydrationPending = <int>{};
+  final Set<int> _originIdHydrationExhausted = <int>{};
+
+  static final Object _eventQueueZoneKey = Object();
+
+  Future<T> runExclusive<T>(Future<T> Function() action) async {
+    if (Zone.current[_eventQueueZoneKey] == true) {
+      return action();
+    }
+    late T result;
+    await _eventQueue.run(
+      () => runZoned(() async {
+        result = await action();
+      }, zoneValues: {_eventQueueZoneKey: true}),
+    );
+    return result;
+  }
+
   final Map<String, int> _learnedAutocryptContactKeyChatIds = <String, int>{};
 
   AppLocalizations get _l10n =>
@@ -574,7 +591,10 @@ class DeltaEventConsumer {
 
   int get _deltaAccountId => _core.accountId;
 
-  Future<bool> bootstrapFromCore() async {
+  Future<bool> bootstrapFromCore() =>
+      runExclusive(_bootstrapFromCoreSerialized);
+
+  Future<bool> _bootstrapFromCoreSerialized() async {
     final int deltaAccountId = _deltaAccountId;
     final chatlist = await _core.getChatlist();
     final archivedChatlist = await _core.getChatlist(
@@ -654,7 +674,10 @@ class DeltaEventConsumer {
       }
       const int batchSize = 32;
       for (var index = 0; index < filteredMsgIds.length; index += batchSize) {
-        final batch = filteredMsgIds.skip(index).take(batchSize).toList();
+        final end = index + batchSize > filteredMsgIds.length
+            ? filteredMsgIds.length
+            : index + batchSize;
+        final batch = filteredMsgIds.sublist(index, end);
         final messages = await _core.getMessages(batch);
         for (final msg in messages) {
           await _ingestDeltaMessage(
@@ -685,7 +708,9 @@ class DeltaEventConsumer {
       await inFlight;
       return;
     }
-    final future = _refreshChatlistSnapshotInternal(isCurrent: isCurrent);
+    final future = runExclusive(
+      () => _refreshChatlistSnapshotInternal(isCurrent: isCurrent),
+    );
     _chatlistRefreshInFlight = future;
     try {
       await future;
@@ -915,6 +940,28 @@ class DeltaEventConsumer {
     int? beforeMessageId,
     DateTime? beforeTimestamp,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) {
+    return runExclusive(
+      () => _backfillChatHistorySerialized(
+        chatId: chatId,
+        chatJid: chatJid,
+        desiredWindow: desiredWindow,
+        targetChat: targetChat,
+        beforeMessageId: beforeMessageId,
+        beforeTimestamp: beforeTimestamp,
+        filter: filter,
+      ),
+    );
+  }
+
+  Future<int> _backfillChatHistorySerialized({
+    required int chatId,
+    required String chatJid,
+    required int desiredWindow,
+    Chat? targetChat,
+    int? beforeMessageId,
+    DateTime? beforeTimestamp,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
     const minimumHistoryWindow = 1;
     if (desiredWindow < minimumHistoryWindow) {
@@ -995,7 +1042,7 @@ class DeltaEventConsumer {
   }
 
   Future<void> handle(DeltaCoreEvent event) {
-    return _eventQueue.run(() => _handleSerialized(event));
+    return runExclusive(() => _handleSerialized(event));
   }
 
   Future<void> _handleSerialized(DeltaCoreEvent event) async {
@@ -1172,9 +1219,12 @@ class DeltaEventConsumer {
       chatJid: chatJid,
       deltaAccountId: _deltaAccountId,
     );
-    await db.updateChat(
-      chat.copyWith(deltaChatId: remainingDeltaChatIds.firstOrNull),
-    );
+    final nextDeltaChatId = remainingDeltaChatIds.firstOrNull;
+    if (nextDeltaChatId == null) {
+      await db.clearChatDeltaChatId(chat.jid);
+      return;
+    }
+    await db.updateChat(chat.copyWith(deltaChatId: nextDeltaChatId));
   }
 
   Future<void> _updateUnreadCount(int chatId) async {
@@ -1262,10 +1312,12 @@ class DeltaEventConsumer {
     }
   }
 
-  Future<void> hydrateMessage(int msgId) async {
-    final msg = await _core.getMessage(msgId);
-    if (msg == null) return;
-    await _ingestDeltaMessage(chatId: msg.chatId, msg: msg);
+  Future<void> hydrateMessage(int msgId) {
+    return runExclusive(() async {
+      final msg = await _core.getMessage(msgId);
+      if (msg == null) return;
+      await _ingestDeltaMessage(chatId: msg.chatId, msg: msg);
+    });
   }
 
   Future<void> _ingestDeltaMessage({
@@ -1317,14 +1369,18 @@ class DeltaEventConsumer {
           storedMessage: existingByDeltaId,
         );
         await _updateExistingMessage(existing: existingByDeltaId, msg: msg);
-        await _scheduleOriginIdHydrationIfNeeded(
-          existing: existingByDeltaId,
-          id: _DeltaChatJidMessageId(
-            accountId: deltaAccountId,
-            chatId: chatId,
-            chatJid: resolvedChat.jid,
-            msgId: msg.id,
+        final hydrationId = _DeltaChatJidMessageId(
+          accountId: deltaAccountId,
+          chatId: chatId,
+          chatJid: resolvedChat.jid,
+          msgId: msg.id,
+        );
+        fireAndForget(
+          () => _scheduleOriginIdHydrationIfNeeded(
+            existing: existingByDeltaId,
+            id: hydrationId,
           ),
+          operationName: 'DeltaEventConsumer.scheduleOriginIdHydration',
         );
         if (!msg.isOutgoing) {
           await _learnAutocryptContactKeyForIncomingMessage(
@@ -1336,14 +1392,15 @@ class DeltaEventConsumer {
         return;
       }
       _log.fine(
-        'Ignoring incompatible Delta id collision; storing as new row. '
+        'Releasing stale Delta locator claim before storing new row. '
         'msgId=${msg.id} chatId=$chatId accountId=$deltaAccountId '
         'existingStanza=${existingByDeltaId.stanzaID} '
         'existingChat=${existingByDeltaId.chatJid} '
         'existingDeltaChat=${existingByDeltaId.deltaChatId}.',
       );
+      await db.clearMessageDeltaHandles(existingByDeltaId.stanzaID);
     }
-    final String originId = await _resolveOriginIdForInitialStore(msg);
+    final String? nativeOriginId = await _resolveNativeOriginId(msg);
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
     final senderJid = isOutgoing
@@ -1381,7 +1438,7 @@ class DeltaEventConsumer {
       senderJid: senderJid,
       chatJid: resolvedChat.jid,
       timestamp: timestamp,
-      originID: originId,
+      originID: nativeOriginId,
       error: resolvedError,
       warning: warning,
       encryptionProtocol: _encryptionProtocolForDelta(msg),
@@ -1398,6 +1455,11 @@ class DeltaEventConsumer {
       chatId: chatId,
       msg: msg,
     );
+    final String originId =
+        nativeOriginId ?? _derivedOriginIdForStoredMessage(message, msg);
+    if (nativeOriginId == null) {
+      message = message.copyWith(originID: originId);
+    }
     await _logEmailPartDiagnostic(
       stage: 'ingest-new-before-store',
       eventChatId: chatId,
@@ -1436,9 +1498,10 @@ class DeltaEventConsumer {
         !isBlocklisted;
     if (shouldAutoDownloadPartial) {
       fireAndForget(
-        () => _autoDownloadQueue.run(
-          () async => _core.downloadFullMessage(msg.id),
-        ),
+        () => _autoDownloadQueue.run(() async {
+          await _core.downloadFullMessage(msg.id);
+          _originIdHydrationExhausted.remove(msg.id);
+        }),
         operationName: 'DeltaEventConsumer.downloadFullMessage',
       );
     }
@@ -2042,11 +2105,11 @@ class DeltaEventConsumer {
     if (!existing.isEmailBacked) {
       return;
     }
-    final existingOrigin = normalizeEmailMessageId(existing.originID);
-    if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
+    if (_originIdHydrationExhausted.contains(id.msgId)) {
       return;
     }
-    if (!_core.supportsMessageRfc724Mid) {
+    final existingOrigin = normalizeEmailMessageId(existing.originID);
+    if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
       return;
     }
     await _scheduleOriginIdHydration(id: id);
@@ -2055,6 +2118,7 @@ class DeltaEventConsumer {
   Future<void> _hydrateOriginId({required _DeltaChatJidMessageId id}) async {
     final nativeOriginId = await _resolveOriginId(id.msgId);
     if (nativeOriginId == null) {
+      _originIdHydrationExhausted.add(id.msgId);
       _log.info('Origin ID hydration exhausted for Delta msg ${id.msgId}.');
       return;
     }
@@ -2070,8 +2134,18 @@ class DeltaEventConsumer {
     if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
       return;
     }
-    final updated = existing.copyWith(originID: nativeOriginId);
-    await db.updateMessage(updated);
+    await db.updateMessageOriginId(
+      stanzaID: existing.stanzaID,
+      originID: nativeOriginId,
+    );
+    final staleOrigin = existing.originID?.trim();
+    if (staleOrigin != null && staleOrigin.isNotEmpty) {
+      await db.rebindMessageCollectionMembershipReferences(
+        chatJid: existing.chatJid,
+        oldReferenceId: staleOrigin,
+        newReferenceId: nativeOriginId,
+      );
+    }
     await db.repairUnreadCountForChat(
       existing.chatJid,
       selfJid: _xmppSelfJid,
@@ -2148,23 +2222,23 @@ class DeltaEventConsumer {
     return parsedHeaderMessageId;
   }
 
-  Future<String> _resolveOriginIdForInitialStore(DeltaMessage msg) async {
-    String? nativeOriginId;
+  Future<String?> _resolveNativeOriginId(DeltaMessage msg) async {
     try {
-      nativeOriginId = await _resolveOriginId(msg.id);
+      return await _resolveOriginId(msg.id);
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to resolve Delta origin ID.', error, stackTrace);
+      return null;
     }
-    if (nativeOriginId != null) {
-      return nativeOriginId;
-    }
+  }
+
+  String _derivedOriginIdForStoredMessage(Message message, DeltaMessage msg) {
     _log.info(
       'No usable Message-ID for Delta msg ${msg.id}; using derived key.',
     );
     return derivedEmailMessageKey(
-      subject: msg.subject,
-      timestamp: msg.timestamp,
-      bodyText: msg.text,
+      subject: message.subject,
+      timestamp: message.timestamp,
+      bodyText: message.body,
     );
   }
 

@@ -1598,7 +1598,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     final result = await _invoke<List<Object?>>('getMessages', {
       'messageIds': messageIds,
       'accountId': accountId,
-    });
+    }, timeout: const Duration(seconds: 180));
     return result.whereType<DeltaMessage>().toList(growable: false);
   }
 
@@ -2114,7 +2114,7 @@ final class _EmailDeltaWorkerServer {
         );
       case 'getMessages':
         return _transport.getMessages(
-          _intListValue(payload['messageIds']),
+          (payload['messageIds'] as List).cast<int>(),
           accountId: payload['accountId'] as int?,
         );
       case 'getMessageMimeHeaders':

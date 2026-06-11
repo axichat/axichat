@@ -2281,6 +2281,43 @@ void main() {
     },
   );
 
+  test(
+    'pipeline-emptied email with failed full HTML falls back to source text',
+    () {
+      final chat = chat_models.Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        deltaChatId: 42,
+        emailAddress: 'peer@example.com',
+      );
+      final message = Message(
+        stanzaID: 'email-forward-preamble-only',
+        senderJid: 'peer@example.com',
+        chatJid: chat.jid,
+        subject: markSyntheticForwardSubject('FWD: bob@example.com'),
+        body: 'Subject:',
+        deltaChatId: chat.deltaChatId,
+        deltaMsgId: 212,
+        timestamp: DateTime.utc(2024, 1, 1, 12),
+      );
+
+      final item = _projectMessages(
+        chat: chat,
+        messages: [message],
+        isEmailChat: true,
+        pendingEmailContentLabel: 'Loading',
+        unavailableEmailContentLabel: 'Service unavailable',
+        emailFullHtmlUnavailable: const {212},
+      ).whereType<ChatTimelineMessageItem>().single;
+
+      expect(item.rowText.trim(), isNotEmpty);
+      expect(item.rowText, isNot('Service unavailable'));
+    },
+  );
+
   test('css-heavy corporate email renders visible text without CSS leak', () {
     final chat = chat_models.Chat(
       jid: 'peer@example.com',

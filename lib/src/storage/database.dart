@@ -14,6 +14,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/storage/app_storage.dart';
 import 'package:drift/drift.dart';
@@ -175,6 +176,21 @@ abstract interface class XmppDatabase implements Database {
     int? deltaAccountId,
     int? deltaChatId,
     String? chatJid,
+  });
+
+  Future<void> clearMessageDeltaHandles(String stanzaID);
+
+  Future<void> clearChatDeltaChatId(String jid);
+
+  Future<void> updateMessageOriginId({
+    required String stanzaID,
+    required String originID,
+  });
+
+  Future<void> rebindMessageCollectionMembershipReferences({
+    required String chatJid,
+    required String oldReferenceId,
+    required String newReferenceId,
   });
 
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
@@ -1763,8 +1779,37 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   SimpleSelectStatement<$ChatsTable, Chat> _homeQuery({
     required int recentLimit,
   }) {
-    final recentJids = selectOnly(table)
+    final recentJids = _recentJidsQuery(
+      recentLimit: recentLimit,
+      predicate:
+          table.archived.equals(false) &
+          table.spam.equals(false) &
+          table.hidden.equals(false),
+    );
+    final recentArchivedJids = _recentJidsQuery(
+      recentLimit: recentLimit,
+      predicate: table.archived.equals(true),
+    );
+    final recentSpamJids = _recentJidsQuery(
+      recentLimit: recentLimit,
+      predicate: table.spam.equals(true),
+    );
+    return _orderedQuery()..where(
+      (tbl) =>
+          tbl.unreadCount.isBiggerThanValue(0) |
+          tbl.jid.isInQuery(recentJids) |
+          tbl.jid.isInQuery(recentArchivedJids) |
+          tbl.jid.isInQuery(recentSpamJids),
+    );
+  }
+
+  JoinedSelectStatement<$ChatsTable, Chat> _recentJidsQuery({
+    required int recentLimit,
+    required Expression<bool> predicate,
+  }) {
+    return selectOnly(table)
       ..addColumns([table.jid])
+      ..where(predicate)
       ..orderBy([
         OrderingTerm(
           expression: table.lastChangeTimestamp,
@@ -1773,10 +1818,6 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
         OrderingTerm(expression: table.jid, mode: OrderingMode.asc),
       ])
       ..limit(recentLimit);
-    return _orderedQuery()..where(
-      (tbl) =>
-          tbl.unreadCount.isBiggerThanValue(0) | tbl.jid.isInQuery(recentJids),
-    );
   }
 
   Stream<List<Chat>> watchUnreadForFolderBadges() =>
@@ -3336,13 +3377,19 @@ WHERE transport = ${MessageTransport.email.index}
     }
     final normalizedChatJid = chatJid?.trim();
     if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
-      return await (select(messages)..where(
-            (tbl) =>
-                tbl.chatJid.equals(normalizedChatJid) &
-                (tbl.stanzaID.equals(normalized) |
-                    tbl.originID.equals(normalized) |
-                    tbl.mucStanzaId.equals(normalized)),
-          ))
+      return await (select(messages)
+            ..where(
+              (tbl) =>
+                  tbl.chatJid.equals(normalizedChatJid) &
+                  (tbl.stanzaID.equals(normalized) |
+                      tbl.originID.equals(normalized) |
+                      tbl.mucStanzaId.equals(normalized)),
+            )
+            ..orderBy([
+              (tbl) => OrderingTerm.asc(tbl.timestamp),
+              (tbl) => OrderingTerm.asc(tbl.stanzaID),
+            ])
+            ..limit(1))
           .getSingleOrNull();
     }
     return await getMessageByStanzaID(normalized) ??
@@ -3358,7 +3405,12 @@ WHERE transport = ${MessageTransport.email.index}
     String? chatJid,
   }) {
     final query = select(messages)
-      ..where((tbl) => tbl.deltaMsgId.equals(deltaMsgId));
+      ..where((tbl) => tbl.deltaMsgId.equals(deltaMsgId))
+      ..orderBy([
+        (tbl) => OrderingTerm.asc(tbl.timestamp),
+        (tbl) => OrderingTerm.asc(tbl.stanzaID),
+      ])
+      ..limit(1);
     if (deltaAccountId != null) {
       query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
     }
@@ -3420,9 +3472,98 @@ WHERE transport = ${MessageTransport.email.index}
             tbl.deltaChatId.isNotNull() &
             tbl.deltaMsgId.isNull() &
             tbl.error.equalsValue(MessageError.none) &
+            tbl.acked.equals(false) &
+            tbl.received.equals(false) &
+            tbl.displayed.equals(false) &
             tbl.timestamp.isSmallerThanValue(cutoff),
       );
     return query.get();
+  }
+
+  @override
+  Future<void> clearMessageDeltaHandles(String stanzaID) async {
+    await (update(
+      messages,
+    )..where((tbl) => tbl.stanzaID.equals(stanzaID))).write(
+      const MessagesCompanion(
+        deltaChatId: Value(null),
+        deltaMsgId: Value(null),
+      ),
+    );
+  }
+
+  @override
+  Future<void> updateMessageOriginId({
+    required String stanzaID,
+    required String originID,
+  }) async {
+    await (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaID)))
+        .write(MessagesCompanion(originID: Value(originID)));
+  }
+
+  @override
+  Future<void> clearChatDeltaChatId(String jid) async {
+    await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+      const ChatsCompanion(deltaChatId: Value(null)),
+    );
+  }
+
+  @override
+  Future<void> rebindMessageCollectionMembershipReferences({
+    required String chatJid,
+    required String oldReferenceId,
+    required String newReferenceId,
+  }) async {
+    final entries =
+        await (select(messageCollectionMemberships)..where(
+              (tbl) =>
+                  tbl.chatJid.equals(chatJid) &
+                  tbl.messageReferenceId.equals(oldReferenceId),
+            ))
+            .get();
+    for (final entry in entries) {
+      await _rebindMembershipEntryReference(
+        entry: entry,
+        chatJid: chatJid,
+        oldReferenceId: oldReferenceId,
+        newReferenceId: newReferenceId,
+      );
+    }
+  }
+
+  Future<void> _rebindMembershipEntryReference({
+    required MessageCollectionMembershipEntry entry,
+    required String chatJid,
+    required String oldReferenceId,
+    required String newReferenceId,
+  }) async {
+    final occupied = await getMessageCollectionMembership(
+      collectionId: entry.collectionId,
+      chatJid: chatJid,
+      messageReferenceId: newReferenceId,
+    );
+    if (occupied != null) {
+      await (delete(messageCollectionMemberships)..where(
+            (tbl) =>
+                tbl.collectionId.equals(entry.collectionId) &
+                tbl.chatJid.equals(chatJid) &
+                tbl.messageReferenceId.equals(oldReferenceId),
+          ))
+          .go();
+      return;
+    }
+    await (update(messageCollectionMemberships)..where(
+          (tbl) =>
+              tbl.collectionId.equals(entry.collectionId) &
+              tbl.chatJid.equals(chatJid) &
+              tbl.messageReferenceId.equals(oldReferenceId),
+        ))
+        .write(
+          MessageCollectionMembershipsCompanion(
+            messageReferenceId: Value(newReferenceId),
+            messageOriginId: Value(newReferenceId),
+          ),
+        );
   }
 
   @override
@@ -7845,8 +7986,11 @@ WHERE jid = ?
   }
 
   Future<void> migrateMessageIdentityToLadder() async {
-    final scopedByMapping = await _backfillDeltaChatScopeFromAccountMappings();
-    final scopedByChat = await _backfillDeltaChatScopeFromChatRows();
+    final (scopedByMapping, ambiguousKeys) =
+        await _backfillDeltaChatScopeFromAccountMappings();
+    final scopedByChat = await _backfillDeltaChatScopeFromChatRows(
+      ambiguousKeys,
+    );
     final unresolvable = await _countUnscopedEmailMessageRows();
     final rewritten = await _rewriteEmailOriginIdsToLadder();
     final membershipsRepaired =
@@ -7870,13 +8014,71 @@ WHERE jid = ?
         deltaAccountId: entry.deltaAccountId,
         chatJid: entry.chatJid,
       );
-      if (matching != null) {
+      if (matching != null && _membershipReferencesMessage(entry, matching)) {
+        await _normalizeEmailMembershipIdentity(
+          entry: entry,
+          message: matching,
+        );
         continue;
       }
       await _clearCollectionMembershipHandles(entry);
       repaired++;
     }
     return repaired;
+  }
+
+  bool _membershipReferencesMessage(
+    MessageCollectionMembershipEntry entry,
+    Message message,
+  ) {
+    final candidates = <String>{
+      ?message.originID?.trim(),
+      message.stanzaID.trim(),
+      ?message.mucStanzaId?.trim(),
+    }..removeWhere((value) => value.isEmpty);
+    if (candidates.contains(entry.messageReferenceId.trim())) {
+      return true;
+    }
+    final entryOrigin = entry.messageOriginId?.trim();
+    return entryOrigin != null &&
+        entryOrigin.isNotEmpty &&
+        candidates.contains(entryOrigin);
+  }
+
+  Future<void> _normalizeEmailMembershipIdentity({
+    required MessageCollectionMembershipEntry entry,
+    required Message message,
+  }) async {
+    if (entry.messageStanzaId != null) {
+      await (update(messageCollectionMemberships)..where(
+            (tbl) =>
+                tbl.collectionId.equals(entry.collectionId) &
+                tbl.chatJid.equals(entry.chatJid) &
+                tbl.messageReferenceId.equals(entry.messageReferenceId),
+          ))
+          .write(
+            const MessageCollectionMembershipsCompanion(
+              messageStanzaId: Value(null),
+            ),
+          );
+    }
+    final origin = message.originID?.trim();
+    final reference = entry.messageReferenceId.trim();
+    final referenceIsDeviceLocal =
+        isDeviceLocalDeltaStanzaId(reference) ||
+        isDeltaGeneratedMessageId(reference);
+    if (origin == null ||
+        origin.isEmpty ||
+        reference == origin ||
+        !referenceIsDeviceLocal) {
+      return;
+    }
+    await _rebindMembershipEntryReference(
+      entry: entry,
+      chatJid: entry.chatJid,
+      oldReferenceId: entry.messageReferenceId,
+      newReferenceId: origin,
+    );
   }
 
   Future<void> _clearCollectionMembershipHandles(
@@ -7893,11 +8095,13 @@ WHERE jid = ?
       const MessageCollectionMembershipsCompanion(
         deltaAccountId: Value(null),
         deltaMsgId: Value(null),
+        messageStanzaId: Value(null),
       ),
     );
   }
 
-  Future<int> _backfillDeltaChatScopeFromAccountMappings() async {
+  Future<(int, Set<(String, int)>)>
+  _backfillDeltaChatScopeFromAccountMappings() async {
     final mappings = await select(emailChatAccounts).get();
     final byKey = <(String, int), Set<int>>{};
     for (final mapping in mappings) {
@@ -7906,8 +8110,10 @@ WHERE jid = ?
           .add(mapping.deltaChatId);
     }
     var updated = 0;
+    final ambiguous = <(String, int)>{};
     for (final entry in byKey.entries) {
       if (entry.value.length != 1) {
+        ambiguous.add(entry.key);
         continue;
       }
       updated += await _scopeUnscopedEmailRows(
@@ -7916,7 +8122,7 @@ WHERE jid = ?
         deltaChatId: entry.value.single,
       );
     }
-    return updated;
+    return (updated, ambiguous);
   }
 
   Future<int> _scopeUnscopedEmailRows({
@@ -7935,7 +8141,9 @@ WHERE jid = ?
     return query.write(MessagesCompanion(deltaChatId: Value(deltaChatId)));
   }
 
-  Future<int> _backfillDeltaChatScopeFromChatRows() async {
+  Future<int> _backfillDeltaChatScopeFromChatRows(
+    Set<(String, int)> ambiguousKeys,
+  ) async {
     final chatRows = await (select(
       chats,
     )..where((tbl) => tbl.deltaChatId.isNotNull())).get();
@@ -7945,10 +8153,19 @@ WHERE jid = ?
       if (mapped == null) {
         continue;
       }
+      final accountIds = await _emailAccountIdsForChatJid(chat.jid);
+      if (accountIds.length != 1) {
+        continue;
+      }
+      final accountId = accountIds.single;
+      if (ambiguousKeys.contains((chat.jid, accountId))) {
+        continue;
+      }
       final query = update(messages)
         ..where(
           (tbl) =>
               tbl.chatJid.equals(chat.jid) &
+              tbl.deltaAccountId.equals(accountId) &
               tbl.deltaMsgId.isNotNull() &
               tbl.deltaChatId.isNull(),
         );
@@ -7957,6 +8174,19 @@ WHERE jid = ?
       );
     }
     return updated;
+  }
+
+  Future<List<int>> _emailAccountIdsForChatJid(String chatJid) async {
+    final query = selectOnly(messages, distinct: true)
+      ..addColumns([messages.deltaAccountId])
+      ..where(
+        messages.chatJid.equals(chatJid) & messages.deltaMsgId.isNotNull(),
+      );
+    final rows = await query.get();
+    return rows
+        .map((row) => row.read(messages.deltaAccountId))
+        .whereType<int>()
+        .toList(growable: false);
   }
 
   Future<int> _countUnscopedEmailMessageRows() async {
@@ -7969,26 +8199,71 @@ WHERE jid = ?
   }
 
   Future<int> _rewriteEmailOriginIdsToLadder() async {
-    final rows = await (select(
-      messages,
-    )..where((tbl) => tbl.deltaMsgId.isNotNull())).get();
+    const int pageSize = 500;
     var rewritten = 0;
-    for (final row in rows) {
-      final canonical = canonicalEmailOriginId(
-        rfc724Mid: row.originID,
-        subject: row.subject,
-        timestamp: row.timestamp,
-        bodyText: row.body,
+    String? lastStanzaId;
+    while (true) {
+      final rows = await _emailIdentityRewritePage(
+        afterStanzaId: lastStanzaId,
+        pageSize: pageSize,
       );
-      if (canonical == row.originID) {
-        continue;
+      if (rows.isEmpty) {
+        break;
       }
-      await (update(messages)
-            ..where((tbl) => tbl.stanzaID.equals(row.stanzaID)))
-          .write(MessagesCompanion(originID: Value(canonical)));
-      rewritten++;
+      for (final row in rows) {
+        if (await _rewriteEmailOriginIdRow(row)) {
+          rewritten++;
+        }
+        lastStanzaId = row.read(messages.stanzaID);
+      }
+      if (rows.length < pageSize) {
+        break;
+      }
     }
     return rewritten;
+  }
+
+  Future<List<TypedResult>> _emailIdentityRewritePage({
+    required String? afterStanzaId,
+    required int pageSize,
+  }) {
+    Expression<bool> predicate = messages.deltaMsgId.isNotNull();
+    if (afterStanzaId != null) {
+      predicate =
+          predicate & messages.stanzaID.isBiggerThanValue(afterStanzaId);
+    }
+    final query = selectOnly(messages)
+      ..addColumns([
+        messages.stanzaID,
+        messages.originID,
+        messages.subject,
+        messages.timestamp,
+        messages.body,
+      ])
+      ..where(predicate)
+      ..orderBy([OrderingTerm.asc(messages.stanzaID)])
+      ..limit(pageSize);
+    return query.get();
+  }
+
+  Future<bool> _rewriteEmailOriginIdRow(TypedResult row) async {
+    final stanzaId = row.read(messages.stanzaID);
+    if (stanzaId == null) {
+      return false;
+    }
+    final storedOrigin = row.read(messages.originID);
+    final canonical = canonicalEmailOriginId(
+      rfc724Mid: storedOrigin,
+      subject: row.read(messages.subject),
+      timestamp: row.read(messages.timestamp),
+      bodyText: row.read(messages.body),
+    );
+    if (canonical == storedOrigin) {
+      return false;
+    }
+    await (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaId)))
+        .write(MessagesCompanion(originID: Value(canonical)));
+    return true;
   }
 
   Future<void> repairGeneratedEmailAttachmentCaptionBodies() async {

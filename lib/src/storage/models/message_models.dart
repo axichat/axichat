@@ -1117,6 +1117,9 @@ extension MessageReferenceIds on Message {
   }
 
   MessageReference? replyReference({required bool isGroupChat}) {
+    if (isEmailBacked) {
+      return _originReference;
+    }
     if (isGroupChat) {
       return _mucStanzaReference;
     }
@@ -1124,6 +1127,9 @@ extension MessageReferenceIds on Message {
   }
 
   MessageReference? reactionReference({required bool isGroupChat}) {
+    if (isEmailBacked) {
+      return _originReference;
+    }
     if (isGroupChat) {
       return _mucStanzaReference;
     }

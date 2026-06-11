@@ -9,8 +9,16 @@ void main() {
     test('canonical form is frozen for clean ids', () {
       expect(
         normalizeEmailMessageId('<AbC123@Example.org>'),
-        'abc123@example.org',
+        'AbC123@example.org',
       );
+    });
+
+    test('preserves id-left case and lowercases only the domain', () {
+      expect(
+        normalizeEmailMessageId('<Base64+Id/CaSe@HOST.Example.COM>'),
+        'Base64+Id/CaSe@host.example.com',
+      );
+      expect(normalizeEmailMessageId('NoAtSignToken'), 'noatsigntoken');
     });
 
     test('accepts ids without angle brackets', () {
@@ -56,6 +64,11 @@ void main() {
       expect(isDeltaGeneratedMessageId('<abc@example.org>'), isFalse);
       expect(isDeltaGeneratedMessageId('genuine@example.org'), isFalse);
       expect(isDeltaGeneratedMessageId(null), isFalse);
+    });
+
+    test('does not flag gen_-prefixed real Message-IDs containing @', () {
+      expect(isDeltaGeneratedMessageId('<GEN_12345@erp.example.com>'), isFalse);
+      expect(isDeltaGeneratedMessageId('gen_ticket@host.org'), isFalse);
     });
   });
 
@@ -109,6 +122,17 @@ void main() {
         derivedEmailMessageKey(subject: 's', timestamp: utc, bodyText: 'b'),
       );
     });
+
+    test('null and empty fields hash identically', () {
+      expect(
+        derivedEmailMessageKey(
+          subject: null,
+          timestamp: timestamp,
+          bodyText: null,
+        ),
+        derivedEmailMessageKey(subject: '', timestamp: timestamp, bodyText: ''),
+      );
+    });
   });
 
   group('canonicalEmailOriginId', () {
@@ -120,7 +144,7 @@ void main() {
           timestamp: DateTime.utc(2026),
           bodyText: 'b',
         ),
-        'real@example.org',
+        'Real@example.org',
       );
     });
 

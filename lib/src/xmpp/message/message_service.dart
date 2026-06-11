@@ -4874,6 +4874,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     bool managerReady = false,
   }) async {
     final itemId = _messageCollectionSyncItemId(entry);
+    if (isDeviceLocalDeltaStanzaId(entry.messageReferenceId) ||
+        isDeltaGeneratedMessageId(entry.messageReferenceId)) {
+      await _clearPendingMessageCollectionPublish(itemId);
+      return;
+    }
     if (!_connection.hasConnectionSettings) {
       return;
     }
@@ -7684,6 +7689,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       (db) => db.getMessageByStanzaID(stanzaID),
     );
     if (message == null) return false;
+    if (message.isEmailBacked) return false;
     final resolvedChatType = await _resolvePersistedChatType(
       jid: message.chatJid,
       requestedChatType: ChatType.chat,

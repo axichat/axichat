@@ -95,6 +95,23 @@ void main() {
       () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
     ).thenAnswer((_) async {});
     when(
+      () => database.updateMessageOriginId(
+        stanzaID: any(named: 'stanzaID'),
+        originID: any(named: 'originID'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.rebindMessageCollectionMembershipReferences(
+        chatJid: any(named: 'chatJid'),
+        oldReferenceId: any(named: 'oldReferenceId'),
+        newReferenceId: any(named: 'newReferenceId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.clearMessageDeltaHandles(any()),
+    ).thenAnswer((_) async {});
+    when(() => database.clearChatDeltaChatId(any())).thenAnswer((_) async {});
+    when(
       () => database.updateMessageAttachment(
         stanzaID: any(named: 'stanzaID'),
         metadata: any(named: 'metadata'),
@@ -628,7 +645,7 @@ void main() {
   );
 
   test(
-    'does not retry existing missing origins when native RFC724 is unavailable',
+    'memoizes exhausted origin hydration instead of retrying per event',
     () async {
       const chatId = 7;
       const msgId = 26;
@@ -663,6 +680,9 @@ void main() {
         ),
       );
       when(
+        () => context.getMessageMimeHeaders(msgId),
+      ).thenAnswer((_) async => null);
+      when(
         () => database.getChatByDeltaChatId(
           chatId,
           accountId: DeltaAccountDefaults.legacyId,
@@ -685,10 +705,23 @@ void main() {
           data2: msgId,
         ),
       );
+      await pumpEventQueue(times: 20);
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+      await pumpEventQueue(times: 20);
 
-      verifyNever(() => context.getMessageRfc724Mid(msgId));
-      verifyNever(() => context.getMessageInfo(msgId));
-      verifyNever(() => context.getMessageMimeHeaders(msgId));
+      verify(() => context.getMessageMimeHeaders(msgId)).called(1);
+      verifyNever(
+        () => database.updateMessageOriginId(
+          stanzaID: any(named: 'stanzaID'),
+          originID: any(named: 'originID'),
+        ),
+      );
     },
   );
 
@@ -1186,11 +1219,18 @@ void main() {
       ),
     );
 
-    final updated = verify(
-      () => database.updateMessage(captureAny()),
-    ).captured.whereType<Message>().last;
-    expect(updated.stanzaID, existing.stanzaID);
-    expect(updated.originID, 'origin@example.com');
+    await untilCalled(
+      () => database.updateMessageOriginId(
+        stanzaID: any(named: 'stanzaID'),
+        originID: any(named: 'originID'),
+      ),
+    );
+    verify(
+      () => database.updateMessageOriginId(
+        stanzaID: existing.stanzaID,
+        originID: 'origin@example.com',
+      ),
+    ).called(1);
     verifyNever(
       () => database.deleteMessage(
         any(),

@@ -292,8 +292,15 @@ class _ChatMessageListState extends State<_ChatMessageList> {
       if (!mounted) {
         return;
       }
-      final messageIds = _renderedMessagesById.keys.toList(growable: false)
-        ..sort();
+      final messageIds =
+          _renderedMessagesById.entries
+              .map(
+                (entry) =>
+                    '${entry.key}\n${entry.value.deltaMsgId ?? ''}'
+                    '\n${entry.value.hasRfc822BodyContent}',
+              )
+              .toList(growable: false)
+            ..sort();
       if (!forced && listEquals(messageIds, _lastRenderedMessageIds)) {
         return;
       }

@@ -61,7 +61,7 @@ void main() {
 
         final migrated = await database.getMessageByStanzaID('dc-msg-42');
         expect(migrated?.deltaChatId, 7);
-        expect(migrated?.originID, 'legacy@example.org');
+        expect(migrated?.originID, 'Legacy@example.org');
       },
     );
 

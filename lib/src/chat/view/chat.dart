@@ -1633,7 +1633,11 @@ class _ChatState extends State<Chat> {
         ? false
         : _isOneTimeAttachmentAllowed(messageModel.stanzaID);
     final locate = context.read;
-    final attachmentUsesEmailProtocol = messageModel.isEmailBacked;
+    final attachmentUsesEmailProtocol =
+        messageModel.isEmailBacked ||
+        (isEmailChat &&
+            (messageModel.hasRfc822BodyContent ||
+                messageModel.hasGeneratedEmailAttachmentCaption));
     final emailDownloadDelegate = attachmentUsesEmailProtocol
         ? AttachmentDownloadDelegate(() async {
             return locate<ChatBloc>().downloadFullEmailMessage(messageModel);
