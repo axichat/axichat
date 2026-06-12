@@ -235,6 +235,8 @@ class ChatsCubit extends Cubit<ChatsState> {
     }
   }
 
+  Future<List<Chat>> allChats() => _chatsService.allChats();
+
   Future<void> loadMoreChats() async {
     final items = state.items;
     if (items == null || items.length < _chatListLimit) {

@@ -154,6 +154,7 @@ ChatsCubit _chatsCubit() {
       creationStatus: RequestStatus.none,
     ),
   );
+  when(cubit.allChats).thenAnswer((_) async => [_chat()]);
   when(() => cubit.stream).thenAnswer((_) => const Stream<ChatsState>.empty());
   when(() => cubit.selfJid).thenReturn('me@axi.im');
   return cubit;

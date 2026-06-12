@@ -34,7 +34,10 @@ Future<void> showCalendarCriticalPathShareSheet({
 }) async {
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
-  final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
+  final List<Chat> chats = await locate<ChatsCubit>().allChats();
+  if (!context.mounted || !modalContext.mounted) {
+    return;
+  }
   final accountJid = locate<ProfileCubit>().state.jid;
   final List<Chat> available = chats
       .where(

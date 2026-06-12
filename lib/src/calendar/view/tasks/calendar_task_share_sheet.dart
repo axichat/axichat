@@ -30,7 +30,10 @@ Future<void> showCalendarTaskShareSheet({
   final l10n = context.l10n;
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
-  final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
+  final List<Chat> chats = await locate<ChatsCubit>().allChats();
+  if (!context.mounted || !modalContext.mounted) {
+    return;
+  }
   final List<Chat> available = chats
       .where((chat) => chat.type != ChatType.note)
       .toList(growable: false);

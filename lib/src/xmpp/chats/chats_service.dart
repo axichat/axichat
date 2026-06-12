@@ -597,6 +597,13 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         getFunction: (db) => db.getAllChats(),
       );
 
+  Future<List<Chat>> allChats() async {
+    final chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+      (db) => db.getAllChats(),
+    );
+    return sortChats(chats);
+  }
+
   Future<List<Chat>?> preloadChatList({
     int limit = _defaultChatPreloadLimit,
   }) async {

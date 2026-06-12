@@ -62,7 +62,10 @@ Future<void> showCalendarAvailabilityShareSheet({
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
   final l10n = context.l10n;
-  final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
+  final List<Chat> chats = await locate<ChatsCubit>().allChats();
+  if (!context.mounted || !modalContext.mounted) {
+    return;
+  }
   final Chat? lockedChat = lockToChat ? initialChat : null;
   final bool canLockToChat =
       lockedChat != null &&
