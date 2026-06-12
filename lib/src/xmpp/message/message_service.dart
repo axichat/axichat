@@ -4211,12 +4211,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return false;
     }
     final removedAt = DateTime.timestamp().toUtc();
+    final emailBacked = item.message?.isEmailBacked ?? item.deltaMsgId != null;
     await _dbOp<XmppDatabase>(
       (db) => db.applyMessageCollectionMembershipMutation(
         collectionId: normalizedCollectionId,
         chatJid: normalizedChatJid,
         messageReferenceId: normalizedReferenceId,
-        messageStanzaId: item.messageStanzaId,
+        messageStanzaId: emailBacked ? null : item.messageStanzaId,
         messageOriginId: item.messageOriginId,
         messageMucStanzaId: item.messageMucStanzaId,
         deltaAccountId: item.deltaMsgId == null ? null : item.deltaAccountId,
@@ -4875,8 +4876,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     bool managerReady = false,
   }) async {
     final itemId = _messageCollectionSyncItemId(entry);
-    if (isDeviceLocalDeltaStanzaId(entry.messageReferenceId) ||
-        isDeltaGeneratedMessageId(entry.messageReferenceId)) {
+    final wireReference = WireReferenceId.tryFrom(entry.messageReferenceId);
+    if (wireReference == null) {
       await _clearPendingMessageCollectionPublish(itemId);
       return;
     }
@@ -4901,7 +4902,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         await manager.ensureNode();
         await manager.subscribe();
       }
-      final payload = await _buildMessageCollectionPayload(entry);
+      final payload = await _buildMessageCollectionPayload(
+        entry,
+        wireReference: wireReference,
+      );
       final published = await manager.publishEntry(payload);
       if (published) {
         await _clearPendingMessageCollectionPublish(itemId);
@@ -5017,10 +5021,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await db.applyMessageCollectionMembershipMutation(
         collectionId: payload.collectionId,
         chatJid: payload.chatJid,
-        messageReferenceId: payload.messageReferenceId,
-        messageStanzaId: payload.messageStanzaId,
-        messageOriginId: payload.messageOriginId,
-        messageMucStanzaId: payload.messageMucStanzaId,
+        messageReferenceId: payload.messageReferenceId.value,
+        messageStanzaId: payload.messageStanzaId?.value,
+        messageOriginId: payload.messageOriginId?.value,
+        messageMucStanzaId: payload.messageMucStanzaId?.value,
         deltaAccountId: null,
         deltaMsgId: null,
         addedAt: payload.updatedAt.toUtc(),
@@ -5029,11 +5033,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await db.normalizeMessageCollectionMembershipAliases(
         collectionId: payload.collectionId,
         chatJid: payload.chatJid,
-        canonicalMessageReferenceId: payload.messageReferenceId,
+        canonicalMessageReferenceId: payload.messageReferenceId.value,
         aliases: payload.aliases,
-        messageStanzaId: payload.messageStanzaId,
-        messageOriginId: payload.messageOriginId,
-        messageMucStanzaId: payload.messageMucStanzaId,
+        messageStanzaId: payload.messageStanzaId?.value,
+        messageOriginId: payload.messageOriginId?.value,
+        messageMucStanzaId: payload.messageMucStanzaId?.value,
         deltaAccountId: null,
         deltaMsgId: null,
       );
@@ -5063,9 +5067,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       mucStanzaId: local.messageMucStanzaId,
     );
     final remoteAliasScore = _messageCollectionAliasScore(
-      stanzaId: remote.messageStanzaId,
-      originId: remote.messageOriginId,
-      mucStanzaId: remote.messageMucStanzaId,
+      stanzaId: remote.messageStanzaId?.value,
+      originId: remote.messageOriginId?.value,
+      mucStanzaId: remote.messageMucStanzaId?.value,
     );
     if (remoteAliasScore > localAliasScore) {
       return _MessageCollectionSyncDecision.applyRemote;
@@ -5095,15 +5099,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   Future<MessageCollectionSyncPayload> _buildMessageCollectionPayload(
-    MessageCollectionMembershipEntry entry,
-  ) async {
+    MessageCollectionMembershipEntry entry, {
+    required WireReferenceId wireReference,
+  }) async {
     return MessageCollectionSyncPayload(
       collectionId: entry.collectionId,
       chatJid: entry.chatJid,
-      messageReferenceId: entry.messageReferenceId,
-      messageStanzaId: entry.deltaMsgId == null ? entry.messageStanzaId : null,
-      messageOriginId: entry.messageOriginId,
-      messageMucStanzaId: entry.messageMucStanzaId,
+      messageReferenceId: wireReference,
+      messageStanzaId: entry.deltaMsgId == null
+          ? WireReferenceId.tryFrom(entry.messageStanzaId)
+          : null,
+      messageOriginId: WireReferenceId.tryFrom(entry.messageOriginId),
+      messageMucStanzaId: WireReferenceId.tryFrom(entry.messageMucStanzaId),
       updatedAt: entry.addedAt.toUtc(),
       active: entry.active,
       sourceId: await _ensureMessageCollectionSyncSourceId(),
@@ -5270,8 +5277,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         _pendingMessageCollectionPublishes.remove(itemId);
         continue;
       }
+      final wireReference = WireReferenceId.tryFrom(
+        membershipEntry.messageReferenceId,
+      );
+      if (wireReference == null) {
+        _pendingMessageCollectionPublishes.remove(itemId);
+        continue;
+      }
       final published = await manager.publishEntry(
-        await _buildMessageCollectionPayload(membershipEntry),
+        await _buildMessageCollectionPayload(
+          membershipEntry,
+          wireReference: wireReference,
+        ),
       );
       if (published) {
         _pendingMessageCollectionPublishes.remove(itemId);

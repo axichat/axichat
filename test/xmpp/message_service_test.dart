@@ -7,6 +7,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/wire_reference_id.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -8099,7 +8100,7 @@ void main() {
         final entry = await database.getMessageCollectionMembership(
           collectionId: SystemMessageCollection.important.id,
           chatJid: chat.jid,
-          messageReferenceId: payload.messageReferenceId,
+          messageReferenceId: payload.messageReferenceId.value,
         );
         expect(entry, isNotNull);
         expect(entry!.active, isTrue);
@@ -8229,6 +8230,82 @@ void main() {
         );
 
         expect(changed, isFalse);
+      },
+    );
+
+    test(
+      'derived-key email references stay local until rebound to a wire id',
+      () async {
+        final transport = RecordingMessageCollectionsPubSubTransport();
+        final manager = MessageCollectionsPubSubManager()
+          ..register(
+            _messageCollectionsTestAttributes(
+              pubSubManager: transport,
+              accountJid: 'owner@example.com/resource',
+            ),
+          );
+
+        when(
+          () => mockConnection.getManager<MessageCollectionsPubSubManager>(),
+        ).thenReturn(manager);
+
+        await connectSuccessfully(
+          xmppService,
+          accountJid: 'owner@example.com/resource',
+        );
+
+        final chat = Chat.fromJid('friend@example.com');
+        final message = Message(
+          stanzaID: '5b2f1c44-9a3d-4e6f-8c7b-2d1e0f9a8b7c',
+          senderJid: chat.jid,
+          chatJid: chat.jid,
+          body: 'Email body',
+          timestamp: DateTime.timestamp().toUtc(),
+          originID: 'axi-drv-deadbeef',
+          deltaAccountId: 7,
+          deltaChatId: 11,
+          deltaMsgId: 42,
+        );
+
+        final changed = await xmppService.setMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chat: chat,
+          message: message,
+          active: true,
+        );
+
+        expect(changed, isTrue);
+        expect(transport.publishedItems, isEmpty);
+
+        final entry = await database.getMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chatJid: chat.jid,
+          messageReferenceId: 'axi-drv-deadbeef',
+        );
+        expect(entry, isNotNull);
+        expect(entry!.active, isTrue);
+
+        await database.rebindMessageCollectionMembershipReferences(
+          chatJid: chat.jid,
+          oldReferenceId: 'axi-drv-deadbeef',
+          newReferenceId: 'thread-5678@mail.example.com',
+        );
+        final rebound = await database.getMessageCollectionMembership(
+          collectionId: SystemMessageCollection.important.id,
+          chatJid: chat.jid,
+          messageReferenceId: 'thread-5678@mail.example.com',
+        );
+        expect(rebound, isNotNull);
+
+        await xmppService.publishMessageCollectionSyncEntry(rebound!);
+        final payload = MessageCollectionSyncPayload.fromXml(
+          transport.publishedItems.values.single,
+        );
+        expect(payload, isNotNull);
+        expect(
+          payload!.messageReferenceId.value,
+          'thread-5678@mail.example.com',
+        );
       },
     );
 
@@ -8378,7 +8455,7 @@ void main() {
             MessageCollectionSyncPayload(
               collectionId: SystemMessageCollection.important.id,
               chatJid: chatJid,
-              messageReferenceId: messageReferenceId,
+              messageReferenceId: WireReferenceId.tryFrom(messageReferenceId)!,
               updatedAt: updatedAt,
               active: true,
               sourceId: 'remote-device',

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/wire_reference_id.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -10,9 +11,9 @@ void main() {
     return MessageCollectionSyncPayload(
       collectionId: 'favorites',
       chatJid: 'alice@example.com',
-      messageReferenceId: 'ref-1',
-      messageStanzaId: stanzaId,
-      messageOriginId: 'origin@example.com',
+      messageReferenceId: WireReferenceId.tryFrom('ref-1')!,
+      messageStanzaId: WireReferenceId.tryFrom(stanzaId),
+      messageOriginId: WireReferenceId.tryFrom('origin@example.com'),
       updatedAt: DateTime.utc(2026, 6, 10, 12),
       active: true,
       sourceId: 'source-1',
@@ -37,6 +38,8 @@ void main() {
         'dc-msg-42',
         'dc-local-msg-0-7-42',
         'dc-pending-abc',
+        'gen_generated123',
+        'axi-drv-deadbeef',
       ]) {
         final node = payload(stanzaId: local).toXml();
         expect(node.attributes.containsKey('message_stanza_id'), isFalse);
@@ -46,7 +49,9 @@ void main() {
 
   group('collection payload receipt', () {
     mox.XMLNode legacyNode({
+      String referenceId = 'ref-1',
       String? stanzaId,
+      String? originId,
       String? deltaAccountId,
       String? deltaMsgId,
     }) {
@@ -56,11 +61,11 @@ void main() {
         attributes: {
           'collection_id': 'favorites',
           'chat_jid': 'alice@example.com',
-          'message_reference_id': 'ref-1',
+          'message_reference_id': referenceId,
           'updated_at': DateTime.utc(2026, 6, 10, 12).toIso8601String(),
           'active': '1',
           'source_id': 'source-1',
-          'message_origin_id': 'origin@example.com',
+          'message_origin_id': originId ?? 'origin@example.com',
           'message_stanza_id': ?stanzaId,
           'delta_account_id': ?deltaAccountId,
           'delta_msg_id': ?deltaMsgId,
@@ -85,6 +90,23 @@ void main() {
       );
       expect(parsed, isNotNull);
       expect(parsed!.messageStanzaId, isNull);
+    });
+
+    test('rejects derived-key references from legacy peers', () {
+      for (final reference in ['axi-drv-deadbeef', 'gen_generated123']) {
+        final parsed = MessageCollectionSyncPayload.fromXml(
+          legacyNode(referenceId: reference),
+        );
+        expect(parsed, isNull, reason: reference);
+      }
+    });
+
+    test('drops derived-key origin aliases from legacy peers', () {
+      final parsed = MessageCollectionSyncPayload.fromXml(
+        legacyNode(originId: 'axi-drv-deadbeef'),
+      );
+      expect(parsed, isNotNull);
+      expect(parsed!.messageOriginId, isNull);
     });
 
     test('keeps real XMPP stanza aliases', () {

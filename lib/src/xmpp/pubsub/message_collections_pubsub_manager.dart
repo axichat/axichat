@@ -7,9 +7,8 @@ import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/wire_reference_id.dart';
 import 'package:axichat/src/common/xml_safety.dart';
-import 'package:axichat/src/email/util/delta_message_ids.dart';
-import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -40,7 +39,6 @@ const String _messageCollectionsBootstrapOperationName =
 const String _messageCollectionsRefreshOperationName =
     'MessageCollectionsPubSubManager.refreshFromServer';
 const int _collectionIdMaxBytes = 128;
-const int _messageReferenceIdMaxBytes = 1024;
 
 sealed class MessageCollectionSyncItem {
   const MessageCollectionSyncItem();
@@ -67,10 +65,10 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   @override
   final String collectionId;
   final String chatJid;
-  final String messageReferenceId;
-  final String? messageStanzaId;
-  final String? messageOriginId;
-  final String? messageMucStanzaId;
+  final WireReferenceId messageReferenceId;
+  final WireReferenceId? messageStanzaId;
+  final WireReferenceId? messageOriginId;
+  final WireReferenceId? messageMucStanzaId;
   @override
   final DateTime updatedAt;
   @override
@@ -81,14 +79,14 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   String get itemId => itemIdFor(
     collectionId: collectionId,
     chatJid: chatJid,
-    messageReferenceId: messageReferenceId,
+    messageReferenceId: messageReferenceId.value,
   );
 
   Set<String> get aliases => <String>{
-    messageReferenceId,
-    ?messageStanzaId,
-    ?messageOriginId,
-    ?messageMucStanzaId,
+    messageReferenceId.value,
+    ?messageStanzaId?.value,
+    ?messageOriginId?.value,
+    ?messageMucStanzaId?.value,
   };
 
   static String itemIdFor({
@@ -116,7 +114,7 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
     final chatJid = _normalizeChatJid(
       node.attributes[_chatJidAttr]?.toString(),
     );
-    final messageReferenceId = _normalizeReferenceValue(
+    final messageReferenceId = WireReferenceId.tryFrom(
       node.attributes[_messageReferenceIdAttr]?.toString(),
     );
     final rawUpdatedAt = node.attributes[_updatedAtAttr]?.toString().trim();
@@ -129,30 +127,21 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
         parsedUpdatedAt == null) {
       return null;
     }
-    if (isDeviceLocalDeltaStanzaId(messageReferenceId) ||
-        isDeltaGeneratedMessageId(messageReferenceId)) {
-      return null;
-    }
     final active = _parseBoolAttr(node.attributes[_activeAttr]) ?? true;
     final sourceId = _normalizeSourceId(
       node.attributes[_sourceIdAttr]?.toString(),
-    );
-    final receivedStanzaId = _normalizeReferenceValue(
-      node.attributes[_messageStanzaIdAttr]?.toString(),
     );
     final payload = MessageCollectionSyncPayload(
       collectionId: collectionId,
       chatJid: chatJid,
       messageReferenceId: messageReferenceId,
-      messageStanzaId:
-          receivedStanzaId != null &&
-              isDeviceLocalDeltaStanzaId(receivedStanzaId)
-          ? null
-          : receivedStanzaId,
-      messageOriginId: _normalizeReferenceValue(
+      messageStanzaId: WireReferenceId.tryFrom(
+        node.attributes[_messageStanzaIdAttr]?.toString(),
+      ),
+      messageOriginId: WireReferenceId.tryFrom(
         node.attributes[_messageOriginIdAttr]?.toString(),
       ),
-      messageMucStanzaId: _normalizeReferenceValue(
+      messageMucStanzaId: WireReferenceId.tryFrom(
         node.attributes[_messageMucStanzaIdAttr]?.toString(),
       ),
       updatedAt: parsedUpdatedAt,
@@ -168,23 +157,21 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   }
 
   mox.XMLNode toXml() {
-    final shareableStanzaId =
-        messageStanzaId != null && isDeviceLocalDeltaStanzaId(messageStanzaId!)
-        ? null
-        : messageStanzaId;
     return mox.XMLNode.xmlns(
       tag: _entryTag,
       xmlns: messageCollectionsPubSubNode,
       attributes: {
         _collectionIdAttr: escapeXmlAttribute(collectionId),
         _chatJidAttr: escapeXmlAttribute(chatJid),
-        _messageReferenceIdAttr: escapeXmlAttribute(messageReferenceId),
+        _messageReferenceIdAttr: escapeXmlAttribute(messageReferenceId.value),
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
         _activeAttr: active ? '1' : '0',
         _sourceIdAttr: escapeXmlAttribute(sourceId),
-        _messageStanzaIdAttr: ?escapeXmlAttributeOrNull(shareableStanzaId),
-        _messageOriginIdAttr: ?escapeXmlAttributeOrNull(messageOriginId),
-        _messageMucStanzaIdAttr: ?escapeXmlAttributeOrNull(messageMucStanzaId),
+        _messageStanzaIdAttr: ?escapeXmlAttributeOrNull(messageStanzaId?.value),
+        _messageOriginIdAttr: ?escapeXmlAttributeOrNull(messageOriginId?.value),
+        _messageMucStanzaIdAttr: ?escapeXmlAttributeOrNull(
+          messageMucStanzaId?.value,
+        ),
       },
     );
   }
@@ -202,21 +189,6 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
 
   static String? _normalizeChatJid(String? value) =>
       value?.toBareJidOrNull(maxBytes: syncAddressMaxBytes);
-
-  static String? _normalizeReferenceValue(String? value) {
-    final normalized = value?.trim();
-    if (normalized == null || normalized.isEmpty) {
-      return null;
-    }
-    final clamped = clampUtf8Value(
-      normalized,
-      maxBytes: _messageReferenceIdMaxBytes,
-    );
-    if (clamped == null || clamped.trim().isEmpty) {
-      return null;
-    }
-    return clamped;
-  }
 
   static bool? _parseBoolAttr(Object? value) {
     final normalized = value?.toString().trim().toLowerCase();

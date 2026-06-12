@@ -1,5 +1,6 @@
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/common/wire_reference_id.dart';
 import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/chat_settings_pubsub_manager.dart';
@@ -259,7 +260,7 @@ void main() {
       final payload = MessageCollectionSyncPayload(
         collectionId: _collectionId,
         chatJid: _messageChatJid,
-        messageReferenceId: _messageReferenceId,
+        messageReferenceId: WireReferenceId.tryFrom(_messageReferenceId)!,
         updatedAt: updatedAt,
         active: true,
         sourceId: 'device-a',
@@ -518,8 +519,8 @@ void main() {
     final collection = MessageCollectionSyncPayload(
       collectionId: special,
       chatJid: _messageChatJid,
-      messageReferenceId: special,
-      messageOriginId: special,
+      messageReferenceId: WireReferenceId.tryFrom(special)!,
+      messageOriginId: WireReferenceId.tryFrom(special),
       updatedAt: updatedAt,
       active: true,
       sourceId: sourceId,
