@@ -2458,11 +2458,7 @@ class EmailService {
         );
       }
       try {
-        if (transport is EmailDeltaWorkerRuntime) {
-          await transport.dispose(requestWorkerDispose: false);
-        } else {
-          await transport.dispose();
-        }
+        await transport.dispose();
       } on Exception catch (error, stackTrace) {
         _log.warning('Failed to dispose email transport', error, stackTrace);
       }
@@ -4322,16 +4318,6 @@ class EmailService {
     final db = await _databaseBuilder();
     yield await db.getDrafts(start: start, end: end);
     yield* db.watchDrafts(start: start, end: end);
-  }
-
-  Stream<List<Chat>> chatsStream({
-    int start = 0,
-    int end = _defaultPageSize,
-  }) async* {
-    await _ensureReady();
-    final db = await _databaseBuilder();
-    yield await db.getChats(start: start, end: end);
-    yield* db.watchChats(start: start, end: end);
   }
 
   Stream<Chat?> chatStream(String jid) async* {

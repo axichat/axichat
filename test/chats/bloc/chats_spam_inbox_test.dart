@@ -15,9 +15,6 @@ void main() {
     xmppService = MockXmppService();
 
     when(
-      () => xmppService.chatsStream(),
-    ).thenAnswer((_) => const Stream<List<Chat>>.empty());
-    when(
       () => xmppService.homeChatsStream(recentLimit: any(named: 'recentLimit')),
     ).thenAnswer((_) => const Stream<List<Chat>>.empty());
     when(

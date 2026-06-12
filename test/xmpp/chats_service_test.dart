@@ -172,7 +172,7 @@ void main() {
         final chats = chatJids.map(Chat.fromJid).toList();
 
         expectLater(
-          xmppService.chatsStream(),
+          xmppService.allChatsStream(),
           emitsInOrder([
             [],
             ...List.generate(
@@ -227,7 +227,7 @@ void main() {
         );
 
         expectLater(
-          xmppService.chatsStream(),
+          xmppService.allChatsStream(),
           emitsInOrder([
             chats.map((e) => ChatMatcher(e)).toList(),
             chats.map((e) => ChatMatcher(e)).toList(),

@@ -259,13 +259,6 @@ class PrivateContactDetailFields extends Table {
 
   @override
   Set<Column<Object>>? get primaryKey => {addressKey, fieldId};
-
-  List<Index> get indexes => [
-    Index(
-      'idx_private_contact_detail_fields_address_order',
-      'address_key, active, sort_order',
-    ),
-  ];
 }
 
 String? _trimmedOrNull(String? value) {

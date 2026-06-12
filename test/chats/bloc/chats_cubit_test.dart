@@ -52,12 +52,6 @@ void main() {
         StreamController<Map<String, String>>.broadcast();
 
     when(
-      () => xmppService.chatsStream(
-        start: any(named: 'start'),
-        end: any(named: 'end'),
-      ),
-    ).thenAnswer((_) => chatsStreamController.stream);
-    when(
       () => xmppService.homeChatsStream(recentLimit: any(named: 'recentLimit')),
     ).thenAnswer((_) => chatsStreamController.stream);
     when(
@@ -497,12 +491,6 @@ void main() {
   test('create room conflict surfaces alreadyExists failure state', () async {
     final xmppMucService = MockXmppMucService();
     when(
-      () => xmppMucService.chatsStream(
-        start: any(named: 'start'),
-        end: any(named: 'end'),
-      ),
-    ).thenAnswer((_) => const Stream<List<Chat>>.empty());
-    when(
       () => xmppMucService.homeChatsStream(
         recentLimit: any(named: 'recentLimit'),
       ),
@@ -537,12 +525,6 @@ void main() {
 
   test('create room forwards the selected primary view', () async {
     final xmppMucService = MockXmppMucService();
-    when(
-      () => xmppMucService.chatsStream(
-        start: any(named: 'start'),
-        end: any(named: 'end'),
-      ),
-    ).thenAnswer((_) => const Stream<List<Chat>>.empty());
     when(
       () => xmppMucService.homeChatsStream(
         recentLimit: any(named: 'recentLimit'),

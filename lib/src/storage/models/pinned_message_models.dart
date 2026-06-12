@@ -17,11 +17,6 @@ class PinnedMessages extends Table {
 
   @override
   Set<Column<Object>>? get primaryKey => {messageStanzaId, chatJid};
-
-  List<Index> get indexes => [
-    Index('idx_pinned_messages_chat', 'chat_jid, pinned_at'),
-    Index('idx_pinned_messages_message', 'message_stanza_id'),
-  ];
 }
 
 @DataClassName('PinEntry')
@@ -48,14 +43,6 @@ class MessagePins extends Table {
     messageReferenceId,
     pinnerJid,
   };
-
-  List<Index> get indexes => [
-    Index(
-      'idx_message_pins_chat',
-      'chat_jid, message_reference_kind, message_reference_id, active',
-    ),
-    Index('idx_message_pins_pinner', 'pinner_jid, chat_jid, active'),
-  ];
 }
 
 final class PinnedMessageAggregate {

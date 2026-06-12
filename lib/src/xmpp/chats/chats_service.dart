@@ -579,28 +579,13 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     }
   }
 
-  Stream<List<Chat>> chatsStream({
-    int start = _chatPreloadStart,
-    int end = _defaultChatPreloadLimit,
-  }) =>
-      createPaginatedStream<Chat, XmppDatabase>(
-        watchFunction: (db) async =>
-            db.watchChats(start: start, end: end).map(sortChats),
-        getFunction: (db) async =>
-            sortChats(await db.getChats(start: start, end: end)),
-      ).map((items) {
-        _cacheSortedChatList(chats: items, limit: end);
-        return items;
-      });
-
   Stream<List<Chat>> homeChatsStream({
     int recentLimit = _defaultChatPreloadLimit,
   }) =>
       createPaginatedStream<Chat, XmppDatabase>(
         watchFunction: (db) async =>
-            db.watchHomeChats(recentLimit: recentLimit).map(sortChats),
-        getFunction: (db) async =>
-            sortChats(await db.getHomeChats(recentLimit: recentLimit)),
+            db.watchHomeChats(recentLimit: recentLimit),
+        getFunction: (db) => db.getHomeChats(recentLimit: recentLimit),
       ).map((items) {
         _cacheSortedChatList(chats: items, limit: recentLimit);
         return items;
@@ -608,8 +593,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
 
   Stream<List<Chat>> allChatsStream() =>
       createPaginatedStream<Chat, XmppDatabase>(
-        watchFunction: (db) async => db.watchAllChats().map(sortChats),
-        getFunction: (db) async => sortChats(await db.getAllChats()),
+        watchFunction: (db) async => db.watchAllChats(),
+        getFunction: (db) => db.getAllChats(),
       );
 
   Future<List<Chat>?> preloadChatList({
@@ -624,15 +609,14 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     } on XmppAbortedException {
       return null;
     }
-    final sorted = sortChats(chats);
-    return _cacheSortedChatList(chats: sorted, limit: limit);
+    return _cacheSortedChatList(chats: chats, limit: limit);
   }
 
   Stream<List<Chat>> unreadChatsForFolderBadgesStream() =>
       createSingleItemStream<List<Chat>, XmppDatabase>(
         watchFunction: (db) async {
-          final stream = db.watchUnreadChatsForFolderBadges().map(sortChats);
-          final initial = sortChats(await db.getUnreadChatsForFolderBadges());
+          final stream = db.watchUnreadChatsForFolderBadges();
+          final initial = await db.getUnreadChatsForFolderBadges();
           return stream.startWith(initial);
         },
       );

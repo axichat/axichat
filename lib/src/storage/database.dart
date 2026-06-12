@@ -696,8 +696,6 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> deleteFileMetadata(String id);
 
-  Stream<List<Chat>> watchChats({required int start, required int end});
-
   Future<List<Chat>> getChats({required int start, required int end});
 
   Stream<List<Chat>> watchHomeChats({required int recentLimit});
@@ -7499,11 +7497,6 @@ ORDER BY pinned_at DESC, message_reference_id DESC
           ..where((tbl) => tbl.chatJid.equals(chatJid))
           ..where((tbl) => tbl.messageStanzaId.equals(messageStanzaId)))
         .go();
-  }
-
-  @override
-  Stream<List<Chat>> watchChats({required int start, required int end}) {
-    return chatsAccessor.watchRange(start: start, end: end);
   }
 
   @override

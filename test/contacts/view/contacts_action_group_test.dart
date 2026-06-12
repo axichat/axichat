@@ -645,9 +645,6 @@ void _stubContactsShellService(
   ).thenAnswer((_) => const Stream<List<Invite>>.empty());
   when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
   when(
-    () => xmppService.chatsStream(),
-  ).thenAnswer((_) => const Stream<List<Chat>>.empty());
-  when(
     () => xmppService.recipientAddressSuggestionsStream(),
   ).thenAnswer((_) => const Stream<List<String>>.empty());
   when(

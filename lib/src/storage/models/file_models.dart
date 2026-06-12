@@ -893,8 +893,4 @@ class DraftAttachmentRefs extends Table {
 
   @override
   Set<Column> get primaryKey => {draftId, fileMetadataId};
-
-  List<Index> get indexes => [
-    Index('idx_draft_attachment_file', 'file_metadata_id'),
-  ];
 }

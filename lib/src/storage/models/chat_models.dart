@@ -786,10 +786,6 @@ class Chats extends Table {
 
   @override
   Set<Column> get primaryKey => {jid};
-
-  List<Index> get indexes => [
-    Index('idx_chats_last_change', 'last_change_timestamp'),
-  ];
 }
 
 extension ChatSettingsSyncModel on Chat {
@@ -866,10 +862,6 @@ class RecipientAddresses extends Table {
 
   @override
   Set<Column> get primaryKey => {address};
-
-  List<Index> get indexes => [
-    Index('idx_recipient_addresses_last_seen', 'last_seen'),
-  ];
 }
 
 @DataClassName('EmailChatAccountData')
@@ -911,13 +903,6 @@ class EmailTrustedContactKeys extends Table {
 
   @override
   Set<Column> get primaryKey => {deltaAccountId, address};
-
-  List<Index> get indexes => [
-    Index(
-      'idx_email_trusted_contact_keys_chat',
-      'delta_account_id, delta_chat_id',
-    ),
-  ];
 }
 
 class Contact extends Equatable implements Insertable<Contact> {

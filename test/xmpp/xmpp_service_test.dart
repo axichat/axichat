@@ -7405,7 +7405,7 @@ void main() {
       () async {
         final errors = <Object>[];
         final subscriptions = <StreamSubscription<dynamic>>[
-          (xmppService as ChatsService).chatsStream().listen(
+          (xmppService as ChatsService).allChatsStream().listen(
             (_) {},
             onError: errors.add,
           ),

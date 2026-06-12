@@ -59,31 +59,6 @@ void main() {
     },
   );
 
-  test('watchChats honors start and end', () async {
-    final now = DateTime.utc(2026, 1, 1, 12);
-    for (var index = 0; index < 3; index++) {
-      await database.createChat(
-        Chat(
-          jid: 'watch-$index@example.com',
-          title: 'Watch $index',
-          type: ChatType.chat,
-          lastChangeTimestamp: now.add(Duration(minutes: index)),
-        ),
-      );
-    }
-
-    await expectLater(
-      database.watchChats(start: 0, end: 2),
-      emits(
-        predicate<List<Chat>>(
-          (chats) =>
-              chats.map((chat) => chat.jid).toList(growable: false).join(',') ==
-              'watch-2@example.com,watch-1@example.com',
-        ),
-      ),
-    );
-  });
-
   test('folder badge unread chats exclude read chats', () async {
     final now = DateTime.utc(2026, 1, 1, 12);
     await database.createChat(

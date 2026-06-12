@@ -1707,10 +1707,6 @@ class Messages extends Table {
 
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};
-
-  List<Index> get indexes => [
-    Index('idx_messages_chat_timestamp', 'chat_jid, timestamp'),
-  ];
 }
 
 @DataClassName('MessageAttachmentData')
@@ -1733,11 +1729,6 @@ class MessageAttachments extends Table {
   @override
   List<String> get customConstraints => const [
     'UNIQUE(message_id, file_metadata_id)',
-  ];
-
-  List<Index> get indexes => [
-    Index('idx_message_attachments_message', 'message_id'),
-    Index('idx_message_attachments_group', 'transport_group_id'),
   ];
 }
 
@@ -1773,10 +1764,6 @@ class MessageParticipants extends Table {
 
   @override
   Set<Column> get primaryKey => {shareId, contactJid};
-
-  List<Index> get indexes => [
-    Index('idx_message_participants_contact', 'contact_jid, share_id'),
-  ];
 }
 
 @DataClassName('MessageCopyData')
@@ -1795,11 +1782,6 @@ class MessageCopies extends Table {
   @override
   List<String> get customConstraints => const [
     'UNIQUE(dc_msg_id, dc_account_id)',
-  ];
-
-  List<Index> get indexes => [
-    Index('idx_message_copies_share', 'share_id, dc_chat_id'),
-    Index('idx_message_copies_dc_msg', 'dc_msg_id, dc_account_id'),
   ];
 }
 
