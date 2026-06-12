@@ -1617,7 +1617,7 @@ class _ParsedInvite {
 @UseRowClass(Message)
 @TableIndex(
   name: 'messages_delta_locator',
-  columns: {#deltaAccountId, #deltaChatId, #deltaMsgId},
+  columns: {#deltaAccountId, #deltaMsgId},
   unique: true,
 )
 class Messages extends Table {

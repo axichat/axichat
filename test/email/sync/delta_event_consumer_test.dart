@@ -45,7 +45,6 @@ void main() {
       () => database.getMessageByDeltaId(
         any(),
         deltaAccountId: any(named: 'deltaAccountId'),
-        deltaChatId: any(named: 'deltaChatId'),
       ),
     ).thenAnswer((_) async => null);
     when(
@@ -469,7 +468,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -693,7 +691,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -1041,7 +1038,6 @@ void main() {
       () => database.getMessageByDeltaId(
         any(),
         deltaAccountId: any(named: 'deltaAccountId'),
-        deltaChatId: any(named: 'deltaChatId'),
       ),
     ).thenAnswer((invocation) async {
       final deltaMsgId = invocation.positionalArguments.first as int;
@@ -1122,7 +1118,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => null);
       when(() => database.createChat(any())).thenAnswer((_) async {});
@@ -1205,7 +1200,6 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -1296,7 +1290,6 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -2316,7 +2309,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => null);
       when(
@@ -2426,7 +2418,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => null);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -2584,7 +2575,6 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -2667,7 +2657,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(
@@ -2753,7 +2742,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(
@@ -2835,7 +2823,6 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(
@@ -2906,7 +2893,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -2982,7 +2968,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -3056,7 +3041,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -3132,7 +3116,6 @@ void main() {
         () => database.getMessageByDeltaId(
           msgId,
           deltaAccountId: DeltaAccountDefaults.legacyId,
-          deltaChatId: chatId,
         ),
       ).thenAnswer((_) async => existing);
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
@@ -3217,7 +3200,6 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -3298,7 +3280,6 @@ void main() {
       () => database.getMessageByDeltaId(
         msgId,
         deltaAccountId: DeltaAccountDefaults.legacyId,
-        deltaChatId: chatId,
       ),
     ).thenAnswer((_) async => existing);
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
@@ -4070,7 +4051,7 @@ void main() {
   );
 
   test(
-    'summary repair preserves the existing timestamp when no visible message remains',
+    'ingesting a new message never regresses the stored chat timestamp',
     () async {
       const chatId = 22;
       const msgId = 78;
@@ -4131,9 +4112,7 @@ void main() {
         ),
       );
 
-      verify(
-        () => database.repairChatSummaryPreservingTimestamp(chat.jid),
-      ).called(1);
+      verifyNever(() => database.repairChatSummaryPreservingTimestamp(any()));
       verifyNever(
         () => database.updateChat(
           any(
@@ -4262,6 +4241,408 @@ void main() {
       expect(countingCore.singleFetches, 1);
     },
   );
+
+  group('status-only message state events', () {
+    const chatId = 51;
+    const msgId = 510;
+    final timestamp = DateTime.utc(2024, 3, 1, 12);
+    final emailChat = Chat(
+      jid: 'alice@example.com',
+      title: 'Alice',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 3, 1),
+      transport: MessageTransport.email,
+      deltaChatId: chatId,
+    );
+
+    Message existingMessage({required bool outgoing, bool displayed = false}) {
+      return Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: outgoing ? 'me@example.com' : emailChat.jid,
+        chatJid: emailChat.jid,
+        body: 'Stored body',
+        originID: 'stored@example.com',
+        timestamp: timestamp,
+        displayed: displayed,
+        received: !outgoing,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+        deltaMsgId: msgId,
+      );
+    }
+
+    void stubExisting(Message existing) {
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => emailChat);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => existing);
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+    }
+
+    test('delivered receipt for stored outgoing message skips content '
+        'rebuild and summary repair', () async {
+      stubExisting(existingMessage(outgoing: true));
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Stored body',
+          timestamp: timestamp,
+          isOutgoing: true,
+          state: DeltaMessageState.outDelivered,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgDelivered.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.updateMessage(
+          any(
+            that: predicate<Message>(
+              (message) => message.received && message.acked,
+            ),
+          ),
+        ),
+      ).called(1);
+      verifyNever(() => context.getMessageRfc822Body(any()));
+      verifyNever(() => database.repairChatSummaryPreservingTimestamp(any()));
+      verifyNever(
+        () => database.repairUnreadCountForChat(
+          any(),
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      );
+    });
+
+    test('incoming seen state change still repairs unread count', () async {
+      stubExisting(existingMessage(outgoing: false));
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Stored body',
+          timestamp: timestamp,
+          state: DeltaMessageState.inSeen,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgRead.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.updateMessage(
+          any(that: predicate<Message>((message) => message.displayed)),
+        ),
+      ).called(1);
+      verify(
+        () => database.repairUnreadCountForChat(
+          emailChat.jid,
+          selfJid: any(named: 'selfJid'),
+          emailSelfJid: any(named: 'emailSelfJid'),
+        ),
+      ).called(2);
+      verifyNever(() => context.getMessageRfc822Body(any()));
+      verifyNever(() => database.repairChatSummaryPreservingTimestamp(any()));
+    });
+
+    test('failed receipt persists send error without content '
+        'rebuild', () async {
+      stubExisting(existingMessage(outgoing: true));
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Stored body',
+          timestamp: timestamp,
+          isOutgoing: true,
+          state: DeltaMessageState.outFailed,
+          error: 'Connection timeout',
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgFailed.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.updateMessage(
+          any(
+            that: predicate<Message>(
+              (message) => message.error == MessageError.serverTimeout,
+            ),
+          ),
+        ),
+      ).called(1);
+      verifyNever(() => context.getMessageRfc822Body(any()));
+    });
+
+    test('receipt with changed timestamp persists it without summary '
+        'repair', () async {
+      final laterTimestamp = timestamp.add(const Duration(minutes: 5));
+      stubExisting(existingMessage(outgoing: true));
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Stored body',
+          timestamp: laterTimestamp,
+          isOutgoing: true,
+          state: DeltaMessageState.outDelivered,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgDelivered.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.updateMessage(
+          any(
+            that: predicate<Message>(
+              (message) => message.timestamp == laterTimestamp,
+            ),
+          ),
+        ),
+      ).called(1);
+      verifyNever(() => database.repairChatSummaryPreservingTimestamp(any()));
+    });
+
+    test('mapped chats resolve the system-chat check without core '
+        'lookups', () async {
+      stubExisting(existingMessage(outgoing: true));
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Stored body',
+          timestamp: timestamp,
+          isOutgoing: true,
+          state: DeltaMessageState.outDelivered,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgDelivered.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(() => database.updateMessage(any())).called(1);
+      verifyNever(() => context.getChat(any()));
+    });
+
+    test('events for unmapped system chats are dropped via the core '
+        'lookup', () async {
+      when(() => context.getChat(chatId)).thenAnswer(
+        (_) async => DeltaChat(
+          id: chatId,
+          name: 'Device Messages',
+          contactId: DeltaContactId.device,
+        ),
+      );
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Device update',
+          timestamp: timestamp,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verifyNever(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      );
+      verifyNever(() => database.updateMessage(any()));
+    });
+
+    test('incoming message ingest leaves summary maintenance to the '
+        'save path', () async {
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => emailChat);
+      when(
+        () => database.getChat(emailChat.jid),
+      ).thenAnswer((_) async => emailChat);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Hello there',
+          timestamp: timestamp,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      ).called(1);
+      verifyNever(() => database.repairChatSummaryPreservingTimestamp(any()));
+    });
+
+    test('chatModified for an unmapped system chat creates no phantom '
+        'chat or mapping', () async {
+      when(() => context.getChat(chatId)).thenAnswer(
+        (_) async => DeltaChat(
+          id: chatId,
+          name: 'Device Messages',
+          contactId: DeltaContactId.device,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.chatModified.code,
+          data1: chatId,
+          data2: 0,
+        ),
+      );
+
+      verifyNever(() => database.createChat(any()));
+      verifyNever(
+        () => database.upsertEmailChatAccount(
+          chatJid: any(named: 'chatJid'),
+          deltaAccountId: any(named: 'deltaAccountId'),
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      );
+    });
+
+    test('recoverOutgoingMessageStatuses re-hydrates stored statuses '
+        'cheaply', () async {
+      final existing = existingMessage(outgoing: true);
+      stubExisting(existing);
+      when(
+        () => database.getRecoverableOutgoingDeltaMessages(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          senderJid: 'me@example.com',
+          since: any(named: 'since'),
+          limit: any(named: 'limit'),
+        ),
+      ).thenAnswer((_) async => [existing]);
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Stored body',
+          timestamp: timestamp,
+          isOutgoing: true,
+          state: DeltaMessageState.outDelivered,
+        ),
+      );
+
+      await consumer.recoverOutgoingMessageStatuses();
+
+      verify(
+        () => database.updateMessage(
+          any(that: predicate<Message>((message) => message.received)),
+        ),
+      ).called(1);
+      verifyNever(() => context.getMessageRfc822Body(any()));
+      final captured = verify(
+        () => database.getRecoverableOutgoingDeltaMessages(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          senderJid: 'me@example.com',
+          since: captureAny(named: 'since'),
+          limit: captureAny(named: 'limit'),
+        ),
+      ).captured;
+      final since = captured[0] as DateTime;
+      expect(DateTime.timestamp().difference(since).inHours, 48);
+      expect(captured[1], 100);
+    });
+
+    test('receipt for unstored message ingests fully', () async {
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => emailChat);
+      when(
+        () => database.getChat(emailChat.jid),
+      ).thenAnswer((_) async => emailChat);
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+      when(() => context.getMessage(msgId)).thenAnswer(
+        (_) async => DeltaMessage(
+          id: msgId,
+          chatId: chatId,
+          text: 'Fresh body',
+          timestamp: timestamp,
+          isOutgoing: true,
+          state: DeltaMessageState.outDelivered,
+        ),
+      );
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgDelivered.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verify(
+        () => database.saveMessage(
+          any(
+            that: predicate<Message>(
+              (message) => message.deltaMsgId == msgId && message.received,
+            ),
+          ),
+          selfJid: any(named: 'selfJid'),
+        ),
+      ).called(1);
+      verify(() => context.getMessageRfc822Body(msgId)).called(1);
+    });
+  });
 }
 
 class CountingDeltaEventCore implements DeltaEventCore {

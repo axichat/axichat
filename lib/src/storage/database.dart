@@ -162,18 +162,33 @@ abstract interface class XmppDatabase implements Database {
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
-    int? deltaChatId,
     String? chatJid,
+  });
+
+  Future<List<Message>> getRecoverableOutgoingDeltaMessages({
+    required int deltaAccountId,
+    required String senderJid,
+    required DateTime since,
+    required int limit,
   });
 
   Future<List<Message>> getMessagesByDeltaIds(
     Iterable<int> deltaMsgIds, {
     int? deltaAccountId,
-    int? deltaChatId,
     String? chatJid,
   });
 
   Future<void> clearMessageDeltaHandles(String stanzaID);
+
+  Future<Message?> rehomeDeltaMessage({
+    required int deltaMsgId,
+    required int deltaAccountId,
+    required int deltaChatId,
+    required String chatJid,
+    required String senderJid,
+    String? selfJid,
+    String? emailSelfJid,
+  });
 
   Future<void> clearChatDeltaChatId(String jid);
 
@@ -2111,7 +2126,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 61;
+  int get schemaVersion => 63;
 
   @override
   MigrationStrategy get migration {
@@ -2552,19 +2567,7 @@ WHERE transport IS NULL
           await m.createTable(emailTrustedContactKeys);
         }
         if (from < 54) {
-          await customStatement('''
-UPDATE chats
-SET transport = ${MessageTransport.xmpp.index}
-WHERE transport = ${MessageTransport.email.index}
-  AND EXISTS (
-    SELECT 1
-    FROM messages
-    WHERE messages.chat_jid = chats.jid
-      AND messages.delta_chat_id IS NULL
-      AND messages.delta_msg_id IS NULL
-      AND messages.pseudo_message_type IS NULL
-  )
-''');
+          await _promoteRosterBackedEmailChats();
         }
         if (from < 56 &&
             !await _tableHasColumn(
@@ -2582,12 +2585,21 @@ WHERE transport = ${MessageTransport.email.index}
         if (from < 60) {
           await migrateMessageIdentityToLadder();
         }
-        if (from < 61) {
-          final removed = await _collapseDuplicateDeltaLocatorRows();
+        if (from < 62) {
+          await m.drop(Index('messages_delta_locator', ''));
+          final removed = await collapseDuplicateDeltaPairRows();
           if (removed > 0) {
-            _log.info('Collapsed $removed duplicate delta-locator rows.');
+            _log.info('Collapsed $removed cross-chat delta-locator rows.');
           }
           await m.createIndex(messagesDeltaLocator);
+        }
+        if (from < 63) {
+          final repaired = await _repairOverpromotedEmailChatTransports();
+          if (repaired > 0) {
+            _log.info(
+              'Repaired $repaired over-promoted email chat transports.',
+            );
+          }
         }
       },
       beforeOpen: (_) async {
@@ -3370,7 +3382,6 @@ WHERE transport = ${MessageTransport.email.index}
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
-    int? deltaChatId,
     String? chatJid,
   }) {
     final query = select(messages)
@@ -3383,9 +3394,6 @@ WHERE transport = ${MessageTransport.email.index}
     if (deltaAccountId != null) {
       query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
     }
-    if (deltaChatId != null) {
-      query.where((tbl) => tbl.deltaChatId.equals(deltaChatId));
-    }
     if (chatJid != null) {
       query.where((tbl) => tbl.chatJid.equals(chatJid));
     }
@@ -3393,10 +3401,31 @@ WHERE transport = ${MessageTransport.email.index}
   }
 
   @override
+  Future<List<Message>> getRecoverableOutgoingDeltaMessages({
+    required int deltaAccountId,
+    required String senderJid,
+    required DateTime since,
+    required int limit,
+  }) {
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.deltaAccountId.equals(deltaAccountId) &
+            tbl.deltaMsgId.isNotNull() &
+            tbl.deltaChatId.isNotNull() &
+            tbl.senderJid.equals(senderJid) &
+            tbl.displayed.equals(false) &
+            tbl.timestamp.isBiggerOrEqualValue(since),
+      )
+      ..orderBy([(tbl) => OrderingTerm.desc(tbl.timestamp)])
+      ..limit(limit);
+    return query.get();
+  }
+
+  @override
   Future<List<Message>> getMessagesByDeltaIds(
     Iterable<int> deltaMsgIds, {
     int? deltaAccountId,
-    int? deltaChatId,
     String? chatJid,
   }) async {
     final normalized = deltaMsgIds
@@ -3410,9 +3439,6 @@ WHERE transport = ${MessageTransport.email.index}
       ..where((tbl) => tbl.deltaMsgId.isIn(normalized));
     if (deltaAccountId != null) {
       query.where((tbl) => tbl.deltaAccountId.equals(deltaAccountId));
-    }
-    if (deltaChatId != null) {
-      query.where((tbl) => tbl.deltaChatId.equals(deltaChatId));
     }
     if (chatJid != null) {
       query.where((tbl) => tbl.chatJid.equals(chatJid));
@@ -3481,6 +3507,221 @@ WHERE transport = ${MessageTransport.email.index}
         oldReferenceId: oldReferenceId,
         newReferenceId: newReferenceId,
       );
+    }
+  }
+
+  @override
+  Future<Message?> rehomeDeltaMessage({
+    required int deltaMsgId,
+    required int deltaAccountId,
+    required int deltaChatId,
+    required String chatJid,
+    required String senderJid,
+    String? selfJid,
+    String? emailSelfJid,
+  }) async {
+    return transaction(() async {
+      final existing = await getMessageByDeltaId(
+        deltaMsgId,
+        deltaAccountId: deltaAccountId,
+      );
+      if (existing == null) {
+        return null;
+      }
+      if (existing.chatJid == chatJid && existing.deltaChatId == deltaChatId) {
+        return existing;
+      }
+      final fromChatJid = existing.chatJid;
+      final updated = existing.copyWith(
+        chatJid: chatJid,
+        deltaChatId: deltaChatId,
+        senderJid: senderJid,
+      );
+      await updateMessage(updated);
+      if (fromChatJid == chatJid) {
+        return updated;
+      }
+      await _migrateMembershipChatJid(
+        message: existing,
+        fromChatJid: fromChatJid,
+        toChatJid: chatJid,
+      );
+      await _migratePinChatJid(
+        message: existing,
+        fromChatJid: fromChatJid,
+        toChatJid: chatJid,
+      );
+      await repairUnreadCountForChat(
+        fromChatJid,
+        selfJid: selfJid,
+        emailSelfJid: emailSelfJid,
+      );
+      await repairUnreadCountForChat(
+        chatJid,
+        selfJid: selfJid,
+        emailSelfJid: emailSelfJid,
+      );
+      await repairChatSummaryPreservingTimestamp(fromChatJid);
+      await repairChatSummaryPreservingTimestamp(chatJid);
+      return updated;
+    });
+  }
+
+  Future<void> _migratePinChatJid({
+    required Message message,
+    required String fromChatJid,
+    required String toChatJid,
+  }) async {
+    final pinnedRows =
+        await (select(pinnedMessages)..where(
+              (tbl) =>
+                  tbl.chatJid.equals(fromChatJid) &
+                  tbl.messageStanzaId.equals(message.stanzaID),
+            ))
+            .get();
+    for (final row in pinnedRows) {
+      await (delete(pinnedMessages)..where(
+            (tbl) =>
+                tbl.chatJid.equals(fromChatJid) &
+                tbl.messageStanzaId.equals(row.messageStanzaId),
+          ))
+          .go();
+      await into(pinnedMessages).insert(
+        row.copyWith(chatJid: toChatJid),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+    final references = message.referenceIds;
+    if (references.isEmpty) {
+      return;
+    }
+    final pinRows =
+        await (select(messagePins)..where(
+              (tbl) =>
+                  tbl.chatJid.equals(fromChatJid) &
+                  tbl.messageReferenceId.isIn(references),
+            ))
+            .get();
+    for (final row in pinRows) {
+      await (delete(messagePins)..where(
+            (tbl) =>
+                tbl.chatJid.equals(fromChatJid) &
+                tbl.messageReferenceKind.equals(row.messageReferenceKind) &
+                tbl.messageReferenceId.equals(row.messageReferenceId) &
+                tbl.pinnerJid.equals(row.pinnerJid),
+          ))
+          .go();
+      await into(messagePins).insert(
+        row.copyWith(chatJid: toChatJid),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+  }
+
+  Future<void> _migratePinsToKeeper({
+    required Message extra,
+    required Message keeper,
+  }) async {
+    final pinnedRows =
+        await (select(pinnedMessages)..where(
+              (tbl) =>
+                  tbl.chatJid.equals(extra.chatJid) &
+                  tbl.messageStanzaId.equals(extra.stanzaID),
+            ))
+            .get();
+    for (final row in pinnedRows) {
+      await (delete(pinnedMessages)..where(
+            (tbl) =>
+                tbl.chatJid.equals(extra.chatJid) &
+                tbl.messageStanzaId.equals(row.messageStanzaId),
+          ))
+          .go();
+      await into(pinnedMessages).insert(
+        row.copyWith(chatJid: keeper.chatJid, messageStanzaId: keeper.stanzaID),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+    final references = extra.referenceIds;
+    if (references.isEmpty) {
+      return;
+    }
+    final pinRows =
+        await (select(messagePins)..where(
+              (tbl) =>
+                  tbl.chatJid.equals(extra.chatJid) &
+                  tbl.messageReferenceId.isIn(references),
+            ))
+            .get();
+    for (final row in pinRows) {
+      await (delete(messagePins)..where(
+            (tbl) =>
+                tbl.chatJid.equals(extra.chatJid) &
+                tbl.messageReferenceKind.equals(row.messageReferenceKind) &
+                tbl.messageReferenceId.equals(row.messageReferenceId) &
+                tbl.pinnerJid.equals(row.pinnerJid),
+          ))
+          .go();
+      final mappedReference = row.messageReferenceId == extra.stanzaID
+          ? keeper.stanzaID
+          : row.messageReferenceId;
+      await into(messagePins).insert(
+        row.copyWith(
+          chatJid: keeper.chatJid,
+          messageReferenceId: mappedReference,
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+  }
+
+  Future<void> _migrateMembershipChatJid({
+    required Message message,
+    required String fromChatJid,
+    required String toChatJid,
+  }) async {
+    final references = message.referenceIds;
+    final deltaMsgId = message.deltaMsgId;
+    Expression<bool> referencePredicate(
+      $MessageCollectionMembershipsTable tbl,
+    ) {
+      var predicate = tbl.messageReferenceId.isIn(references);
+      if (deltaMsgId != null) {
+        predicate =
+            predicate |
+            (tbl.deltaMsgId.equals(deltaMsgId) &
+                tbl.deltaAccountId.equals(message.deltaAccountId));
+      }
+      return tbl.chatJid.equals(fromChatJid) & predicate;
+    }
+
+    final entries = await (select(
+      messageCollectionMemberships,
+    )..where(referencePredicate)).get();
+    final tombstonedAt = DateTime.timestamp().toUtc();
+    for (final entry in entries) {
+      final occupied = await getMessageCollectionMembership(
+        collectionId: entry.collectionId,
+        chatJid: toChatJid,
+        messageReferenceId: entry.messageReferenceId,
+      );
+      if (occupied == null) {
+        await into(messageCollectionMemberships).insert(
+          entry.copyWith(chatJid: toChatJid),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+      await (update(messageCollectionMemberships)..where(
+            (tbl) =>
+                tbl.collectionId.equals(entry.collectionId) &
+                tbl.chatJid.equals(fromChatJid) &
+                tbl.messageReferenceId.equals(entry.messageReferenceId),
+          ))
+          .write(
+            MessageCollectionMembershipsCompanion(
+              active: const Value(false),
+              addedAt: Value(tombstonedAt),
+            ),
+          );
     }
   }
 
@@ -3847,12 +4088,10 @@ WHERE transport = ${MessageTransport.email.index}
       }
       final persisted = await messagesAccessor.selectOne(message.stanzaID);
       if (persisted == null) {
-        if (messageToSave.deltaMsgId != null &&
-            messageToSave.deltaChatId != null) {
+        if (messageToSave.deltaMsgId != null) {
           final locatorOwner = await getMessageByDeltaId(
             messageToSave.deltaMsgId!,
             deltaAccountId: messageToSave.deltaAccountId,
-            deltaChatId: messageToSave.deltaChatId,
           );
           if (locatorOwner != null) {
             _log.fine('Delta locator already claimed; ignoring duplicate row.');
@@ -6389,7 +6628,9 @@ WHERE stanza_i_d = ?
           collectionId: normalizedCollectionId,
           chatJid: message.chatJid,
           messageReferenceId: reference.value,
-          messageStanzaId: message.trimmedStanzaId,
+          messageStanzaId: message.isEmailBacked
+              ? null
+              : message.trimmedStanzaId,
           messageOriginId: message.trimmedOriginId,
           messageMucStanzaId: message.trimmedMucStanzaId,
           deltaAccountId: message.deltaMsgId == null
@@ -7656,6 +7897,84 @@ ORDER BY pinned_at DESC, message_reference_id DESC
     await _markDirectChatsXmppCapable(jids);
   }
 
+  Future<int> _promoteRosterBackedEmailChats() {
+    return customUpdate(
+      '''
+UPDATE chats
+SET transport = ?
+WHERE transport = ?
+  AND type = ?
+  AND EXISTS (
+    SELECT 1
+    FROM roster
+    WHERE lower(trim(roster.jid)) = lower(trim(chats.jid))
+  )
+''',
+      variables: [
+        Variable<int>(MessageTransport.xmpp.index),
+        Variable<int>(MessageTransport.email.index),
+        Variable<int>(ChatType.chat.index),
+      ],
+      updates: {chats},
+    );
+  }
+
+  Future<int> _repairOverpromotedEmailChatTransports() {
+    return customUpdate(
+      '''
+UPDATE chats
+SET transport = ?
+WHERE transport = ?
+  AND type = ?
+  AND (
+    delta_chat_id IS NOT NULL
+    OR EXISTS (
+      SELECT 1
+      FROM email_chat_accounts
+      WHERE email_chat_accounts.chat_jid = chats.jid
+    )
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM roster
+    WHERE lower(trim(roster.jid)) = lower(trim(chats.jid))
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM messages
+    WHERE messages.chat_jid = chats.jid
+      AND (
+        (
+          messages.muc_stanza_id IS NOT NULL
+          AND trim(messages.muc_stanza_id) != ''
+        )
+        OR (
+          messages.sender_real_jid IS NOT NULL
+          AND trim(messages.sender_real_jid) != ''
+        )
+        OR (
+          messages.occupant_i_d IS NOT NULL
+          AND trim(messages.occupant_i_d) != ''
+        )
+        OR messages.device_i_d IS NOT NULL
+        OR messages.trust IS NOT NULL
+        OR messages.trusted IS NOT NULL
+        OR messages.encryption_protocol IN (?, ?)
+        OR messages.is_file_upload_notification = 1
+      )
+  )
+''',
+      variables: [
+        Variable<int>(MessageTransport.email.index),
+        Variable<int>(MessageTransport.xmpp.index),
+        Variable<int>(ChatType.chat.index),
+        Variable<int>(EncryptionProtocol.omemo.index),
+        Variable<int>(EncryptionProtocol.mls.index),
+      ],
+      updates: {chats},
+    );
+  }
+
   Future<void> _markDirectChatsXmppCapable(Iterable<String> jids) async {
     final normalizedJids = jids
         .map((jid) => bareAddress(jid) ?? jid.trim())
@@ -7753,41 +8072,37 @@ WHERE jid = ?
     );
   }
 
-  Future<int> _collapseDuplicateDeltaLocatorRows() async {
+  Future<int> collapseDuplicateDeltaPairRows() async {
     final count = countAll();
     final duplicateGroups = selectOnly(messages)
-      ..addColumns([
-        messages.deltaAccountId,
-        messages.deltaChatId,
-        messages.deltaMsgId,
-        count,
-      ])
-      ..where(
-        messages.deltaMsgId.isNotNull() & messages.deltaChatId.isNotNull(),
-      )
+      ..addColumns([messages.deltaAccountId, messages.deltaMsgId, count])
+      ..where(messages.deltaMsgId.isNotNull())
       ..groupBy([
         messages.deltaAccountId,
-        messages.deltaChatId,
         messages.deltaMsgId,
       ], having: count.isBiggerThanValue(1));
     final groups = await duplicateGroups.get();
     var removed = 0;
+    final affectedChatJids = <String>{};
     for (final group in groups) {
-      removed += await _deleteExtraDeltaLocatorRows(
+      removed += await _deleteExtraDeltaPairRows(
         deltaAccountId: group.read(messages.deltaAccountId),
-        deltaChatId: group.read(messages.deltaChatId),
         deltaMsgId: group.read(messages.deltaMsgId),
+        affectedChatJids: affectedChatJids,
       );
+    }
+    for (final chatJid in affectedChatJids) {
+      await repairChatSummaryPreservingTimestamp(chatJid);
     }
     return removed;
   }
 
-  Future<int> _deleteExtraDeltaLocatorRows({
+  Future<int> _deleteExtraDeltaPairRows({
     required int? deltaAccountId,
-    required int? deltaChatId,
     required int? deltaMsgId,
+    required Set<String> affectedChatJids,
   }) async {
-    if (deltaAccountId == null || deltaChatId == null || deltaMsgId == null) {
+    if (deltaAccountId == null || deltaMsgId == null) {
       return 0;
     }
     final rows =
@@ -7795,7 +8110,6 @@ WHERE jid = ?
               ..where(
                 (tbl) =>
                     tbl.deltaAccountId.equals(deltaAccountId) &
-                    tbl.deltaChatId.equals(deltaChatId) &
                     tbl.deltaMsgId.equals(deltaMsgId),
               )
               ..orderBy([
@@ -7803,14 +8117,85 @@ WHERE jid = ?
                 (tbl) => OrderingTerm.asc(tbl.stanzaID),
               ]))
             .get();
+    if (rows.length < 2) {
+      return 0;
+    }
+    final keeper = await _preferredDeltaPairRow(rows);
     var removed = 0;
-    for (final extra in rows.skip(1)) {
-      await (delete(
-        messages,
-      )..where((tbl) => tbl.stanzaID.equals(extra.stanzaID))).go();
+    for (final row in rows) {
+      affectedChatJids.add(row.chatJid);
+    }
+    for (final extra in rows) {
+      if (extra.stanzaID == keeper.stanzaID) {
+        continue;
+      }
+      if (extra.chatJid != keeper.chatJid) {
+        await _migrateMembershipChatJid(
+          message: extra,
+          fromChatJid: extra.chatJid,
+          toChatJid: keeper.chatJid,
+        );
+      } else {
+        final keeperReference = keeper.originID ?? keeper.stanzaID;
+        await rebindMessageCollectionMembershipReferences(
+          chatJid: keeper.chatJid,
+          oldReferenceId: extra.stanzaID,
+          newReferenceId: keeperReference,
+        );
+      }
+      await _migratePinsToKeeper(extra: extra, keeper: keeper);
+      await _deleteMessageRowWithDependents(extra);
       removed++;
     }
     return removed;
+  }
+
+  Future<Message> _preferredDeltaPairRow(List<Message> rows) async {
+    for (final row in rows.reversed) {
+      final deltaChatId = row.deltaChatId;
+      if (deltaChatId == null) {
+        continue;
+      }
+      final mapped = await _emailChatAccountJid(
+        deltaAccountId: row.deltaAccountId,
+        deltaChatId: deltaChatId,
+      );
+      if (mapped != null && mapped == row.chatJid) {
+        return row;
+      }
+    }
+    final chatJids = rows.map((row) => row.chatJid).toSet();
+    return chatJids.length > 1 ? rows.last : rows.first;
+  }
+
+  Future<String?> _emailChatAccountJid({
+    required int deltaAccountId,
+    required int deltaChatId,
+  }) async {
+    final query = select(emailChatAccounts)
+      ..where(
+        (tbl) =>
+            tbl.deltaAccountId.equals(deltaAccountId) &
+            tbl.deltaChatId.equals(deltaChatId),
+      )
+      ..limit(1);
+    final row = await query.getSingleOrNull();
+    return row?.chatJid;
+  }
+
+  Future<void> _deleteMessageRowWithDependents(Message extra) async {
+    await reactionsAccessor.deleteByMessage(extra.stanzaID);
+    await reactionsAccessor.deleteStatesByMessage(extra.stanzaID);
+    final rowId = extra.id?.trim();
+    if (rowId != null && rowId.isNotEmpty) {
+      final metadataIds = await deleteMessageAttachments(rowId);
+      for (final metadataId in metadataIds) {
+        await _deleteFileMetadataIfOrphaned(metadataId);
+      }
+    }
+    await (delete(
+      messages,
+    )..where((tbl) => tbl.stanzaID.equals(extra.stanzaID))).go();
   }
 
   Future<void> migrateMessageIdentityToLadder() async {

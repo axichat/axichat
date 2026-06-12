@@ -706,6 +706,8 @@ class EmailService {
       'EmailService.flushQueuedNotifications';
   static const String _deltaQueueOperationNameSyncContactsFromCore =
       'EmailService.syncContactsFromCore';
+  static const String _deltaQueueOperationNameRuntimeRestartRecovery =
+      'EmailService.runtimeRestartRecovery';
 
   EmailService({
     required CredentialStore credentialStore,
@@ -885,6 +887,24 @@ class EmailService {
     transport.updateEmailEncryptionBetaSettings(
       _emailEncryptionBetaEnabledByAddress,
     );
+    transport.onRuntimeRestarted = _scheduleRuntimeRestartRecovery;
+  }
+
+  void _scheduleRuntimeRestartRecovery() {
+    _enqueueDeltaOperation(
+      _recoverAfterRuntimeRestart,
+      operationName: _deltaQueueOperationNameRuntimeRestartRecovery,
+    );
+  }
+
+  Future<void> _recoverAfterRuntimeRestart() async {
+    await _refreshChatlistSnapshotOnMain();
+    final accountIds = await _deltaAccountIdsForScope(null);
+    for (final accountId in accountIds) {
+      await _deltaConsumerForAccount(
+        accountId,
+      ).recoverOutgoingMessageStatuses();
+    }
   }
 
   Future<EmailEncryptionAccountInfo?> activeEncryptionAccountInfo() async {
@@ -2688,11 +2708,7 @@ class EmailService {
     required int chatId,
     required String quotingStanzaId,
   }) async {
-    final row = await db.getMessageByDeltaId(
-      msgId,
-      deltaAccountId: accountId,
-      deltaChatId: chatId,
-    );
+    final row = await db.getMessageByDeltaId(msgId, deltaAccountId: accountId);
     if (row == null || row.quoting != null) {
       return;
     }
@@ -2827,7 +2843,6 @@ class EmailService {
       final message = await db.getMessageByDeltaId(
         msgId,
         deltaAccountId: binding.deltaAccountId,
-        deltaChatId: chatId,
       );
       if (message != null && !message.isForwarded) {
         await db.updateMessage(
@@ -2952,7 +2967,6 @@ class EmailService {
       final message = await db.getMessageByDeltaId(
         msgId,
         deltaAccountId: binding.deltaAccountId,
-        deltaChatId: chatId,
       );
       if (message != null && !message.isForwarded) {
         await db.updateMessage(
@@ -4785,24 +4799,19 @@ class EmailService {
     XmppDatabase db,
     _DeltaChatMessageId id,
   ) async {
-    final scoped = await db.getMessageByDeltaId(
+    final stored = await db.getMessageByDeltaId(
       id.msgId,
       deltaAccountId: id.accountId,
-      deltaChatId: id.chatId,
     );
-    if (scoped != null && _storedDeltaLocatorMatches(scoped, id)) {
-      return scoped;
+    if (stored != null && _storedDeltaLocatorMatches(stored, id)) {
+      return stored;
     }
     return null;
   }
 
   bool _storedDeltaLocatorMatches(Message message, _DeltaChatMessageId id) {
-    if (message.deltaMsgId != id.msgId ||
-        message.deltaAccountId != id.accountId) {
-      return false;
-    }
-    final deltaChatId = message.deltaChatId;
-    return id.chatId == null || deltaChatId == null || deltaChatId == id.chatId;
+    return message.deltaMsgId == id.msgId &&
+        message.deltaAccountId == id.accountId;
   }
 
   String _notificationThreadKey(String chatJid) {
@@ -7976,219 +7985,6 @@ class EmailService {
   }
 
   /// Forwards messages to another chat using core.
-  Future<bool> forwardMessages({
-    required List<Message> messages,
-    required Chat toChat,
-  }) async {
-    await _ensureReady();
-    final account = await _accountBindingForChat(toChat);
-    final toChatId = await _ensureDeltaChatIdForAccount(
-      chat: toChat,
-      account: account,
-    );
-    final forwardedMessages = messages
-        .where(
-          (message) =>
-              message.deltaMsgId != null &&
-              message.deltaAccountId == account.deltaAccountId,
-        )
-        .toList(growable: false);
-    final deltaIds = forwardedMessages
-        .map((message) => message.deltaMsgId!)
-        .toList(growable: false);
-    if (deltaIds.isEmpty) {
-      return false;
-    }
-    final existingMessageIds = await _transport.getChatMessageIds(
-      chatId: toChatId,
-      accountId: account.deltaAccountId,
-    );
-    final forwarded = await _transport.forwardMessages(
-      messageIds: deltaIds,
-      toChatId: toChatId,
-      accountId: account.deltaAccountId,
-    );
-    if (!forwarded) {
-      return false;
-    }
-    await _applyNativeForwardMetadata(
-      sourceMessages: forwardedMessages,
-      deltaAccountId: account.deltaAccountId,
-      deltaChatId: toChatId,
-      existingMessageIds: existingMessageIds.toSet(),
-    );
-    return true;
-  }
-
-  Future<void> _applyNativeForwardMetadata({
-    required List<Message> sourceMessages,
-    required int deltaAccountId,
-    required int deltaChatId,
-    required Set<int> existingMessageIds,
-  }) async {
-    if (sourceMessages.isEmpty) {
-      return;
-    }
-    final db = await _databaseBuilder();
-    final unresolvedSourceIndexes = <int>{
-      for (var index = 0; index < sourceMessages.length; index += 1) index,
-    };
-    final appliedCandidateIds = <int>{};
-    const maxAttempts = 5;
-    const retryDelay = Duration(milliseconds: 50);
-    for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
-      final candidateIds =
-          (await _transport.getChatMessageIds(
-                chatId: deltaChatId,
-                accountId: deltaAccountId,
-              ))
-              .where(
-                (messageId) =>
-                    messageId > _deltaMessageIdUnset &&
-                    !existingMessageIds.contains(messageId) &&
-                    !appliedCandidateIds.contains(messageId),
-              )
-              .toList()
-            ..sort();
-      if (candidateIds.isEmpty) {
-        if (attempt + 1 < maxAttempts) {
-          await Future<void>.delayed(retryDelay);
-        }
-        continue;
-      }
-      await _hydrateMessagesOnMain(candidateIds, accountId: deltaAccountId);
-      final candidateMessages = <Message>[];
-      for (final candidateId in candidateIds) {
-        final deltaMessage = await _transport.getMessage(
-          candidateId,
-          accountId: deltaAccountId,
-        );
-        if (deltaMessage?.isOutgoing != true) {
-          continue;
-        }
-        final stored = await db.getMessageByDeltaId(
-          candidateId,
-          deltaAccountId: deltaAccountId,
-          deltaChatId: deltaChatId,
-        );
-        if (stored == null) {
-          continue;
-        }
-        candidateMessages.add(stored);
-      }
-      if (candidateMessages.isEmpty) {
-        if (attempt + 1 < maxAttempts) {
-          await Future<void>.delayed(retryDelay);
-        }
-        continue;
-      }
-      final matches = _matchNativeForwardSources(
-        sourceMessages: sourceMessages,
-        unresolvedSourceIndexes: unresolvedSourceIndexes,
-        candidateMessages: candidateMessages,
-      );
-      if (matches.isEmpty) {
-        if (attempt + 1 < maxAttempts) {
-          await Future<void>.delayed(retryDelay);
-        }
-        continue;
-      }
-      for (final entry in matches.entries) {
-        final sourceMessage = sourceMessages[entry.key];
-        final stored = entry.value;
-        final updated = stored.copyWith(
-          pseudoMessageData: stored.pseudoMessageDataWithForwarded(
-            forwardedFromJid: sourceMessage.senderJid,
-            forwardedOriginalSenderLabel: sourceMessage
-                .resolveForwardedOriginalSenderLabel(),
-          ),
-        );
-        if (updated != stored) {
-          await db.updateMessage(updated);
-        }
-        final candidateId = stored.deltaMsgId;
-        if (candidateId != null) {
-          appliedCandidateIds.add(candidateId);
-        }
-        unresolvedSourceIndexes.remove(entry.key);
-      }
-      if (unresolvedSourceIndexes.isEmpty) {
-        return;
-      }
-      if (attempt + 1 < maxAttempts) {
-        await Future<void>.delayed(retryDelay);
-      }
-    }
-    _log.fine(
-      'Native forwarded email metadata was only applied to '
-      '${sourceMessages.length - unresolvedSourceIndexes.length}/'
-      '${sourceMessages.length} messages for '
-      'chatId=$deltaChatId accountId=$deltaAccountId.',
-    );
-  }
-
-  Map<int, Message> _matchNativeForwardSources({
-    required List<Message> sourceMessages,
-    required Set<int> unresolvedSourceIndexes,
-    required List<Message> candidateMessages,
-  }) {
-    final candidatesByKey =
-        <({String body, bool hasAttachment}), List<Message>>{};
-    for (final candidate in candidateMessages) {
-      final key = _nativeForwardMatchKey(candidate);
-      candidatesByKey.putIfAbsent(key, () => <Message>[]).add(candidate);
-    }
-    final matches = <int, Message>{};
-    final sortedSourceIndexes = unresolvedSourceIndexes.toList()..sort();
-    for (final sourceIndex in sortedSourceIndexes) {
-      final sourceMessage = sourceMessages[sourceIndex];
-      final key = _nativeForwardMatchKey(sourceMessage);
-      final candidates = candidatesByKey[key];
-      if (candidates == null || candidates.isEmpty) {
-        continue;
-      }
-      matches[sourceIndex] = candidates.removeAt(
-        _preferredNativeForwardCandidateIndex(
-          sourceMessage: sourceMessage,
-          candidateMessages: candidates,
-        ),
-      );
-    }
-    return matches;
-  }
-
-  int _preferredNativeForwardCandidateIndex({
-    required Message sourceMessage,
-    required List<Message> candidateMessages,
-  }) {
-    final sourceSubject = sourceMessage.subject?.trim() ?? '';
-    if (sourceSubject.isEmpty) {
-      final emptySubjectIndex = candidateMessages.indexWhere(
-        (candidate) => (candidate.subject?.trim() ?? '').isEmpty,
-      );
-      return emptySubjectIndex == -1 ? 0 : emptySubjectIndex;
-    }
-    final exactSubjectIndex = candidateMessages.indexWhere(
-      (candidate) => (candidate.subject?.trim() ?? '') == sourceSubject,
-    );
-    if (exactSubjectIndex != -1) {
-      return exactSubjectIndex;
-    }
-    final emptySubjectIndex = candidateMessages.indexWhere(
-      (candidate) => (candidate.subject?.trim() ?? '').isEmpty,
-    );
-    return emptySubjectIndex == -1 ? 0 : emptySubjectIndex;
-  }
-
-  ({String body, bool hasAttachment}) _nativeForwardMatchKey(Message message) {
-    final normalizedBody = message.body?.trim() ?? '';
-    final fileMetadataId = message.fileMetadataID?.trim();
-    return (
-      body: normalizedBody,
-      hasAttachment: fileMetadataId != null && fileMetadataId.isNotEmpty,
-    );
-  }
-
   /// Searches messages using core search.
   ///
   /// Pass null for chat to search all chats.
@@ -8226,7 +8022,6 @@ class EmailService {
     final existing = await db.getMessagesByDeltaIds(
       deltaIdSet,
       deltaAccountId: deltaAccountId,
-      deltaChatId: chat == null ? null : chatId,
     );
     for (final message in existing) {
       final deltaId = message.deltaMsgId;
@@ -8243,7 +8038,6 @@ class EmailService {
       final hydrated = await db.getMessagesByDeltaIds(
         remainingIds,
         deltaAccountId: deltaAccountId,
-        deltaChatId: chat == null ? null : chatId,
       );
       for (final message in hydrated) {
         final deltaId = message.deltaMsgId;
@@ -8561,10 +8355,6 @@ class EmailService {
       return false;
     }
     if (deltaMessage == null) {
-      return false;
-    }
-    final deltaChatId = message.deltaChatId;
-    if (deltaChatId != null && deltaMessage.chatId != deltaChatId) {
       return false;
     }
     return true;

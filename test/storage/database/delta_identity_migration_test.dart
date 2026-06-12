@@ -251,11 +251,9 @@ void main() {
       await database.saveMessage(first);
       await database.saveMessage(duplicate);
 
-      final stored = await database.getMessagesByDeltaIds(
-        const [42],
-        deltaAccountId: 1,
-        deltaChatId: 7,
-      );
+      final stored = await database.getMessagesByDeltaIds(const [
+        42,
+      ], deltaAccountId: 1);
       expect(stored, hasLength(1));
       expect(stored.single.stanzaID, 'row-a');
       expect(await database.getMessageByStanzaID('row-b'), isNull);

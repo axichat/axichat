@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/database.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
@@ -113,6 +114,38 @@ WHERE message_id = 'stanza-1'
 '''),
         1,
       );
+      expect(await _indexColumns(database, 'messages_delta_locator'), [
+        'delta_account_id',
+        'delta_msg_id',
+      ]);
+      expect(await _indexIsUnique(database, 'messages_delta_locator'), isTrue);
+    } finally {
+      await database.close();
+    }
+  });
+
+  test('schema 63 repairs over-promoted email chat transports', () async {
+    final file = await _createSchema62OverpromotedTransportDatabase();
+    final database = XmppDrift(
+      file: file,
+      passphrase: '',
+      executor: NativeDatabase(file),
+    );
+
+    try {
+      expect(await _userVersion(database), database.schemaVersion);
+      expect(
+        (await database.getChat('legacy-orphan@example.com'))?.transport,
+        MessageTransport.email,
+      );
+      expect(
+        (await database.getChat('rostered@example.com'))?.transport,
+        MessageTransport.xmpp,
+      );
+      expect(
+        (await database.getChat('xmpp-evidence@example.com'))?.transport,
+        MessageTransport.xmpp,
+      );
     } finally {
       await database.close();
     }
@@ -143,6 +176,91 @@ Future<File> _createSchema39Database() async {
   return file;
 }
 
+Future<File> _createSchema62OverpromotedTransportDatabase() async {
+  final directory = await Directory.systemTemp.createTemp(
+    'axichat_schema62_transport_repair_test',
+  );
+  addTearDown(() async {
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+  });
+
+  final file = File('${directory.path}/schema62.axichat.drift');
+  final database = XmppDrift(
+    file: file,
+    passphrase: '',
+    executor: NativeDatabase(file),
+  );
+  try {
+    await _seedOverpromotedEmailChat(
+      database,
+      'legacy-orphan@example.com',
+      deltaChatId: 101,
+    );
+    await _seedOverpromotedEmailChat(
+      database,
+      'rostered@example.com',
+      deltaChatId: 102,
+      withRoster: true,
+    );
+    await _seedOverpromotedEmailChat(
+      database,
+      'xmpp-evidence@example.com',
+      deltaChatId: 103,
+      withXmppEvidence: true,
+    );
+    await database.customStatement('PRAGMA user_version = 62');
+    expect(await _userVersion(database), 62);
+  } finally {
+    await database.close();
+  }
+  return file;
+}
+
+Future<void> _seedOverpromotedEmailChat(
+  XmppDrift database,
+  String jid, {
+  required int deltaChatId,
+  bool withRoster = false,
+  bool withXmppEvidence = false,
+}) async {
+  await database.createChat(
+    Chat(
+      jid: jid,
+      title: jid,
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+      transport: MessageTransport.email,
+      deltaChatId: deltaChatId,
+      emailAddress: jid,
+    ),
+  );
+  await database.upsertEmailChatAccount(
+    chatJid: jid,
+    deltaAccountId: 0,
+    deltaChatId: deltaChatId,
+  );
+  await database.saveMessage(
+    Message(
+      stanzaID: 'legacy-orphan-$jid',
+      senderJid: jid,
+      chatJid: jid,
+      timestamp: DateTime.utc(2026, 1, 2),
+      body: 'legacy orphan',
+      encryptionProtocol: withXmppEvidence
+          ? EncryptionProtocol.omemo
+          : EncryptionProtocol.none,
+    ),
+  );
+  if (withRoster) {
+    await database.saveRosterItemOnly(RosterItem.fromJid(jid));
+  }
+  await database.updateChat(
+    (await database.getChat(jid))!.copyWith(transport: MessageTransport.xmpp),
+  );
+}
+
 Future<int> _userVersion(XmppDrift database) async {
   final row = await database.customSelect('PRAGMA user_version').getSingle();
   return row.read<int>('user_version');
@@ -160,6 +278,27 @@ Future<Set<String>> _columnNames(XmppDrift database, String tableName) async {
       .customSelect('PRAGMA table_info("$tableName")')
       .get();
   return rows.map((row) => row.read<String>('name')).toSet();
+}
+
+Future<List<String>> _indexColumns(XmppDrift database, String indexName) async {
+  final rows = await database
+      .customSelect('PRAGMA index_info("$indexName")')
+      .get();
+  final ordered = rows.toList()
+    ..sort((a, b) => a.read<int>('seqno').compareTo(b.read<int>('seqno')));
+  return ordered.map((row) => row.read<String>('name')).toList();
+}
+
+Future<bool> _indexIsUnique(XmppDrift database, String indexName) async {
+  final rows = await database
+      .customSelect("PRAGMA index_list('messages')")
+      .get();
+  for (final row in rows) {
+    if (row.read<String>('name') == indexName) {
+      return row.read<int>('unique') == 1;
+    }
+  }
+  return false;
 }
 
 Future<int> _rowCount(XmppDrift database, String sql) async {
@@ -323,6 +462,15 @@ VALUES(
   'peer@example.com',
   'hello from schema 39',
   '2026-01-02T03:04:05.000Z'
+);
+INSERT INTO messages(id, stanza_i_d, sender_jid, chat_jid, body, timestamp)
+VALUES(
+  'mail-orphan-row',
+  'mail-orphan',
+  'mail@example.com',
+  'mail@example.com',
+  'legacy mail orphan',
+  '2026-01-03T04:04:05.000Z'
 );
 INSERT INTO pinned_messages(message_stanza_id, chat_jid, pinned_at, active)
 VALUES(

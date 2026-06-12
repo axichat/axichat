@@ -198,6 +198,8 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
   bool get isIoRunning;
   bool get persistsAppStateInternally;
 
+  abstract void Function()? onRuntimeRestarted;
+
   void updateDatabaseOperationTracker(
     Future<T> Function<T>(Future<T> Function() operation)? tracker,
   );
@@ -324,11 +326,6 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
   Future<DeltaChat?> getChat(int chatId, {int? accountId});
   Future<List<int>> getFreshMessageIds({int? accountId});
   Future<bool> deleteMessages(List<int> messageIds, {int? accountId});
-  Future<bool> forwardMessages({
-    required List<int> messageIds,
-    required int toChatId,
-    int? accountId,
-  });
   Future<List<int>> searchMessages({
     required int chatId,
     required String query,
@@ -432,6 +429,9 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   final Map<int, _DeltaAccountSession> _accountSessions = {};
   Map<String, bool> _emailEncryptionBetaEnabledByAddress =
       const <String, bool>{};
+
+  @override
+  void Function()? onRuntimeRestarted;
 
   @override
   void updateDatabaseOperationTracker(
@@ -1099,6 +1099,9 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     _DeltaBackgroundFetchEventSubscriptions subscriptions,
   ) async {
     await _awaitActiveEventOperations();
+    if (_ioRunning) {
+      return;
+    }
     if (!subscriptions.hadAccountsSubscription) {
       await _cancelAccountsEventSubscription();
     }
@@ -2264,11 +2267,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     required int chatId,
     required String quotingStanzaId,
   }) async {
-    final row = await db.getMessageByDeltaId(
-      msgId,
-      deltaAccountId: accountId,
-      deltaChatId: chatId,
-    );
+    final row = await db.getMessageByDeltaId(msgId, deltaAccountId: accountId);
     if (row == null || row.quoting != null) {
       return;
     }
@@ -2717,21 +2716,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   ///
   /// Returns true if the operation succeeded.
   @override
-  Future<bool> forwardMessages({
-    required List<int> messageIds,
-    required int toChatId,
-    int? accountId,
-  }) async {
-    if (messageIds.isEmpty) return true;
-    await _ensureContextReady();
-    final session = await _ensureSession(accountId: accountId);
-    final context = session?.context;
-    if (context == null) {
-      return false;
-    }
-    return context.forwardMessages(messageIds: messageIds, toChatId: toChatId);
-  }
-
   /// Searches messages in a chat.
   ///
   /// Pass chatId=0 to search all chats.

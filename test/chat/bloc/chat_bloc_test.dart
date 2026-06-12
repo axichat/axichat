@@ -3079,6 +3079,91 @@ void main() {
   );
 
   test(
+    'ingest-shaped multipart email forwards whole group from every bubble',
+    () async {
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 7,
+        emailAddress: initialChat.jid,
+        transport: MessageTransport.email,
+      );
+      final emailTimestamp = DateTime.utc(2026, 1, 2, 3, 4, 5);
+      final messages = [
+        Message(
+          stanzaID: 'row-body',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          body: 'Vacation photos attached',
+          originID: 'Shared@example.com',
+          timestamp: emailTimestamp,
+          deltaChatId: 7,
+          deltaMsgId: 11,
+        ),
+        Message(
+          stanzaID: 'row-photo',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          originID: 'Shared@example.com',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'dc-file-12',
+          deltaChatId: 7,
+          deltaMsgId: 12,
+        ),
+        Message(
+          stanzaID: 'row-notes',
+          senderJid: emailChat.jid,
+          chatJid: emailChat.jid,
+          originID: 'Shared@example.com',
+          timestamp: emailTimestamp,
+          fileMetadataID: 'dc-file-13',
+          deltaChatId: 7,
+          deltaMsgId: 13,
+        ),
+      ];
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      messageStreamController.add(messages);
+      await _pumpBloc();
+
+      for (final stanzaId in const ['row-body', 'row-photo', 'row-notes']) {
+        final pressed = bloc.state.items.singleWhere(
+          (message) => message.stanzaID == stanzaId,
+        );
+
+        bloc.add(ChatMessageForwardRequested(message: pressed));
+        await _pumpBloc();
+
+        final draft = bloc.state.pendingForwardDraft;
+        expect(draft, isNotNull);
+        expect(draft!.attachmentMetadataIds, ['dc-file-12', 'dc-file-13']);
+        expect(draft.sources.single.sourceMessageId, 'row-body');
+        expect(
+          draft.sources.single.originalPlainTextBody,
+          'Vacation photos attached',
+        );
+        expect(draft.sources.single.attachmentMetadataIds, [
+          'dc-file-12',
+          'dc-file-13',
+        ]);
+
+        bloc.add(const ChatForwardDraftConsumed());
+        await _pumpBloc();
+      }
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'split RFC email reply clears file when body is on attachment row',
     () async {
       final emailChat = initialChat.copyWith(
