@@ -291,6 +291,9 @@ void main() {
       () => database.getEmailMessagesWithDeltaAccountNotIn(any()),
     ).thenAnswer((_) async => const <Message>[]);
     when(
+      () => database.getEmailChatAccountsForAccount(any()),
+    ).thenAnswer((_) async => const <EmailChatAccountData>[]);
+    when(
       () => transport.getChatlist(
         flags: any(named: 'flags'),
         accountId: any(named: 'accountId'),
@@ -529,6 +532,16 @@ void main() {
         deltaChatId: any(named: 'deltaChatId'),
       ),
     ).thenAnswer((_) async {});
+    when(
+      () => database.repairChatSummaryPreservingTimestamp(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.countUnreadMessagesForChat(
+        any(),
+        selfJid: any(named: 'selfJid'),
+        emailSelfJid: any(named: 'emailSelfJid'),
+      ),
+    ).thenAnswer((_) async => 0);
     when(() => database.updateChat(any())).thenAnswer((_) async {});
     when(() => database.updateMessage(any())).thenAnswer((_) async {});
     when(
@@ -5292,6 +5305,98 @@ void main() {
         expect(service.syncState.status, EmailSyncStatus.ready);
         verify(() => transport.performBackgroundFetch(any())).called(1);
         _verifyRuntimeChatlistReads(transport, 2);
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
+  test(
+    'summaries-only bootstrap does not mark full bootstrap complete',
+    () async {
+      final storedCredentials = <String, String>{};
+      when(() => credentialStore.read(key: any(named: 'key'))).thenAnswer((
+        invocation,
+      ) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        return storedCredentials[key.value];
+      });
+      when(
+        () => credentialStore.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((invocation) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        final value = invocation.namedArguments[#value] as String;
+        storedCredentials[key.value] = value;
+        return true;
+      });
+      when(() => database.createChat(any())).thenAnswer((_) async {});
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+        storedCredentials.clear();
+        clearInteractions(credentialStore);
+        clearInteractions(transport);
+        when(() => transport.connectivity()).thenAnswer((_) async => 3000);
+        when(
+          () => transport.getChatlist(
+            flags: 0,
+            accountId: any(named: 'accountId'),
+          ),
+        ).thenAnswer(
+          (_) async => const [
+            DeltaChatlistEntry(chatId: 91, msgId: DeltaMessageId.dayMarker),
+          ],
+        );
+        when(
+          () => transport.getChatlist(
+            flags: DeltaChatlistFlags.archivedOnly,
+            accountId: any(named: 'accountId'),
+          ),
+        ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+        when(
+          () => transport.getChat(91, accountId: any(named: 'accountId')),
+        ).thenAnswer(
+          (_) async => const DeltaChat(
+            id: 91,
+            name: 'Peer',
+            contactAddress: 'peer@example.com',
+          ),
+        );
+
+        emitConnectivityChanged();
+        await untilCalled(() => transport.performBackgroundFetch(any()));
+        await pumpMicrotasks();
+
+        verifyNever(
+          () => transport.getChatMessageIds(
+            chatId: 91,
+            beforeMessageId: any(named: 'beforeMessageId'),
+            accountId: any(named: 'accountId'),
+          ),
+        );
+        verifyNever(
+          () => credentialStore.write(
+            key: any(named: 'key'),
+            value: true.toString(),
+          ),
+        );
       } finally {
         await service.shutdown(jid: 'bob@axi.im');
       }

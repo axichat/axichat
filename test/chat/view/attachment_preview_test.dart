@@ -335,6 +335,80 @@ void main() {
     },
   );
 
+  testWidgets('local image validation preserves preview extent', (
+    tester,
+  ) async {
+    final tempDir = Directory.systemTemp.createTempSync(
+      'axichat-image-validation-extent-test-',
+    );
+    addTearDown(() {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+    final image = image_tools.Image(width: 2, height: 1, numChannels: 4);
+    image_tools.fill(image, color: image_tools.ColorRgba8(255, 0, 0, 255));
+    final pngBytes = image_tools.encodePng(image, level: 1);
+    final file = File('${tempDir.path}/image.png')..writeAsBytesSync(pngBytes);
+    final metadata = FileMetadataData(
+      id: 'stable-image-extent',
+      filename: 'image.png',
+      path: file.path,
+      mimeType: 'image/png',
+      sizeBytes: pngBytes.length,
+      width: 1200,
+      height: 600,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        ChatAttachmentPreview(
+          stanzaId: 'stable-image-extent',
+          metadata: metadata,
+          allowed: true,
+        ),
+      ),
+    );
+    final pendingSize = tester.getSize(find.byType(ChatAttachmentPreview));
+    await _pumpUntil(tester, () => find.byType(Image).evaluate().isNotEmpty);
+    final loadedSize = tester.getSize(find.byType(ChatAttachmentPreview));
+
+    expect(pendingSize.height, moreOrLessEquals(loadedSize.height));
+
+    await tester.pumpWidget(_wrap(const SizedBox.shrink()));
+    await tester.pump();
+    await tester.pumpWidget(
+      _wrap(
+        ChatAttachmentPreview(
+          stanzaId: 'stable-image-extent',
+          metadata: metadata,
+          allowed: true,
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byType(ChatAttachmentPreview)).height,
+      moreOrLessEquals(loadedSize.height),
+    );
+  });
+
+  testWidgets('pending metadata reserves media preview extent', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ChatAttachmentPreview(
+          stanzaId: 'pending-metadata',
+          metadata: null,
+          metadataPending: true,
+          allowed: true,
+        ),
+      ),
+    );
+
+    final pendingSize = tester.getSize(find.byType(ChatAttachmentPreview));
+    expect(pendingSize.height, greaterThan(axiSizing.attachmentPreviewExtent));
+  });
+
   testWidgets('local image body tap is handled by parent message wrapper', (
     tester,
   ) async {

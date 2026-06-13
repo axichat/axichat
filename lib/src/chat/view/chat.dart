@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
+import 'package:axichat/src/common/email_html_logging.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
 import 'package:axichat/src/avatar/view/avatar_badge_overlay.dart';
 import 'package:axichat/src/app.dart';
@@ -122,6 +123,8 @@ import 'package:flutter/rendering.dart'
         RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:html/dom.dart' as html_dom;
+import 'package:html/parser.dart' as html_parser;
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -1792,6 +1795,7 @@ class _ChatState extends State<Chat> {
     required bool isSingleSelection,
     required bool autoLoadEmailImages,
     required bool hasRemoteHtmlImages,
+    required String? rawHtmlBody,
     required String normalizedHtmlBody,
     required String? normalizedHtmlText,
     required String? messageDatabaseId,
@@ -1819,11 +1823,22 @@ class _ChatState extends State<Chat> {
         ? normalizedHtmlText
         : null;
     final shouldRenderHtmlBody =
+        !emailPlainTextBubbleExperiment &&
         preparedHtmlBody.trim().isNotEmpty &&
         _emailHtmlHasVisibleTimelineContent(
           normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: normalizedHtmlText,
         );
+    if (preparedHtmlBody.trim().isNotEmpty) {
+      logEmailHtmlStages(
+        contentKey: bubbleContentKey,
+        stages: {
+          'raw': rawHtmlBody,
+          'normalized': normalizedHtmlBody,
+          'prepared-flutter-html': preparedHtmlBody,
+        },
+      );
+    }
     final shouldUseSelectedInlineEmailWebView =
         isSingleSelection && shouldRenderHtmlBody;
     final shouldShowImageGallery = hasRemoteHtmlImages && shouldRenderHtmlBody;
@@ -1866,6 +1881,8 @@ class _ChatState extends State<Chat> {
                 key: ValueKey<String>('${bubbleContentKey}_webview'),
                 html: normalizedHtmlBody,
                 loadingHtml: preparedHtmlBody,
+                rawHtml: rawHtmlBody,
+                diagnosticContentKey: '${bubbleContentKey}_selected_webview',
                 textStyle: baseTextStyle,
                 backgroundColor: bubbleColor,
                 textColor: textColor,
@@ -1962,6 +1979,7 @@ class _ChatState extends State<Chat> {
           isSingleSelection: isSingleSelection,
           autoLoadEmailImages: autoLoadEmailImages,
           hasRemoteHtmlImages: hasRemoteHtmlImages,
+          rawHtmlBody: block.resolvedHtmlBody,
           normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: visibleSanitizedHtmlText,
           messageDatabaseId: block.sourceMessageDatabaseId,
@@ -2418,6 +2436,7 @@ class _ChatState extends State<Chat> {
         isSingleSelection: isSingleSelection,
         autoLoadEmailImages: autoLoadEmailImages,
         hasRemoteHtmlImages: hasRemoteHtmlImages,
+        rawHtmlBody: resolvedHtmlBody,
         normalizedHtmlBody: normalizedHtmlBody,
         normalizedHtmlText: visibleSanitizedHtmlText,
         messageDatabaseId: messageModel.id,

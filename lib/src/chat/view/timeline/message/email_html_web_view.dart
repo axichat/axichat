@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/email_html_logging.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
@@ -72,6 +73,16 @@ String _inlineJsonString(String value) => jsonEncode(value)
     .replaceAll('<', r'\u003C')
     .replaceAll('>', r'\u003E')
     .replaceAll('&', r'\u0026');
+
+String _emailRenderedDomExpression() => '''
+(() => {
+  const root = document.documentElement;
+  return root ? root.outerHTML : '';
+})()
+''';
+
+@visibleForTesting
+String emailRenderedDomExpressionForTesting() => _emailRenderedDomExpression();
 
 String? _safeEmailLinkUrl(String value) {
   final report = assessLinkSafety(raw: value, kind: LinkSafetyKind.message);
@@ -1284,6 +1295,9 @@ class EmailHtmlWebView extends StatefulWidget {
     this.simplifyLayout = false,
     this.useHybridComposition = true,
     this.contentMode = EmailHtmlContentMode.safe,
+    this.diagnosticContentKey,
+    this.diagnosticRawHtml,
+    this.diagnosticFlutterHtml,
   }) : _mode = _EmailHtmlWebViewMode.embedded,
        maxHeight = null;
 
@@ -1301,6 +1315,9 @@ class EmailHtmlWebView extends StatefulWidget {
     this.simplifyLayout = false,
     this.useHybridComposition = true,
     this.contentMode = EmailHtmlContentMode.safe,
+    this.diagnosticContentKey,
+    this.diagnosticRawHtml,
+    this.diagnosticFlutterHtml,
   }) : _mode = _EmailHtmlWebViewMode.scrollable;
 
   final String html;
@@ -1315,6 +1332,9 @@ class EmailHtmlWebView extends StatefulWidget {
   final bool simplifyLayout;
   final bool useHybridComposition;
   final EmailHtmlContentMode contentMode;
+  final Object? diagnosticContentKey;
+  final String? diagnosticRawHtml;
+  final String? diagnosticFlutterHtml;
   final _EmailHtmlWebViewMode _mode;
 
   bool get _usesInternalScroll => _mode == _EmailHtmlWebViewMode.scrollable;
@@ -1419,6 +1439,56 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       if (details != null) 'details=$details',
     ];
     debugPrint('[EmailHtmlWebView] ${fields.join(' ')}');
+  }
+
+  Object get _diagnosticContentKey => (
+    contentKey: widget.diagnosticContentKey ?? widget.html.hashCode,
+    mode: widget._mode.name,
+    contentMode: widget.contentMode.name,
+    remoteImages: widget.allowRemoteImages,
+  );
+
+  void _logPreparedHtmlStages(String preparedHtmlData) {
+    logEmailHtmlStages(
+      contentKey: _diagnosticContentKey,
+      stages: {
+        if (widget.diagnosticRawHtml != null) 'raw': widget.diagnosticRawHtml,
+        'webview-input': widget.html,
+        if (widget.diagnosticFlutterHtml != null)
+          'prepared-flutter-html': widget.diagnosticFlutterHtml,
+        'webview-prepared-shell': preparedHtmlData,
+      },
+    );
+  }
+
+  Future<void> _logRenderedDom(
+    InAppWebViewController controller, {
+    required int webViewGeneration,
+  }) async {
+    if (!emailHtmlLoggingEnabled ||
+        !_canUseController(controller, webViewGeneration)) {
+      return;
+    }
+    try {
+      final result = await controller.evaluateJavascript(
+        source: _emailRenderedDomExpression(),
+      );
+      if (!_canUseController(controller, webViewGeneration) ||
+          result is! String ||
+          result.trim().isEmpty) {
+        return;
+      }
+      logEmailHtmlStages(
+        contentKey: _diagnosticContentKey,
+        stages: {'webview-rendered-dom': result},
+      );
+    } on Exception catch (error) {
+      _traceMeasurement(
+        'rendered-dom-log-exception',
+        webViewGeneration: webViewGeneration,
+        details: error.runtimeType.toString(),
+      );
+    }
   }
 
   double get _resolvedHeight {
@@ -1631,6 +1701,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       return;
     }
     _preparedHtmlData = preparedHtmlData;
+    _logPreparedHtmlStages(preparedHtmlData);
     _traceMeasurement(
       'prepare-applied',
       elapsedMs: prepareTimer.elapsedMilliseconds,
@@ -1981,6 +2052,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       controller: controller,
       webViewGeneration: webViewGeneration,
     );
+    await _logRenderedDom(controller, webViewGeneration: webViewGeneration);
   }
 
   void _scheduleLoadCompletionFallback(

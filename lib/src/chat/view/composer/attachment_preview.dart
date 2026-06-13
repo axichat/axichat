@@ -505,11 +505,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             final metadata = widget.metadata;
             if (metadata == null) {
               if (widget.metadataPending) {
-                return _AttachmentSurface(
-                  child: Center(
-                    child: AxiProgressIndicator(color: colors.primary),
-                  ),
-                );
+                return _AttachmentPendingPreviewFrame(color: colors.primary);
               }
               return _AttachmentError(message: l10n.chatAttachmentUnavailable);
             }
@@ -869,8 +865,10 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       future: previewAllowedFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return _AttachmentSurface(
-            child: Center(child: AxiProgressIndicator(color: colors.primary)),
+          return _ImageAttachmentFrame(
+            metadata: metadata,
+            builder: (context, {required aspectRatio, required targetWidth}) =>
+                Center(child: AxiProgressIndicator(color: colors.primary)),
           );
         }
         final allowed = snapshot.data ?? false;
@@ -886,15 +884,9 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
             detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
           );
         }
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final targetWidth = _resolveAttachmentWidth(
-              constraints,
-              context,
-              intrinsicWidth: widget.metadata.width?.toDouble(),
-              minimumWidth: _attachmentMetadataOverlayMinWidth(context),
-            );
-            final aspectRatio = _aspectRatio(metadata);
+        return _ImageAttachmentFrame(
+          metadata: metadata,
+          builder: (context, {required aspectRatio, required targetWidth}) {
             final cacheDimensions = _attachmentImageCacheDimensions(
               targetWidth: targetWidth,
               aspectRatio: aspectRatio,
@@ -902,55 +894,37 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
               intrinsicWidth: metadata.width,
               intrinsicHeight: metadata.height,
             );
-            return Align(
-              alignment: Alignment.centerLeft,
-              widthFactor: 1,
-              heightFactor: 1,
-              child: SizedBox(
-                width: targetWidth,
-                child: _AttachmentSurface(
-                  padding: EdgeInsets.zero,
-                  backgroundColor: Colors.transparent,
-                  borderSide: BorderSide.none,
-                  child: AspectRatio(
-                    aspectRatio: aspectRatio,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.file(
-                          previewFile,
-                          fit: BoxFit.cover,
-                          cacheWidth: cacheDimensions?.width,
-                          cacheHeight: cacheDimensions?.height,
-                          errorBuilder: (_, _, _) => const Center(
-                            child: Icon(Icons.broken_image_outlined),
-                          ),
-                        ),
-                        _AttachmentMetadataVignette(
-                          metadata: metadata,
-                          hasLocalFile: hasLocalFile,
-                          details: widget.messageDetails,
-                          detailOpticalOffsetFactors:
-                              widget.detailOpticalOffsetFactors,
-                          trailing: AxiIconButton.ghost(
-                            iconData: LucideIcons.eye,
-                            tooltip: context.l10n.chatAttachmentPreview,
-                            onPressed: () => _openImagePreview(
-                              context,
-                              file: previewFile,
-                              metadata: metadata,
-                              typeReport: widget.typeReport,
-                              messageDetails: widget.messageDetails,
-                              detailOpticalOffsetFactors:
-                                  widget.detailOpticalOffsetFactors,
-                            ),
-                          ),
-                        ),
-                      ],
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.file(
+                  previewFile,
+                  fit: BoxFit.cover,
+                  cacheWidth: cacheDimensions?.width,
+                  cacheHeight: cacheDimensions?.height,
+                  errorBuilder: (_, _, _) =>
+                      const Center(child: Icon(Icons.broken_image_outlined)),
+                ),
+                _AttachmentMetadataVignette(
+                  metadata: metadata,
+                  hasLocalFile: hasLocalFile,
+                  details: widget.messageDetails,
+                  detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
+                  trailing: AxiIconButton.ghost(
+                    iconData: LucideIcons.eye,
+                    tooltip: context.l10n.chatAttachmentPreview,
+                    onPressed: () => _openImagePreview(
+                      context,
+                      file: previewFile,
+                      metadata: metadata,
+                      typeReport: widget.typeReport,
+                      messageDetails: widget.messageDetails,
+                      detailOpticalOffsetFactors:
+                          widget.detailOpticalOffsetFactors,
                     ),
                   ),
                 ),
-              ),
+              ],
             );
           },
         );
@@ -1044,14 +1018,109 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       }
     }
   }
+}
 
-  double _aspectRatio(FileMetadataData metadata) {
-    if (metadata.width != null && metadata.height != null) {
-      if (metadata.height == 0) return 4 / 3;
-      return metadata.width! / metadata.height!;
-    }
-    return 4 / 3;
+typedef _ImageAttachmentFrameBuilder =
+    Widget Function(
+      BuildContext context, {
+      required double aspectRatio,
+      required double targetWidth,
+    });
+
+class _AttachmentPendingPreviewFrame extends StatelessWidget {
+  const _AttachmentPendingPreviewFrame({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final targetWidth = _resolveAttachmentWidth(
+          constraints,
+          context,
+          intrinsicWidth: null,
+          minimumWidth: _attachmentMetadataOverlayMinWidth(context),
+        );
+        return _AttachmentMediaFrame(
+          targetWidth: targetWidth,
+          aspectRatio: _attachmentImageFallbackAspectRatio(),
+          child: Center(child: AxiProgressIndicator(color: color)),
+        );
+      },
+    );
   }
+}
+
+class _ImageAttachmentFrame extends StatelessWidget {
+  const _ImageAttachmentFrame({required this.metadata, required this.builder});
+
+  final FileMetadataData metadata;
+  final _ImageAttachmentFrameBuilder builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final targetWidth = _resolveAttachmentWidth(
+          constraints,
+          context,
+          intrinsicWidth: metadata.width?.toDouble(),
+          minimumWidth: _attachmentMetadataOverlayMinWidth(context),
+        );
+        final aspectRatio = _attachmentImageAspectRatio(metadata);
+        return _AttachmentMediaFrame(
+          targetWidth: targetWidth,
+          aspectRatio: aspectRatio,
+          child: builder(
+            context,
+            aspectRatio: aspectRatio,
+            targetWidth: targetWidth,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AttachmentMediaFrame extends StatelessWidget {
+  const _AttachmentMediaFrame({
+    required this.targetWidth,
+    required this.aspectRatio,
+    required this.child,
+  });
+
+  final double targetWidth;
+  final double aspectRatio;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      widthFactor: 1,
+      heightFactor: 1,
+      child: SizedBox(
+        width: targetWidth,
+        child: _AttachmentSurface(
+          padding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          borderSide: BorderSide.none,
+          child: AspectRatio(aspectRatio: aspectRatio, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+double _attachmentImageFallbackAspectRatio() => 4 / 3;
+
+double _attachmentImageAspectRatio(FileMetadataData metadata) {
+  if (metadata.width != null && metadata.height != null) {
+    if (metadata.height == 0) return _attachmentImageFallbackAspectRatio();
+    return metadata.width! / metadata.height!;
+  }
+  return _attachmentImageFallbackAspectRatio();
 }
 
 class _VideoAttachment extends StatefulWidget {

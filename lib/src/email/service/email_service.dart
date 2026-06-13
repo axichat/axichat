@@ -1961,10 +1961,7 @@ class EmailService {
     );
     _activeAccount = account;
     _credentialSession.markEphemerallyProvisioned(scope);
-    await _bootstrapFromCoreIfNeeded(
-      scope: scope,
-      databasePrefix: databasePrefix,
-    );
+    await _refreshStartupChatlistSnapshot(accountId: deltaAccountId);
     return account;
   }
 
@@ -4392,13 +4389,13 @@ class EmailService {
     );
   }
 
-  Future<bool> _bootstrapFromCoreOnMain() async {
+  Future<bool> _bootstrapFromCoreOnMain({bool includeMessages = true}) async {
     final accountIds = await _transport.accountIds();
     var didBootstrap = false;
     for (final accountId in accountIds) {
       await _transport.ensureAccountSession(accountId);
       final consumer = _deltaConsumerForAccount(accountId);
-      if (await consumer.bootstrapFromCore()) {
+      if (await consumer.bootstrapFromCore(includeMessages: includeMessages)) {
         didBootstrap = true;
       }
     }
@@ -4412,6 +4409,14 @@ class EmailService {
       await _deltaConsumerForAccount(
         resolvedAccountId,
       ).refreshChatlistSnapshot();
+    }
+  }
+
+  Future<void> _refreshStartupChatlistSnapshot({required int accountId}) async {
+    try {
+      await _refreshChatlistSnapshotOnMain(accountId: accountId);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Email startup chatlist refresh failed.', error, stackTrace);
     }
   }
 
@@ -5551,12 +5556,17 @@ class EmailService {
     if (scope == null || prefix == null) {
       return;
     }
-    await _bootstrapFromCoreIfNeeded(scope: scope, databasePrefix: prefix);
+    await _bootstrapFromCoreIfNeeded(
+      scope: scope,
+      databasePrefix: prefix,
+      includeMessages: false,
+    );
   }
 
   Future<void> _bootstrapFromCoreIfNeeded({
     required String scope,
     required String databasePrefix,
+    bool includeMessages = true,
   }) async {
     final bootstrapKey = _bootstrapKeyFor(
       scope: scope,
@@ -5577,6 +5587,7 @@ class EmailService {
       scope: scope,
       operationId: operationId,
       bootstrapKey: bootstrapKey,
+      includeMessages: includeMessages,
     );
     _setBootstrapFutureForScope(scope, future);
     try {
@@ -5592,6 +5603,7 @@ class EmailService {
     required String scope,
     required int operationId,
     required RegisteredCredentialKey bootstrapKey,
+    required bool includeMessages,
   }) async {
     if (!_acceptsRuntimeWork) {
       return;
@@ -5603,12 +5615,14 @@ class EmailService {
       );
     }
     try {
-      final didBootstrap = await _bootstrapFromCoreOnMain();
+      final didBootstrap = await _bootstrapFromCoreOnMain(
+        includeMessages: includeMessages,
+      );
       if (operationId != _bootstrapOperationIdForScope(scope) ||
           !_acceptsRuntimeWork) {
         return;
       }
-      if (didBootstrap) {
+      if (didBootstrap && includeMessages) {
         await _credentialStore.write(key: bootstrapKey, value: true.toString());
       }
       if (operationId != _bootstrapOperationIdForScope(scope) ||

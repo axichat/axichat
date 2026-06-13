@@ -581,7 +581,7 @@ class DeltaEventConsumer {
 
   int get _deltaAccountId => _core.accountId;
 
-  Future<bool> bootstrapFromCore() async {
+  Future<bool> bootstrapFromCore({bool includeMessages = true}) async {
     final int deltaAccountId = _deltaAccountId;
     final chatlist = await _core.getChatlist();
     final archivedChatlist = await _core.getChatlist(
@@ -625,6 +625,10 @@ class DeltaEventConsumer {
         archivedChatIds: archivedChatIds,
         db: db,
       );
+    }
+
+    if (!includeMessages) {
+      return didBootstrap;
     }
 
     for (final chatId in entriesByChatId.keys) {

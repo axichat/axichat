@@ -114,6 +114,28 @@ class _MessageHtmlBody extends StatefulWidget {
 }
 
 class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
+  html_dom.Document? _document;
+  String? _documentHtml;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshDocument();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessageHtmlBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_documentHtml != widget.html) {
+      _refreshDocument();
+    }
+  }
+
+  void _refreshDocument() {
+    _documentHtml = widget.html;
+    _document = html_parser.parse(widget.html);
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = context.textTheme;
@@ -126,8 +148,8 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
       alignment: Alignment.centerLeft,
       child: SizedBox(
         width: double.infinity,
-        child: html_widget.Html(
-          data: widget.html,
+        child: html_widget.Html.fromDom(
+          document: _document,
           shrinkWrap: false,
           extensions: createEmailHtmlExtensions(
             shouldLoadImages: widget.shouldLoadImages,
@@ -154,6 +176,8 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
     super.key,
     required this.html,
     required this.loadingHtml,
+    required this.rawHtml,
+    required this.diagnosticContentKey,
     required this.textStyle,
     required this.backgroundColor,
     required this.textColor,
@@ -164,6 +188,8 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
 
   final String html;
   final String loadingHtml;
+  final String? rawHtml;
+  final Object diagnosticContentKey;
   final TextStyle textStyle;
   final Color backgroundColor;
   final Color textColor;
@@ -179,6 +205,9 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
       child: EmailHtmlWebView.embedded(
         html: html,
         allowRemoteImages: shouldLoadImages,
+        diagnosticContentKey: diagnosticContentKey,
+        diagnosticRawHtml: rawHtml,
+        diagnosticFlutterHtml: loadingHtml,
         minHeight: sizing.attachmentPreviewExtent,
         backgroundColor: backgroundColor,
         textColor: textColor,

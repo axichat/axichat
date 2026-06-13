@@ -9,6 +9,13 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  test('rendered DOM diagnostic reads document outer HTML', () {
+    final expression = emailRenderedDomExpressionForTesting();
+
+    expect(expression, contains('document.documentElement'));
+    expect(expression, contains('outerHTML'));
+  });
+
   group('prepareEmailHtmlDataForWebView', () {
     test('safe mode injects layout css after sanitizing content', () {
       const themeStyle =
