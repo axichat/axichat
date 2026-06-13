@@ -1888,7 +1888,11 @@ _resolveTimelineMessageActionCallbacks({
   final rowText = timelineMessageItem.rowText;
 
   VoidCallback? onReply;
-  if (!requiresMucReference) {
+  if (canReplyToTimelineMessage(
+    message: messageModel,
+    isGroupChat: chatEntity?.type == ChatType.groupChat,
+    requiresMucReference: requiresMucReference,
+  )) {
     onReply = () => onReplyRequested(messageModel);
   }
 
@@ -1986,4 +1990,19 @@ _resolveTimelineMessageActionCallbacks({
     pinLoading: pinLoading,
     replyLoading: loadingMucReference,
   );
+}
+
+@visibleForTesting
+bool canReplyToTimelineMessage({
+  required Message message,
+  required bool isGroupChat,
+  required bool requiresMucReference,
+}) {
+  if (requiresMucReference) {
+    return false;
+  }
+  if (message.replyReference(isGroupChat: isGroupChat) != null) {
+    return true;
+  }
+  return message.isEmailBacked && message.deltaMsgId != null;
 }

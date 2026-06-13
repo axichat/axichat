@@ -4,7 +4,6 @@
 import 'dart:io';
 
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:drift/native.dart';
@@ -135,7 +134,7 @@ void main() {
       expect(migrated?.deltaChatId, isNull);
     });
 
-    test('rewrites GEN_ and missing origins to derived keys', () async {
+    test('rewrites GEN_ and missing origins to null', () async {
       const jid = 'carol@example.com';
       final timestamp = DateTime.utc(2026, 1, 3, 9);
       await database.createChat(
@@ -184,16 +183,8 @@ void main() {
       final fromMissing = await database.getMessageByStanzaID(
         'dc-local-msg-0-11-51',
       );
-      expect(isDerivedEmailMessageKey(fromGen?.originID), isTrue);
-      expect(isDerivedEmailMessageKey(fromMissing?.originID), isTrue);
-      expect(
-        fromGen?.originID,
-        derivedEmailMessageKey(
-          subject: 'Hi',
-          timestamp: timestamp,
-          bodyText: 'gen body',
-        ),
-      );
+      expect(fromGen?.originID, isNull);
+      expect(fromMissing?.originID, isNull);
     });
 
     test('does not touch XMPP rows', () async {
@@ -222,6 +213,272 @@ void main() {
       final untouched = await database.getMessageByStanzaID('xmpp-1');
       expect(untouched?.originID, 'XMPP-Origin-Unchanged');
       expect(untouched?.deltaChatId, isNull);
+    });
+  });
+
+  group('derived origin retirement (v65)', () {
+    const jid = 'erin@example.com';
+
+    Future<void> seedEmailChat() {
+      return database.createChat(
+        Chat(
+          jid: jid,
+          title: 'Erin',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+          transport: MessageTransport.email,
+          deltaChatId: 12,
+        ),
+      );
+    }
+
+    test('nulls derived and GEN_ origins, keeps genuine ones', () async {
+      await seedEmailChat();
+      await database.saveMessage(
+        Message(
+          stanzaID: 'row-derived',
+          senderJid: jid,
+          chatJid: jid,
+          timestamp: DateTime.utc(2026, 1, 2),
+          originID: 'axi-drv-feedbeef',
+          deltaAccountId: 0,
+          deltaChatId: 12,
+          deltaMsgId: 60,
+        ),
+      );
+      await database.saveMessage(
+        Message(
+          stanzaID: 'row-genuine',
+          senderJid: jid,
+          chatJid: jid,
+          timestamp: DateTime.utc(2026, 1, 2),
+          originID: 'real@example.org',
+          deltaAccountId: 0,
+          deltaChatId: 12,
+          deltaMsgId: 61,
+        ),
+      );
+
+      await database.retireDerivedEmailOriginIds();
+
+      final derived = await database.getMessageByStanzaID('row-derived');
+      final genuine = await database.getMessageByStanzaID('row-genuine');
+      expect(derived?.originID, isNull);
+      expect(genuine?.originID, 'real@example.org');
+    });
+
+    test('preserves resolvable non-wire membership rows', () async {
+      await seedEmailChat();
+      final addedAt = DateTime.utc(2026, 1, 3);
+      await database.saveMessage(
+        Message(
+          stanzaID: 'dc-msg-62',
+          senderJid: jid,
+          chatJid: jid,
+          timestamp: DateTime.utc(2026, 1, 2),
+          originID: 'axi-drv-deadc0de',
+          deltaAccountId: 0,
+          deltaChatId: 12,
+          deltaMsgId: 62,
+        ),
+      );
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: 'starred',
+        chatJid: jid,
+        messageReferenceId: 'axi-drv-deadc0de',
+        messageStanzaId: null,
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: 0,
+        deltaMsgId: 62,
+        addedAt: addedAt,
+        active: true,
+      );
+
+      await database.retireDerivedEmailOriginIds();
+
+      final membership = await database.getMessageCollectionMembership(
+        collectionId: 'starred',
+        chatJid: jid,
+        messageReferenceId: 'axi-drv-deadc0de',
+      );
+      final items = await database.getFolderMessageItems('starred');
+
+      expect(membership, isNotNull);
+      expect(membership?.deltaAccountId, 0);
+      expect(membership?.deltaMsgId, 62);
+      expect(items, hasLength(1));
+      expect(items.single.message?.stanzaID, 'dc-msg-62');
+    });
+
+    test(
+      'fills missing delta locators before retiring derived origins',
+      () async {
+        await seedEmailChat();
+        final addedAt = DateTime.utc(2026, 1, 3);
+        await database.saveMessage(
+          Message(
+            stanzaID: 'dc-msg-63',
+            senderJid: jid,
+            chatJid: jid,
+            timestamp: DateTime.utc(2026, 1, 2),
+            originID: 'axi-drv-missinglocator',
+            deltaAccountId: 0,
+            deltaChatId: 12,
+            deltaMsgId: 63,
+          ),
+        );
+        await database.applyMessageCollectionMembershipMutation(
+          collectionId: 'starred',
+          chatJid: jid,
+          messageReferenceId: 'axi-drv-missinglocator',
+          messageStanzaId: null,
+          messageOriginId: null,
+          messageMucStanzaId: null,
+          deltaAccountId: null,
+          deltaMsgId: null,
+          addedAt: addedAt,
+          active: true,
+        );
+
+        await database.retireDerivedEmailOriginIds();
+
+        final membership = await database.getMessageCollectionMembership(
+          collectionId: 'starred',
+          chatJid: jid,
+          messageReferenceId: 'axi-drv-missinglocator',
+        );
+        final items = await database.getFolderMessageItems('starred');
+
+        expect(membership, isNotNull);
+        expect(membership?.deltaAccountId, 0);
+        expect(membership?.deltaMsgId, 63);
+        expect(items, hasLength(1));
+        expect(items.single.message?.stanzaID, 'dc-msg-63');
+      },
+    );
+
+    test('rebinds non-wire memberships to genuine origins', () async {
+      await seedEmailChat();
+      final addedAt = DateTime.utc(2026, 1, 3);
+      await database.saveMessage(
+        Message(
+          stanzaID: 'dc-msg-64',
+          senderJid: jid,
+          chatJid: jid,
+          timestamp: DateTime.utc(2026, 1, 2),
+          originID: 'real@example.org',
+          deltaAccountId: 0,
+          deltaChatId: 12,
+          deltaMsgId: 64,
+        ),
+      );
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: 'starred',
+        chatJid: jid,
+        messageReferenceId: 'gen_pending_origin',
+        messageStanzaId: null,
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: 0,
+        deltaMsgId: 64,
+        addedAt: addedAt,
+        active: true,
+      );
+
+      await database.retireDerivedEmailOriginIds();
+
+      final old = await database.getMessageCollectionMembership(
+        collectionId: 'starred',
+        chatJid: jid,
+        messageReferenceId: 'gen_pending_origin',
+      );
+      final rebound = await database.getMessageCollectionMembership(
+        collectionId: 'starred',
+        chatJid: jid,
+        messageReferenceId: 'real@example.org',
+      );
+      final items = await database.getFolderMessageItems('starred');
+
+      expect(old, isNull);
+      expect(rebound, isNotNull);
+      expect(rebound?.messageOriginId, 'real@example.org');
+      expect(rebound?.deltaAccountId, 0);
+      expect(rebound?.deltaMsgId, 64);
+      expect(items, hasLength(1));
+      expect(items.single.message?.stanzaID, 'dc-msg-64');
+    });
+
+    test('leaves unproven and XMPP-looking non-wire rows untouched', () async {
+      await seedEmailChat();
+      final addedAt = DateTime.utc(2026, 1, 3);
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: 'starred',
+        chatJid: jid,
+        messageReferenceId: 'gen_unproven_email_like',
+        messageStanzaId: null,
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: addedAt,
+        active: true,
+      );
+      const xmppJid = 'xmpp@axi.im';
+      await database.createChat(
+        Chat(
+          jid: xmppJid,
+          title: 'Xmpp',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.utc(2026, 1, 1),
+          transport: MessageTransport.xmpp,
+        ),
+      );
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: 'starred',
+        chatJid: xmppJid,
+        messageReferenceId: 'gen_xmpp_server_id',
+        messageStanzaId: null,
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: addedAt,
+        active: true,
+      );
+      await database.applyMessageCollectionMembershipMutation(
+        collectionId: 'starred',
+        chatJid: xmppJid,
+        messageReferenceId: 'axi-drv-server-id',
+        messageStanzaId: null,
+        messageOriginId: null,
+        messageMucStanzaId: null,
+        deltaAccountId: null,
+        deltaMsgId: null,
+        addedAt: addedAt,
+        active: true,
+      );
+
+      await database.retireDerivedEmailOriginIds();
+
+      final unproven = await database.getMessageCollectionMembership(
+        collectionId: 'starred',
+        chatJid: jid,
+        messageReferenceId: 'gen_unproven_email_like',
+      );
+      final xmppGen = await database.getMessageCollectionMembership(
+        collectionId: 'starred',
+        chatJid: xmppJid,
+        messageReferenceId: 'gen_xmpp_server_id',
+      );
+      final xmppDerived = await database.getMessageCollectionMembership(
+        collectionId: 'starred',
+        chatJid: xmppJid,
+        messageReferenceId: 'axi-drv-server-id',
+      );
+      expect(unproven, isNotNull);
+      expect(xmppGen, isNotNull);
+      expect(xmppDerived, isNotNull);
     });
   });
 

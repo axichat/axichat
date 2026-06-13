@@ -2084,11 +2084,6 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     executor ?? _openDatabase(file, passphrase),
   );
 
-  factory XmppDrift.remote({
-    required File file,
-    required DatabaseConnection connection,
-  }) => XmppDrift._(file, connection);
-
   final _log = Logger('XmppDrift');
   final File _file;
   final bool _inMemory;
@@ -2124,7 +2119,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 63;
+  int get schemaVersion => 65;
 
   @override
   MigrationStrategy get migration {
@@ -2599,12 +2594,36 @@ WHERE transport IS NULL
             );
           }
         }
+        if (from < 64) {
+          final cleared = await clearXmppErrorsFromEmailMessages();
+          if (cleared > 0) {
+            _log.info(
+              'Cleared $cleared stray XMPP errors from email messages.',
+            );
+          }
+        }
+        if (from < 65) {
+          await retireDerivedEmailOriginIds();
+        }
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
         await _repairRestoredArchiveJids();
         await repairMixedChatTransports();
       },
+    );
+  }
+
+  Future<int> clearXmppErrorsFromEmailMessages() {
+    const xmppErrors = [MessageError.serviceUnavailable, MessageError.unknown];
+    final query = update(messages)
+      ..where(
+        (tbl) =>
+            (tbl.deltaMsgId.isNotNull() | tbl.deltaChatId.isNotNull()) &
+            tbl.error.isInValues(xmppErrors),
+      );
+    return query.write(
+      const MessagesCompanion(error: Value(MessageError.none)),
     );
   }
 
@@ -8198,7 +8217,7 @@ WHERE jid = ?
       ambiguousKeys,
     );
     final unresolvable = await _countUnscopedEmailMessageRows();
-    final rewritten = await _rewriteEmailOriginIdsToLadder();
+    final rewritten = await _rewriteEmailOriginIdsToGenuine();
     final membershipsRepaired =
         await _repairForeignCollectionMembershipHandles();
     _log.info(
@@ -8251,10 +8270,11 @@ WHERE jid = ?
         candidates.contains(entryOrigin);
   }
 
-  Future<void> _normalizeEmailMembershipIdentity({
+  Future<bool> _normalizeEmailMembershipIdentity({
     required MessageCollectionMembershipEntry entry,
     required Message message,
   }) async {
+    var normalized = false;
     if (entry.messageStanzaId != null) {
       await (update(messageCollectionMemberships)..where(
             (tbl) =>
@@ -8267,17 +8287,19 @@ WHERE jid = ?
               messageStanzaId: Value(null),
             ),
           );
+      normalized = true;
     }
-    final origin = message.originID?.trim();
+    final origin = genuineEmailMessageId(message.originID);
     final reference = entry.messageReferenceId.trim();
-    final referenceIsDeviceLocal =
+    final referenceIsNonPortable =
         isDeviceLocalDeltaStanzaId(reference) ||
-        isDeltaGeneratedMessageId(reference);
+        isDeltaGeneratedMessageId(reference) ||
+        isDerivedEmailMessageKey(reference);
     if (origin == null ||
         origin.isEmpty ||
         reference == origin ||
-        !referenceIsDeviceLocal) {
-      return;
+        !referenceIsNonPortable) {
+      return normalized;
     }
     await _rebindMembershipEntryReference(
       entry: entry,
@@ -8285,6 +8307,7 @@ WHERE jid = ?
       oldReferenceId: entry.messageReferenceId,
       newReferenceId: origin,
     );
+    return true;
   }
 
   Future<void> _clearCollectionMembershipHandles(
@@ -8404,7 +8427,7 @@ WHERE jid = ?
     return row.read(count) ?? 0;
   }
 
-  Future<int> _rewriteEmailOriginIdsToLadder() async {
+  Future<int> _rewriteEmailOriginIdsToGenuine() async {
     const int pageSize = 500;
     var rewritten = 0;
     String? lastStanzaId;
@@ -8439,13 +8462,7 @@ WHERE jid = ?
           predicate & messages.stanzaID.isBiggerThanValue(afterStanzaId);
     }
     final query = selectOnly(messages)
-      ..addColumns([
-        messages.stanzaID,
-        messages.originID,
-        messages.subject,
-        messages.timestamp,
-        messages.body,
-      ])
+      ..addColumns([messages.stanzaID, messages.originID])
       ..where(predicate)
       ..orderBy([OrderingTerm.asc(messages.stanzaID)])
       ..limit(pageSize);
@@ -8458,18 +8475,116 @@ WHERE jid = ?
       return false;
     }
     final storedOrigin = row.read(messages.originID);
-    final canonical = canonicalEmailOriginId(
-      rfc724Mid: storedOrigin,
-      subject: row.read(messages.subject),
-      timestamp: row.read(messages.timestamp),
-      bodyText: row.read(messages.body),
-    );
-    if (canonical == storedOrigin) {
+    final genuine = genuineEmailMessageId(storedOrigin);
+    if (genuine == storedOrigin) {
       return false;
     }
     await (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaId)))
-        .write(MessagesCompanion(originID: Value(canonical)));
+        .write(MessagesCompanion(originID: Value(genuine)));
     return true;
+  }
+
+  Future<void> retireDerivedEmailOriginIds() async {
+    final repairedMemberships = await _repairNonWireEmailMembershipRows();
+    final rewritten = await _rewriteEmailOriginIdsToGenuine();
+    _log.info(
+      'Retired derived email origins: originIdsRewritten=$rewritten '
+      'membershipsRepaired=$repairedMemberships',
+    );
+  }
+
+  Future<int> _repairNonWireEmailMembershipRows() async {
+    final entries = await select(messageCollectionMemberships).get();
+    var repaired = 0;
+    for (final entry in entries) {
+      final reference = entry.messageReferenceId.trim();
+      if (!isDerivedEmailMessageKey(reference) &&
+          !isDeltaGeneratedMessageId(reference)) {
+        continue;
+      }
+      final message = await _emailMessageForNonWireMembership(entry);
+      if (message == null) {
+        continue;
+      }
+      if (await _repairNonWireEmailMembershipRow(
+        entry: entry,
+        message: message,
+      )) {
+        repaired++;
+      }
+    }
+    return repaired;
+  }
+
+  Future<Message?> _emailMessageForNonWireMembership(
+    MessageCollectionMembershipEntry entry,
+  ) async {
+    final deltaMsgId = entry.deltaMsgId;
+    if (deltaMsgId != null) {
+      final matching = await getMessageByDeltaId(
+        deltaMsgId,
+        deltaAccountId: entry.deltaAccountId ?? DeltaAccountDefaults.legacyId,
+        chatJid: entry.chatJid,
+      );
+      if (matching?.isEmailBacked == true) {
+        return matching;
+      }
+    }
+    final references = <String>{
+      entry.messageReferenceId.trim(),
+      ?entry.messageStanzaId?.trim(),
+      ?entry.messageOriginId?.trim(),
+      ?entry.messageMucStanzaId?.trim(),
+    }..removeWhere((value) => value.isEmpty);
+    if (references.isEmpty) {
+      return null;
+    }
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.chatJid.equals(entry.chatJid) &
+            tbl.deltaMsgId.isNotNull() &
+            (tbl.stanzaID.isIn(references) |
+                tbl.originID.isIn(references) |
+                tbl.mucStanzaId.isIn(references)),
+      )
+      ..orderBy([
+        (tbl) => OrderingTerm.asc(tbl.timestamp),
+        (tbl) => OrderingTerm.asc(tbl.stanzaID),
+      ])
+      ..limit(1);
+    final matching = await query.getSingleOrNull();
+    return matching?.isEmailBacked == true ? matching : null;
+  }
+
+  Future<bool> _repairNonWireEmailMembershipRow({
+    required MessageCollectionMembershipEntry entry,
+    required Message message,
+  }) async {
+    var repaired = false;
+    final deltaMsgId = message.deltaMsgId;
+    if (deltaMsgId != null &&
+        (entry.deltaMsgId != deltaMsgId ||
+            entry.deltaAccountId != message.deltaAccountId)) {
+      await (update(messageCollectionMemberships)..where(
+            (tbl) =>
+                tbl.collectionId.equals(entry.collectionId) &
+                tbl.chatJid.equals(entry.chatJid) &
+                tbl.messageReferenceId.equals(entry.messageReferenceId),
+          ))
+          .write(
+            MessageCollectionMembershipsCompanion(
+              deltaAccountId: Value(message.deltaAccountId),
+              deltaMsgId: Value(deltaMsgId),
+            ),
+          );
+      repaired = true;
+    }
+    return await _normalizeEmailMembershipIdentity(
+          entry: entry,
+          message: message,
+        ) ||
+        repaired;
   }
 
   Future<void> repairGeneratedEmailAttachmentCaptionBodies() async {

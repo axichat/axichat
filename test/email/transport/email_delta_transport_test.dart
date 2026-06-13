@@ -1419,8 +1419,209 @@ void main() {
       'runtimeState',
       'dispose',
       'ensureInitialized',
+      'hydrateAccountAddress',
       'accountIds',
     ]);
+  });
+
+  test('worker runtime honors operation-specific request timeouts', () async {
+    ReceivePort? workerReceivePort;
+    final runtime = EmailDeltaWorkerRuntime(
+      debugRequestTimeout: const Duration(milliseconds: 20),
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            var initialized = false;
+            final receivePort = ReceivePort(
+              'fake-email-delta-worker-operation-timeouts',
+            );
+            workerReceivePort = receivePort;
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              void respond(Object? result) {
+                mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+              }
+
+              void respondAfterDelay(Object? result) {
+                unawaited(
+                  Future<void>.delayed(
+                    const Duration(milliseconds: 60),
+                  ).then((_) => respond(result)),
+                );
+              }
+
+              switch (op) {
+                case 'runtimeState':
+                  respond({
+                    'accountsSupported': true,
+                    'accountsActive': initialized,
+                    'activeAccountId': initialized ? 7 : 0,
+                    'isIoRunning': false,
+                    'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                  });
+                  return;
+                case 'ensureInitialized':
+                  initialized = true;
+                  respond(null);
+                  return;
+                case 'configureAccount':
+                  respondAfterDelay(null);
+                  return;
+                case 'performBackgroundFetch':
+                  respondAfterDelay(true);
+                  return;
+                case 'runImex':
+                  respondAfterDelay({
+                    r'$type': 'EmailDeltaImexResult',
+                    'accountId': 7,
+                    'exportedPaths': ['/tmp/key.asc'],
+                  });
+                  return;
+                case 'dispose':
+                  respond(null);
+                  receivePort.close();
+                  return;
+                default:
+                  respond(null);
+                  return;
+              }
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(() async {
+      await runtime.dispose();
+      workerReceivePort?.close();
+    });
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_operation_timeout_test',
+      databasePassphrase: 'passphrase',
+    );
+
+    await runtime.configureAccount(
+      address: 'me@example.com',
+      password: 'password',
+      displayName: 'Me',
+    );
+    expect(
+      await runtime.performBackgroundFetch(const Duration(milliseconds: 100)),
+      isTrue,
+    );
+    final imexResult = await runtime.runImex(
+      mode: DeltaImexMode.exportSelfKeys,
+      path: '/tmp/export',
+      timeout: const Duration(milliseconds: 100),
+    );
+
+    expect(imexResult.accountId, 7);
+    expect(imexResult.exportedPaths, ['/tmp/key.asc']);
+  });
+
+  test('worker runtime times out hanging requests and recovers', () async {
+    final workerReceivePorts = <ReceivePort>[];
+    var workerStarts = 0;
+    final runtime = EmailDeltaWorkerRuntime(
+      debugRequestTimeout: const Duration(milliseconds: 20),
+      debugWorkerStarter:
+          ({
+            required mainPort,
+            required deltaDatabasePath,
+            required databasePrefix,
+            required databasePassphrase,
+            required emailEncryptionBetaEnabledByAddress,
+            required xmppSelfJid,
+          }) async {
+            workerStarts++;
+            final workerIndex = workerStarts;
+            var initialized = false;
+            final receivePort = ReceivePort(
+              'fake-email-delta-worker-timeout-$workerIndex',
+            );
+            workerReceivePorts.add(receivePort);
+            receivePort.listen((message) {
+              final request = (message as Map).cast<Object?, Object?>();
+              final id = request['id'] as int;
+              final method = request['method'] as String;
+              final op = method.substring('axichat.email.'.length);
+              void respond(Object? result) {
+                mainPort.send({'jsonrpc': '2.0', 'id': id, 'result': result});
+              }
+
+              switch (op) {
+                case 'runtimeState':
+                  respond({
+                    'accountsSupported': true,
+                    'accountsActive': initialized,
+                    'activeAccountId': initialized ? 7 : 0,
+                    'isIoRunning': false,
+                    'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                  });
+                  return;
+                case 'ensureInitialized':
+                  initialized = true;
+                  respond(null);
+                  return;
+                case 'accountIds':
+                  if (workerIndex == 1) {
+                    return;
+                  }
+                  respond({
+                    'state': {
+                      'accountsSupported': true,
+                      'accountsActive': initialized,
+                      'activeAccountId': initialized ? 7 : 0,
+                      'isIoRunning': false,
+                      'selfJids': initialized ? {'7': 'me@example.com'} : {},
+                    },
+                    'accountIds': [7],
+                  });
+                  return;
+                case 'dispose':
+                  respond(null);
+                  receivePort.close();
+                  return;
+                default:
+                  respond(null);
+                  return;
+              }
+            });
+            return receivePort.sendPort;
+          },
+    );
+    addTearDown(() async {
+      await runtime.dispose(requestWorkerDispose: false);
+      for (final receivePort in workerReceivePorts) {
+        receivePort.close();
+      }
+    });
+
+    await runtime.ensureInitialized(
+      databasePrefix: 'worker_runtime_timeout_recovery_test',
+      databasePassphrase: 'passphrase',
+    );
+
+    await expectLater(
+      runtime.accountIds(),
+      throwsA(
+        isA<EmailDeltaWorkerRuntimeException>().having(
+          (error) => error.message,
+          'message',
+          'Delta worker request timed out.',
+        ),
+      ),
+    );
+    expect(workerStarts, 2);
+    expect(await runtime.accountIds(), [7]);
   });
 
   test('worker runtime joins concurrent initialization requests', () async {

@@ -14,8 +14,11 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter/foundation.dart';
+import 'package:json_rpc_2/error_code.dart' as json_rpc_error;
+import 'package:json_rpc_2/json_rpc_2.dart' as json_rpc;
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
+import 'package:stream_channel/isolate_channel.dart';
 
 final class EmailDeltaWorkerRuntimeException implements Exception {
   const EmailDeltaWorkerRuntimeException(this.message);
@@ -30,13 +33,12 @@ Future<File> _deltaDatabaseFileFor(String databasePrefix) {
   return dbFileFor('${databasePrefix}_email');
 }
 
-const String _emailDeltaRpcVersion = '2.0';
 // Aligned with Delta Chat's public deltachat-jsonrpc envelope so this bridge
 // can delegate to upstream dc_jsonrpc_* methods where that becomes practical.
 const String _emailDeltaRpcMethodPrefix = 'axichat.email.';
-const String _emailDeltaRpcReadyMethod = 'axichat.email.ready';
 const String _emailDeltaRpcEventMethod = 'axichat.email.event';
 const String _emailDeltaRpcTypeKey = r'$type';
+String _emailDeltaRpcMethod(String op) => '$_emailDeltaRpcMethodPrefix$op';
 
 Map<String, Object?> _emailDeltaWorkerConfigMessage({
   required SendPort mainPort,
@@ -56,41 +58,8 @@ Map<String, Object?> _emailDeltaWorkerConfigMessage({
   'xmppSelfJid': xmppSelfJid,
 };
 
-Map<String, Object?> _emailDeltaRpcRequest(
-  int id,
-  String op,
-  Map<String, Object?> params,
-) => {
-  'jsonrpc': _emailDeltaRpcVersion,
-  'id': id,
-  'method': '$_emailDeltaRpcMethodPrefix$op',
-  'params': _encodeEmailDeltaRpcValue(params),
-};
-
-Map<String, Object?> _emailDeltaRpcResponse({
-  required int id,
-  Object? result,
-}) => {
-  'jsonrpc': _emailDeltaRpcVersion,
-  'id': id,
-  'result': _encodeEmailDeltaRpcValue(result),
-};
-
-Map<String, Object?> _emailDeltaRpcError({
-  required int id,
-  required Object error,
-}) => {
-  'jsonrpc': _emailDeltaRpcVersion,
-  'id': id,
-  'error': _emailDeltaRpcErrorPayload(error),
-};
-
 Map<String, Object?> _emailDeltaRpcErrorPayload(Object error) {
-  final payload = <String, Object?>{
-    'code': -32000,
-    'type': _emailDeltaRpcErrorType(error),
-    'message': _emailDeltaRpcErrorMessage(error),
-  };
+  final payload = <String, Object?>{'type': _emailDeltaRpcErrorType(error)};
   if (error is DeltaAccountUnavailableException) {
     payload['accountId'] = error.accountId;
   }
@@ -150,19 +119,19 @@ String _emailDeltaRpcErrorMessage(Object error) {
   return 'Delta worker request failed with ${error.runtimeType}.';
 }
 
-Object _emailDeltaRpcExceptionFromError(Map<Object?, Object?> error) {
-  final rawMessage = error['message'];
-  final message = rawMessage is String && rawMessage.isNotEmpty
-      ? rawMessage
+Object _emailDeltaRpcExceptionFromRpcError(json_rpc.RpcException exception) {
+  final message = exception.message.isNotEmpty
+      ? exception.message
       : 'Delta worker request failed.';
-  final type = error['type'];
-  return switch (type) {
+  final data = exception.data;
+  final details = data is Map ? data : const <Object?, Object?>{};
+  return switch (details['type']) {
     'DeltaConfigurationTimeoutException' =>
       const DeltaConfigurationTimeoutException(),
     'DeltaAllocationException' => DeltaAllocationException(message),
     'DeltaOperationException' => DeltaOperationException(message),
     'DeltaStateException' => DeltaStateException(message),
-    'DeltaAccountUnavailableException' => switch (error['accountId']) {
+    'DeltaAccountUnavailableException' => switch (details['accountId']) {
       final int accountId => DeltaAccountUnavailableException(accountId),
       _ => DeltaOperationException(message),
     },
@@ -181,43 +150,8 @@ Object _emailDeltaRpcExceptionFromError(Map<Object?, Object?> error) {
   };
 }
 
-Map<String, Object?> _emailDeltaRpcNotification(
-  String method,
-  Map<String, Object?> params,
-) => {
-  'jsonrpc': _emailDeltaRpcVersion,
-  'method': method,
-  'params': _encodeEmailDeltaRpcValue(params),
-};
-
-Map<String, Object?> _emailDeltaReadyMessage(SendPort port) =>
-    _emailDeltaRpcNotification(_emailDeltaRpcReadyMethod, {'port': port});
-
-Map<String, Object?> _emailDeltaEventMessage(DeltaCoreEvent event) =>
-    _emailDeltaRpcNotification(_emailDeltaRpcEventMethod, {'event': event});
-
-Map<Object?, Object?>? _rpcMap(Object? message) {
-  if (message is Map<Object?, Object?>) {
-    return message;
-  }
-  if (message is Map) {
-    return message.cast<Object?, Object?>();
-  }
-  return null;
-}
-
-String? _rpcMethod(Map<Object?, Object?> message) {
-  final method = message['method'];
-  return method is String ? method : null;
-}
-
-int? _rpcId(Map<Object?, Object?> message) {
-  final id = message['id'];
-  return id is int ? id : null;
-}
-
-Map<String, Object?> _rpcParams(Map<Object?, Object?> message) {
-  final decoded = _decodeEmailDeltaRpcValue(message['params']);
+Map<String, Object?> _decodedRpcParams(json_rpc.Parameters params) {
+  final decoded = _decodeEmailDeltaRpcValue(params.value);
   if (decoded is Map<String, Object?>) {
     return decoded;
   }
@@ -231,21 +165,8 @@ String? _opFromRpcMethod(String method) {
   return method.substring(_emailDeltaRpcMethodPrefix.length);
 }
 
-SendPort? _readyPortFromMessage(Object? message) {
-  final rpc = _rpcMap(message);
-  if (rpc == null || _rpcMethod(rpc) != _emailDeltaRpcReadyMethod) {
-    return null;
-  }
-  final port = _rpcParams(rpc)['port'];
-  return port is SendPort ? port : null;
-}
-
 Object? _encodeEmailDeltaRpcValue(Object? value) {
-  if (value == null ||
-      value is bool ||
-      value is num ||
-      value is String ||
-      value is SendPort) {
+  if (value == null || value is bool || value is num || value is String) {
     return value;
   }
   if (value is Duration) {
@@ -420,11 +341,7 @@ Object? _encodeEmailDeltaRpcValue(Object? value) {
 }
 
 Object? _decodeEmailDeltaRpcValue(Object? value) {
-  if (value == null ||
-      value is bool ||
-      value is num ||
-      value is String ||
-      value is SendPort) {
+  if (value == null || value is bool || value is num || value is String) {
     return value;
   }
   if (value is List) {
@@ -634,9 +551,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   EmailDeltaWorkerRuntime({
     String? Function()? xmppSelfJidProvider,
     Logger? logger,
-    @visibleForTesting
-    Duration debugBackgroundFetchRpcGracePeriod = const Duration(seconds: 5),
-    Duration debugWorkerHealthProbeTimeout = const Duration(seconds: 10),
+    @visibleForTesting Duration? debugRequestTimeout,
     @visibleForTesting
     Future<SendPort> Function({
       required SendPort mainPort,
@@ -648,14 +563,15 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     })?
     debugWorkerStarter,
   }) : _xmppSelfJidProvider = xmppSelfJidProvider,
-       _backgroundFetchRpcGracePeriod = debugBackgroundFetchRpcGracePeriod,
-       _workerHealthProbeTimeout = debugWorkerHealthProbeTimeout,
+       _requestTimeout = debugRequestTimeout ?? _defaultRequestTimeout,
        _debugWorkerStarter = debugWorkerStarter,
        _log = logger ?? Logger('EmailDeltaWorkerRuntime');
 
+  static const Duration _defaultRequestTimeout = Duration(minutes: 3);
+  static const Duration _backgroundFetchRpcGracePeriod = Duration(seconds: 5);
+
   final String? Function()? _xmppSelfJidProvider;
-  final Duration _backgroundFetchRpcGracePeriod;
-  final Duration _workerHealthProbeTimeout;
+  final Duration _requestTimeout;
   final Future<SendPort> Function({
     required SendPort mainPort,
     required String deltaDatabasePath,
@@ -668,25 +584,35 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   final Logger _log;
   StreamController<DeltaCoreEvent> _events =
       StreamController<DeltaCoreEvent>.broadcast(sync: true);
-  bool _workerHealthProbeInFlight = false;
   final List<void Function(DeltaCoreEvent event)> _eventListeners = [];
-  final Map<int, Completer<Object?>> _pending = {};
   Map<String, bool> _emailEncryptionBetaEnabledByAddress =
       const <String, bool>{};
   Future<void>? _startFuture;
   Future<void>? _workerInitializationFuture;
   ReceivePort? _receivePort;
-  StreamSubscription<Object?>? _receiveSubscription;
+  ReceivePort? _exitPort;
+  ReceivePort? _errorPort;
   Isolate? _isolate;
-  SendPort? _workerPort;
-  int _nextRequestId = 0;
+  json_rpc.Peer? _peer;
   String? _databasePrefix;
   String? _databasePassphrase;
   bool _accountsSupported = true;
   bool _accountsActive = false;
   int _activeAccountId = DeltaAccountDefaults.legacyId;
   bool _isIoRunning = false;
+  bool _ioDesired = false;
+  bool _disposed = false;
+  bool _logoutBlocked = false;
+  int? _requestedPrimaryAccountId;
   bool _workerInitialized = false;
+  bool _workerSessionInitializedOnce = false;
+  Future<void>? _exitRecovery;
+  int _consecutiveExitRecoveries = 0;
+
+  static const int _maxConsecutiveExitRecoveries = 3;
+
+  @override
+  void Function()? onRuntimeRestarted;
   final Map<int, String> _selfJids = {};
 
   @override
@@ -738,6 +664,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
 
   @override
   void setPrimaryAccountId(int? accountId) {
+    _requestedPrimaryAccountId = accountId;
     if (accountId == null) {
       _activeAccountId = DeltaAccountDefaults.legacyId;
     } else {
@@ -766,11 +693,13 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     required String databasePrefix,
     required String databasePassphrase,
   }) async {
+    _disposed = false;
     await _ensureWorker(
       databasePrefix: databasePrefix,
       databasePassphrase: databasePassphrase,
     );
     await _ensureWorkerInitialized();
+    _consecutiveExitRecoveries = 0;
     await _refreshState();
   }
 
@@ -778,7 +707,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     required String databasePrefix,
     required String databasePassphrase,
   }) async {
-    if (_workerPort != null &&
+    if (_peer != null &&
         _databasePrefix == databasePrefix &&
         _databasePassphrase == databasePassphrase) {
       return;
@@ -786,7 +715,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     final starting = _startFuture;
     if (starting != null) {
       await starting;
-      if (_workerPort != null &&
+      if (_peer != null &&
           _databasePrefix == databasePrefix &&
           _databasePassphrase == databasePassphrase) {
         return;
@@ -804,14 +733,10 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   }
 
   void _sendBestEffort(String op, Map<String, Object?> payload) {
-    if (_workerPort == null) {
+    if (_peer == null) {
       return;
     }
-    unawaited(
-      _invoke<void>(op, payload).onError<Exception>((error, stackTrace) {
-        _log.fine('Best-effort Delta worker $op failed.', error, stackTrace);
-      }),
-    );
+    unawaited(_invokeBestEffort(op, payload));
   }
 
   Future<void> _startWorker({
@@ -821,24 +746,20 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     await _stopWorker(clearInitialization: false);
     final deltaDatabaseFile = await _deltaDatabaseFileFor(databasePrefix);
     final receivePort = ReceivePort('email-delta-worker-main');
-    final ready = Completer<SendPort>();
     if (_events.isClosed) {
       _events = StreamController<DeltaCoreEvent>.broadcast(sync: true);
     }
     _receivePort = receivePort;
-    _receiveSubscription = receivePort.listen((message) {
-      final readyPort = _readyPortFromMessage(message);
-      if (readyPort != null) {
-        if (!ready.isCompleted) {
-          ready.complete(readyPort);
-        }
-        return;
-      }
-      _handleWorkerMessage(message);
-    });
     try {
+      IsolateChannel<Object?> channel;
       final debugWorkerStarter = _debugWorkerStarter;
       if (debugWorkerStarter == null) {
+        final exitPort = ReceivePort('email-delta-worker-exit');
+        final errorPort = ReceivePort('email-delta-worker-error');
+        exitPort.listen((_) => _handleUnexpectedWorkerExit());
+        errorPort.listen(_logWorkerError);
+        _exitPort = exitPort;
+        _errorPort = errorPort;
         _isolate = await Isolate.spawn<Map<String, Object?>>(
           _emailDeltaWorkerMain,
           _emailDeltaWorkerConfigMessage(
@@ -850,11 +771,13 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
                 _emailEncryptionBetaEnabledByAddress,
             xmppSelfJid: _xmppSelfJidProvider?.call(),
           ),
+          onExit: exitPort.sendPort,
+          onError: errorPort.sendPort,
           debugName: 'email-delta-runtime',
         );
-        _workerPort = await ready.future.timeout(const Duration(seconds: 10));
+        channel = IsolateChannel<Object?>.connectReceive(receivePort);
       } else {
-        _workerPort = await debugWorkerStarter(
+        final workerPort = await debugWorkerStarter(
           mainPort: receivePort.sendPort,
           deltaDatabasePath: deltaDatabaseFile.path,
           databasePrefix: databasePrefix,
@@ -862,8 +785,22 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
           emailEncryptionBetaEnabledByAddress:
               _emailEncryptionBetaEnabledByAddress,
           xmppSelfJid: _xmppSelfJidProvider?.call(),
-        ).timeout(const Duration(seconds: 10));
+        );
+        channel = IsolateChannel<Object?>(receivePort, workerPort);
       }
+      final peer = json_rpc.Peer.withoutJson(
+        channel,
+        onUnhandledError: (error, stackTrace) {
+          _log.warning('Delta worker channel error.', error, stackTrace);
+        },
+      );
+      peer.registerMethod(_emailDeltaRpcEventMethod, _handleWorkerEvent);
+      _peer = peer;
+      unawaited(
+        peer.listen().catchError((Object error, StackTrace stackTrace) {
+          _log.fine('Delta worker channel closed.', error, stackTrace);
+        }),
+      );
       _databasePrefix = databasePrefix;
       _databasePassphrase = databasePassphrase;
       _workerInitialized = false;
@@ -879,29 +816,24 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     bool requestDispose = true,
   }) async {
     _workerInitializationFuture = null;
-    for (final completer in _pending.values) {
-      if (!completer.isCompleted) {
-        completer.completeError(
-          const EmailDeltaWorkerRuntimeException('Delta worker stopped.'),
-        );
-      }
-    }
-    _pending.clear();
     _workerInitialized = false;
     _isIoRunning = false;
-    final workerPort = _workerPort;
-    _workerPort = null;
-    if (workerPort != null && requestDispose) {
-      final id = ++_nextRequestId;
-      final disposeCompleter = Completer<Object?>();
-      _pending[id] = disposeCompleter;
-      workerPort.send(_emailDeltaRpcRequest(id, 'dispose', const {}));
+    _exitPort?.close();
+    _exitPort = null;
+    _errorPort?.close();
+    _errorPort = null;
+    final peer = _peer;
+    _peer = null;
+    if (peer != null && requestDispose) {
       try {
-        await disposeCompleter.future.timeout(const Duration(seconds: 5));
+        await peer
+            .sendRequest(
+              _emailDeltaRpcMethod('dispose'),
+              const <String, Object?>{},
+            )
+            .timeout(const Duration(seconds: 5));
       } on Exception catch (error, stackTrace) {
         _log.fine('Delta worker dispose request failed.', error, stackTrace);
-      } finally {
-        _pending.remove(id);
       }
     }
     if (clearInitialization) {
@@ -910,8 +842,13 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     }
     _isolate?.kill(priority: Isolate.beforeNextEvent);
     _isolate = null;
-    await _receiveSubscription?.cancel();
-    _receiveSubscription = null;
+    if (peer != null && !peer.isClosed) {
+      unawaited(
+        peer.close().catchError((Object error, StackTrace stackTrace) {
+          _log.fine('Delta worker peer close failed.', error, stackTrace);
+        }),
+      );
+    }
     _receivePort?.close();
     _receivePort = null;
   }
@@ -920,55 +857,82 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   Future<void> debugStopWorkerPreservingInitializationForTest() =>
       _stopWorker(clearInitialization: false);
 
-  void _handleWorkerMessage(Object? message) {
-    final rpc = _rpcMap(message);
-    if (rpc == null) {
+  void _handleWorkerEvent(json_rpc.Parameters params) {
+    final decoded = _decodedRpcParams(params);
+    final event = decoded['event'];
+    if (event is! DeltaCoreEvent || _events.isClosed) {
       return;
     }
-    final method = _rpcMethod(rpc);
-    if (method == _emailDeltaRpcEventMethod) {
-      final event = _rpcParams(rpc)['event'];
-      if (event is! DeltaCoreEvent || _events.isClosed) {
-        return;
-      }
-      _events.add(event);
-      for (final listener in List.of(_eventListeners)) {
-        listener(event);
-      }
+    _events.add(event);
+    for (final listener in List.of(_eventListeners)) {
+      listener(event);
+    }
+  }
+
+  void _handleUnexpectedWorkerExit() {
+    if (_disposed) {
       return;
     }
-    final id = _rpcId(rpc);
-    if (id != null) {
-      final completer = _pending.remove(id);
-      if (completer == null || completer.isCompleted) {
-        return;
-      }
-      final error = rpc['error'];
-      if (error is Map) {
-        completer.completeError(
-          _emailDeltaRpcExceptionFromError(error.cast<Object?, Object?>()),
+    final canRecover =
+        _exitRecovery == null &&
+        _consecutiveExitRecoveries < _maxConsecutiveExitRecoveries;
+    if (!canRecover) {
+      final budgetExhausted =
+          _consecutiveExitRecoveries >= _maxConsecutiveExitRecoveries;
+      _log.warning(
+        budgetExhausted
+            ? 'Email Delta worker keeps exiting; deferring to reprovisioning.'
+            : 'Email Delta worker exited during recovery.',
+      );
+      unawaited(
+        _stopWorker(
+          clearInitialization: budgetExhausted,
+          requestDispose: false,
+        ),
+      );
+      return;
+    }
+    _consecutiveExitRecoveries += 1;
+    _log.warning('Email Delta worker exited unexpectedly; recovering.');
+    final recovery = () async {
+      try {
+        await _stopWorker(clearInitialization: false, requestDispose: false);
+        await Future<void>.delayed(
+          Duration(seconds: 1 << _consecutiveExitRecoveries),
         );
-      } else {
-        completer.complete(_decodeEmailDeltaRpcValue(rpc['result']));
+        await _recoverAfterUnresponsiveWorker();
+      } on Exception catch (error, stackTrace) {
+        _log.warning('Delta worker restart failed.', error, stackTrace);
       }
-      return;
-    }
+    }();
+    _exitRecovery = recovery;
+    unawaited(
+      recovery.whenComplete(() {
+        if (identical(_exitRecovery, recovery)) {
+          _exitRecovery = null;
+        }
+      }),
+    );
+  }
+
+  void _logWorkerError(Object? message) {
+    final details = message is List ? message : [message];
+    _log.warning('Email Delta worker error: ${details.join(' | ')}');
   }
 
   Future<T> _invoke<T>(
     String op,
     Map<String, Object?> payload, {
-    Duration timeout = const Duration(seconds: 60),
+    Duration? timeout,
   }) async {
-    final port = _workerPort;
-    if (port == null) {
+    if (_peer == null) {
       final starting = _startFuture;
       if (starting != null) {
         await starting;
       } else {
         final prefix = _databasePrefix;
         final passphrase = _databasePassphrase;
-        if (prefix == null || passphrase == null) {
+        if (_disposed || prefix == null || passphrase == null) {
           throw const EmailDeltaWorkerRuntimeException(
             'Delta worker is not initialized.',
           );
@@ -980,55 +944,135 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       }
     }
     await _ensureWorkerInitializedForRequest(op);
-    final activePort = _workerPort;
-    if (activePort == null) {
+    final peer = _peer;
+    if (peer == null) {
       throw const EmailDeltaWorkerRuntimeException(
         'Delta worker is unavailable.',
       );
     }
-    final id = ++_nextRequestId;
-    final completer = Completer<Object?>();
-    _pending[id] = completer;
-    activePort.send(_emailDeltaRpcRequest(id, op, payload));
-    final result = await completer.future.timeout(
-      timeout,
-      onTimeout: () {
-        _pending.remove(id);
-        _probeWorkerHealthAfterTimeout();
-        throw EmailDeltaWorkerRuntimeException('Delta worker $op timed out.');
-      },
-    );
-    if (op == 'ensureInitialized') {
-      _workerInitialized = true;
+    Object? result;
+    try {
+      result = await peer
+          .sendRequest(
+            _emailDeltaRpcMethod(op),
+            _encodeEmailDeltaRpcValue(payload),
+          )
+          .timeout(timeout ?? _requestTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      await _recoverAfterTimedOutRequest(op, error, stackTrace);
+      throw const EmailDeltaWorkerRuntimeException(
+        'Delta worker request timed out.',
+      );
+    } on json_rpc.RpcException catch (error) {
+      throw _emailDeltaRpcExceptionFromRpcError(error);
+    } on StateError {
+      throw const EmailDeltaWorkerRuntimeException('Delta worker stopped.');
     }
-    return result as T;
+    return _decodeEmailDeltaRpcValue(result) as T;
   }
 
-  void _probeWorkerHealthAfterTimeout() {
-    if (_workerHealthProbeInFlight) {
+  Future<void> _recoverAfterTimedOutRequest(
+    String op,
+    TimeoutException error,
+    StackTrace stackTrace,
+  ) async {
+    _log.warning(
+      'Delta worker request timed out during $op; recovering.',
+      error,
+      stackTrace,
+    );
+    final activeRecovery = _exitRecovery;
+    if (activeRecovery != null) {
+      await activeRecovery;
       return;
     }
-    _workerHealthProbeInFlight = true;
-    unawaited(() async {
+    final recovery = () async {
       try {
-        await _invoke<Object?>(
-          'runtimeState',
-          const {},
-          timeout: _workerHealthProbeTimeout,
-        );
-      } on Exception {
+        await _stopWorker(clearInitialization: false, requestDispose: false);
+        await _recoverAfterUnresponsiveWorker();
+      } on Exception catch (recoveryError, recoveryStackTrace) {
         _log.warning(
-          'Delta worker unresponsive after RPC timeout; restarting.',
+          'Delta worker timeout recovery failed.',
+          recoveryError,
+          recoveryStackTrace,
         );
-        try {
-          await _stopWorker(clearInitialization: false);
-        } on Exception catch (error, stackTrace) {
-          _log.warning('Delta worker restart failed.', error, stackTrace);
-        }
-      } finally {
-        _workerHealthProbeInFlight = false;
       }
-    }());
+    }();
+    _exitRecovery = recovery;
+    try {
+      await recovery;
+    } finally {
+      if (identical(_exitRecovery, recovery)) {
+        _exitRecovery = null;
+      }
+    }
+  }
+
+  Future<void> _recoverAfterUnresponsiveWorker() async {
+    final prefix = _databasePrefix;
+    final passphrase = _databasePassphrase;
+    if (prefix == null || passphrase == null || !_acceptsRecovery) {
+      return;
+    }
+    await _ensureWorker(databasePrefix: prefix, databasePassphrase: passphrase);
+    if (await _abortRecoveryIfShutDown()) {
+      return;
+    }
+    await _ensureWorkerInitialized();
+    if (await _abortRecoveryIfShutDown()) {
+      return;
+    }
+    await _refreshStatePreservingSelfJids();
+  }
+
+  bool get _acceptsRecovery => !_disposed && !_logoutBlocked;
+
+  Future<bool> _abortRecoveryIfShutDown() async {
+    if (_acceptsRecovery) {
+      return false;
+    }
+    await _stopWorker(requestDispose: false);
+    return true;
+  }
+
+  Future<void> _replayRuntimeStateToWorker() async {
+    final requestedPrimaryAccountId = _requestedPrimaryAccountId;
+    if (requestedPrimaryAccountId != null) {
+      await _invokeBestEffort('setPrimaryAccountId', {
+        'accountId': requestedPrimaryAccountId,
+      });
+    }
+    for (final entry in _selfJids.entries) {
+      await _invokeBestEffort('hydrateAccountAddress', {
+        'address': entry.value,
+        'accountId': entry.key,
+      });
+    }
+  }
+
+  Future<void> _invokeBestEffort(
+    String op,
+    Map<String, Object?> payload,
+  ) async {
+    try {
+      await _invoke<void>(op, payload);
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Best-effort Delta worker $op failed.', error, stackTrace);
+    }
+  }
+
+  Future<void> _refreshStatePreservingSelfJids() async {
+    final preserved = Map<int, String>.of(_selfJids);
+    await _refreshState();
+    for (final entry in preserved.entries) {
+      _selfJids.putIfAbsent(entry.key, () => entry.value);
+    }
+  }
+
+  @visibleForTesting
+  Future<void> debugRecoverUnresponsiveWorkerForTest() async {
+    await _stopWorker(clearInitialization: false);
+    await _recoverAfterUnresponsiveWorker();
   }
 
   Future<void> _ensureWorkerInitializedForRequest(String op) async {
@@ -1049,17 +1093,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       await existing;
       return;
     }
-    final prefix = _databasePrefix;
-    final passphrase = _databasePassphrase;
-    if (prefix == null || passphrase == null) {
-      throw const EmailDeltaWorkerRuntimeException(
-        'Delta worker is not initialized.',
-      );
-    }
-    final future = _invoke<void>('ensureInitialized', {
-      'databasePrefix': prefix,
-      'databasePassphrase': passphrase,
-    });
+    final future = _initializeWorkerSession();
     _workerInitializationFuture = future;
     try {
       await future;
@@ -1067,6 +1101,31 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       if (identical(_workerInitializationFuture, future)) {
         _workerInitializationFuture = null;
       }
+    }
+  }
+
+  Future<void> _initializeWorkerSession() async {
+    final prefix = _databasePrefix;
+    final passphrase = _databasePassphrase;
+    if (prefix == null || passphrase == null) {
+      throw const EmailDeltaWorkerRuntimeException(
+        'Delta worker is not initialized.',
+      );
+    }
+    await _invoke<void>('ensureInitialized', {
+      'databasePrefix': prefix,
+      'databasePassphrase': passphrase,
+    });
+    _workerInitialized = true;
+    await _replayRuntimeStateToWorker();
+    if (_ioDesired && !_isIoRunning) {
+      await _invoke<void>('start', const {});
+      _isIoRunning = true;
+    }
+    final isReinitialization = _workerSessionInitializedOnce;
+    _workerSessionInitializedOnce = true;
+    if (isReinitialization && _acceptsRecovery) {
+      onRuntimeRestarted?.call();
     }
   }
 
@@ -1113,6 +1172,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
 
   @override
   Future<void> deconfigureAccount({int? accountId}) async {
+    _ioDesired = false;
     await _invoke<void>('deconfigureAccount', {'accountId': accountId});
     await _refreshState();
   }
@@ -1142,24 +1202,34 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
 
   @override
   Future<void> start() async {
-    await _invoke<void>('start', const {});
-    _isIoRunning = true;
+    _ioDesired = true;
+    await _ensureWorkerInitialized();
+    if (!_isIoRunning) {
+      await _invoke<void>('start', const {});
+      _isIoRunning = true;
+    }
     await _refreshState();
   }
 
   @override
   Future<void> stop() async {
+    _ioDesired = false;
     await _invoke<void>('stop', const {});
     _isIoRunning = false;
     await _refreshState();
   }
 
   @override
-  Future<void> stopEventDeliveryForLogout() =>
-      _invoke<void>('stopEventDeliveryForLogout', const {});
+  Future<void> stopEventDeliveryForLogout() {
+    _logoutBlocked = true;
+    _ioDesired = false;
+    return _invoke<void>('stopEventDeliveryForLogout', const {});
+  }
 
   @override
   Future<void> dispose({bool requestWorkerDispose = true}) async {
+    _disposed = true;
+    _ioDesired = false;
     await _stopWorker(requestDispose: requestWorkerDispose);
     if (!_events.isClosed) {
       await _events.close();
@@ -1183,12 +1253,11 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       _invoke<void>('notifyNetworkLost', const {});
 
   @override
-  Future<bool> performBackgroundFetch(Duration timeout) {
-    final rpcTimeout = timeout + _backgroundFetchRpcGracePeriod;
-    return _invoke<bool>('performBackgroundFetch', {
-      'timeout': timeout,
-    }, timeout: rpcTimeout);
-  }
+  Future<bool> performBackgroundFetch(Duration timeout) => _invoke<bool>(
+    'performBackgroundFetch',
+    {'timeout': timeout},
+    timeout: timeout + _backgroundFetchRpcGracePeriod,
+  );
 
   @override
   Future<void> backfillChatHistory({
@@ -1503,17 +1572,6 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       });
 
   @override
-  Future<bool> forwardMessages({
-    required List<int> messageIds,
-    required int toChatId,
-    int? accountId,
-  }) => _invoke<bool>('forwardMessages', {
-    'messageIds': messageIds,
-    'toChatId': toChatId,
-    'accountId': accountId,
-  });
-
-  @override
   Future<List<int>> searchMessages({
     required int chatId,
     required String query,
@@ -1729,7 +1787,6 @@ final class _EmailDeltaWorkerServer {
         config['emailEncryptionBetaEnabledByAddress'],
       ),
       _xmppSelfJid = config['xmppSelfJid'] as String?,
-      _receivePort = ReceivePort('email-delta-worker'),
       _l10n = lookupAppLocalizations(const ui.Locale('en')) {
     _transport = EmailDeltaTransport(
       databaseBuilder: _databaseBuilder,
@@ -1742,7 +1799,9 @@ final class _EmailDeltaWorkerServer {
       _emailEncryptionBetaEnabledByAddress,
     );
     _transport.addEventListener((event) {
-      _mainPort.send(_emailDeltaEventMessage(event));
+      _peer?.sendNotification(_emailDeltaRpcEventMethod, {
+        'event': _encodeEmailDeltaRpcValue(event),
+      });
     });
   }
 
@@ -1750,31 +1809,31 @@ final class _EmailDeltaWorkerServer {
   final String _deltaDatabasePath;
   final String _databasePrefix;
   final Map<String, bool> _emailEncryptionBetaEnabledByAddress;
-  final ReceivePort _receivePort;
   final AppLocalizations _l10n;
   late final EmailDeltaTransport _transport;
   final String? _xmppSelfJid;
-  Future<void> _queue = Future<void>.value();
+  json_rpc.Peer? _peer;
+  int _activeRequests = 0;
+  Completer<void>? _idleCompleter;
+  Completer<void>? _gateOpened;
+  bool _exclusiveGateClosed = false;
+  Future<void> _exclusiveTail = Future<void>.value();
+
+  static const Set<String> _exclusiveOps = {
+    'dispose',
+    'ensureInitialized',
+    'start',
+    'stop',
+    'stopEventDeliveryForLogout',
+    'deconfigureAccount',
+  };
 
   void start() {
-    _receivePort.listen((message) {
-      final rpc = _rpcMap(message);
-      if (rpc == null) {
-        return;
-      }
-      final id = _rpcId(rpc);
-      final method = _rpcMethod(rpc);
-      if (id == null || method == null) {
-        return;
-      }
-      _queue = _queue.then((_) => _handleRequest(rpc)).catchError((
-        Object error,
-        StackTrace stackTrace,
-      ) {
-        _mainPort.send(_emailDeltaRpcError(id: id, error: error));
-      });
-    });
-    _mainPort.send(_emailDeltaReadyMessage(_receivePort.sendPort));
+    final channel = IsolateChannel<Object?>.connectSend(_mainPort);
+    final peer = json_rpc.Peer.withoutJson(channel);
+    peer.registerFallback(_handleRpc);
+    _peer = peer;
+    unawaited(peer.listen());
   }
 
   Future<XmppDatabase> _databaseBuilder() async {
@@ -1792,24 +1851,70 @@ final class _EmailDeltaWorkerServer {
   }
 
   Future<void> dispose() async {
-    _receivePort.close();
     await _transport.dispose();
   }
 
-  Future<void> _handleRequest(Map<Object?, Object?> request) async {
-    final id = _rpcId(request);
-    final method = _rpcMethod(request);
-    final op = method == null ? null : _opFromRpcMethod(method);
-    if (id == null || op == null) {
-      return;
+  Future<Object?> _handleRpc(json_rpc.Parameters params) async {
+    final op = _opFromRpcMethod(params.method);
+    if (op == null) {
+      throw json_rpc.RpcException.methodNotFound(params.method);
     }
     try {
-      final result = await _dispatch(op, _rpcParams(request));
-      _mainPort.send(_emailDeltaRpcResponse(id: id, result: result));
-    } on StateError catch (error) {
-      _mainPort.send(_emailDeltaRpcError(id: id, error: error));
-    } on Exception catch (error) {
-      _mainPort.send(_emailDeltaRpcError(id: id, error: error));
+      return _encodeEmailDeltaRpcValue(await _dispatchTracked(op, params));
+    } on json_rpc.RpcException {
+      rethrow;
+    } catch (error) {
+      throw json_rpc.RpcException(
+        json_rpc_error.SERVER_ERROR,
+        _emailDeltaRpcErrorMessage(error),
+        data: _emailDeltaRpcErrorPayload(error),
+      );
+    }
+  }
+
+  Future<Object?> _dispatchTracked(String op, json_rpc.Parameters params) {
+    final payload = _decodedRpcParams(params);
+    if (!_exclusiveOps.contains(op)) {
+      return _runShared(op, payload);
+    }
+    final previous = _exclusiveTail;
+    final run = () async {
+      await previous;
+      _exclusiveGateClosed = true;
+      try {
+        await _whenRequestsIdle();
+        return await _dispatch(op, payload);
+      } finally {
+        _exclusiveGateClosed = false;
+        _gateOpened?.complete();
+        _gateOpened = null;
+      }
+    }();
+    _exclusiveTail = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<Object?> _runShared(String op, Map<String, Object?> payload) async {
+    while (_exclusiveGateClosed) {
+      final gate = _gateOpened ??= Completer<void>();
+      await gate.future;
+    }
+    _activeRequests += 1;
+    try {
+      return await _dispatch(op, payload);
+    } finally {
+      _activeRequests -= 1;
+      if (_activeRequests == 0) {
+        _idleCompleter?.complete();
+        _idleCompleter = null;
+      }
+    }
+  }
+
+  Future<void> _whenRequestsIdle() async {
+    while (_activeRequests > 0) {
+      final completer = _idleCompleter ??= Completer<void>();
+      await completer.future;
     }
   }
 
@@ -2071,12 +2176,6 @@ final class _EmailDeltaWorkerServer {
       case 'deleteMessages':
         return _transport.deleteMessages(
           (payload['messageIds'] as List).cast<int>(),
-          accountId: payload['accountId'] as int?,
-        );
-      case 'forwardMessages':
-        return _transport.forwardMessages(
-          messageIds: (payload['messageIds'] as List).cast<int>(),
-          toChatId: payload['toChatId'] as int,
           accountId: payload['accountId'] as int?,
         );
       case 'searchMessages':
