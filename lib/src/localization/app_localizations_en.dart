@@ -1687,6 +1687,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsMessageToggle => 'Background notifications';
 
   @override
+  String get notificationsBackgroundMessagingHardKillWarning =>
+      'Leave Axichat running in the background for live delivery. Force stopping Axichat or restricting battery use can stop background messages.';
+
+  @override
   String get notificationsRequiresRestart => 'Strongly recommended';
 
   @override

@@ -7,6 +7,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
 
 const foregroundClientEmailDelta = 'email_delta';
 const foregroundTaskMessageSeparator = '::';
+const foregroundNotificationSnapshotPrefix = 'NotificationSnapshot';
+const foregroundNotificationSnapshotAckPrefix = 'NotificationSnapshotAck';
+const foregroundNotificationShownPrefix = 'ForegroundNotificationShown';
 const _notificationTapPrefix = 'NotificationTap';
 
 bool launchedFromNotification = false;

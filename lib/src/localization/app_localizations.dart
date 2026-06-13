@@ -3102,6 +3102,12 @@ abstract class AppLocalizations {
   /// **'Background notifications'**
   String get notificationsMessageToggle;
 
+  /// No description provided for @notificationsBackgroundMessagingHardKillWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave Axichat running in the background for live delivery. Force stopping Axichat or restricting battery use can stop background messages.'**
+  String get notificationsBackgroundMessagingHardKillWarning;
+
   /// No description provided for @notificationsRequiresRestart.
   ///
   /// In en, this message translates to:

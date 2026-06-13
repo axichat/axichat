@@ -1720,6 +1720,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get notificationsMessageToggle => 'Notificaciones en segundo plano';
 
   @override
+  String get notificationsBackgroundMessagingHardKillWarning =>
+      'Deja Axichat en segundo plano para la entrega en vivo. Forzar la detención de Axichat o restringir la batería puede detener los mensajes en segundo plano.';
+
+  @override
   String get notificationsRequiresRestart => 'Muy recomendable';
 
   @override

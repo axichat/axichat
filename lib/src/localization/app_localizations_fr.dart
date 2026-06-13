@@ -1727,6 +1727,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get notificationsMessageToggle => 'Notifications en arrière-plan';
 
   @override
+  String get notificationsBackgroundMessagingHardKillWarning =>
+      'Laissez Axichat en arrière-plan pour la réception en direct. Forcer l’arrêt d’Axichat ou restreindre la batterie peut arrêter les messages en arrière-plan.';
+
+  @override
   String get notificationsRequiresRestart => 'Fortement recommandé';
 
   @override

@@ -68,6 +68,21 @@ const SyncRateLimit settingsSyncRateLimit = SyncRateLimit(
   refreshCooldown: _syncRefreshCooldown,
 );
 
+const Duration messageNotificationRateLimitWindow = Duration(minutes: 1);
+const Duration messageNotificationRateLimitCleanupInterval = Duration(
+  minutes: 5,
+);
+const int messageNotificationMaxPerThread = 30;
+const int messageNotificationMaxGlobal = 120;
+const WindowRateLimit messageNotificationPerThreadRateLimit = WindowRateLimit(
+  maxEvents: messageNotificationMaxPerThread,
+  window: messageNotificationRateLimitWindow,
+);
+const WindowRateLimit messageNotificationGlobalRateLimit = WindowRateLimit(
+  maxEvents: messageNotificationMaxGlobal,
+  window: messageNotificationRateLimitWindow,
+);
+
 final class SyncRateLimiter {
   SyncRateLimiter(this.limit);
 

@@ -723,6 +723,7 @@ class EmailService {
     Map<String, bool> emailEncryptionBetaEnabledByAddress =
         const <String, bool>{},
     String? Function()? xmppSelfJidProvider,
+    Stream<Object?>? mailPushHints,
   }) : _credentialStore = credentialStore,
        _databaseBuilder = databaseBuilder,
        _endpointConfig = endpointConfig,
@@ -763,6 +764,12 @@ class EmailService {
         (address) => _transport.unblockContact(address),
       ),
     );
+    _mailPushHintSubscription = mailPushHints?.listen((_) {
+      fireAndForget(
+        handleForegroundResumeNetworkAvailable,
+        operationName: 'EmailService.mailPushHint',
+      );
+    });
     _attachTransportListener();
   }
 
@@ -778,6 +785,7 @@ class EmailService {
   final String? Function()? _xmppSelfJidProvider;
   final NotificationService? _notificationService;
   final ForegroundTaskBridge? _foregroundBridge;
+  StreamSubscription<Object?>? _mailPushHintSubscription;
   AppLocalizations? _localizations;
   final _EmailCredentialRuntimeSession _credentialSession =
       _EmailCredentialRuntimeSession();
@@ -2247,6 +2255,12 @@ class EmailService {
       _pendingPushToken = null;
       _runtimePhase = _EmailRuntimePhase.stopped;
     }
+  }
+
+  Future<void> close() async {
+    await _mailPushHintSubscription?.cancel();
+    _mailPushHintSubscription = null;
+    await shutdown();
   }
 
   Future<void> _shutdownForLogout({
@@ -6211,9 +6225,12 @@ class EmailService {
     required Message message,
     required AppLocalizations l10n,
   }) async {
-    final trimmed = message.body?.trim();
-    if (trimmed?.isNotEmpty == true) {
-      return trimmed;
+    final text = ChatSubjectCodec.previewEmailText(
+      body: message.body,
+      subject: message.subject,
+    );
+    if (text != null) {
+      return text;
     }
     final messageId = message.id;
     if (messageId != null && messageId.isNotEmpty) {

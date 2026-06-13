@@ -31,7 +31,7 @@ class NotificationRequest extends StatelessWidget {
   const NotificationRequest({
     super.key,
     this.displayMode = NotificationRequestDisplayMode.platformOnly,
-    this.allowCurrentSessionMigration = false,
+    this.allowCurrentSessionMigration = true,
     this.onForegroundActivationStarted,
     this.onForegroundActivationFinished,
     this.onForegroundActivated,
@@ -105,23 +105,27 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
         final switchValue =
             _pendingBackgroundMessagingEnabled ?? backgroundMessagingEnabled;
         final switchBusy = state.isBusy || _backgroundMessagingToggleInFlight;
-        final String? sublabel;
+        final foregroundActivationInFlight =
+            _backgroundMessagingToggleInFlight &&
+            widget.allowCurrentSessionMigration;
+        final String? statusSublabel;
         if (switchValue &&
             state.hasPermissions == true &&
             (_foregroundActivationDeferredUntilRestart ||
-                !state.foregroundServiceActive)) {
-          sublabel = l10n.notificationsRestartTitle;
+                (!state.foregroundServiceActive &&
+                    !foregroundActivationInFlight &&
+                    !widget.allowCurrentSessionMigration))) {
+          statusSublabel = l10n.notificationsRestartTitle;
         } else if (switchValue &&
-            state.foregroundServiceActive &&
-            state.hasPermissions == true) {
-          sublabel = null;
+            state.hasPermissions == true &&
+            (state.foregroundServiceActive || foregroundActivationInFlight)) {
+          statusSublabel = null;
         } else {
-          sublabel = l10n.notificationsRequiresRestart;
+          statusSublabel = l10n.notificationsRequiresRestart;
         }
-
         return ShadSwitch(
           label: Text(l10n.notificationsMessageToggle),
-          sublabel: sublabel == null ? null : Text(sublabel),
+          sublabel: statusSublabel == null ? null : Text(statusSublabel),
           value: switchValue,
           onChanged: switchBusy
               ? null
@@ -184,7 +188,6 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
         foregroundActivationStarted = true;
       }
       final foregroundResult = await notificationCubit.enableForegroundService(
-        emailKeepaliveEnabled: settingsCubit.state.endpointConfig.smtpEnabled,
         allowCurrentSessionMigration: widget.allowCurrentSessionMigration,
       );
       if (!context.mounted) {

@@ -32,6 +32,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/test/
+/integration_test/
 *.g.dart
 *.freezed.dart
 

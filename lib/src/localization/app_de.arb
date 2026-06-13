@@ -562,6 +562,7 @@
   "notificationsRestartTitle": "App neu starten, um Benachrichtigungen zu aktivieren",
   "notificationsRestartSubtitle": "Erforderliche Berechtigungen bereits erteilt",
   "notificationsMessageToggle": "Hintergrundbenachrichtigungen",
+  "notificationsBackgroundMessagingHardKillWarning": "Lass Axichat für Live-Zustellung im Hintergrund laufen. Erzwingen des Stopps oder Akku-Beschränkungen können Hintergrundnachrichten stoppen.",
   "notificationsRequiresRestart": "Dringend empfohlen",
   "notificationsDialogTitle": "Nachrichtenbenachrichtigungen aktivieren",
   "notificationsDialogIgnore": "Ignorieren",

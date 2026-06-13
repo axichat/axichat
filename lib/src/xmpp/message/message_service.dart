@@ -5486,6 +5486,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           return;
         }
         _trackMamGlobalAnchor(event);
+        if (_handleMailPushHint(event)) {
+          await _acknowledgeMessage(event);
+          return;
+        }
         final metadata = _extractFileMetadata(event);
         if (_handleCalendarSync(event, metadata: metadata)) return;
 
@@ -5519,6 +5523,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           timestamp: message.timestamp ?? DateTime.timestamp(),
         );
         message = _normalizeDefaultDomainSystemMessage(message);
+        if (message.isFpushMailNotifyMarker) {
+          await _acknowledgeMessage(event);
+          return;
+        }
         final accountJid = myJid;
         if (accountJid != null && (event.isCarbon || event.isFromMAM)) {
           final bool isSelfDirectMessage =
@@ -11223,6 +11231,49 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         session.recordPageProcessingFailure();
       }
     }
+  }
+
+  bool _handleMailPushHint(mox.MessageEvent event) {
+    final hint = event.extensions.get<MailPushHintData>();
+    if (hint == null) {
+      return false;
+    }
+    final accountJid = myJid?.trim();
+    if (accountJid == null ||
+        accountJid.isEmpty ||
+        !_mailPushHintMatchesAccount(hint, accountJid)) {
+      return false;
+    }
+    if (event.isFromMAM || event.isCarbon) {
+      return true;
+    }
+    emitMailPushHint(
+      XmppMailPushHint(
+        fromJid: hint.fromJid,
+        toJid: hint.toJid,
+        stanzaId: hint.stanzaId,
+      ),
+    );
+    return true;
+  }
+
+  bool _mailPushHintMatchesAccount(MailPushHintData hint, String accountJid) {
+    final fromDomain = addressDomainPart(
+      bareAddress(hint.fromJid) ?? hint.fromJid,
+    )?.toLowerCase();
+    final accountDomain = addressDomainPart(
+      bareAddress(accountJid) ?? accountJid,
+    )?.toLowerCase();
+    if (accountDomain == null || fromDomain != accountDomain) {
+      return false;
+    }
+    final toJid = hint.toJid?.trim();
+    if (toJid != null &&
+        toJid.isNotEmpty &&
+        !sameBareAddress(toJid, accountJid)) {
+      return false;
+    }
+    return true;
   }
 
   bool _handleCalendarSync(

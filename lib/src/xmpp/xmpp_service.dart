@@ -40,6 +40,8 @@ import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
+import 'package:axichat/src/common/foreground_notification_snapshot.dart';
+import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
@@ -507,6 +509,10 @@ abstract interface class XmppBase {
 
   bool allowsAutoDownloadMetadata(FileMetadataData metadata);
 
+  void scheduleForegroundNotificationSnapshotPublish() {}
+
+  Future<bool> ensureForegroundNotificationSnapshotReady() async => false;
+
   Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
   CapabilityDecision decidePubSubSupport({
@@ -641,6 +647,10 @@ abstract interface class XmppBase {
 
   void emitXmppOperation(XmppOperationEvent event) {}
 
+  Stream<XmppMailPushHint> get mailPushHintStream;
+
+  void emitMailPushHint(XmppMailPushHint hint) {}
+
   Stream<mox.OmemoActivityEvent> get omemoActivityStream;
 
   void emitOmemoActivity(mox.OmemoActivityEvent event) {}
@@ -698,6 +708,14 @@ final class XmppBootstrapOperation {
   final Object? lane;
 }
 
+final class XmppMailPushHint {
+  const XmppMailPushHint({required this.fromJid, this.toJid, this.stanzaId});
+
+  final String fromJid;
+  final String? toJid;
+  final String? stanzaId;
+}
+
 enum _XmppBootstrapOperationOutcome { success, failed, aborted, skipped }
 
 final class _XmppBootstrapPass {
@@ -738,6 +756,8 @@ class XmppService extends XmppBase
     this._lifecycleStateProvider,
   ) {
     _pingController = XmppPingController(owner: this);
+    _foregroundNotificationShownSubscription = foregroundNotificationShownStream
+        .listen(_rememberForegroundNotificationDedupeKeys);
   }
 
   static XmppService? _instance;
@@ -746,12 +766,17 @@ class XmppService extends XmppBase
   static const NotificationPayloadCodec _notificationPayloadCodec =
       NotificationPayloadCodec();
   static const _defaultConnectingWatchdogTimeout = Duration(seconds: 20);
+  static const _foregroundNotificationSnapshotAckTimeout = Duration(seconds: 5);
   final Map<String, String> _notificationPayloadCache = <String, String>{};
   final Map<String, String> _notificationPayloadLowerCache = <String, String>{};
   bool _notificationPayloadCacheReady = false;
   Future<void>? _notificationPayloadCacheFuture;
+  int _foregroundNotificationSnapshotSequence = 0;
   static const int _notificationPayloadLookupStart = 0;
   static const int _notificationPayloadLookupEnd = 0;
+  static const Duration _foregroundNotificationDedupeTtl = Duration(
+    seconds: 90,
+  );
 
   factory XmppService({
     required FutureOr<XmppConnection> Function() buildConnection,
@@ -803,12 +828,45 @@ class XmppService extends XmppBase
   var _autoDownloadVideos = false;
   var _autoDownloadDocuments = false;
   var _autoDownloadArchives = false;
+  var _foregroundChatNotificationsMuted = false;
+  var _foregroundEmailNotificationsMuted = false;
+  var _foregroundNotificationPreviewsEnabled = false;
+  ForegroundNotificationStrings _foregroundNotificationStrings =
+      const ForegroundNotificationStrings.empty();
+  final Map<String, DateTime> _foregroundNotificationDedupeKeys =
+      <String, DateTime>{};
 
   AppLocalizations get localizations =>
       _localizations ?? lookupAppLocalizations(const ui.Locale('en'));
 
   void updateLocalizations(AppLocalizations localizations) {
     _localizations = localizations;
+  }
+
+  void updateForegroundNotificationStrings(
+    ForegroundNotificationStrings strings,
+  ) {
+    if (_foregroundNotificationStrings == strings) {
+      return;
+    }
+    _foregroundNotificationStrings = strings;
+    scheduleForegroundNotificationSnapshotPublish();
+  }
+
+  void updateForegroundNotificationSettings({
+    required bool chatNotificationsMuted,
+    required bool emailNotificationsMuted,
+    required bool notificationPreviewsEnabled,
+  }) {
+    if (_foregroundChatNotificationsMuted == chatNotificationsMuted &&
+        _foregroundEmailNotificationsMuted == emailNotificationsMuted &&
+        _foregroundNotificationPreviewsEnabled == notificationPreviewsEnabled) {
+      return;
+    }
+    _foregroundChatNotificationsMuted = chatNotificationsMuted;
+    _foregroundEmailNotificationsMuted = emailNotificationsMuted;
+    _foregroundNotificationPreviewsEnabled = notificationPreviewsEnabled;
+    scheduleForegroundNotificationSnapshotPublish();
   }
 
   bool get mamSupported => _mamSupportResolved && _mamSupported;
@@ -854,6 +912,208 @@ class XmppService extends XmppBase
   }
 
   @override
+  void scheduleForegroundNotificationSnapshotPublish() {
+    fireAndForget(
+      () => _publishForegroundNotificationSnapshot(source: 'scheduled'),
+      operationName: 'XmppService.publishForegroundNotificationSnapshot',
+    );
+  }
+
+  @override
+  Future<bool> ensureForegroundNotificationSnapshotReady() {
+    return _publishForegroundNotificationSnapshot(source: 'activation');
+  }
+
+  Future<bool> _publishForegroundNotificationSnapshot({
+    required String source,
+  }) async {
+    if (!Platform.isAndroid) {
+      _xmppLogger.fine(
+        'Skipping foreground notification snapshot publish: '
+        'source=$source reason=notAndroid',
+      );
+      return false;
+    }
+    if (!_foregroundNotificationStrings.hasMessageLabels &&
+        !_foregroundNotificationStrings.hasEmailLabels) {
+      _xmppLogger.fine(
+        'Skipping foreground notification snapshot publish: '
+        'source=$source reason=missingLabels',
+      );
+      return false;
+    }
+    if (!_database.isCompleted) {
+      _xmppLogger.fine(
+        'Skipping foreground notification snapshot publish: '
+        'source=$source reason=databaseNotReady',
+      );
+      return false;
+    }
+    if (myJid == null) {
+      _xmppLogger.fine(
+        'Skipping foreground notification snapshot publish: '
+        'source=$source reason=missingJid',
+      );
+      return false;
+    }
+    try {
+      if (!await foregroundTaskBridge.isRunning()) {
+        _xmppLogger.fine(
+          'Skipping foreground notification snapshot publish: '
+          'source=$source reason=foregroundTaskStopped',
+        );
+        return false;
+      }
+      final snapshotData =
+          await _dbOpReturning<
+            XmppDatabase,
+            ({List<Chat> chats, List<BlocklistData> blocklist})
+          >(
+            (db) async => (
+              chats: await db.getChats(start: 0, end: 0),
+              blocklist: await db.getBlocklist(start: 0, end: 0),
+            ),
+          );
+      final snapshot = ForegroundNotificationSnapshot(
+        accountJid: myJid,
+        chatNotificationsMuted: _foregroundChatNotificationsMuted,
+        emailNotificationsMuted: _foregroundEmailNotificationsMuted,
+        notificationPreviewsEnabled: _foregroundNotificationPreviewsEnabled,
+        strings: _foregroundNotificationStrings,
+        chatPolicies: _foregroundNotificationPoliciesFor(snapshotData.chats),
+        blockedJids: snapshotData.blocklist.map((entry) => entry.jid),
+      );
+      final token = (++_foregroundNotificationSnapshotSequence).toString();
+      final ack = Completer<bool>();
+      final listenerId = '$foregroundNotificationSnapshotPrefix:$token';
+      Future<void> handleAck(String data) async {
+        if (!data.startsWith(
+          '$foregroundNotificationSnapshotAckPrefix$foregroundTaskMessageSeparator',
+        )) {
+          return;
+        }
+        final payload = data.substring(
+          '$foregroundNotificationSnapshotAckPrefix$foregroundTaskMessageSeparator'
+              .length,
+        );
+        if (payload == token && !ack.isCompleted) {
+          ack.complete(true);
+        }
+      }
+
+      foregroundTaskBridge.registerListener(listenerId, handleAck);
+      final bool acknowledged;
+      try {
+        await foregroundTaskBridge.send([
+          foregroundNotificationSnapshotPrefix,
+          token,
+          snapshot.encode(),
+        ]);
+        acknowledged = await ack.future.timeout(
+          _foregroundNotificationSnapshotAckTimeout,
+          onTimeout: () => false,
+        );
+      } finally {
+        foregroundTaskBridge.unregisterListener(listenerId);
+      }
+      if (!acknowledged) {
+        _xmppLogger.fine(
+          'Foreground notification snapshot was not acknowledged: '
+          'source=$source',
+        );
+        return false;
+      }
+      _xmppLogger.fine(
+        'Published foreground notification snapshot: source=$source',
+      );
+      return true;
+    } on MissingPluginException catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Foreground task plugin unavailable while publishing notification snapshot.',
+        error,
+        stackTrace,
+      );
+      return false;
+    } on XmppAbortedException {
+      // Account/session reset won the race; the next connect/settings update
+      // will publish a fresh snapshot if the foreground task is still running.
+      return false;
+    }
+  }
+
+  Iterable<ForegroundChatNotificationPolicy> _foregroundNotificationPoliciesFor(
+    Iterable<Chat> chats,
+  ) sync* {
+    for (final chat in chats) {
+      final addressKeys = <String>{
+        ?normalizedAddressKey(chat.jid),
+        ?normalizedAddressKey(chat.remoteJid),
+      };
+      if (addressKeys.isEmpty) {
+        continue;
+      }
+      yield ForegroundChatNotificationPolicy(
+        addressKeys: addressKeys,
+        title: chat.displayName,
+        threadKey: _notificationPayloadCodec.encodeChatJid(chat.jid) ?? '',
+        isGroupConversation: chat.type == ChatType.groupChat,
+        myNickname: chat.myNickname,
+        previewSetting: switch (chat.notificationPreviewSetting) {
+          NotificationPreviewSetting.show =>
+            ForegroundNotificationPreviewSetting.show,
+          NotificationPreviewSetting.hide =>
+            ForegroundNotificationPreviewSetting.hide,
+          null => null,
+        },
+        notificationBehavior: switch (chat.effectiveNotificationBehavior) {
+          ChatNotificationBehavior.muted =>
+            ForegroundChatNotificationBehavior.muted,
+          ChatNotificationBehavior.alwaysNotify =>
+            ForegroundChatNotificationBehavior.alwaysNotify,
+          null => null,
+        },
+      );
+    }
+  }
+
+  void _rememberForegroundNotificationDedupeKeys(List<String> keys) {
+    final now = DateTime.timestamp();
+    _foregroundNotificationDedupeKeys.removeWhere(
+      (key, createdAt) =>
+          now.difference(createdAt) > _foregroundNotificationDedupeTtl,
+    );
+    for (final key in keys) {
+      final normalized = key.trim();
+      if (normalized.isNotEmpty) {
+        _foregroundNotificationDedupeKeys[normalized] = now;
+      }
+    }
+  }
+
+  bool _consumeForegroundNotificationForMessage(Message message) {
+    final now = DateTime.timestamp();
+    _foregroundNotificationDedupeKeys.removeWhere(
+      (key, createdAt) =>
+          now.difference(createdAt) > _foregroundNotificationDedupeTtl,
+    );
+    var consumed = false;
+    for (final key in _foregroundNotificationDedupeKeysFor(message)) {
+      if (_foregroundNotificationDedupeKeys.remove(key) != null) {
+        consumed = true;
+      }
+    }
+    return consumed;
+  }
+
+  Iterable<String> _foregroundNotificationDedupeKeysFor(Message message) sync* {
+    for (final id in message.referenceIds) {
+      if (foregroundNotificationStanzaDedupeKey(id) case final key?) {
+        yield key;
+      }
+    }
+  }
+
+  @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
 
   void _notifyDatabaseReloaded() {
@@ -867,9 +1127,13 @@ class XmppService extends XmppBase
 
   StreamController<XmppOperationEvent> _xmppOperationController =
       StreamController<XmppOperationEvent>.broadcast();
+  StreamController<XmppMailPushHint> _mailPushHintController =
+      StreamController<XmppMailPushHint>.broadcast(sync: true);
   StreamController<mox.OmemoActivityEvent> _omemoActivityController =
       StreamController<mox.OmemoActivityEvent>.broadcast();
   StreamSubscription<mox.OmemoActivityEvent>? _omemoActivitySubscription;
+  late final StreamSubscription<List<String>>
+  _foregroundNotificationShownSubscription;
   StreamSubscription<NetworkAvailability>? _networkAvailabilitySubscription;
   late final XmppPingController _pingController;
 
@@ -902,6 +1166,16 @@ class XmppService extends XmppBase
     }
     _handleDemoXmppOperationEvent(event);
     _xmppOperationController.add(event);
+  }
+
+  @override
+  Stream<XmppMailPushHint> get mailPushHintStream =>
+      _mailPushHintController.stream;
+
+  @override
+  void emitMailPushHint(XmppMailPushHint hint) {
+    if (_mailPushHintController.isClosed) return;
+    _mailPushHintController.add(hint);
   }
 
   @override
@@ -1883,6 +2157,7 @@ class XmppService extends XmppBase
         password: password,
       );
       await _attachMessageNotificationSubscription();
+      scheduleForegroundNotificationSnapshotPublish();
       _sessionReconnectEnabled = true;
       _ensureNetworkAvailabilityListener();
     }
@@ -1962,6 +2237,7 @@ class XmppService extends XmppBase
     );
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
+    scheduleForegroundNotificationSnapshotPublish();
     fireAndForget(
       _verifyMamSupportOnLogin,
       operationName: 'XmppService.verifyMamSupportOnLogin',
@@ -1988,7 +2264,9 @@ class XmppService extends XmppBase
     await _messageSubscription?.cancel();
     _messageSubscription = _messageStream.stream.listen((message) async {
       if (_consumeSuppressedNotificationForMessage(message) ||
-          message.displayed) {
+          _consumeForegroundNotificationForMessage(message) ||
+          message.displayed ||
+          message.isFpushMailNotifyMarker) {
         return;
       }
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(
@@ -3807,6 +4085,9 @@ class XmppService extends XmppBase
         !foregroundServiceActive.value) {
       foregroundServiceActive.value = true;
     }
+    if (_connection.socketWrapper is ForegroundSocketWrapper) {
+      scheduleForegroundNotificationSnapshotPublish();
+    }
   }
 
   Future<void> _releaseForegroundConnection(XmppConnection connection) async {
@@ -3939,6 +4220,7 @@ class XmppService extends XmppBase
 
     await _omemoActivitySubscription?.cancel();
     _omemoActivitySubscription = null;
+    _foregroundNotificationDedupeKeys.clear();
 
     await _closeManagerStreams();
 
@@ -4045,6 +4327,11 @@ class XmppService extends XmppBase
       _xmppOperationController =
           StreamController<XmppOperationEvent>.broadcast();
     }
+    if (_mailPushHintController.isClosed) {
+      _mailPushHintController = StreamController<XmppMailPushHint>.broadcast(
+        sync: true,
+      );
+    }
     if (_omemoActivityController.isClosed) {
       _omemoActivityController =
           StreamController<mox.OmemoActivityEvent>.broadcast();
@@ -4079,6 +4366,9 @@ class XmppService extends XmppBase
     if (!_xmppOperationController.isClosed) {
       await _xmppOperationController.close();
     }
+    if (!_mailPushHintController.isClosed) {
+      await _mailPushHintController.close();
+    }
     if (!_omemoActivityController.isClosed) {
       await _omemoActivityController.close();
     }
@@ -4098,6 +4388,7 @@ class XmppService extends XmppBase
 
   Future<void> close() async {
     _cancelConnectingWatchdog();
+    await _foregroundNotificationShownSubscription.cancel();
     if (_hasInitializedConnection) {
       final connection = _connection;
       await connection.getManager<PubSubManager>()?.disposeSupport();

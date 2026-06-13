@@ -562,6 +562,7 @@
   "notificationsRestartTitle": "重启应用以启用通知",
   "notificationsRestartSubtitle": "必要权限已授予",
   "notificationsMessageToggle": "后台通知",
+  "notificationsBackgroundMessagingHardKillWarning": "请让 Axichat 在后台运行以实时接收消息。强行停止 Axichat 或限制电池使用可能会停止后台消息。",
   "notificationsRequiresRestart": "强烈建议",
   "notificationsDialogTitle": "启用消息通知",
   "notificationsDialogIgnore": "忽略",

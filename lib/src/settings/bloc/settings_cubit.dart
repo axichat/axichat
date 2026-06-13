@@ -45,7 +45,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
        _ownsRecoveryClient = recoveryClient == null,
        super(const SettingsState()) {
     _initialStoredLoginJid = _readStoredLoginJid();
-    _applyAttachmentAutoDownloadSettings(state);
+    _applySettingsSideEffects(state);
     final service = _xmppService;
     if (service != null) {
       _settingsSyncSubscription = service.settingsSyncUpdateStream.listen(
@@ -910,6 +910,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void _applySettingsSideEffects(SettingsState nextState) {
     _applyAttachmentAutoDownloadSettings(nextState);
+    _applyForegroundNotificationSettings(nextState);
   }
 
   void _applyAttachmentAutoDownloadSettings(SettingsState nextState) {
@@ -918,6 +919,14 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       videosEnabled: nextState.autoDownloadVideos,
       documentsEnabled: nextState.autoDownloadDocuments,
       archivesEnabled: nextState.autoDownloadArchives,
+    );
+  }
+
+  void _applyForegroundNotificationSettings(SettingsState nextState) {
+    _xmppService?.updateForegroundNotificationSettings(
+      chatNotificationsMuted: nextState.chatNotificationsMuted,
+      emailNotificationsMuted: nextState.emailNotificationsMuted,
+      notificationPreviewsEnabled: nextState.notificationPreviewsEnabled,
     );
   }
 

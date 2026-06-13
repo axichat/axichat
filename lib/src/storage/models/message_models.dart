@@ -853,6 +853,20 @@ extension MessageContent on Message {
         received: received,
       );
 
+  bool get isFpushMailNotifyMarker {
+    if (isEmailBacked) {
+      return false;
+    }
+    final senderKey = normalizedAddressKey(senderJid);
+    if (senderKey == null) {
+      return false;
+    }
+    if (senderKey == 'mail-notify') {
+      return true;
+    }
+    return addressLocalPart(senderKey)?.toLowerCase() == 'mail-notify';
+  }
+
   String? get normalizedHtmlBody => HtmlContentCodec.normalizeHtml(htmlBody);
 
   String get plainText {
@@ -1024,7 +1038,7 @@ extension MessageReferenceIds on Message {
     final hasSubject = subject?.trim().isNotEmpty == true;
     final hasAttachment = fileMetadataID?.trim().isNotEmpty == true;
     final pseudoMessageType = this.pseudoMessageType;
-    if (isHiddenMultiDeviceSyncMessage) {
+    if (isHiddenMultiDeviceSyncMessage || isFpushMailNotifyMarker) {
       return false;
     }
     if (!(hasBody || hasSubject || hasAttachment)) {

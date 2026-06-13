@@ -78,8 +78,7 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   }
 
   Future<ForegroundActivationResult> enableForegroundService({
-    bool emailKeepaliveEnabled = true,
-    bool allowCurrentSessionMigration = false,
+    bool allowCurrentSessionMigration = true,
   }) async {
     final existing = _enableForegroundOperation;
     if (existing != null) {
@@ -90,7 +89,6 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
     final operation =
         CancelableOperation<ForegroundActivationResult>.fromFuture(
           _enableForegroundService(
-            emailKeepaliveEnabled: emailKeepaliveEnabled,
             allowCurrentSessionMigration: allowCurrentSessionMigration,
           ),
         );
@@ -113,11 +111,9 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   }
 
   Future<ForegroundActivationResult> _enableForegroundService({
-    required bool emailKeepaliveEnabled,
     required bool allowCurrentSessionMigration,
   }) async {
     return _foregroundRuntimeController.enableForUserToggle(
-      emailKeepaliveEnabled: emailKeepaliveEnabled,
       allowCurrentSessionMigration: allowCurrentSessionMigration,
     );
   }

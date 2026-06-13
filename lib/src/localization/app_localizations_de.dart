@@ -1729,6 +1729,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get notificationsMessageToggle => 'Hintergrundbenachrichtigungen';
 
   @override
+  String get notificationsBackgroundMessagingHardKillWarning =>
+      'Lass Axichat für Live-Zustellung im Hintergrund laufen. Erzwingen des Stopps oder Akku-Beschränkungen können Hintergrundnachrichten stoppen.';
+
+  @override
   String get notificationsRequiresRestart => 'Dringend empfohlen';
 
   @override

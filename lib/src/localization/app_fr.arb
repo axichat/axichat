@@ -558,6 +558,7 @@
   "notificationsRestartTitle": "Redémarrez l’app pour activer les notifications",
   "notificationsRestartSubtitle": "Autorisations requises déjà accordées",
   "notificationsMessageToggle": "Notifications en arrière-plan",
+  "notificationsBackgroundMessagingHardKillWarning": "Laissez Axichat en arrière-plan pour la réception en direct. Forcer l’arrêt d’Axichat ou restreindre la batterie peut arrêter les messages en arrière-plan.",
   "notificationsRequiresRestart": "Fortement recommandé",
   "notificationsDialogTitle": "Activer les notifications de messages",
   "notificationsDialogIgnore": "Ignorer",

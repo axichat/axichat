@@ -558,6 +558,7 @@
   "notificationsRestartTitle": "Reinicia la app para activar las notificaciones",
   "notificationsRestartSubtitle": "Permisos necesarios ya concedidos",
   "notificationsMessageToggle": "Notificaciones en segundo plano",
+  "notificationsBackgroundMessagingHardKillWarning": "Deja Axichat en segundo plano para la entrega en vivo. Forzar la detención de Axichat o restringir la batería puede detener los mensajes en segundo plano.",
   "notificationsRequiresRestart": "Muy recomendable",
   "notificationsDialogTitle": "Activar notificaciones de mensajes",
   "notificationsDialogIgnore": "Ignorar",

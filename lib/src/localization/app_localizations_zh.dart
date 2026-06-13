@@ -1613,6 +1613,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationsMessageToggle => '后台通知';
 
   @override
+  String get notificationsBackgroundMessagingHardKillWarning =>
+      '请让 Axichat 在后台运行以实时接收消息。强行停止 Axichat 或限制电池使用可能会停止后台消息。';
+
+  @override
   String get notificationsRequiresRestart => '强烈建议';
 
   @override
@@ -8440,6 +8444,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get notificationsMessageToggle => '背景通知';
+
+  @override
+  String get notificationsBackgroundMessagingHardKillWarning =>
+      '請讓 Axichat 在背景執行以即時接收訊息。強行停止 Axichat 或限制電池使用可能會停止背景訊息。';
 
   @override
   String get notificationsRequiresRestart => '強烈建議';

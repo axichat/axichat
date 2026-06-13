@@ -2,21 +2,32 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/flavor_prefix.dart';
+import 'package:axichat/src/common/foreground_notification_snapshot.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
+import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/safe_logging.dart';
+import 'package:axichat/src/common/sync_rate_limiter.dart';
+import 'package:axichat/src/common/xml_safety.dart';
+import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    as local_notifications;
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:xml/xml.dart' as xml;
 
 const join = foregroundTaskMessageSeparator;
 const connectPrefix = 'Connect';
@@ -73,6 +84,12 @@ ForegroundTaskBridge get foregroundTaskBridge => _foregroundTaskBridge;
 set foregroundTaskBridge(ForegroundTaskBridge bridge) {
   _foregroundTaskBridge = bridge;
 }
+
+final _foregroundNotificationShownController =
+    StreamController<List<String>>.broadcast(sync: true);
+
+Stream<List<String>> get foregroundNotificationShownStream =>
+    _foregroundNotificationShownController.stream;
 
 class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   FlutterForegroundTaskBridge({
@@ -516,11 +533,39 @@ void startCallback() {
 }
 
 class ForegroundSocket extends TaskHandler {
+  ForegroundSocket({
+    ForegroundSocketNotificationResolver? notificationResolver,
+    Future<bool> Function(ForegroundSocketNotificationRequest)?
+    showNotification,
+    Future<bool> Function()? isAppOnForeground,
+    void Function(List<Object> strings)? sendToMain,
+  }) : _notificationResolver =
+           notificationResolver ?? ForegroundSocketNotificationResolver(),
+       _showNotification =
+           showNotification ?? ForegroundSocketNotificationPresenter().show,
+       _isAppOnForeground = isAppOnForeground ?? _defaultIsAppOnForeground,
+       _sendToMainOverride = sendToMain;
+
   static final _log = Logger('ForegroundSocket');
 
   XmppSocketWrapper? _socket;
+  final ForegroundSocketNotificationResolver _notificationResolver;
+  final Future<bool> Function(ForegroundSocketNotificationRequest)
+  _showNotification;
+  final Future<bool> Function() _isAppOnForeground;
+  final void Function(List<Object> strings)? _sendToMainOverride;
+  final WindowRateLimiter _messageNotificationGlobalLimiter = WindowRateLimiter(
+    messageNotificationGlobalRateLimit,
+  );
+  final KeyedWindowRateLimiter _messageNotificationPerThreadLimiter =
+      KeyedWindowRateLimiter(
+        limit: messageNotificationPerThreadRateLimit,
+        cleanupInterval: messageNotificationRateLimitCleanupInterval,
+      );
   late final StreamSubscription<String> _dataSubscription;
   late final StreamSubscription<mox.XmppSocketEvent> _eventSubscription;
+  Future<void> _incomingDataQueue = Future<void>.value();
+  var _foregroundCheckUnavailable = false;
 
   static void _sendToMain(List<Object> strings) {
     final data = strings.join(join);
@@ -535,7 +580,124 @@ class ForegroundSocket extends TaskHandler {
     FlutterForegroundTask.sendDataToMain(data);
   }
 
-  static void _onData(String data) => _sendToMain([dataPrefix, data]);
+  void _sendDataToMain(List<Object> strings) {
+    final override = _sendToMainOverride;
+    if (override != null) {
+      override(strings);
+      return;
+    }
+    _sendToMain(strings);
+  }
+
+  static Future<bool> _defaultIsAppOnForeground() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+    return FlutterForegroundTask.isAppOnForeground;
+  }
+
+  Future<bool> _shouldHandleForegroundNotifications() async {
+    try {
+      return !await _isAppOnForeground();
+    } on MissingPluginException catch (error, stackTrace) {
+      if (!_foregroundCheckUnavailable) {
+        _log.fine(
+          'Foreground app-state check unavailable; allowing notifications.',
+          error,
+          stackTrace,
+        );
+        _foregroundCheckUnavailable = true;
+      }
+      return true;
+    } on PlatformException catch (error, stackTrace) {
+      if (!_foregroundCheckUnavailable) {
+        _log.fine(
+          'Foreground app-state check unavailable; allowing notifications.',
+          error,
+          stackTrace,
+        );
+        _foregroundCheckUnavailable = true;
+      }
+      return true;
+    }
+  }
+
+  Future<void> _resolveAndForward(String data) async {
+    try {
+      if (await _shouldHandleForegroundNotifications()) {
+        final requests = _notificationResolver.resolve(data);
+        for (final request in requests) {
+          if (!_allowMessageNotification(request)) {
+            continue;
+          }
+          if (await _showNotification(request)) {
+            _sendDataToMain([
+              foregroundNotificationShownPrefix,
+              jsonEncode(request.dedupeKeys),
+            ]);
+          }
+        }
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Foreground notification resolution failed; forwarding socket data.',
+        error,
+        stackTrace,
+      );
+    } finally {
+      _sendDataToMain([dataPrefix, data]);
+    }
+  }
+
+  bool _allowMessageNotification(ForegroundSocketNotificationRequest request) {
+    final threadKey = request.payload.trim();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (threadKey.isNotEmpty &&
+        !_messageNotificationPerThreadLimiter.allowEvent(
+          threadKey,
+          nowMs: nowMs,
+        )) {
+      return false;
+    }
+    return _messageNotificationGlobalLimiter.allowEvent(nowMs: nowMs);
+  }
+
+  @visibleForTesting
+  Future<void> debugResolveAndForward(String data) => _resolveAndForward(data);
+
+  void _queueSocketData(String data) {
+    _incomingDataQueue = _incomingDataQueue.then(
+      (_) => _resolveAndForward(data),
+      onError: (Object error, StackTrace stackTrace) {
+        if (error is Exception) {
+          _log.warning(
+            'Foreground socket data queue recovered after an exception.',
+            error,
+            stackTrace,
+          );
+        }
+        return _resolveAndForward(data);
+      },
+    );
+  }
+
+  Future<void> _drainIncomingDataQueue() async {
+    try {
+      await _incomingDataQueue.timeout(const Duration(seconds: 5));
+    } on TimeoutException catch (error, stackTrace) {
+      _log.warning(
+        'Timed out draining foreground socket data before destroy.',
+        error,
+        stackTrace,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Foreground socket data queue failed before destroy.',
+        error,
+        stackTrace,
+      );
+    }
+  }
 
   static void _onEvent(mox.XmppSocketEvent event) {
     if (event is mox.XmppSocketErrorEvent) {
@@ -554,9 +716,9 @@ class ForegroundSocket extends TaskHandler {
 
     _log.fine('onStart called.');
     _socket ??= XmppSocketWrapper();
-    _dataSubscription = _socket!.getDataStream().listen(_onData);
+    _dataSubscription = _socket!.getDataStream().listen(_queueSocketData);
     _eventSubscription = _socket!.getEventStream().listen(_onEvent);
-    _sendToMain([taskReadyPrefix]);
+    _sendDataToMain([taskReadyPrefix]);
   }
 
   @override
@@ -569,6 +731,23 @@ class ForegroundSocket extends TaskHandler {
         ? 0
         : data.length - separatorIndex - join.length;
     _log.fine('Received task: type=$type payloadLen=$payloadLength');
+    if (data.startsWith('$foregroundNotificationSnapshotPrefix$join')) {
+      final payload = data.substring(
+        '$foregroundNotificationSnapshotPrefix$join'.length,
+      );
+      final tokenSeparator = payload.indexOf(join);
+      final token = tokenSeparator == -1
+          ? null
+          : payload.substring(0, tokenSeparator);
+      final snapshotPayload = tokenSeparator == -1
+          ? payload
+          : payload.substring(tokenSeparator + join.length);
+      final updated = _notificationResolver.updateSnapshot(snapshotPayload);
+      if (updated && token != null && token.isNotEmpty) {
+        _sendDataToMain([foregroundNotificationSnapshotAckPrefix, token]);
+      }
+      return;
+    }
     _socket ??= XmppSocketWrapper();
     if (data.startsWith('$connectPrefix$join')) {
       final split = data.split(join);
@@ -582,11 +761,11 @@ class ForegroundSocket extends TaskHandler {
       );
       final result = await _socket!.connect(split[1], host: host, port: port);
       _log.info('Foreground task XMPP socket connect result: $result');
-      return _sendToMain([connectPrefix, result]);
+      return _sendDataToMain([connectPrefix, result]);
     } else if (data.startsWith('$securePrefix$join')) {
       final domain = data.substring('$securePrefix$join'.length);
       final result = await _socket!.secure(domain);
-      return _sendToMain([securePrefix, result]);
+      return _sendDataToMain([securePrefix, result]);
     } else if (data.startsWith('$writePrefix$join')) {
       return _socket?.write(data.substring('$writePrefix$join'.length));
     } else if (data.startsWith('$closePrefix$join')) {
@@ -603,6 +782,825 @@ class ForegroundSocket extends TaskHandler {
     _socket = null;
     await _dataSubscription.cancel();
     await _eventSubscription.cancel();
+    await _drainIncomingDataQueue();
+  }
+}
+
+@visibleForTesting
+final class ForegroundSocketNotificationRequest {
+  const ForegroundSocketNotificationRequest({
+    required this.notificationId,
+    required this.title,
+    required this.body,
+    required this.payload,
+    required this.channelName,
+    required this.showPreview,
+    required this.dedupeKeys,
+  });
+
+  final int notificationId;
+  final String title;
+  final String? body;
+  final String payload;
+  final String channelName;
+  final bool showPreview;
+  final List<String> dedupeKeys;
+}
+
+@visibleForTesting
+final class ForegroundSocketNotificationResolver {
+  ForegroundSocketNotificationResolver({
+    ForegroundMessageStanzaBuffer? buffer,
+    ForegroundSocketMessageExtractor? extractor,
+    DateTime Function()? now,
+  }) : _buffer = buffer ?? ForegroundMessageStanzaBuffer(),
+       _extractor = extractor ?? const ForegroundSocketMessageExtractor(),
+       _now = now ?? DateTime.timestamp;
+
+  static const Duration _dedupeTtl = Duration(seconds: 90);
+
+  final ForegroundMessageStanzaBuffer _buffer;
+  final ForegroundSocketMessageExtractor _extractor;
+  final DateTime Function() _now;
+  final Map<String, DateTime> _recentNotificationKeys = <String, DateTime>{};
+  ForegroundNotificationSnapshot? _snapshot;
+
+  bool updateSnapshot(String raw) {
+    final snapshot = ForegroundNotificationSnapshot.tryDecode(raw);
+    if (snapshot == null) {
+      return false;
+    }
+    _snapshot = snapshot;
+    return true;
+  }
+
+  List<ForegroundSocketNotificationRequest> resolve(String socketData) {
+    final snapshot = _snapshot;
+    if (snapshot == null ||
+        (!snapshot.strings.hasMessageLabels &&
+            !snapshot.strings.hasEmailLabels)) {
+      return const <ForegroundSocketNotificationRequest>[];
+    }
+    final requests = <ForegroundSocketNotificationRequest>[];
+    for (final stanza in _buffer.add(socketData)) {
+      final candidate = _extractor.extract(stanza, snapshot: snapshot);
+      if (candidate == null) {
+        continue;
+      }
+      final request = _requestFor(candidate, snapshot);
+      if (request != null) {
+        requests.add(request);
+      }
+    }
+    return requests;
+  }
+
+  ForegroundSocketNotificationRequest? _requestFor(
+    ForegroundSocketMessageCandidate candidate,
+    ForegroundNotificationSnapshot snapshot,
+  ) {
+    if (candidate.isMailPushHint) {
+      return _mailPushRequestFor(candidate, snapshot);
+    }
+    if (!snapshot.strings.hasMessageLabels) {
+      return null;
+    }
+    final policy = snapshot.policyFor(candidate.chatJid);
+    if (policy?.allowsNotification(
+          globalChatNotificationsMuted: snapshot.chatNotificationsMuted,
+        ) ==
+        false) {
+      return null;
+    }
+    if (policy == null && snapshot.chatNotificationsMuted) {
+      return null;
+    }
+    final threadKey = _notificationThreadKey(policy, candidate.chatJid);
+    if (threadKey.isEmpty) {
+      return null;
+    }
+    final showPreview =
+        policy?.resolvePreviews(snapshot.notificationPreviewsEnabled) ??
+        snapshot.notificationPreviewsEnabled;
+    final sanitizedBody = showPreview
+        ? sanitizeNotificationPreview(candidate.preview)
+        : null;
+    final conversationTitle = _notificationLabel(
+      policy?.title,
+      fallback: candidate.conversationTitle,
+    );
+    final senderName = _notificationLabel(
+      candidate.senderName,
+      fallback: conversationTitle,
+    );
+    final presentation = _resolvePresentation(
+      strings: snapshot.strings,
+      conversationTitle: conversationTitle,
+      senderName: senderName,
+      isGroupConversation:
+          policy?.isGroupConversation ?? candidate.isGroupConversation,
+      sanitizedBody: sanitizedBody,
+    );
+    final dedupeKeys = candidate.dedupeKeys;
+    if (dedupeKeys.isEmpty || !_reserveDedupeKeys(dedupeKeys)) {
+      return null;
+    }
+    return ForegroundSocketNotificationRequest(
+      notificationId: foregroundNotificationStableId(threadKey),
+      title: presentation.title,
+      body: presentation.body,
+      payload: threadKey,
+      channelName: snapshot.strings.channelMessages,
+      showPreview: sanitizedBody != null,
+      dedupeKeys: dedupeKeys,
+    );
+  }
+
+  ForegroundSocketNotificationRequest? _mailPushRequestFor(
+    ForegroundSocketMessageCandidate candidate,
+    ForegroundNotificationSnapshot snapshot,
+  ) {
+    if (snapshot.emailNotificationsMuted || !snapshot.strings.hasEmailLabels) {
+      return null;
+    }
+    final dedupeKeys = candidate.dedupeKeys;
+    if (!_reserveDedupeKeys(dedupeKeys)) {
+      return null;
+    }
+    final payload = const NotificationPayloadCodec().emailInboxPayload;
+    return ForegroundSocketNotificationRequest(
+      notificationId: foregroundNotificationStableId(payload),
+      title: snapshot.strings.newEmailTitle.trim(),
+      body: null,
+      payload: payload,
+      channelName: snapshot.strings.channelMessages,
+      showPreview: false,
+      dedupeKeys: dedupeKeys,
+    );
+  }
+
+  bool _reserveDedupeKeys(List<String> dedupeKeys) {
+    final now = _now();
+    _recentNotificationKeys.removeWhere(
+      (key, createdAt) => now.difference(createdAt) > _dedupeTtl,
+    );
+    for (final key in dedupeKeys) {
+      if (_recentNotificationKeys.containsKey(key)) {
+        return false;
+      }
+    }
+    for (final key in dedupeKeys) {
+      _recentNotificationKeys[key] = now;
+    }
+    return true;
+  }
+
+  ({String title, String? body}) _resolvePresentation({
+    required ForegroundNotificationStrings strings,
+    required String conversationTitle,
+    required String senderName,
+    required bool isGroupConversation,
+    required String? sanitizedBody,
+  }) {
+    if (sanitizedBody != null) {
+      return (
+        title: isGroupConversation ? conversationTitle : senderName,
+        body: isGroupConversation && senderName != conversationTitle
+            ? '$senderName: $sanitizedBody'
+            : sanitizedBody,
+      );
+    }
+    final categoryTitle = strings.newMessageTitle.trim();
+    final label = (isGroupConversation ? conversationTitle : senderName).trim();
+    return (
+      title: label.isEmpty ? categoryTitle : '$categoryTitle: $label',
+      body: isGroupConversation && senderName.trim() != conversationTitle.trim()
+          ? senderName
+          : null,
+    );
+  }
+
+  String _notificationLabel(String? value, {required String fallback}) {
+    final normalized = value?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      return normalized;
+    }
+    return fallback.trim();
+  }
+
+  String _notificationThreadKey(
+    ForegroundChatNotificationPolicy? policy,
+    String chatJid,
+  ) {
+    final policyThreadKey = policy?.threadKey.trim();
+    if (policyThreadKey != null && policyThreadKey.isNotEmpty) {
+      return policyThreadKey;
+    }
+    return const NotificationPayloadCodec().encodeChatJid(chatJid) ??
+        normalizedAddressKey(chatJid) ??
+        chatJid.trim();
+  }
+}
+
+@visibleForTesting
+final class ForegroundMessageStanzaBuffer {
+  static const int _maxBufferCharacters = 128 * 1024;
+  static const String _messageStartPrefix = '<message';
+
+  String _buffer = '';
+
+  List<String> add(String data) {
+    if (data.isEmpty) {
+      return const <String>[];
+    }
+    _buffer = '$_buffer$data';
+    if (_buffer.length > _maxBufferCharacters) {
+      _trimOversizedBuffer();
+    }
+    final stanzas = <String>[];
+    while (_buffer.isNotEmpty) {
+      final start = _findMessageStart(_buffer);
+      if (start == -1) {
+        _retainPossibleMessageStartPrefix();
+        return stanzas;
+      }
+      if (start > 0) {
+        _buffer = _buffer.substring(start);
+      }
+      final end = _findTopLevelMessageEnd(_buffer);
+      if (end == null) {
+        return stanzas;
+      }
+      stanzas.add(_buffer.substring(0, end));
+      _buffer = _buffer.substring(end);
+    }
+    return stanzas;
+  }
+
+  void _trimOversizedBuffer() {
+    final start = _findMessageStart(_buffer);
+    if (start == -1) {
+      _retainPossibleMessageStartPrefix();
+      return;
+    }
+    _buffer = _buffer.substring(start);
+    if (_buffer.length > _maxBufferCharacters) {
+      _buffer = '';
+    }
+  }
+
+  int _findMessageStart(String value) {
+    var index = value.indexOf(_messageStartPrefix);
+    while (index != -1) {
+      final after = index + _messageStartPrefix.length;
+      if (after >= value.length ||
+          _isXmlNameBoundary(value.codeUnitAt(after))) {
+        return index;
+      }
+      index = value.indexOf(_messageStartPrefix, index + 1);
+    }
+    return -1;
+  }
+
+  void _retainPossibleMessageStartPrefix() {
+    final maxSuffixLength = _messageStartPrefix.length - 1;
+    final suffixStart = _buffer.length > maxSuffixLength
+        ? _buffer.length - maxSuffixLength
+        : 0;
+    final suffix = _buffer.substring(suffixStart);
+    for (var length = suffix.length; length > 0; length--) {
+      final candidate = suffix.substring(suffix.length - length);
+      if (_messageStartPrefix.startsWith(candidate)) {
+        _buffer = candidate;
+        return;
+      }
+    }
+    _buffer = '';
+  }
+
+  int? _findTopLevelMessageEnd(String value) {
+    var index = 0;
+    var depth = 0;
+    while (index < value.length) {
+      if (value.codeUnitAt(index) != 0x3c) {
+        index++;
+        continue;
+      }
+      if (value.startsWith('<!--', index)) {
+        final end = value.indexOf('-->', index + 4);
+        if (end == -1) return null;
+        index = end + 3;
+        continue;
+      }
+      if (value.startsWith('<![CDATA[', index)) {
+        final end = value.indexOf(']]>', index + 9);
+        if (end == -1) return null;
+        index = end + 3;
+        continue;
+      }
+      if (value.startsWith('<?', index)) {
+        final end = value.indexOf('?>', index + 2);
+        if (end == -1) return null;
+        index = end + 2;
+        continue;
+      }
+      if (value.startsWith('</', index)) {
+        final tagEnd = _findTagEnd(value, index + 2);
+        if (tagEnd == null) return null;
+        if (_isMessageTagName(_readTagName(value, index + 2))) {
+          depth--;
+          if (depth <= 0) {
+            return tagEnd + 1;
+          }
+        }
+        index = tagEnd + 1;
+        continue;
+      }
+      if (value.startsWith('<!', index)) {
+        final end = value.indexOf('>', index + 2);
+        if (end == -1) return null;
+        index = end + 1;
+        continue;
+      }
+      final tagEnd = _findTagEnd(value, index + 1);
+      if (tagEnd == null) return null;
+      if (_isMessageTagName(_readTagName(value, index + 1))) {
+        if (_isSelfClosingTag(value, tagEnd)) {
+          if (depth == 0) {
+            return tagEnd + 1;
+          }
+        } else {
+          depth++;
+        }
+      }
+      index = tagEnd + 1;
+    }
+    return null;
+  }
+
+  int? _findTagEnd(String value, int start) {
+    int? quote;
+    var index = start;
+    while (index < value.length) {
+      final codeUnit = value.codeUnitAt(index);
+      if (quote != null) {
+        if (codeUnit == quote) {
+          quote = null;
+        }
+      } else if (codeUnit == 0x22 || codeUnit == 0x27) {
+        quote = codeUnit;
+      } else if (codeUnit == 0x3e) {
+        return index;
+      }
+      index++;
+    }
+    return null;
+  }
+
+  String _readTagName(String value, int start) {
+    var index = start;
+    while (index < value.length && value.codeUnitAt(index) <= 0x20) {
+      index++;
+    }
+    final begin = index;
+    while (index < value.length &&
+        !_isXmlNameBoundary(value.codeUnitAt(index))) {
+      index++;
+    }
+    return value.substring(begin, index);
+  }
+
+  bool _isMessageTagName(String rawName) {
+    final name = rawName.trim();
+    if (name.isEmpty) {
+      return false;
+    }
+    final colonIndex = name.indexOf(':');
+    final localName = colonIndex == -1 ? name : name.substring(colonIndex + 1);
+    return localName == 'message';
+  }
+
+  bool _isSelfClosingTag(String value, int tagEnd) {
+    var index = tagEnd - 1;
+    while (index >= 0 && value.codeUnitAt(index) <= 0x20) {
+      index--;
+    }
+    return index >= 0 && value.codeUnitAt(index) == 0x2f;
+  }
+
+  bool _isXmlNameBoundary(int codeUnit) {
+    return codeUnit <= 0x20 || codeUnit == 0x2f || codeUnit == 0x3e;
+  }
+}
+
+@visibleForTesting
+final class ForegroundSocketMessageCandidate {
+  const ForegroundSocketMessageCandidate.chat({
+    required this.chatJid,
+    required this.senderJid,
+    required this.senderName,
+    required this.conversationTitle,
+    required this.preview,
+    required this.isGroupConversation,
+    required this.dedupeKeys,
+  }) : isMailPushHint = false;
+
+  const ForegroundSocketMessageCandidate.mailPushHint({
+    required this.dedupeKeys,
+  }) : chatJid = '',
+       senderJid = '',
+       senderName = '',
+       conversationTitle = '',
+       preview = null,
+       isGroupConversation = false,
+       isMailPushHint = true;
+
+  final String chatJid;
+  final String senderJid;
+  final String senderName;
+  final String conversationTitle;
+  final String? preview;
+  final bool isGroupConversation;
+  final bool isMailPushHint;
+  final List<String> dedupeKeys;
+}
+
+@visibleForTesting
+final class ForegroundSocketMessageExtractor {
+  const ForegroundSocketMessageExtractor();
+
+  static const XmlParseLimits _parseLimits = XmlParseLimits(
+    maxBytes: 64 * 1024,
+    maxNodes: 512,
+    maxDepth: 32,
+    maxDuration: Duration(milliseconds: 50),
+  );
+  static const Set<String> _mamNamespaces = <String>{
+    'urn:xmpp:mam:0',
+    'urn:xmpp:mam:1',
+    'urn:xmpp:mam:2',
+    'urn:xmpp:mam:tmp',
+  };
+  static const String _carbonsNamespace = 'urn:xmpp:carbons:2';
+  static const String _messageCorrectionNamespace =
+      'urn:xmpp:message-correct:0';
+  static const String _messageRetractionNamespace =
+      'urn:xmpp:message-retract:1';
+  static const String _receiptsNamespace = 'urn:xmpp:receipts';
+  static const String _chatMarkersNamespace = 'urn:xmpp:chat-markers:0';
+  static const String _mailPushNamespace = 'urn:axichat:mail-push:0';
+  static const String _mailPushSenderLocalPart = 'mail-notify';
+
+  ForegroundSocketMessageCandidate? extract(
+    String raw, {
+    required ForegroundNotificationSnapshot snapshot,
+  }) {
+    final document = tryParseXml(raw, _parseLimits);
+    if (document == null) {
+      return null;
+    }
+    final root = document.rootElement;
+    if (root.name.local != 'message') {
+      return null;
+    }
+    final mailPushHint = _mailPushHintCandidate(root, snapshot);
+    if (mailPushHint != null) {
+      return mailPushHint;
+    }
+    if (_suppressedMessageType(root)) {
+      return null;
+    }
+    if (_hasSuppressedWrapper(root) || _hasSuppressedMutation(root)) {
+      return null;
+    }
+
+    final from = fullAddress(root.getAttribute('from'))?.trim();
+    if (from == null || from.isEmpty) {
+      return null;
+    }
+    final body = _directChildText(root, 'body');
+    final subject = _directChildText(root, 'subject');
+    final type = root.getAttribute('type')?.trim();
+    final isGroupConversation = type == 'groupchat';
+    final chatJid = bareAddress(from)?.trim();
+    if (chatJid == null || chatJid.isEmpty) {
+      return null;
+    }
+    if (_isSelfDirectMessage(
+      from: from,
+      isGroupConversation: isGroupConversation,
+      accountJid: snapshot.accountJid,
+    )) {
+      return null;
+    }
+    if (!isGroupConversation && snapshot.blocksInboundSender(from)) {
+      return null;
+    }
+
+    final policy = snapshot.policyFor(chatJid);
+    final senderResource = addressResourcePart(from);
+    if (isGroupConversation &&
+        _isOwnGroupEcho(senderResource, policy?.myNickname)) {
+      return null;
+    }
+
+    final preview = ChatSubjectCodec.previewText(
+      body: body,
+      subject: isGroupConversation ? null : subject,
+    );
+    final encrypted = _hasDirectChild(
+      root,
+      'encrypted',
+      namespace: mox.omemoXmlns,
+    );
+    final fileUpload = _hasDirectChild(
+      root,
+      'file-upload',
+      namespace: mox.fileUploadNotificationXmlns,
+    );
+    if (preview == null && !encrypted && !fileUpload) {
+      return null;
+    }
+    final senderName = isGroupConversation
+        ? _displayName(
+            senderResource,
+            fallback: displaySafeAddress(from, includeResource: true) ?? from,
+          )
+        : _displayName(
+            policy?.title,
+            fallback:
+                addressDisplayLabel(from) ?? displaySafeAddress(from) ?? from,
+          );
+    final conversationTitle = _displayName(
+      policy?.title,
+      fallback: isGroupConversation
+          ? addressDisplayLabel(chatJid) ??
+                displaySafeAddress(chatJid) ??
+                chatJid
+          : senderName,
+    );
+    final dedupeKeys = <String>{
+      ?foregroundNotificationStanzaDedupeKey(root.getAttribute('id')),
+    }.toList(growable: false);
+    return ForegroundSocketMessageCandidate.chat(
+      chatJid: chatJid,
+      senderJid: from,
+      senderName: senderName,
+      conversationTitle: conversationTitle,
+      preview: preview,
+      isGroupConversation: isGroupConversation,
+      dedupeKeys: dedupeKeys,
+    );
+  }
+
+  ForegroundSocketMessageCandidate? _mailPushHintCandidate(
+    xml.XmlElement root,
+    ForegroundNotificationSnapshot snapshot,
+  ) {
+    if (root.getAttribute('type')?.trim() != 'headline') {
+      return null;
+    }
+    final accountJid = snapshot.accountJid?.trim();
+    if (accountJid == null || accountJid.isEmpty) {
+      return null;
+    }
+    final from = fullAddress(root.getAttribute('from'))?.trim();
+    if (from == null || from.isEmpty) {
+      return null;
+    }
+    if (addressLocalPart(from)?.trim().toLowerCase() !=
+        _mailPushSenderLocalPart) {
+      return null;
+    }
+    final accountBare = bareAddress(accountJid) ?? accountJid;
+    final fromBare = bareAddress(from) ?? from;
+    final accountDomain = addressDomainPart(accountBare)?.toLowerCase();
+    final fromDomain = addressDomainPart(fromBare)?.toLowerCase();
+    if (accountDomain == null || fromDomain != accountDomain) {
+      return null;
+    }
+    final to = fullAddress(root.getAttribute('to'))?.trim();
+    if (to != null && to.isNotEmpty && !sameBareAddress(to, accountJid)) {
+      return null;
+    }
+    if (!_hasDirectChild(root, 'x', namespace: _mailPushNamespace)) {
+      return null;
+    }
+    final dedupeKeys = <String>{
+      ?foregroundNotificationMailPushDedupeKey(root.getAttribute('id')),
+    }.toList(growable: false);
+    return ForegroundSocketMessageCandidate.mailPushHint(
+      dedupeKeys: dedupeKeys,
+    );
+  }
+
+  bool _suppressedMessageType(xml.XmlElement root) {
+    final type = root.getAttribute('type')?.trim();
+    return type == 'error' || type == 'headline';
+  }
+
+  bool _hasSuppressedWrapper(xml.XmlElement root) {
+    return _hasDirectChild(root, 'result', namespaces: _mamNamespaces) ||
+        _hasDirectChild(root, 'sent', namespace: _carbonsNamespace) ||
+        _hasDirectChild(root, 'received', namespace: _carbonsNamespace);
+  }
+
+  bool _hasSuppressedMutation(xml.XmlElement root) {
+    return _hasDirectChild(
+          root,
+          'replace',
+          namespace: _messageCorrectionNamespace,
+        ) ||
+        _hasDirectChild(
+          root,
+          'retract',
+          namespace: _messageRetractionNamespace,
+        ) ||
+        _hasDirectChild(
+          root,
+          'retracted',
+          namespace: _messageRetractionNamespace,
+        ) ||
+        _hasDirectChild(root, 'received', namespace: _receiptsNamespace) ||
+        _hasDirectChild(root, 'displayed', namespace: _chatMarkersNamespace) ||
+        _hasDirectChild(root, 'acknowledged', namespace: _chatMarkersNamespace);
+  }
+
+  bool _hasDirectChild(
+    xml.XmlElement root,
+    String localName, {
+    String? namespace,
+    Set<String> namespaces = const <String>{},
+  }) {
+    for (final child in root.children.whereType<xml.XmlElement>()) {
+      if (child.name.local != localName) {
+        continue;
+      }
+      final childNamespace = _namespaceFor(child);
+      if (namespace != null) {
+        if (childNamespace == namespace) {
+          return true;
+        }
+        continue;
+      }
+      if (namespaces.isNotEmpty) {
+        if (childNamespace != null && namespaces.contains(childNamespace)) {
+          return true;
+        }
+        continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  String? _directChildText(xml.XmlElement root, String localName) {
+    for (final child in root.children.whereType<xml.XmlElement>()) {
+      if (child.name.local != localName) {
+        continue;
+      }
+      final text = child.innerText.trim();
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return null;
+  }
+
+  String? _namespaceFor(xml.XmlElement element) {
+    final namespace = element.name.namespaceUri?.trim();
+    if (namespace != null && namespace.isNotEmpty) {
+      return namespace;
+    }
+    final defaultNamespace = element.getAttribute('xmlns')?.trim();
+    if (defaultNamespace != null && defaultNamespace.isNotEmpty) {
+      return defaultNamespace;
+    }
+    return null;
+  }
+
+  bool _isSelfDirectMessage({
+    required String from,
+    required bool isGroupConversation,
+    required String? accountJid,
+  }) {
+    if (isGroupConversation) {
+      return false;
+    }
+    final account = accountJid?.trim();
+    return account != null &&
+        account.isNotEmpty &&
+        sameBareAddress(from, account);
+  }
+
+  bool _isOwnGroupEcho(String? resource, String? myNickname) {
+    final normalizedResource = resource?.trim().toLowerCase();
+    final normalizedNickname = myNickname?.trim().toLowerCase();
+    return normalizedResource != null &&
+        normalizedResource.isNotEmpty &&
+        normalizedNickname != null &&
+        normalizedNickname.isNotEmpty &&
+        normalizedResource == normalizedNickname;
+  }
+
+  String _displayName(String? value, {required String fallback}) {
+    final normalized = value?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      return normalized;
+    }
+    return fallback.trim();
+  }
+}
+
+@visibleForTesting
+final class ForegroundSocketNotificationPresenter {
+  ForegroundSocketNotificationPresenter({
+    local_notifications.FlutterLocalNotificationsPlugin? plugin,
+  }) : _plugin =
+           plugin ?? local_notifications.FlutterLocalNotificationsPlugin();
+
+  static const String _androidIconPath = '@mipmap/ic_launcher';
+  static const String _androidGroupKey = 'im.axi.axichat.MESSAGES';
+
+  final local_notifications.FlutterLocalNotificationsPlugin _plugin;
+  var _initialized = false;
+  Future<void>? _initialization;
+
+  Future<bool> show(ForegroundSocketNotificationRequest request) async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+    try {
+      await _ensureInitialized();
+      final details = local_notifications.NotificationDetails(
+        android: local_notifications.AndroidNotificationDetails(
+          request.channelName,
+          request.channelName,
+          groupKey: _androidGroupKey,
+          importance: local_notifications.Importance.max,
+          priority: local_notifications.Priority.high,
+          icon: _androidIconPath,
+          category: local_notifications.AndroidNotificationCategory.message,
+          visibility: request.showPreview
+              ? local_notifications.NotificationVisibility.public
+              : local_notifications.NotificationVisibility.private,
+        ),
+      );
+      await _plugin.show(
+        id: request.notificationId,
+        title: request.title,
+        body: request.body,
+        notificationDetails: details,
+        payload: request.payload,
+      );
+      return true;
+    } on MissingPluginException catch (error, stackTrace) {
+      ForegroundSocket._log.warning(
+        'Foreground notification plugin unavailable.',
+        error,
+        stackTrace,
+      );
+      return false;
+    } on PlatformException catch (error, stackTrace) {
+      ForegroundSocket._log.warning(
+        'Foreground notification failed.',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
+  Future<void> _ensureInitialized() {
+    if (_initialized) {
+      return Future<void>.value();
+    }
+    final pending = _initialization;
+    if (pending != null) {
+      return pending;
+    }
+    final initialization = _initialize();
+    _initialization = initialization;
+    return initialization;
+  }
+
+  Future<void> _initialize() async {
+    const androidSettings = local_notifications.AndroidInitializationSettings(
+      _androidIconPath,
+    );
+    const settings = local_notifications.InitializationSettings(
+      android: androidSettings,
+    );
+    try {
+      await _plugin.initialize(
+        settings: settings,
+        onDidReceiveNotificationResponse: notificationTapBackground,
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
+      _initialized = true;
+    } finally {
+      _initialization = null;
+    }
   }
 }
 
@@ -647,6 +1645,10 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     if (data.startsWith('$dataPrefix$join')) {
       _recordIncomingTraffic();
       _dataStream.add(data.substring('$dataPrefix$join'.length));
+    } else if (data.startsWith('$foregroundNotificationShownPrefix$join')) {
+      _recordForegroundNotificationShown(
+        data.substring('$foregroundNotificationShownPrefix$join'.length),
+      );
     } else if (data == socketErrorPrefix) {
       _eventStream.add(mox.XmppSocketErrorEvent(''));
     } else if (data.startsWith('$socketClosurePrefix$join')) {
@@ -662,6 +1664,20 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     final parts = data.split(join);
     if (parts.length < 2) return false;
     return parts[1].toLowerCase() == 'true';
+  }
+
+  void _recordForegroundNotificationShown(String payload) {
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! List) {
+        return;
+      }
+      _foregroundNotificationShownController.add(
+        decoded.whereType<String>().toList(growable: false),
+      );
+    } on FormatException {
+      return;
+    }
   }
 
   void _completeConnect(bool connected) {
@@ -753,11 +1769,9 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
     _secure = Completer<bool>();
     _secureResult = false;
 
-    final target = _resolveTarget(domain, host: host, port: port);
-    if (target == null) {
-      await _onConnectFailure?.call();
-      return false;
-    }
+    final target = host == null || host.isEmpty
+        ? _SocketTarget(domain, port ?? EndpointConfig.defaultXmppPort)
+        : _SocketTarget(host, port ?? EndpointConfig.defaultXmppPort);
 
     if (!_listenerRegistered) {
       _bridge.registerListener(foregroundClientXmpp, _onReceiveTaskData);
@@ -791,16 +1805,6 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       await _onConnectFailure?.call();
     }
     return connected;
-  }
-
-  _SocketTarget? _resolveTarget(String domain, {String? host, int? port}) {
-    final overrideHost = host;
-    final hasOverride = overrideHost != null && overrideHost.isNotEmpty;
-    if (hasOverride) {
-      return _SocketTarget(overrideHost, port ?? 5222);
-    }
-
-    return _SocketTarget(domain, port ?? EndpointConfig.defaultXmppPort);
   }
 
   @override

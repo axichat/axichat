@@ -32,6 +32,9 @@ const _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
 const _mucUserTag = 'x';
 const _mucUserItemTag = 'item';
 const _mucUserItemJidAttr = 'jid';
+const _mailPushXmlns = 'urn:axichat:mail-push:0';
+const _mailPushTag = 'x';
+const _mailPushSenderLocalPart = 'mail-notify';
 const _mucJoinXmlns = 'http://jabber.org/protocol/muc';
 const _directInviteTag = 'x';
 const _directInviteXmlns = 'jabber:x:conference';
@@ -312,6 +315,38 @@ final class MessageSubjectData implements mox.StanzaHandlerExtension {
     )?.trim();
     if (subject == null || subject.isEmpty) return null;
     return MessageSubjectData(subject);
+  }
+}
+
+final class MailPushHintData implements mox.StanzaHandlerExtension {
+  const MailPushHintData({required this.fromJid, this.toJid, this.stanzaId});
+
+  final String fromJid;
+  final String? toJid;
+  final String? stanzaId;
+
+  static MailPushHintData? fromStanza(mox.Stanza stanza) {
+    final type = (stanza.type ?? stanza.attributes[_iqTypeAttr]?.toString())
+        ?.trim();
+    if (type != 'headline') return null;
+    if (stanza.firstTag(_mailPushTag, xmlns: _mailPushXmlns) == null) {
+      return null;
+    }
+    final from = fullAddress(stanza.from)?.trim();
+    final to = fullAddress(stanza.to)?.trim();
+    if (from == null || from.isEmpty) {
+      return null;
+    }
+    if (addressLocalPart(from)?.toLowerCase() != _mailPushSenderLocalPart) {
+      return null;
+    }
+    final fromBare = bareAddress(from);
+    final toBare = to == null || to.isEmpty ? null : bareAddress(to);
+    return MailPushHintData(
+      fromJid: fromBare == null || fromBare.isEmpty ? from : fromBare,
+      toJid: toBare == null || toBare.isEmpty ? to : toBare,
+      stanzaId: stanza.id?.trim(),
+    );
   }
 }
 
@@ -897,6 +932,11 @@ class MessageStanzaManager extends mox.XmppManagerBase {
     final pinMutation = PinMessageMutationData.fromStanza(stanza);
     if (pinMutation != null) {
       state.extensions.set(pinMutation);
+    }
+
+    final mailPushHint = MailPushHintData.fromStanza(stanza);
+    if (mailPushHint != null) {
+      state.extensions.set(mailPushHint);
     }
 
     final subject = MessageSubjectData.fromStanza(stanza);

@@ -655,6 +655,7 @@
   "notificationsRestartTitle": "Restart the app",
   "notificationsRestartSubtitle": "Required permissions already granted",
   "notificationsMessageToggle": "Background notifications",
+  "notificationsBackgroundMessagingHardKillWarning": "Leave Axichat running in the background for live delivery. Force stopping Axichat or restricting battery use can stop background messages.",
   "notificationsRequiresRestart": "Strongly recommended",
   "notificationsDialogTitle": "Enable message notifications",
   "notificationsDialogIgnore": "Ignore",

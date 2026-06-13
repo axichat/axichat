@@ -51,10 +51,7 @@ class ForegroundRuntimeController {
 
   bool get isActive => foregroundServiceActive.value;
 
-  Future<void> prepareForNextXmppConnection({
-    required bool desired,
-    bool emailKeepaliveEnabled = true,
-  }) async {
+  Future<void> prepareForNextXmppConnection({required bool desired}) async {
     if (!desired ||
         !_capability.canForegroundService ||
         !await _notificationService.hasAllNotificationPermissions()) {
@@ -64,35 +61,26 @@ class ForegroundRuntimeController {
       return;
     }
     _setForegroundIntent(true);
-    if (!emailKeepaliveEnabled) {
-      await _setEmailKeepaliveStopped();
-    }
+    await _setEmailKeepaliveStopped();
   }
 
-  Future<bool> restoreIfPreferred({
-    required bool desired,
-    bool emailKeepaliveEnabled = true,
-  }) async {
+  Future<bool> restoreIfPreferred({required bool desired}) async {
     if (!desired) {
       return disableForUserToggle();
     }
     final result = await _activateForegroundRuntime(
-      emailKeepaliveEnabled: emailKeepaliveEnabled,
-      allowCurrentSessionMigration: false,
+      allowCurrentSessionMigration: true,
     );
     return result == ForegroundActivationResult.active;
   }
 
   Future<ForegroundActivationResult> enableForUserToggle({
-    bool emailKeepaliveEnabled = true,
     bool allowCurrentSessionMigration = false,
   }) => _activateForegroundRuntime(
-    emailKeepaliveEnabled: emailKeepaliveEnabled,
     allowCurrentSessionMigration: allowCurrentSessionMigration,
   );
 
   Future<ForegroundActivationResult> _activateForegroundRuntime({
-    required bool emailKeepaliveEnabled,
     required bool allowCurrentSessionMigration,
   }) async {
     if (!_capability.canForegroundService) {
@@ -113,7 +101,6 @@ class ForegroundRuntimeController {
     initForegroundService();
     if (await refreshActualState(fallback: foregroundServiceActive.value)) {
       return await _refreshActiveRuntime(
-            emailKeepaliveEnabled: emailKeepaliveEnabled,
             allowCurrentSessionMigration: allowCurrentSessionMigration,
           )
           ? ForegroundActivationResult.active
@@ -122,7 +109,7 @@ class ForegroundRuntimeController {
 
     try {
       if (!_xmppService.connected) {
-        await _setEmailKeepaliveForRuntime(emailKeepaliveEnabled);
+        await _setEmailKeepaliveStopped();
         return await _isRuntimeReadyForCurrentTransport(
               allowPendingSocketStart: true,
             )
@@ -130,8 +117,10 @@ class ForegroundRuntimeController {
             : ForegroundActivationResult.failed;
       }
       await _xmppService.ensureForegroundSocketIfActive();
-      await _setEmailKeepaliveForRuntime(emailKeepaliveEnabled);
-      if (await _isRuntimeReadyForCurrentTransport()) {
+      await _setEmailKeepaliveStopped();
+      if (await _isRuntimeReadyForCurrentTransport(
+        requireNotificationSnapshot: true,
+      )) {
         return ForegroundActivationResult.active;
       }
       _log.warning(
@@ -251,7 +240,6 @@ class ForegroundRuntimeController {
   }
 
   Future<bool> _refreshActiveRuntime({
-    required bool emailKeepaliveEnabled,
     required bool allowCurrentSessionMigration,
   }) async {
     try {
@@ -260,9 +248,10 @@ class ForegroundRuntimeController {
           allowCurrentSessionMigration) {
         await _xmppService.ensureForegroundSocketIfActive();
       }
-      await _setEmailKeepaliveForRuntime(emailKeepaliveEnabled);
+      await _setEmailKeepaliveStopped();
       if (await _isRuntimeReadyForCurrentTransport(
         allowPendingSocketStart: !_xmppService.connected,
+        requireNotificationSnapshot: _xmppService.connected,
       )) {
         return true;
       }
@@ -275,6 +264,7 @@ class ForegroundRuntimeController {
 
   Future<bool> _isRuntimeReadyForCurrentTransport({
     bool allowPendingSocketStart = false,
+    bool requireNotificationSnapshot = false,
   }) async {
     final running = await refreshActualState(
       fallback: foregroundServiceActive.value,
@@ -282,7 +272,13 @@ class ForegroundRuntimeController {
     if (!_xmppService.connected) {
       return allowPendingSocketStart || running;
     }
-    return running && _xmppService.usingForegroundSocket;
+    if (!running || !_xmppService.usingForegroundSocket) {
+      return false;
+    }
+    if (!requireNotificationSnapshot) {
+      return true;
+    }
+    return _xmppService.ensureForegroundNotificationSnapshotReady();
   }
 
   Future<void> _reconcileFailedStart() async {
@@ -306,10 +302,6 @@ class ForegroundRuntimeController {
     }
     await refreshActualState(fallback: foregroundServiceActive.value);
     _setForegroundIntent(false);
-  }
-
-  Future<void> _setEmailKeepaliveForRuntime(bool enabled) async {
-    await _emailService.setForegroundKeepalive(enabled);
   }
 
   Future<bool> _setEmailKeepaliveStopped() async {

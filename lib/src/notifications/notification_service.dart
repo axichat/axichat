@@ -7,6 +7,7 @@ import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/foreground_notification_snapshot.dart';
 import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
@@ -23,21 +24,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-const Duration _messageNotificationRateLimitWindow = Duration(minutes: 1);
-const Duration _messageNotificationRateLimitCleanupInterval = Duration(
-  minutes: 5,
-);
-const int _messageNotificationMaxPerThread = 30;
-const int _messageNotificationMaxGlobal = 120;
 const String _androidIconPath = '@mipmap/ic_launcher';
-const WindowRateLimit _messageNotificationPerThreadRateLimit = WindowRateLimit(
-  maxEvents: _messageNotificationMaxPerThread,
-  window: _messageNotificationRateLimitWindow,
-);
-const WindowRateLimit _messageNotificationGlobalRateLimit = WindowRateLimit(
-  maxEvents: _messageNotificationMaxGlobal,
-  window: _messageNotificationRateLimitWindow,
-);
 
 enum MessageNotificationChannel {
   chat,
@@ -99,6 +86,19 @@ class NotificationStrings {
   final String appTitle;
   final String backgroundConnectionDisabledTitle;
   final String backgroundConnectionDisabledBody;
+}
+
+extension ForegroundNotificationStringsFromNotificationStrings
+    on NotificationStrings {
+  ForegroundNotificationStrings toForegroundNotificationStrings() {
+    return ForegroundNotificationStrings(
+      channelMessages: channelMessages,
+      newMessageTitle: newMessageTitle,
+      newEmailTitle: newEmailTitle,
+      openAction: openAction,
+      appTitle: appTitle,
+    );
+  }
 }
 
 extension NotificationStringsFromL10n on AppLocalizations {
@@ -211,12 +211,12 @@ class NotificationService {
   Completer<void>? _initializationCompleter;
   bool _foregroundCheckUnavailable = false;
   final WindowRateLimiter _messageNotificationGlobalLimiter = WindowRateLimiter(
-    _messageNotificationGlobalRateLimit,
+    messageNotificationGlobalRateLimit,
   );
   final KeyedWindowRateLimiter _messageNotificationPerThreadLimiter =
       KeyedWindowRateLimiter(
-        limit: _messageNotificationPerThreadRateLimit,
-        cleanupInterval: _messageNotificationRateLimitCleanupInterval,
+        limit: messageNotificationPerThreadRateLimit,
+        cleanupInterval: messageNotificationRateLimitCleanupInterval,
       );
   final Logger _log = Logger('NotificationService');
   PackageInfo? _packageInfo;
@@ -307,6 +307,7 @@ class NotificationService {
       await _plugin.initialize(
         settings: initializationSettings,
         onDidReceiveNotificationResponse: notificationTapBackground,
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       );
 
       await _ensureTimeZones(force: true);

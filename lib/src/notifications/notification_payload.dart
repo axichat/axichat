@@ -6,11 +6,14 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 const String _notificationPayloadPrefix = 'axichat-chat-v1:';
+const String _emailInboxPayload = 'axichat-email-v1:inbox';
 
 class NotificationPayloadCodec {
   const NotificationPayloadCodec();
 
   static const int _payloadMaxLength = 256;
+
+  String get emailInboxPayload => _emailInboxPayload;
 
   String? encodeChatJid(String chatJid) {
     final normalized = chatJid.trim();
@@ -32,6 +35,9 @@ class NotificationPayloadCodec {
     final normalized = payload.trim();
     return normalized.isNotEmpty && normalized.length <= _payloadMaxLength;
   }
+
+  bool isEmailInboxPayload(String payload) =>
+      payload.trim() == _emailInboxPayload;
 
   String? resolveChatJid({
     required String payload,

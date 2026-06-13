@@ -815,6 +815,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   }) async {
     await _dbOp<XmppDatabase>((db) => db.markChatMuted(jid: jid, muted: muted));
     await _syncConversationIndexMeta(jid: jid);
+    scheduleForegroundNotificationSnapshotPublish();
   }
 
   Future<bool> setChatNotificationPreviewSetting({
@@ -1018,6 +1019,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         return updated;
       });
       localApplied = updatedChats.isNotEmpty;
+      if (localApplied && _isForegroundNotificationChatSetting(settingId)) {
+        scheduleForegroundNotificationSnapshotPublish();
+      }
       var published = true;
       for (final chat in updatedChats) {
         final clearedSettings = _clearedUnsyncedChatSettings(chat)
@@ -1065,13 +1069,22 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       if (settingId.syncValueFrom(updatedChat) == null) {
         clearedSettings.add(settingId);
       }
-      return _publishChatSettingsForChat(
+      final published = await _publishChatSettingsForChat(
         updatedChat,
         clearedSettings: clearedSettings,
       );
+      if (_isForegroundNotificationChatSetting(settingId)) {
+        scheduleForegroundNotificationSnapshotPublish();
+      }
+      return published;
     } on XmppAbortedException {
       return false;
     }
+  }
+
+  bool _isForegroundNotificationChatSetting(ChatSettingId settingId) {
+    return settingId == ChatSettingId.notificationPreview ||
+        settingId == ChatSettingId.notificationBehavior;
   }
 
   Future<String> _ensureChatSettingsSourceId() async {
@@ -1229,6 +1242,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       case _ChatSettingsSyncDecision.applyRemote:
         await _saveRemoteChatSettingsSync(local: local, remote: payload);
         await _syncConversationIndexMeta(jid: local.jid);
+        scheduleForegroundNotificationSnapshotPublish();
       case _ChatSettingsSyncDecision.publishLocal:
         await _publishChatSettingsForChat(
           local,

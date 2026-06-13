@@ -27,6 +27,7 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -146,14 +147,6 @@ class _AxichatState extends State<Axichat> {
   }
 
   @override
-  void dispose() {
-    Future<void>(() async {
-      await _reminderController.clearAll();
-    });
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return MultiRepositoryProvider(
       providers: [
@@ -208,6 +201,7 @@ class _AxichatState extends State<Axichat> {
                   emailEncryptionBetaEnabledByAddress:
                       settingsState.emailEncryptionBetaEnabledByAddress,
                   xmppSelfJidProvider: () => _xmppService.myJid,
+                  mailPushHints: _xmppService.mailPushHintStream,
                 );
               },
               child: RepositoryProvider<ForegroundRuntimeController>(
@@ -245,11 +239,6 @@ class _AxichatState extends State<Axichat> {
                                     .read<SettingsCubit>()
                                     .state
                                     .backgroundMessagingEnabled,
-                                emailKeepaliveEnabled: context
-                                    .read<SettingsCubit>()
-                                    .state
-                                    .endpointConfig
-                                    .smtpEnabled,
                               );
                         },
                         beforeXmppConnect: (accountJid) async {
@@ -262,10 +251,6 @@ class _AxichatState extends State<Axichat> {
                                     .backgroundMessagingEnabledForAccount(
                                       accountJid,
                                     ),
-                                emailKeepaliveEnabled: settingsCubit
-                                    .state
-                                    .endpointConfig
-                                    .smtpEnabled,
                               );
                         },
                       ),
@@ -402,13 +387,11 @@ class _AxichatState extends State<Axichat> {
                             await foregroundRuntimeController
                                 .restoreIfPreferred(
                                   desired: settings.backgroundMessagingEnabled,
-                                  emailKeepaliveEnabled: config.smtpEnabled,
                                 );
                           } else {
                             await foregroundRuntimeController
                                 .prepareForNextXmppConnection(
                                   desired: settings.backgroundMessagingEnabled,
-                                  emailKeepaliveEnabled: config.smtpEnabled,
                                 );
                           }
                         },
@@ -468,6 +451,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   Future<void>? _exitCleanupFuture;
   AuthenticationState? _lastAuthState;
   String? _pendingNotificationChatJid;
+  String? _pendingNotificationPayload;
   bool _checkedInitialNotificationLaunchDetails = false;
   late final AppLifecycleListener _lifecycleListener = AppLifecycleListener(
     onResume: _handleLifecycleResume,
@@ -537,8 +521,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     final locate = context.read;
     await locate<ForegroundRuntimeController>().restoreIfPreferred(
       desired: locate<SettingsCubit>().state.backgroundMessagingEnabled,
-      emailKeepaliveEnabled:
-          locate<SettingsCubit>().state.endpointConfig.smtpEnabled,
     );
   }
 
@@ -762,11 +744,17 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           },
           routerConfig: _router,
           builder: (context, child) {
+            final notificationStrings = AppLocalizations.of(
+              context,
+            )!.toNotificationStrings();
             context.read<NotificationService>().updateLocalizations(
-              AppLocalizations.of(context)!.toNotificationStrings(),
+              notificationStrings,
             );
             context.read<XmppService>().updateLocalizations(
               AppLocalizations.of(context)!,
+            );
+            context.read<XmppService>().updateForegroundNotificationStrings(
+              notificationStrings.toForegroundNotificationStrings(),
             );
             context.read<CalendarReminderController>().updateLocalizations(
               AppLocalizations.of(context)!,
@@ -1018,7 +1006,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       return context.read<AuthenticationCubit>().prepareForAppExit();
     });
     await _runExitStep('stop email runtime', () {
-      return context.read<EmailService>().shutdown();
+      return context.read<EmailService>().close();
     });
     await _runExitStep('close XMPP runtime', () {
       return context.read<XmppService>().close();
@@ -1044,30 +1032,53 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   Future<void> _handleNotificationIntent() async {
     if (!mounted || _notificationIntentHandling) return;
-    if (context.read<AuthenticationCubit>().state is! AuthenticationComplete) {
-      return;
-    }
-    final xmppService = context.read<XmppService>();
-    final chatsCubit = context.read<ChatsCubit>();
     _notificationIntentHandling = true;
     try {
-      final payload = await _takePendingNotificationPayload();
+      _pendingNotificationPayload ??= await _takePendingNotificationPayload();
+      if (!mounted) {
+        return;
+      }
+      if (context.read<AuthenticationCubit>().state
+          is! AuthenticationComplete) {
+        return;
+      }
+      final xmppService = context.read<XmppService>();
+      final chatsCubit = context.read<ChatsCubit>();
+      final emailService = context.read<EmailService>();
+      final payload = _pendingNotificationPayload;
       if (payload != null) {
+        _pendingNotificationPayload = null;
+        fireAndForget(
+          emailService.handleForegroundResumeNetworkAvailable,
+          operationName: 'MaterialAxichat.notificationWakeEmailRefresh',
+        );
+        if (const NotificationPayloadCodec().isEmailInboxPayload(payload)) {
+          _pendingNotificationChatJid = null;
+          _goHomeIfNeeded();
+          return;
+        }
         final String? chatJid = await xmppService.resolveNotificationPayload(
           payload,
         );
         if (chatJid != null) {
           _pendingNotificationChatJid = chatJid;
+        } else {
+          _goHomeIfNeeded();
+          return;
         }
       }
       final pendingJid = _pendingNotificationChatJid;
       if (pendingJid == null) {
+        _notificationIntentAwaitingRoute = false;
         return;
       }
       if (!_isOnHomeRoute()) {
         _notificationIntentAwaitingRoute = true;
         _router.go(const HomeRoute().location);
-        return;
+        await Future<void>.delayed(Duration.zero);
+        if (!mounted || !_isOnHomeRoute()) {
+          return;
+        }
       }
       _notificationIntentAwaitingRoute = false;
       await chatsCubit.openChat(jid: pendingJid);
@@ -1076,6 +1087,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       }
     } finally {
       _notificationIntentHandling = false;
+    }
+  }
+
+  void _goHomeIfNeeded() {
+    _notificationIntentAwaitingRoute = false;
+    if (!_isOnHomeRoute()) {
+      _router.go(const HomeRoute().location);
     }
   }
 
@@ -1180,7 +1198,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   void _handleRouteChange() {
     if (!mounted) return;
     if (_notificationIntentAwaitingRoute && _isOnHomeRoute()) {
-      _notificationIntentAwaitingRoute = false;
+      if (_notificationIntentHandling) {
+        return;
+      }
       _handleNotificationIntent();
     }
     if (!_shareIntentAwaitingRoute || !_isOnHomeRoute()) {

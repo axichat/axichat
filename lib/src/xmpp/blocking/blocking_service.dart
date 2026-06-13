@@ -533,6 +533,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
       ..clear()
       ..addAll(next);
     _blocklistCacheReady = true;
+    scheduleForegroundNotificationSnapshotPublish();
     final newlyBlocked = next.difference(previous);
     if (newlyBlocked.isEmpty) {
       return;
