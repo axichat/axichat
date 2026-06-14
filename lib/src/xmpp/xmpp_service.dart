@@ -33,7 +33,6 @@ import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
-import 'package:axichat/src/common/wire_reference_id.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/defer.dart';

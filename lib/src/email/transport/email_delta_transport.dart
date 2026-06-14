@@ -1588,7 +1588,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     final consumer = _persistEvents
         ? DeltaEventConsumer(
             databaseBuilder: _databaseBuilder,
-            core: DeltaContextEventCore(context),
+            core: DeltaContextEventCore(context, accountId: accountId),
             localizationsProvider: _localizationsProvider,
             selfJidProvider: () => _selfJidForAccount(accountId),
             xmppSelfJidProvider: _xmppSelfJidProvider,

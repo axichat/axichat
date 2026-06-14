@@ -6062,10 +6062,16 @@ class EmailService {
   }) async {
     final resolved = await _resolveDeltaAccountIdForStoredMessage(message);
     if (resolved != null) {
-      await db.updateMessage(message.copyWith(deltaAccountId: resolved));
+      await db.repairMessageDeltaAccountIdIfUnclaimed(
+        stanzaID: message.stanzaID,
+        deltaAccountId: resolved,
+      );
       return;
     }
-    await db.clearMessageDeltaHandles(message.stanzaID);
+    _log.fine(
+      'Leaving stored Delta locator unchanged for ${message.stanzaID}; '
+      'account id could not be proven.',
+    );
   }
 
   Future<int> _sendDemoEmailMessage({
@@ -8459,12 +8465,15 @@ class EmailService {
     required Message message,
     required int deltaAccountId,
   }) async {
-    if (message.id == null || message.deltaAccountId == deltaAccountId) {
+    if (message.deltaAccountId == deltaAccountId) {
       return;
     }
     await _trackAppDatabaseOperation(() async {
       final db = await _databaseBuilder();
-      await db.updateMessage(message.copyWith(deltaAccountId: deltaAccountId));
+      await db.repairMessageDeltaAccountIdIfUnclaimed(
+        stanzaID: message.stanzaID,
+        deltaAccountId: deltaAccountId,
+      );
     });
   }
 

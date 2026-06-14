@@ -2085,7 +2085,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         jids: payload.recipientJids,
         body: payload.body,
         subject: payload.subject,
-        quotingStanzaId: payload.quotingStanzaId,
+        quotingStanzaId: payload.quotingStanzaId?.value,
         quotingReferenceKind: payload.quotingReferenceKind,
         attachmentMetadataIds: attachmentMetadata.values,
         attachmentMetadata: attachmentMetadataRows,
@@ -2113,6 +2113,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return null;
     }
     final quoteTarget = draft.quoteTarget;
+    final quoteId = _wireDraftQuoteReference(quoteTarget);
     return DraftSyncPayload(
       syncId: syncId,
       updatedAt: syncMetadata.updatedAt.toUtc(),
@@ -2120,8 +2121,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       recipients: recipients,
       subject: draft.subject,
       body: draft.body,
-      quotingStanzaId: quoteTarget?.stanzaId,
-      quotingReferenceKind: quoteTarget?.referenceKind,
+      quotingStanzaId: quoteId,
+      quotingReferenceKind: quoteId == null ? null : quoteTarget?.referenceKind,
       attachments: attachments,
       calendarTaskIcsMessage: draft.calendarTaskIcsMessage,
       forwardedBlocks: draft.forwardedBlocks,
@@ -4876,7 +4877,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     bool managerReady = false,
   }) async {
     final itemId = _messageCollectionSyncItemId(entry);
-    final wireReference = WireReferenceId.tryFrom(entry.messageReferenceId);
+    final wireReference = _wireMessageCollectionReferenceForEntry(entry);
     if (wireReference == null) {
       await _clearPendingMessageCollectionPublish(itemId);
       return;
@@ -5100,21 +5101,89 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   Future<MessageCollectionSyncPayload> _buildMessageCollectionPayload(
     MessageCollectionMembershipEntry entry, {
-    required WireReferenceId wireReference,
+    required WireMessageReference wireReference,
   }) async {
     return MessageCollectionSyncPayload(
       collectionId: entry.collectionId,
       chatJid: entry.chatJid,
       messageReferenceId: wireReference,
       messageStanzaId: entry.deltaMsgId == null
-          ? WireReferenceId.tryFrom(entry.messageStanzaId)
+          ? WireMessageReference.tryParseXmpp(
+              kind: MessageReferenceKind.stanzaId,
+              value: entry.messageStanzaId,
+            )
           : null,
-      messageOriginId: WireReferenceId.tryFrom(entry.messageOriginId),
-      messageMucStanzaId: WireReferenceId.tryFrom(entry.messageMucStanzaId),
+      messageOriginId: _wireMessageCollectionOriginReference(entry),
+      messageMucStanzaId: WireMessageReference.tryParseXmpp(
+        kind: MessageReferenceKind.mucStanzaId,
+        value: entry.messageMucStanzaId,
+      ),
       updatedAt: entry.addedAt.toUtc(),
       active: entry.active,
       sourceId: await _ensureMessageCollectionSyncSourceId(),
     );
+  }
+
+  WireMessageReference? _wireDraftQuoteReference(
+    DraftQuoteTarget? quoteTarget,
+  ) {
+    if (quoteTarget == null) {
+      return null;
+    }
+    if (quoteTarget.referenceKind == MessageReferenceKind.originId) {
+      final emailReference = WireMessageReference.tryParseEmailMessageId(
+        quoteTarget.stanzaId,
+      );
+      if (emailReference != null) {
+        return emailReference;
+      }
+    }
+    return WireMessageReference.tryParseXmpp(
+      kind: quoteTarget.referenceKind,
+      value: quoteTarget.stanzaId,
+    );
+  }
+
+  WireMessageReference? _wireMessageCollectionReferenceForEntry(
+    MessageCollectionMembershipEntry entry,
+  ) {
+    if (entry.deltaMsgId != null || entry.deltaAccountId != null) {
+      return WireMessageReference.tryParseEmailMessageId(
+        entry.messageReferenceId,
+      );
+    }
+    return WireMessageReference.tryParseXmpp(
+      kind: _xmppMessageCollectionReferenceKind(entry),
+      value: entry.messageReferenceId,
+    );
+  }
+
+  WireMessageReference? _wireMessageCollectionOriginReference(
+    MessageCollectionMembershipEntry entry,
+  ) {
+    if (entry.deltaMsgId != null || entry.deltaAccountId != null) {
+      return WireMessageReference.tryParseEmailMessageId(
+            entry.messageOriginId,
+          ) ??
+          WireMessageReference.tryParseEmailMessageId(entry.messageReferenceId);
+    }
+    return WireMessageReference.tryParseXmpp(
+      kind: MessageReferenceKind.originId,
+      value: entry.messageOriginId,
+    );
+  }
+
+  MessageReferenceKind _xmppMessageCollectionReferenceKind(
+    MessageCollectionMembershipEntry entry,
+  ) {
+    final reference = entry.messageReferenceId.trim();
+    if (reference == entry.messageMucStanzaId?.trim()) {
+      return MessageReferenceKind.mucStanzaId;
+    }
+    if (reference == entry.messageOriginId?.trim()) {
+      return MessageReferenceKind.originId;
+    }
+    return MessageReferenceKind.stanzaId;
   }
 
   Future<List<MessageCollectionMembershipEntry>>
@@ -5277,8 +5346,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         _pendingMessageCollectionPublishes.remove(itemId);
         continue;
       }
-      final wireReference = WireReferenceId.tryFrom(
-        membershipEntry.messageReferenceId,
+      final wireReference = _wireMessageCollectionReferenceForEntry(
+        membershipEntry,
       );
       if (wireReference == null) {
         _pendingMessageCollectionPublishes.remove(itemId);
@@ -10155,7 +10224,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       persistedMessage = null;
     }
     final bool shouldPersistError =
-        persistedMessage != null && !isChatStateOnlyError;
+        persistedMessage != null &&
+        !persistedMessage.isEmailBacked &&
+        !isChatStateOnlyError;
 
     if (outboundReaction != null) {
       await _dbOp<XmppDatabase>(

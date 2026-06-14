@@ -101,8 +101,11 @@ bool isDeltaGeneratedMessageId(String? value) {
   return normalized.toLowerCase().startsWith(_deltaGeneratedMessageIdPrefix);
 }
 
-bool isDerivedEmailMessageKey(String? value) =>
-    value != null && value.startsWith(derivedEmailMessageKeyPrefix);
+bool isDerivedEmailMessageKey(String? value) {
+  final normalized = normalizeEmailMessageId(value);
+  if (normalized == null || normalized.contains('@')) return false;
+  return normalized.startsWith(derivedEmailMessageKeyPrefix);
+}
 
 String derivedEmailMessageKey({
   required String? subject,
@@ -125,7 +128,9 @@ String canonicalEmailOriginId({
   required String? bodyText,
 }) {
   final normalized = normalizeEmailMessageId(rfc724Mid);
-  if (normalized != null && !isDeltaGeneratedMessageId(normalized)) {
+  if (normalized != null &&
+      !isDeltaGeneratedMessageId(normalized) &&
+      !isDerivedEmailMessageKey(normalized)) {
     return normalized;
   }
   return derivedEmailMessageKey(
@@ -133,6 +138,17 @@ String canonicalEmailOriginId({
     timestamp: timestamp,
     bodyText: bodyText,
   );
+}
+
+String? genuineEmailMessageId(String? value) {
+  final normalized = normalizeEmailMessageId(value);
+  if (normalized == null ||
+      !normalized.contains('@') ||
+      isDeltaGeneratedMessageId(normalized) ||
+      isDerivedEmailMessageKey(normalized)) {
+    return null;
+  }
+  return normalized;
 }
 
 String _extractMessageIdToken(String value) {

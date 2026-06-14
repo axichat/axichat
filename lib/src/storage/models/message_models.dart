@@ -13,6 +13,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/util/delta_message_ids.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/database_converters.dart';
@@ -915,6 +916,87 @@ enum MessageReferenceKind {
 
 enum DirectMessageReferencePolicy { currentWire, preferOriginId }
 
+const int wireMessageReferenceMaxBytes = 1024;
+
+String? _normalizeWireMessageReferenceValue(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  if (!isWithinUtf8ByteLimit(trimmed, maxBytes: wireMessageReferenceMaxBytes)) {
+    return null;
+  }
+  return trimmed;
+}
+
+bool isLegacyWireMessageReferenceValue(String? raw) {
+  final trimmed = raw?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return false;
+  }
+  final normalized = trimmed.toLowerCase();
+  return isDeviceLocalDeltaStanzaId(normalized) ||
+      isDeltaGeneratedMessageId(normalized) ||
+      isDerivedEmailMessageKey(normalized);
+}
+
+sealed class WireMessageReference {
+  const WireMessageReference._(this.value);
+
+  final String value;
+
+  static XmppWireMessageReference? tryParseXmpp({
+    required MessageReferenceKind kind,
+    required String? value,
+  }) {
+    final normalized = _normalizeWireMessageReferenceValue(value);
+    if (normalized == null || isLegacyWireMessageReferenceValue(normalized)) {
+      return null;
+    }
+    return XmppWireMessageReference._(kind: kind, value: normalized);
+  }
+
+  static EmailWireMessageReference? tryParseEmailMessageId(String? value) {
+    final genuine = genuineEmailMessageId(value);
+    final normalized = _normalizeWireMessageReferenceValue(genuine);
+    if (normalized == null ||
+        !normalized.contains('@') ||
+        isLegacyWireMessageReferenceValue(normalized)) {
+      return null;
+    }
+    return EmailWireMessageReference._(normalized);
+  }
+}
+
+final class XmppWireMessageReference extends WireMessageReference {
+  const XmppWireMessageReference._({required this.kind, required String value})
+    : super._(value);
+
+  final MessageReferenceKind kind;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is XmppWireMessageReference &&
+          other.kind == kind &&
+          other.value == value;
+
+  @override
+  int get hashCode => Object.hash(XmppWireMessageReference, kind, value);
+}
+
+final class EmailWireMessageReference extends WireMessageReference {
+  const EmailWireMessageReference._(super.value) : super._();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmailWireMessageReference && other.value == value;
+
+  @override
+  int get hashCode => Object.hash(EmailWireMessageReference, value);
+}
+
 final class MessageReference {
   const MessageReference({required this.kind, required this.value});
 
@@ -1140,7 +1222,7 @@ extension MessageReferenceIds on Message {
 
   MessageReference? reactionReference({required bool isGroupChat}) {
     if (isEmailBacked) {
-      return _originReference;
+      return null;
     }
     if (isGroupChat) {
       return _mucStanzaReference;

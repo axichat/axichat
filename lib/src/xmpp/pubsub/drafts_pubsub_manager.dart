@@ -308,7 +308,7 @@ final class DraftSyncPayload {
   final String? subject;
   final String? body;
   final String? html;
-  final String? quotingStanzaId;
+  final WireMessageReference? quotingStanzaId;
   final MessageReferenceKind? quotingReferenceKind;
   final List<DraftAttachmentRef> attachments;
   final CalendarTaskIcsMessage? calendarTaskIcsMessage;
@@ -328,7 +328,7 @@ final class DraftSyncPayload {
     String? subject,
     String? body,
     String? html,
-    String? quotingStanzaId,
+    WireMessageReference? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
     List<DraftAttachmentRef>? attachments,
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
@@ -409,13 +409,17 @@ final class DraftSyncPayload {
             .whereType<DraftForwardedBlock>()
             .toList(growable: false) ??
         const <DraftForwardedBlock>[];
-    final quotingStanzaId = _normalizeText(
-      node.attributes[_quoteIdAttr]?.toString(),
-      maxBytes: draftSyncMaxIdBytes,
-    );
     final quotingReferenceKind = _parseReferenceKind(
       node.attributes[_quoteKindAttr]?.toString(),
     );
+    final quotingStanzaId = _parseQuoteReference(
+      _normalizeText(
+        node.attributes[_quoteIdAttr]?.toString(),
+        maxBytes: draftSyncMaxIdBytes,
+      ),
+      quotingReferenceKind,
+    );
+    final hasQuote = quotingStanzaId != null && quotingReferenceKind != null;
 
     final attachmentsNode = node.firstTag(_attachmentsTag);
     final attachments =
@@ -437,8 +441,8 @@ final class DraftSyncPayload {
       subject: subject,
       body: body,
       html: html,
-      quotingStanzaId: quotingStanzaId,
-      quotingReferenceKind: quotingReferenceKind,
+      quotingStanzaId: hasQuote ? quotingStanzaId : null,
+      quotingReferenceKind: hasQuote ? quotingReferenceKind : null,
       attachments: attachments,
       calendarTaskIcsMessage: calendarTaskIcsMessage,
       forwardedBlocks: forwardedBlocks,
@@ -473,7 +477,7 @@ final class DraftSyncPayload {
               .toList(growable: false)
         : forwardedBlocks;
     final normalizedQuoteId = _normalizeText(
-      quotingStanzaId,
+      quotingStanzaId?.value,
       maxBytes: draftSyncMaxIdBytes,
     );
     final normalizedQuoteKind = _referenceKindAttrValue(quotingReferenceKind);
@@ -786,6 +790,31 @@ final class DraftSyncPayload {
       null => null,
     };
   }
+
+  static WireMessageReference? _parseQuoteReference(
+    String? value,
+    MessageReferenceKind? kind,
+  ) {
+    final normalized = value?.trim();
+    if (normalized == null ||
+        normalized.isEmpty ||
+        kind == null ||
+        _isLegacyReferenceValue(normalized)) {
+      return null;
+    }
+    if (kind == MessageReferenceKind.originId) {
+      final emailReference = WireMessageReference.tryParseEmailMessageId(
+        normalized,
+      );
+      if (emailReference != null) {
+        return emailReference;
+      }
+    }
+    return WireMessageReference.tryParseXmpp(kind: kind, value: normalized);
+  }
+
+  static bool _isLegacyReferenceValue(String? value) =>
+      isLegacyWireMessageReferenceValue(value);
 }
 
 sealed class DraftSyncUpdate {

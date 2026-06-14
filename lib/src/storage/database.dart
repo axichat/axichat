@@ -165,6 +165,11 @@ abstract interface class XmppDatabase implements Database {
     String? chatJid,
   });
 
+  Future<bool> repairMessageDeltaAccountIdIfUnclaimed({
+    required String stanzaID,
+    required int deltaAccountId,
+  });
+
   Future<List<Message>> getRecoverableOutgoingDeltaMessages({
     required int deltaAccountId,
     required String senderJid,
@@ -188,6 +193,13 @@ abstract interface class XmppDatabase implements Database {
     required String senderJid,
     String? selfJid,
     String? emailSelfJid,
+  });
+
+  Future<Message?> recoverStaleDeltaMessageLocator({
+    required int deltaMsgId,
+    required int deltaAccountId,
+    required int deltaChatId,
+    required String chatJid,
   });
 
   Future<void> clearChatDeltaChatId(String jid);
@@ -3477,6 +3489,33 @@ WHERE transport IS NULL
   }
 
   @override
+  Future<bool> repairMessageDeltaAccountIdIfUnclaimed({
+    required String stanzaID,
+    required int deltaAccountId,
+  }) {
+    return transaction(() async {
+      final stored = await getMessageByStanzaID(stanzaID);
+      final deltaMsgId = stored?.deltaMsgId;
+      if (stored == null || deltaMsgId == null) {
+        return false;
+      }
+      if (stored.deltaAccountId == deltaAccountId) {
+        return true;
+      }
+      final claimed = await getMessageByDeltaId(
+        deltaMsgId,
+        deltaAccountId: deltaAccountId,
+      );
+      if (claimed != null && claimed.stanzaID != stored.stanzaID) {
+        return false;
+      }
+      await (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaID)))
+          .write(MessagesCompanion(deltaAccountId: Value(deltaAccountId)));
+      return true;
+    });
+  }
+
+  @override
   Future<void> clearMessageDeltaHandles(String stanzaID) async {
     await (update(
       messages,
@@ -3580,6 +3619,55 @@ WHERE transport IS NULL
       );
       await repairChatSummaryPreservingTimestamp(fromChatJid);
       await repairChatSummaryPreservingTimestamp(chatJid);
+      return updated;
+    });
+  }
+
+  @override
+  Future<Message?> recoverStaleDeltaMessageLocator({
+    required int deltaMsgId,
+    required int deltaAccountId,
+    required int deltaChatId,
+    required String chatJid,
+  }) {
+    return transaction(() async {
+      final existing = await getMessageByDeltaId(
+        deltaMsgId,
+        deltaAccountId: deltaAccountId,
+      );
+      if (existing != null) {
+        return existing;
+      }
+      final mappedChatIds = await getDeltaChatIdsForAccount(
+        chatJid: chatJid,
+        deltaAccountId: deltaAccountId,
+      );
+      if (!mappedChatIds.contains(deltaChatId)) {
+        return null;
+      }
+      final staleRows =
+          await (select(messages)
+                ..where(
+                  (tbl) =>
+                      tbl.deltaMsgId.equals(deltaMsgId) &
+                      tbl.deltaChatId.equals(deltaChatId) &
+                      tbl.chatJid.equals(chatJid) &
+                      tbl.deltaAccountId.equals(DeltaAccountDefaults.legacyId),
+                )
+                ..orderBy([
+                  (tbl) => OrderingTerm.asc(tbl.timestamp),
+                  (tbl) => OrderingTerm.asc(tbl.stanzaID),
+                ]))
+              .get();
+      if (staleRows.length != 1) {
+        return null;
+      }
+      final stale = staleRows.single;
+      final updated = stale.copyWith(
+        deltaAccountId: deltaAccountId,
+        deltaChatId: deltaChatId,
+      );
+      await updateMessage(updated);
       return updated;
     });
   }
@@ -8217,8 +8305,11 @@ WHERE jid = ?
       ambiguousKeys,
     );
     final unresolvable = await _countUnscopedEmailMessageRows();
+    final nonWireMembershipsRepaired =
+        await _repairNonWireEmailMembershipRows();
     final rewritten = await _rewriteEmailOriginIdsToGenuine();
     final membershipsRepaired =
+        nonWireMembershipsRepaired +
         await _repairForeignCollectionMembershipHandles();
     _log.info(
       'Message identity migration: scopedByMapping=$scopedByMapping '
@@ -8239,7 +8330,9 @@ WHERE jid = ?
         deltaAccountId: entry.deltaAccountId,
         chatJid: entry.chatJid,
       );
-      if (matching != null && _membershipReferencesMessage(entry, matching)) {
+      if (matching != null &&
+          (_membershipReferencesMessage(entry, matching) ||
+              _membershipIsNonWireEmailReference(entry, matching))) {
         await _normalizeEmailMembershipIdentity(
           entry: entry,
           message: matching,
@@ -8250,6 +8343,16 @@ WHERE jid = ?
       repaired++;
     }
     return repaired;
+  }
+
+  bool _membershipIsNonWireEmailReference(
+    MessageCollectionMembershipEntry entry,
+    Message message,
+  ) {
+    final reference = entry.messageReferenceId.trim();
+    return message.isEmailBacked &&
+        (isDerivedEmailMessageKey(reference) ||
+            isDeltaGeneratedMessageId(reference));
   }
 
   bool _membershipReferencesMessage(
@@ -8530,12 +8633,20 @@ WHERE jid = ?
         return matching;
       }
     }
-    final references = <String>{
+    final rawReferences = <String>{
       entry.messageReferenceId.trim(),
       ?entry.messageStanzaId?.trim(),
       ?entry.messageOriginId?.trim(),
       ?entry.messageMucStanzaId?.trim(),
     }..removeWhere((value) => value.isEmpty);
+    final references = <String>{};
+    for (final reference in rawReferences) {
+      references.add(reference);
+      final normalized = normalizeEmailMessageId(reference);
+      if (normalized != null) {
+        references.add(normalized);
+      }
+    }
     if (references.isEmpty) {
       return null;
     }
@@ -8552,9 +8663,13 @@ WHERE jid = ?
         (tbl) => OrderingTerm.asc(tbl.timestamp),
         (tbl) => OrderingTerm.asc(tbl.stanzaID),
       ])
-      ..limit(1);
-    final matching = await query.getSingleOrNull();
-    return matching?.isEmailBacked == true ? matching : null;
+      ..limit(2);
+    final matches = await query.get();
+    if (matches.length != 1) {
+      return null;
+    }
+    final matching = matches.single;
+    return matching.isEmailBacked ? matching : null;
   }
 
   Future<bool> _repairNonWireEmailMembershipRow({

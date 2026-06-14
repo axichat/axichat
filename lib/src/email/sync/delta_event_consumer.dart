@@ -159,12 +159,15 @@ abstract interface class DeltaEventCore {
 }
 
 final class DeltaContextEventCore implements DeltaEventCore {
-  const DeltaContextEventCore(this._context);
+  const DeltaContextEventCore(this._context, {int? accountId})
+    : _accountId = accountId;
 
   final DeltaContextHandle _context;
+  final int? _accountId;
 
   @override
-  int get accountId => _context.accountId ?? DeltaAccountDefaults.legacyId;
+  int get accountId =>
+      _accountId ?? _context.accountId ?? DeltaAccountDefaults.legacyId;
 
   @override
   bool get supportsMessageRfc724Mid => _context.supportsMessageRfc724Mid;
@@ -1369,9 +1372,11 @@ class DeltaEventConsumer {
       return;
     }
     final stanzaId = _emailRowKey();
-    var existingByDeltaId = await db.getMessageByDeltaId(
-      msg.id,
+    var existingByDeltaId = await db.recoverStaleDeltaMessageLocator(
+      deltaMsgId: msg.id,
       deltaAccountId: deltaAccountId,
+      deltaChatId: chatId,
+      chatJid: resolvedChat.jid,
     );
     if (existingByDeltaId != null &&
         !_storedDeltaLocatorMatches(
@@ -1492,10 +1497,6 @@ class DeltaEventConsumer {
       chatId: chatId,
       msg: msg,
     );
-    final String originId = nativeOriginId ?? _derivedOriginIdForMessage(msg);
-    if (nativeOriginId == null) {
-      message = message.copyWith(originID: originId);
-    }
     if (isOutgoing) {
       message = await _withReconstructedQuote(
         db: db,
@@ -1511,7 +1512,7 @@ class DeltaEventConsumer {
       msg: msg,
       resolvedChat: resolvedChat,
       storedMessage: message,
-      resolvedOriginId: originId,
+      resolvedOriginId: nativeOriginId,
     );
     await _storeMessage(db: db, message: message, chatJid: resolvedChat.jid);
     await _ensureEmailEncryptionStatusMarkerForMessage(
@@ -1876,9 +1877,11 @@ class DeltaEventConsumer {
     XmppDatabase db,
     _DeltaChatJidMessageId id,
   ) async {
-    final stored = await db.getMessageByDeltaId(
-      id.msgId,
+    final stored = await db.recoverStaleDeltaMessageLocator(
+      deltaMsgId: id.msgId,
       deltaAccountId: id.accountId,
+      deltaChatId: id.chatId,
+      chatJid: id.chatJid,
     );
     if (stored == null ||
         stored.deltaMsgId != id.msgId ||
@@ -1955,12 +1958,8 @@ class DeltaEventConsumer {
   Message _mergeDeltaMessageState({
     required Message existing,
     required DeltaMessage msg,
-    String? originId,
   }) {
     var next = existing;
-    if (originId != null && originId != existing.originID) {
-      next = next.copyWith(originID: originId);
-    }
     final DateTime? timestamp = msg.timestamp;
     if (timestamp != null && next.timestamp != timestamp) {
       next = next.copyWith(timestamp: timestamp);
@@ -2049,15 +2048,10 @@ class DeltaEventConsumer {
   Future<void> _updateExistingMessage({
     required Message existing,
     required DeltaMessage msg,
-    String? originId,
     bool statusOnly = false,
   }) async {
     final db = await _db();
-    var next = _mergeDeltaMessageState(
-      existing: existing,
-      msg: msg,
-      originId: originId,
-    );
+    var next = _mergeDeltaMessageState(existing: existing, msg: msg);
     if (statusOnly) {
       await _persistStatusOnlyUpdate(
         db: db,
@@ -2212,8 +2206,7 @@ class DeltaEventConsumer {
     if (_originIdHydrationExhausted.contains(id.msgId)) {
       return;
     }
-    final existingOrigin = normalizeEmailMessageId(existing.originID);
-    if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
+    if (normalizeEmailMessageId(existing.originID) != null) {
       return;
     }
     await _scheduleOriginIdHydration(id: id);
@@ -2231,25 +2224,13 @@ class DeltaEventConsumer {
     if (existing == null) {
       return;
     }
-    final existingOrigin = normalizeEmailMessageId(existing.originID);
-    if (existingOrigin == nativeOriginId) {
-      return;
-    }
-    if (existingOrigin != null && !isDerivedEmailMessageKey(existingOrigin)) {
+    if (normalizeEmailMessageId(existing.originID) != null) {
       return;
     }
     await db.updateMessageOriginId(
       stanzaID: existing.stanzaID,
       originID: nativeOriginId,
     );
-    final staleOrigin = existing.originID?.trim();
-    if (staleOrigin != null && staleOrigin.isNotEmpty) {
-      await db.rebindMessageCollectionMembershipReferences(
-        chatJid: existing.chatJid,
-        oldReferenceId: staleOrigin,
-        newReferenceId: nativeOriginId,
-      );
-    }
     await db.repairUnreadCountForChat(
       existing.chatJid,
       selfJid: _xmppSelfJid,
@@ -2364,17 +2345,6 @@ class DeltaEventConsumer {
       _log.fine('Failed to resolve Delta origin ID.', error, stackTrace);
       return null;
     }
-  }
-
-  String _derivedOriginIdForMessage(DeltaMessage msg) {
-    _log.info(
-      'No usable Message-ID for Delta msg ${msg.id}; using derived key.',
-    );
-    return derivedEmailMessageKey(
-      subject: msg.subject,
-      timestamp: msg.timestamp,
-      bodyText: msg.text,
-    );
   }
 
   Future<void> _refreshStoredChatSummary({
