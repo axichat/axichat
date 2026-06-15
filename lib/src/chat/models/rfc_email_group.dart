@@ -230,6 +230,19 @@ String? resolvedEmailHtmlBodyForMessage({
   return fullHtml;
 }
 
+EmailHtmlDerivation? emailHtmlDerivationForBody(
+  String? html, {
+  bool deriveIfMissing = true,
+}) {
+  final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+  if (normalizedHtml == null) {
+    return null;
+  }
+  return deriveIfMissing
+      ? HtmlContentCodec.emailDerivations(normalizedHtml)
+      : HtmlContentCodec.cachedEmailDerivations(normalizedHtml);
+}
+
 bool emailHtmlHasVisibleBodyContent(String? html) {
   final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
   if (normalizedHtml == null) {

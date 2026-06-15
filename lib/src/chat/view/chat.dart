@@ -210,20 +210,45 @@ List<BoxShadow> _scaleShadows(List<BoxShadow> shadows, double factor) => shadows
 bool _emailHtmlHasVisibleTimelineContent({
   required String? normalizedHtmlBody,
   required String? normalizedHtmlText,
+  EmailHtmlDerivation? derivation,
 }) {
-  if (normalizedHtmlText?.trim().isNotEmpty == true) {
+  if ((derivation?.visibleBodyText ?? normalizedHtmlText)?.trim().isNotEmpty ==
+      true) {
     return true;
   }
   if (normalizedHtmlBody == null) {
     return false;
   }
-  if (HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody)) {
+  if (derivation?.containsRemoteImages ??
+      HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody)) {
     return true;
   }
   return HtmlContentCodec.imageSources(
     normalizedHtmlBody,
   ).any((source) => source.trim().toLowerCase().startsWith('data:'));
 }
+
+@visibleForTesting
+bool shouldUseSelectedInlineEmailWebViewForTesting({
+  required bool isSingleSelection,
+  required bool shouldRenderHtmlBody,
+}) => isSingleSelection && shouldRenderHtmlBody;
+
+@visibleForTesting
+bool shouldShowSelectedEmailImageLoadButtonForTesting({
+  required bool isSingleSelection,
+  required bool shouldRenderHtmlBody,
+  required bool hasRemoteHtmlImages,
+  required bool shouldLoadImages,
+  required bool hasLoadCallback,
+}) =>
+    shouldUseSelectedInlineEmailWebViewForTesting(
+      isSingleSelection: isSingleSelection,
+      shouldRenderHtmlBody: shouldRenderHtmlBody,
+    ) &&
+    hasRemoteHtmlImages &&
+    !shouldLoadImages &&
+    hasLoadCallback;
 
 double _bubbleCornerClearance(BorderRadius baseRadius) =>
     math.max(baseRadius.topLeft.x, baseRadius.topLeft.y);
@@ -341,9 +366,12 @@ class _ChatState extends State<Chat> {
   bool _cachedSearchFiltering = false;
   Map<String, List<String>>? _cachedAttachmentsByMessageId;
   Map<String, String>? _cachedGroupLeaderByMessageId;
+  Map<int, String>? _cachedEmailFullHtmlByDeltaId;
   Map<String, Message> _cachedMessageById = const {};
   List<Message> _cachedFilteredItems = const [];
   final _bubbleWidthByMessageId = <String, double>{};
+  final _emailWebViewHeightByContentKey =
+      <String, ({String messageId, double height})>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _messageListKey = GlobalKey();
@@ -656,6 +684,49 @@ class _ChatState extends State<Chat> {
     setState(() {
       _bubbleWidthByMessageId[messageId] = width;
     });
+  }
+
+  String _emailWebViewHeightCacheKey({
+    required Object bubbleContentKey,
+    required String html,
+    required bool shouldLoadImages,
+    required double baseFontSize,
+  }) {
+    return [
+      bubbleContentKey,
+      html.length,
+      html.hashCode,
+      shouldLoadImages,
+      baseFontSize.toStringAsFixed(2),
+    ].join('\n');
+  }
+
+  double? _emailWebViewHeightFor(String contentKey) =>
+      _emailWebViewHeightByContentKey[contentKey]?.height;
+
+  void _updateEmailWebViewHeight({
+    required String contentKey,
+    required String messageId,
+    required double height,
+  }) {
+    if (height <= 0) {
+      return;
+    }
+    final normalizedHeight = height.ceilToDouble();
+    final previous = _emailWebViewHeightByContentKey[contentKey]?.height;
+    if (previous != null && (previous - normalizedHeight).abs() < 0.5) {
+      return;
+    }
+    _emailWebViewHeightByContentKey[contentKey] = (
+      messageId: messageId,
+      height: normalizedHeight,
+    );
+  }
+
+  void _pruneEmailWebViewHeights(Set<String> availableIds) {
+    _emailWebViewHeightByContentKey.removeWhere(
+      (_, entry) => !availableIds.contains(entry.messageId),
+    );
   }
 
   List<String> _demoTypingParticipants(ChatState state) {
@@ -1798,6 +1869,9 @@ class _ChatState extends State<Chat> {
     required String? rawHtmlBody,
     required String normalizedHtmlBody,
     required String? normalizedHtmlText,
+    required EmailHtmlDerivation emailDerivation,
+    required String preparedHtmlBody,
+    required String messageStanzaId,
     required String? messageDatabaseId,
     required Object bubbleContentKey,
     required TextStyle baseTextStyle,
@@ -1815,10 +1889,6 @@ class _ChatState extends State<Chat> {
     final onLoadRequested = messageDatabaseId == null
         ? null
         : () => _handleEmailImagesApproved(messageDatabaseId);
-    final preparedHtmlBody = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-      normalizedHtmlBody,
-      allowRemoteImages: false,
-    );
     final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
         ? normalizedHtmlText
         : null;
@@ -1828,6 +1898,7 @@ class _ChatState extends State<Chat> {
         _emailHtmlHasVisibleTimelineContent(
           normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: normalizedHtmlText,
+          derivation: emailDerivation,
         );
     if (preparedHtmlBody.trim().isNotEmpty) {
       logEmailHtmlStages(
@@ -1840,8 +1911,31 @@ class _ChatState extends State<Chat> {
       );
     }
     final shouldUseSelectedInlineEmailWebView =
-        isSingleSelection && shouldRenderHtmlBody;
-    final shouldShowImageGallery = hasRemoteHtmlImages && shouldRenderHtmlBody;
+        shouldUseSelectedInlineEmailWebViewForTesting(
+          isSingleSelection: isSingleSelection,
+          shouldRenderHtmlBody: shouldRenderHtmlBody,
+        );
+    final shouldShowLoadImagesButton =
+        shouldShowSelectedEmailImageLoadButtonForTesting(
+          isSingleSelection: isSingleSelection,
+          shouldRenderHtmlBody: shouldRenderHtmlBody,
+          hasRemoteHtmlImages: hasRemoteHtmlImages,
+          shouldLoadImages: shouldLoadImagesInWebView,
+          hasLoadCallback: onLoadRequested != null,
+        );
+    _logSelectedEmailImageDecision(
+      bubbleContentKey: bubbleContentKey,
+      isSingleSelection: isSingleSelection,
+      shouldRenderHtmlBody: shouldRenderHtmlBody,
+      shouldUseSelectedInlineEmailWebView: shouldUseSelectedInlineEmailWebView,
+      hasRemoteHtmlImages: hasRemoteHtmlImages,
+      shouldLoadImagesInWebView: shouldLoadImagesInWebView,
+      hasLoadCallback: onLoadRequested != null,
+      shouldShowLoadImagesButton: shouldShowLoadImagesButton,
+      normalizedHtmlBody: normalizedHtmlBody,
+      preparedHtmlBody: preparedHtmlBody,
+      emailDerivation: emailDerivation,
+    );
     final initialChildCount = bubbleTextChildren.length;
     if (!shouldRenderHtmlBody &&
         emailFallbackText != null &&
@@ -1864,10 +1958,17 @@ class _ChatState extends State<Chat> {
           (isSelfBubble
               ? context.colorScheme.primaryForeground
               : context.colorScheme.primary);
-      if (shouldUseSelectedInlineEmailWebView &&
-          shouldShowImageGallery &&
-          !shouldLoadImagesInWebView &&
-          onLoadRequested != null) {
+      final webViewBaseFontSize =
+          baseTextStyle.fontSize ??
+          context.textTheme.small.fontSize ??
+          context.sizing.menuItemIconSize;
+      final webViewHeightCacheKey = _emailWebViewHeightCacheKey(
+        bubbleContentKey: bubbleContentKey,
+        html: normalizedHtmlBody,
+        shouldLoadImages: shouldLoadImagesInWebView,
+        baseFontSize: webViewBaseFontSize,
+      );
+      if (shouldShowLoadImagesButton) {
         bubbleTextChildren.add(
           Padding(
             padding: EdgeInsets.only(bottom: context.spacing.xs),
@@ -1887,8 +1988,17 @@ class _ChatState extends State<Chat> {
                 backgroundColor: bubbleColor,
                 textColor: textColor,
                 linkColor: linkColor,
+                baseFontSize: webViewBaseFontSize,
                 shouldLoadImages: shouldLoadImagesInWebView,
+                initialContentHeight: _emailWebViewHeightFor(
+                  webViewHeightCacheKey,
+                ),
                 onLinkTap: _handleLinkTap,
+                onContentHeightChanged: (height) => _updateEmailWebViewHeight(
+                  contentKey: webViewHeightCacheKey,
+                  messageId: messageStanzaId,
+                  height: height,
+                ),
               )
             : _MessageHtmlBody(
                 key: ValueKey<Object>(bubbleContentKey),
@@ -1920,6 +2030,7 @@ class _ChatState extends State<Chat> {
     required bool isSelfBubble,
     required bool isSingleSelection,
     required bool autoLoadEmailImages,
+    required String messageStanzaId,
     required Object bubbleContentKey,
     required TextStyle baseTextStyle,
     required TextStyle linkStyle,
@@ -1945,22 +2056,15 @@ class _ChatState extends State<Chat> {
       final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
         block.resolvedHtmlBody,
       );
-      final normalizedHtmlText = normalizedHtmlBody == null
-          ? null
-          : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
-      final visibleSanitizedHtmlText = normalizedHtmlBody == null
-          ? null
-          : HtmlContentCodec.toPlainText(
-              HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-                normalizedHtmlBody,
-                allowRemoteImages: false,
-              ),
-            ).trim();
+      final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+      final visibleSanitizedHtmlText = emailDerivation?.visibleBodyText;
+      final normalizedHtmlText = visibleSanitizedHtmlText;
       final renderedText = block.plainText.trim().isNotEmpty
           ? block.plainText
           : (visibleSanitizedHtmlText ?? _emptyText);
       final shouldRenderHtmlBody =
           normalizedHtmlBody != null &&
+          emailDerivation != null &&
           (isSingleSelection ||
               HtmlContentCodec.shouldRenderRichEmailHtml(
                 normalizedHtmlBody: normalizedHtmlBody,
@@ -1971,17 +2075,18 @@ class _ChatState extends State<Chat> {
           ? messageDetails
           : const <InlineSpan>[];
       if (shouldRenderHtmlBody) {
-        final hasRemoteHtmlImages =
-            HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody);
         _appendInlineEmailHtmlBubbleContent(
           context: context,
           isSelfBubble: isSelfBubble,
           isSingleSelection: isSingleSelection,
           autoLoadEmailImages: autoLoadEmailImages,
-          hasRemoteHtmlImages: hasRemoteHtmlImages,
+          hasRemoteHtmlImages: emailDerivation.containsRemoteImages,
           rawHtmlBody: block.resolvedHtmlBody,
           normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: visibleSanitizedHtmlText,
+          emailDerivation: emailDerivation,
+          preparedHtmlBody: emailDerivation.preparedFlutterHtml,
+          messageStanzaId: messageStanzaId,
           messageDatabaseId: block.sourceMessageDatabaseId,
           bubbleContentKey:
               '${bubbleContentKey}_email_block_${block.sourceStanzaId}',
@@ -2307,21 +2412,16 @@ class _ChatState extends State<Chat> {
                 emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
               );
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
-    final normalizedHtmlText = normalizedHtmlBody == null
-        ? null
-        : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
-    final visibleSanitizedHtmlText = normalizedHtmlBody == null
-        ? null
-        : HtmlContentCodec.toPlainText(
-            HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-              normalizedHtmlBody,
-              allowRemoteImages: false,
-            ),
-          ).trim();
-    final hasVisibleEmailHtmlContent = _emailHtmlHasVisibleTimelineContent(
-      normalizedHtmlBody: normalizedHtmlBody,
-      normalizedHtmlText: visibleSanitizedHtmlText,
-    );
+    final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+    final visibleSanitizedHtmlText = emailDerivation?.visibleBodyText;
+    final normalizedHtmlText = visibleSanitizedHtmlText;
+    final hasVisibleEmailHtmlContent =
+        emailDerivation != null &&
+        _emailHtmlHasVisibleTimelineContent(
+          normalizedHtmlBody: normalizedHtmlBody,
+          normalizedHtmlText: visibleSanitizedHtmlText,
+          derivation: emailDerivation,
+        );
     final displayMessageText = messageText;
     final trimmedDisplayMessageText = displayMessageText.trim();
     final textBubbleMessageText =
@@ -2379,6 +2479,7 @@ class _ChatState extends State<Chat> {
         collapsedEmailPreviewText != fullEmailPreviewText;
     final shouldPreferRichEmailHtml =
         isEmailMessage &&
+        emailDerivation != null &&
         HtmlContentCodec.shouldRenderRichEmailHtml(
           normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: normalizedHtmlText,
@@ -2394,7 +2495,8 @@ class _ChatState extends State<Chat> {
         !showsAttachmentOnlySurface &&
         hasRichEmailHtmlBody;
     final shouldRenderInlineEmailHtmlBody =
-        hasRichEmailHtmlBody &&
+        hasEmailHtmlBody &&
+        hasVisibleEmailHtmlContent &&
         shouldRenderTextContent &&
         !showsAttachmentOnlySurface &&
         (defaultShowsInlineEmailHtmlBody || isSingleSelection);
@@ -2407,6 +2509,7 @@ class _ChatState extends State<Chat> {
         isSelfBubble: isSelfBubble,
         isSingleSelection: isSingleSelection,
         autoLoadEmailImages: autoLoadEmailImages,
+        messageStanzaId: messageModel.stanzaID,
         bubbleContentKey: bubbleContentKey,
         baseTextStyle: baseTextStyle,
         linkStyle: linkStyle,
@@ -2428,17 +2531,18 @@ class _ChatState extends State<Chat> {
         bubbleTextChildren: bubbleTextChildren,
       );
     } else if (shouldRenderInlineEmailHtmlBody) {
-      final hasRemoteHtmlImages =
-          HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody);
       _appendInlineEmailHtmlBubbleContent(
         context: context,
         isSelfBubble: isSelfBubble,
         isSingleSelection: isSingleSelection,
         autoLoadEmailImages: autoLoadEmailImages,
-        hasRemoteHtmlImages: hasRemoteHtmlImages,
+        hasRemoteHtmlImages: emailDerivation.containsRemoteImages,
         rawHtmlBody: resolvedHtmlBody,
         normalizedHtmlBody: normalizedHtmlBody,
         normalizedHtmlText: visibleSanitizedHtmlText,
+        emailDerivation: emailDerivation,
+        preparedHtmlBody: emailDerivation.preparedFlutterHtml,
+        messageStanzaId: messageModel.stanzaID,
         messageDatabaseId: messageModel.id,
         bubbleContentKey: bubbleContentKey,
         baseTextStyle: baseTextStyle,
@@ -5238,6 +5342,9 @@ class _ChatState extends State<Chat> {
         .where((id) => !availableIds.contains(id))
         .toList(growable: false);
     var didChange = false;
+    if (_emailWebViewHeightByContentKey.isNotEmpty) {
+      _pruneEmailWebViewHeights(availableIds);
+    }
     if (removedKeys.isNotEmpty) {
       for (final id in removedKeys) {
         _messageKeys.remove(id);
@@ -5337,6 +5444,52 @@ class _ChatState extends State<Chat> {
     _cachedChatAvatarPathsByJid = chatAvatarPathsByJid;
   }
 
+  void _scheduleEmailHtmlDerivationPrewarm({
+    required Iterable<Message> messages,
+    required Map<int, String> emailFullHtmlByDeltaId,
+  }) {
+    final normalizedHtmlBodies = <String>[];
+    final seenHtmlBodies = <String>{};
+    void addHtml(String? html) {
+      final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+      if (normalizedHtml == null ||
+          HtmlContentCodec.cachedEmailDerivations(normalizedHtml) != null ||
+          !seenHtmlBodies.add(normalizedHtml)) {
+        return;
+      }
+      normalizedHtmlBodies.add(normalizedHtml);
+    }
+
+    for (final message in messages) {
+      addHtml(message.htmlBody);
+      final deltaMessageId = message.deltaMsgId;
+      if (deltaMessageId != null) {
+        addHtml(emailFullHtmlByDeltaId[deltaMessageId]);
+      }
+    }
+    if (normalizedHtmlBodies.isEmpty) {
+      return;
+    }
+    unawaited(_precacheEmailHtmlDerivations(normalizedHtmlBodies));
+  }
+
+  Future<void> _precacheEmailHtmlDerivations(
+    List<String> normalizedHtmlBodies,
+  ) async {
+    final bool cacheUpdated;
+    try {
+      cacheUpdated = await HtmlContentCodec.precacheEmailDerivations(
+        normalizedHtmlBodies,
+      );
+    } on Exception {
+      return;
+    }
+    if (!mounted || !cacheUpdated) {
+      return;
+    }
+    setState(() {});
+  }
+
   void _ensureMessageCaches({
     required List<Message> items,
     required Map<String, Message> quotedMessagesById,
@@ -5344,6 +5497,7 @@ class _ChatState extends State<Chat> {
     required bool searchFiltering,
     required Map<String, List<String>> attachmentsByMessageId,
     required Map<String, String> groupLeaderByMessageId,
+    required Map<int, String> emailFullHtmlByDeltaId,
   }) {
     _reconcilePendingReactionPreviews(items);
     final sameItems = identical(items, _cachedItems);
@@ -5358,12 +5512,17 @@ class _ChatState extends State<Chat> {
       groupLeaderByMessageId,
       _cachedGroupLeaderByMessageId,
     );
+    final sameEmailFullHtml = identical(
+      emailFullHtmlByDeltaId,
+      _cachedEmailFullHtmlByDeltaId,
+    );
     if (sameItems &&
         sameQuoted &&
         sameSearch &&
         sameSearchFiltering &&
         sameAttachments &&
-        sameGroupLeaders) {
+        sameGroupLeaders &&
+        sameEmailFullHtml) {
       return;
     }
     final messageById = <String, Message>{
@@ -5378,6 +5537,10 @@ class _ChatState extends State<Chat> {
       }
     }
     final activeItems = searchFiltering ? searchResults : items;
+    _scheduleEmailHtmlDerivationPrewarm(
+      messages: activeItems,
+      emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+    );
     bool isGroupedNonLeader(Message message) {
       final messageId = message.id;
       if (messageId == null || messageId.isEmpty) {
@@ -5416,6 +5579,7 @@ class _ChatState extends State<Chat> {
     _cachedSearchFiltering = searchFiltering;
     _cachedAttachmentsByMessageId = attachmentsByMessageId;
     _cachedGroupLeaderByMessageId = groupLeaderByMessageId;
+    _cachedEmailFullHtmlByDeltaId = emailFullHtmlByDeltaId;
     _cachedMessageById = messageById;
     _cachedFilteredItems = filteredItems;
   }

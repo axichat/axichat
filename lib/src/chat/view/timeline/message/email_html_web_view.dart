@@ -15,6 +15,31 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:html/dom.dart' as dom;
+import 'package:html/parser.dart' as html_parser;
+
+const String _emailScaleRootId = 'axichat-original-email-scale-root';
+const String _emailScaleRootAttributeName =
+    'data-axichat-original-email-scale-root';
+const String _emailScaleRootOpenTag =
+    '<div id="$_emailScaleRootId" $_emailScaleRootAttributeName="true" '
+    'style="transform-origin: top left; display: block;">';
+final RegExp _originalPassiveRemoteUrlPattern = RegExp(
+  r'''(?:(?:https?:)?//)[^\s"'<>),;]+''',
+  caseSensitive: false,
+);
+final RegExp _originalPassiveCssRemoteUrlPattern = RegExp(
+  r'''url\(\s*(?:"|')?(?:https?:)?//[^)"']+(?:"|')?\s*\)''',
+  caseSensitive: false,
+);
+final RegExp _originalPassiveCssRemoteImportPattern = RegExp(
+  r'''@import\b[^;{}]*(?:(?:https?:)?//|url\(\s*(?:"|')?(?:https?:)?//)[^;{}]*;?''',
+  caseSensitive: false,
+);
+final RegExp _originalPassiveTrackerImagePattern = RegExp(
+  r'(?:beacon|pixel|spacer|tracking)',
+  caseSensitive: false,
+);
 
 String _prepareEmailHtmlData(Map<String, Object> arguments) {
   final html = arguments['html']! as String;
@@ -41,6 +66,7 @@ String prepareEmailHtmlDataForWebView({
   if (contentMode == EmailHtmlContentMode.originalPassive) {
     return _buildOriginalPassiveEmailHtmlShell(
       html: html,
+      allowRemoteImages: allowRemoteImages,
       themeStyle: themeStyle,
     );
   }
@@ -48,7 +74,9 @@ String prepareEmailHtmlDataForWebView({
     html,
     allowRemoteImages: allowRemoteImages,
   );
-  return _injectEmailThemeStyle(preparedHtml, themeStyle);
+  return _wrapEmailHtmlScaleRoot(
+    _injectEmailThemeStyle(preparedHtml, themeStyle),
+  );
 }
 
 String _injectEmailThemeStyle(String html, String themeStyle) {
@@ -69,10 +97,206 @@ String _injectEmailThemeStyle(String html, String themeStyle) {
   return '$themeStyle$html';
 }
 
+String _wrapEmailHtmlScaleRoot(String html) {
+  final bodyOpen = RegExp(
+    r'<body\b[^>]*>',
+    caseSensitive: false,
+  ).firstMatch(html);
+  final bodyCloseMatches = RegExp(
+    r'</body\s*>',
+    caseSensitive: false,
+  ).allMatches(html).toList();
+  if (bodyOpen == null || bodyCloseMatches.isEmpty) {
+    return '$_emailScaleRootOpenTag$html</div>';
+  }
+  final bodyClose = bodyCloseMatches.last;
+  if (bodyClose.start < bodyOpen.end) {
+    return '$_emailScaleRootOpenTag$html</div>';
+  }
+  final bodyTag = bodyOpen.group(0) ?? '';
+  if (bodyTag.toLowerCase().contains(_emailScaleRootAttributeName) ||
+      html.contains('id="$_emailScaleRootId"') ||
+      html.contains("id='$_emailScaleRootId'")) {
+    return html;
+  }
+  return html.replaceRange(
+    bodyOpen.end - 1,
+    bodyOpen.end - 1,
+    ' $_emailScaleRootAttributeName="true"',
+  );
+}
+
 String _inlineJsonString(String value) => jsonEncode(value)
     .replaceAll('<', r'\u003C')
     .replaceAll('>', r'\u003E')
     .replaceAll('&', r'\u0026');
+
+String _preSanitizeOriginalPassiveEmailHtml({
+  required String html,
+  required bool allowRemoteImages,
+}) {
+  if (allowRemoteImages) {
+    return html;
+  }
+  try {
+    final document = html_parser.parse(html);
+    _stripOriginalPassiveRemoteImageLoads(document);
+    _stripOriginalPassiveRemoteStyleLoads(document);
+    _stripOriginalPassiveRefreshRedirects(document);
+    _stripOriginalPassiveRemoteResourceAttributes(document);
+    return document.outerHtml;
+  } on Exception {
+    return html.replaceAll(
+      _originalPassiveRemoteUrlPattern,
+      HtmlContentCodec.blockedRemoteEmailImagePlaceholderDataUri,
+    );
+  }
+}
+
+void _stripOriginalPassiveRemoteImageLoads(dom.Document document) {
+  for (final image in document.querySelectorAll('img').toList()) {
+    image.attributes.remove('srcset');
+    final source = image.attributes['src'];
+    if (!_isOriginalPassiveRemoteResource(source)) {
+      continue;
+    }
+    if (_isOriginalPassiveTrackerOrSpacerImage(image)) {
+      image.remove();
+      continue;
+    }
+    image.attributes['src'] =
+        HtmlContentCodec.blockedRemoteEmailImagePlaceholderDataUri;
+  }
+  for (final source in document.querySelectorAll('source').toList()) {
+    final srcset = source.attributes['srcset'];
+    if (srcset == null || !_containsOriginalPassiveRemoteResource(srcset)) {
+      continue;
+    }
+    source.attributes.remove('srcset');
+  }
+}
+
+void _stripOriginalPassiveRemoteStyleLoads(dom.Document document) {
+  for (final style in document.querySelectorAll('style').toList()) {
+    final sanitized = _stripOriginalPassiveRemoteCssLoads(style.text);
+    if (sanitized.trim().isEmpty) {
+      style.remove();
+      continue;
+    }
+    style.text = sanitized;
+  }
+  for (final element in document.querySelectorAll('[style]')) {
+    final style = element.attributes['style'];
+    if (style == null) {
+      continue;
+    }
+    final sanitized = _stripOriginalPassiveRemoteCssLoads(style);
+    if (sanitized.trim().isEmpty) {
+      element.attributes.remove('style');
+      continue;
+    }
+    element.attributes['style'] = sanitized;
+  }
+}
+
+void _stripOriginalPassiveRefreshRedirects(dom.Document document) {
+  for (final meta in document.querySelectorAll('meta').toList()) {
+    if (_isOriginalPassiveRefreshMeta(meta)) {
+      meta.remove();
+    }
+  }
+}
+
+void _stripOriginalPassiveRemoteResourceAttributes(dom.Document document) {
+  for (final element in document.querySelectorAll('*')) {
+    final tag = (element.localName ?? '').toLowerCase();
+    for (final entry in element.attributes.entries.toList()) {
+      final name = entry.key.toString().trim().toLowerCase();
+      if (name == 'srcdoc') {
+        element.attributes.remove(entry.key);
+        continue;
+      }
+      if (name == 'src' &&
+          tag != 'img' &&
+          _isOriginalPassiveRemoteResource(entry.value)) {
+        element.attributes.remove(entry.key);
+        continue;
+      }
+      if (name == 'href' &&
+          tag == 'link' &&
+          _isOriginalPassiveRemoteResource(entry.value)) {
+        element.attributes.remove(entry.key);
+        continue;
+      }
+      if (name == 'srcset') {
+        if (_containsOriginalPassiveRemoteResource(entry.value)) {
+          element.attributes.remove(entry.key);
+        }
+        continue;
+      }
+      if (name == 'data' &&
+          tag == 'object' &&
+          _isOriginalPassiveRemoteResource(entry.value)) {
+        element.attributes.remove(entry.key);
+        continue;
+      }
+      if (const <String>{'background', 'poster'}.contains(name) &&
+          _isOriginalPassiveRemoteResource(entry.value)) {
+        element.attributes.remove(entry.key);
+      }
+    }
+  }
+}
+
+bool _isOriginalPassiveRefreshMeta(dom.Element element) {
+  final tag = (element.localName ?? '').toLowerCase();
+  if (tag != 'meta') {
+    return false;
+  }
+  for (final entry in element.attributes.entries) {
+    final name = entry.key.toString().trim().toLowerCase();
+    if (name != 'http-equiv') {
+      continue;
+    }
+    return entry.value.trim().toLowerCase() == 'refresh';
+  }
+  return false;
+}
+
+String _stripOriginalPassiveRemoteCssLoads(String css) {
+  return css
+      .replaceAll(_originalPassiveCssRemoteImportPattern, '')
+      .replaceAll(_originalPassiveCssRemoteUrlPattern, 'none');
+}
+
+bool _containsOriginalPassiveRemoteResource(String value) =>
+    _originalPassiveRemoteUrlPattern.hasMatch(value);
+
+bool _isOriginalPassiveRemoteResource(String? value) {
+  final source = value?.trim();
+  if (source == null || source.isEmpty) {
+    return false;
+  }
+  return source.startsWith('//') ||
+      source.toLowerCase().startsWith('http://') ||
+      source.toLowerCase().startsWith('https://');
+}
+
+bool _isOriginalPassiveTrackerOrSpacerImage(dom.Element image) {
+  final width = double.tryParse(image.attributes['width']?.trim() ?? '');
+  final height = double.tryParse(image.attributes['height']?.trim() ?? '');
+  if (width != null &&
+      height != null &&
+      width > 0 &&
+      height > 0 &&
+      width <= 1 &&
+      height <= 1) {
+    return true;
+  }
+  return _originalPassiveTrackerImagePattern.hasMatch(
+    image.attributes['src'] ?? '',
+  );
+}
 
 String _emailRenderedDomExpression() => '''
 (() => {
@@ -388,10 +612,10 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
   const layoutSequence = Math.ceil(
     Number(sourceDocument.__axichatEmailLayoutSequence || 0),
   );
-  const widthFitRoot = frame && sourceDocument !== document
-    ? sourceDocument.getElementById('axichat-original-email-scale-root')
-    : null;
-  let widthFitReady = !frame || sourceDocument === document;
+  const widthFitRoot =
+    sourceDocument.querySelector('[data-axichat-original-email-scale-root="true"]') ||
+    sourceDocument.getElementById('axichat-original-email-scale-root');
+  let widthFitReady = !widthFitRoot;
   if (frame && sourceDocument !== document) {
     frame.style.height = '';
     if (document.body) {
@@ -407,13 +631,24 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
   const frameRect = frame && frame.getBoundingClientRect
     ? frame.getBoundingClientRect()
     : null;
+  const firstPositiveWidth = (values) => {
+    for (const value of values) {
+      if (Number.isFinite(value) && value > 0) {
+        return value;
+      }
+    }
+    return 0;
+  };
   const viewportWidth = Math.ceil(
-    Math.max(
-      frameRect && Number.isFinite(frameRect.width) ? frameRect.width : 0,
+    firstPositiveWidth([
+      frameRect ? frameRect.width : 0,
+      sourceWindow && sourceWindow.visualViewport
+        ? sourceWindow.visualViewport.width || 0
+        : 0,
       sourceWindow ? sourceWindow.innerWidth || 0 : 0,
       root ? root.clientWidth || 0 : 0,
       body.clientWidth || 0,
-    ),
+    ]),
   );
   const contentWidth = Math.ceil(
     Math.max(
@@ -728,7 +963,21 @@ String _emailDocumentHeightObserverExpression() =>
     }
   };
 
-  const mutationObserver = new MutationObserver(() => {
+  const isWidthFitRoot = (target) =>
+    target &&
+    target.nodeType === Node.ELEMENT_NODE &&
+    (
+      target.getAttribute('data-axichat-original-email-scale-root') === 'true' ||
+      target.id === 'axichat-original-email-scale-root'
+    );
+  const isWidthFitStyleMutation = (mutation) =>
+    mutation.type === 'attributes' &&
+    mutation.attributeName === 'style' &&
+    isWidthFitRoot(mutation.target);
+  const mutationObserver = new MutationObserver((mutations) => {
+    if (mutations.every(isWidthFitStyleMutation)) {
+      return;
+    }
     observeImages();
     noteLayoutChanged();
   });
@@ -845,13 +1094,22 @@ bool emailHtmlUsesDelayedContentHeightMeasurementsForTesting({
 
 String _buildOriginalPassiveEmailHtmlShell({
   required String html,
+  required bool allowRemoteImages,
   required String themeStyle,
 }) {
   const linkHandlerName = _EmailHtmlWebViewState._linkHandlerName;
+  final iframeHtml = _preSanitizeOriginalPassiveEmailHtml(
+    html: html,
+    allowRemoteImages: allowRemoteImages,
+  );
   final encodedHtml = _inlineJsonString(
-    _injectEmailThemeStyle(html, themeStyle),
+    _injectEmailThemeStyle(iframeHtml, themeStyle),
   );
   final encodedThemeStyle = _inlineJsonString(themeStyle);
+  final encodedAllowRemoteImages = allowRemoteImages ? 'true' : 'false';
+  final encodedImagePlaceholder = _inlineJsonString(
+    HtmlContentCodec.blockedRemoteEmailImagePlaceholderDataUri,
+  );
   return '''
 <!doctype html>
 <html>
@@ -888,6 +1146,8 @@ html, body {
   const frame = document.getElementById('axichat-original-email-frame');
   const html = $encodedHtml;
   const themeStyleHtml = $encodedThemeStyle;
+  const allowRemoteImages = $encodedAllowRemoteImages;
+  const blockedRemoteImagePlaceholder = $encodedImagePlaceholder;
 
   const measureMetrics = () => ${_emailDomHeightMetricsExpression()};
   let lastReportedMetricsKey = '';
@@ -966,21 +1226,42 @@ html, body {
     if (style) {
       head.appendChild(style);
     }
-    if (doc.body && !doc.getElementById('axichat-original-email-scale-root')) {
-      const scaleRoot = doc.createElement('div');
-      scaleRoot.id = 'axichat-original-email-scale-root';
-      scaleRoot.style.transformOrigin = 'top left';
-      scaleRoot.style.display = 'block';
-      while (doc.body.firstChild) {
-        scaleRoot.appendChild(doc.body.firstChild);
-      }
-      doc.body.appendChild(scaleRoot);
+    const scaleRoot =
+      doc.querySelector('[data-axichat-original-email-scale-root="true"]') ||
+      doc.getElementById('axichat-original-email-scale-root');
+    if (doc.body && !scaleRoot) {
+      doc.body.setAttribute('data-axichat-original-email-scale-root', 'true');
+      doc.body.style.transformOrigin = 'top left';
+      doc.body.style.display = 'block';
     }
     doc.__axichatViewportNormalized = true;
     doc.__axichatWidthFitApplied = false;
     doc.__axichatEmailLayoutSequence = 0;
     doc.__axichatEmailLastStabilityKey = '';
     doc.__axichatEmailLastStabilitySequence = -1;
+    if (!allowRemoteImages) {
+      for (const image of Array.from(doc.images || [])) {
+        let url = null;
+        try {
+          url = new URL(image.getAttribute('src') || '', doc.baseURI);
+        } catch (_) {
+          continue;
+        }
+        if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+          continue;
+        }
+        const width = Number(image.getAttribute('width') || 0);
+        const height = Number(image.getAttribute('height') || 0);
+        const source = url.href.toLowerCase();
+        if ((width > 0 && height > 0 && width <= 1 && height <= 1) ||
+            /(?:beacon|pixel|spacer|tracking)/i.test(source)) {
+          image.remove();
+          continue;
+        }
+        image.removeAttribute('srcset');
+        image.src = blockedRemoteImagePlaceholder;
+      }
+    }
     return true;
   };
 
@@ -1063,12 +1344,17 @@ html, body {
         Number(doc.__axichatEmailLayoutSequence || 0) + 1;
       scheduleHeight();
     };
+    const isWidthFitRoot = (target) =>
+      target &&
+      target.nodeType === Node.ELEMENT_NODE &&
+      (
+        target.getAttribute('data-axichat-original-email-scale-root') === 'true' ||
+        target.id === 'axichat-original-email-scale-root'
+      );
     const isWidthFitStyleMutation = (mutation) =>
       mutation.type === 'attributes' &&
       mutation.attributeName === 'style' &&
-      mutation.target &&
-      mutation.target.nodeType === Node.ELEMENT_NODE &&
-      mutation.target.id === 'axichat-original-email-scale-root';
+      isWidthFitRoot(mutation.target);
     new MutationObserver((mutations) => {
       if (mutations.every(isWidthFitStyleMutation)) {
         return;
@@ -1118,31 +1404,33 @@ String _emailWebViewCssColor(Color color) {
   return 'rgba($red, $green, $blue, ${color.a.toStringAsFixed(3)})';
 }
 
+String _emailWebViewCssPixels(double pixels) => pixels == pixels.roundToDouble()
+    ? pixels.toStringAsFixed(0)
+    : pixels.toStringAsFixed(2);
+
 String _buildEmailWebViewThemeStyle({
   required Brightness brightness,
   required Color backgroundColor,
+  required double baseFontSize,
 }) {
   final fallbackBackgroundColor = brightness == Brightness.dark
       ? const Color(0xFFFFFFFF)
       : backgroundColor;
+  final baseFontSizeCss = _emailWebViewCssPixels(baseFontSize);
   const viewportContent =
       'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
-  const layoutStyle = '''
+  final layoutStyle =
+      '''
 html, body {
   width: 100% !important;
   max-width: 100% !important;
+  font-size: max(1em, ${baseFontSizeCss}px);
   -webkit-text-size-adjust: 100% !important;
   text-size-adjust: 100% !important;
-  font-size: 16px !important;
-  line-height: 1.5 !important;
 }
 body {
   overflow-wrap: break-word !important;
   word-break: normal !important;
-  white-space: normal !important;
-}
-*, *::before, *::after {
-  max-width: 100% !important;
 }
 body, div, section, article, main, header, footer, p, ul, ol, li {
   max-width: 100% !important;
@@ -1166,21 +1454,6 @@ div, p, a, li,
 b, strong, em, i, u, small {
   overflow-wrap: break-word !important;
   word-break: normal !important;
-  white-space: normal !important;
-  font-size: 16px !important;
-  line-height: 1.5 !important;
-}
-h1 {
-  font-size: 1.5em !important;
-  line-height: 1.3 !important;
-}
-h2, h3 {
-  font-size: 1.25em !important;
-  line-height: 1.35 !important;
-}
-h4, h5, h6 {
-  font-size: 1.1em !important;
-  line-height: 1.4 !important;
 }
 pre, code, blockquote {
   overflow-wrap: break-word !important;
@@ -1188,7 +1461,6 @@ pre, code, blockquote {
 }
 pre, code {
   white-space: pre-wrap !important;
-  font-size: 0.95em !important;
 }
 ''';
   return '''
@@ -1214,9 +1486,11 @@ $layoutStyle
 String buildEmailWebViewThemeStyleForTesting({
   required Brightness brightness,
   required Color backgroundColor,
+  required double baseFontSize,
 }) => _buildEmailWebViewThemeStyle(
   brightness: brightness,
   backgroundColor: backgroundColor,
+  baseFontSize: baseFontSize,
 );
 
 enum _EmailHtmlWebViewMode { embedded, scrollable }
@@ -1228,7 +1502,7 @@ enum EmailHtmlContentMode {
   bool allowsRemoteImages({required bool shouldLoadSafeRemoteImages}) =>
       switch (this) {
         EmailHtmlContentMode.safe => shouldLoadSafeRemoteImages,
-        EmailHtmlContentMode.originalPassive => true,
+        EmailHtmlContentMode.originalPassive => shouldLoadSafeRemoteImages,
       };
 
   bool usesWebViewJavaScript(TargetPlatform platform) => switch (this) {
@@ -1263,6 +1537,9 @@ InAppWebViewSettings buildEmailHtmlWebViewSettings({
     useOnDownloadStart: true,
     blockNetworkImage: !effectiveAllowRemoteImages,
     blockNetworkLoads: false,
+    mixedContentMode: effectiveAllowRemoteImages
+        ? MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW
+        : MixedContentMode.MIXED_CONTENT_NEVER_ALLOW,
     useHybridComposition: useHybridComposition,
     supportZoom: false,
     builtInZoomControls: false,
@@ -1281,6 +1558,11 @@ InAppWebViewSettings buildEmailHtmlWebViewSettings({
   );
 }
 
+@visibleForTesting
+Set<Factory<OneSequenceGestureRecognizer>>
+emailHtmlEmbeddedGestureRecognizersForTesting() =>
+    _EmailHtmlWebViewState._tapOnlyGestureRecognizers;
+
 class EmailHtmlWebView extends StatefulWidget {
   const EmailHtmlWebView.embedded({
     super.key,
@@ -1290,7 +1572,10 @@ class EmailHtmlWebView extends StatefulWidget {
     required this.backgroundColor,
     required this.textColor,
     required this.linkColor,
+    required this.baseFontSize,
     required this.onLinkTap,
+    this.initialContentHeight,
+    this.onContentHeightChanged,
     this.loadingFallback,
     this.simplifyLayout = false,
     this.useHybridComposition = true,
@@ -1310,7 +1595,10 @@ class EmailHtmlWebView extends StatefulWidget {
     required this.backgroundColor,
     required this.textColor,
     required this.linkColor,
+    required this.baseFontSize,
     required this.onLinkTap,
+    this.initialContentHeight,
+    this.onContentHeightChanged,
     this.loadingFallback,
     this.simplifyLayout = false,
     this.useHybridComposition = true,
@@ -1327,7 +1615,10 @@ class EmailHtmlWebView extends StatefulWidget {
   final Color backgroundColor;
   final Color textColor;
   final Color linkColor;
+  final double baseFontSize;
   final ValueChanged<String> onLinkTap;
+  final double? initialContentHeight;
+  final ValueChanged<double>? onContentHeightChanged;
   final Widget? loadingFallback;
   final bool simplifyLayout;
   final bool useHybridComposition;
@@ -1448,6 +1739,14 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     remoteImages: widget.allowRemoteImages,
   );
 
+  double? _normalizedInitialContentHeight() {
+    final initialContentHeight = widget.initialContentHeight;
+    if (initialContentHeight == null || initialContentHeight <= 0) {
+      return null;
+    }
+    return initialContentHeight.ceilToDouble();
+  }
+
   void _logPreparedHtmlStages(String preparedHtmlData) {
     logEmailHtmlStages(
       contentKey: _diagnosticContentKey,
@@ -1507,6 +1806,12 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _contentHeight = _normalizedInitialContentHeight();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _refreshPreparedHtml(reload: _controller != null);
@@ -1548,11 +1853,12 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         oldWidget.allowRemoteImages != widget.allowRemoteImages ||
         oldWidget.simplifyLayout != widget.simplifyLayout ||
         oldWidget._mode != widget._mode ||
-        oldWidget.contentMode != widget.contentMode;
+        oldWidget.contentMode != widget.contentMode ||
+        oldWidget.baseFontSize != widget.baseFontSize;
     if (layoutChanged) {
       _traceMeasurement('widget-update-reset-layout');
       _heightMeasurementEpoch++;
-      _contentHeight = null;
+      _contentHeight = _normalizedInitialContentHeight();
       _documentHeightObserverInstalled = false;
       _linuxFitLockedHeight = null;
       _lastLinuxPlatformViewId = null;
@@ -1566,7 +1872,8 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         oldWidget.contentMode != widget.contentMode ||
         oldWidget.backgroundColor != widget.backgroundColor ||
         oldWidget.textColor != widget.textColor ||
-        oldWidget.linkColor != widget.linkColor) {
+        oldWidget.linkColor != widget.linkColor ||
+        oldWidget.baseFontSize != widget.baseFontSize) {
       _traceMeasurement('widget-update-refresh-prepared-html');
       _preparedHtmlInputKey = null;
       _documentHeightObserverInstalled = false;
@@ -1575,6 +1882,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         reload: _controller != null,
         preserveMeasuredHeight: !layoutChanged,
       );
+    } else if (oldWidget.initialContentHeight != widget.initialContentHeight &&
+        _contentHeight == null) {
+      _contentHeight = _normalizedInitialContentHeight();
     }
   }
 
@@ -1591,6 +1901,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       widget.simplifyLayout,
       brightness.name,
       widget.backgroundColor.toARGB32(),
+      widget.baseFontSize,
     ].join(':');
     if (_preparedHtmlInputKey == inputKey) {
       _traceMeasurement(
@@ -1633,7 +1944,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           _preparedHtmlData = null;
         }
         if (!preserveMeasuredHeight) {
-          _contentHeight = null;
+          _contentHeight = _normalizedInitialContentHeight();
         }
         _linuxFitLockedHeight = null;
       });
@@ -1673,6 +1984,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       if (widget.contentMode == EmailHtmlContentMode.originalPassive) {
         preparedHtmlData = _buildOriginalPassiveEmailHtmlShell(
           html: widget.html,
+          allowRemoteImages: widget.allowRemoteImages,
           themeStyle: themeStyle,
         );
       } else {
@@ -1680,7 +1992,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           widget.html,
           allowRemoteImages: widget.allowRemoteImages,
         );
-        preparedHtmlData = _injectEmailThemeStyle(fallbackHtml, themeStyle);
+        preparedHtmlData = _wrapEmailHtmlScaleRoot(
+          _injectEmailThemeStyle(fallbackHtml, themeStyle),
+        );
       }
       _traceMeasurement(
         'prepare-fallback-complete',
@@ -2450,6 +2764,10 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _contentHeight = resolved.contentHeight;
       _isLoading = resolved.isLoading;
     });
+    final contentHeight = resolved.contentHeight;
+    if (contentHeight != null) {
+      widget.onContentHeightChanged?.call(contentHeight);
+    }
     _traceMeasurement('height-updated', measuredHeight: resolved.contentHeight);
     _scheduleLinuxPlatformViewResize();
   }
@@ -2510,6 +2828,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _contentHeight = normalizedHeight;
       _isLoading = false;
     });
+    widget.onContentHeightChanged?.call(normalizedHeight);
     if (documentFitsViewport) {
       _linuxFitLockedHeight = normalizedHeight;
     }
@@ -2627,6 +2946,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     return _buildEmailWebViewThemeStyle(
       brightness: brightness,
       backgroundColor: widget.backgroundColor,
+      baseFontSize: widget.baseFontSize,
     );
   }
 
@@ -2941,7 +3261,6 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       hasWebView: webView != null,
       paintWebView: loadingLayout.paintWebView,
     );
-
     final webViewStack = Stack(
       children: [
         if (loadingLayout.paintLoadingFallback)
@@ -2980,7 +3299,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       height: loadingLayout.useFixedHeight ? _resolvedHeight : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: preservedMinHeight),
-        child: webViewStack,
+        child: ClipRect(child: webViewStack),
       ),
     );
   }

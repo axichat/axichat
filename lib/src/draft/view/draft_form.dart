@@ -480,7 +480,7 @@ class DraftFormState extends State<DraftForm> {
     _scheduleAutosave();
   }
 
-  Widget? _forwardedPreview() {
+  Widget? _forwardedPreview(double baseFontSize) {
     if (_forwardedBlocks.isEmpty) {
       return null;
     }
@@ -494,6 +494,7 @@ class DraftFormState extends State<DraftForm> {
             showImages: _forwardPreviewShowImages[block.blockId] == true,
             originalContentUnblocked:
                 _forwardPreviewUnblockedOriginal[block.blockId] == true,
+            baseFontSize: baseFontSize,
             onShowImages: () => _handleForwardShowImages(block.blockId),
             onUnblockOriginal: () =>
                 _handleForwardUnblockOriginal(block.blockId),
@@ -839,7 +840,9 @@ class DraftFormState extends State<DraftForm> {
                           bodyController: _bodyTextController,
                           bodyFocusNode: _bodyFocusNode,
                           onSubjectSubmitted: _bodyFocusNode.requestFocus,
-                          forwardedPreview: _forwardedPreview(),
+                          forwardedPreview: _forwardedPreview(
+                            settingsState.messageTextSize.fontSize,
+                          ),
                           banner: _composerBanner(widget.banner),
                           subjectTrailing: widget.subjectTrailing,
                           loadingAttachments: _loadingAttachments,
@@ -2580,6 +2583,7 @@ class _DraftForwardedBlockPreview extends StatelessWidget {
     required this.block,
     required this.showImages,
     required this.originalContentUnblocked,
+    required this.baseFontSize,
     required this.onShowImages,
     required this.onUnblockOriginal,
     required this.onConvert,
@@ -2590,6 +2594,7 @@ class _DraftForwardedBlockPreview extends StatelessWidget {
   final DraftForwardedBlock block;
   final bool showImages;
   final bool originalContentUnblocked;
+  final double baseFontSize;
   final VoidCallback onShowImages;
   final Future<void> Function() onUnblockOriginal;
   final VoidCallback onConvert;
@@ -2639,6 +2644,7 @@ class _DraftForwardedBlockPreview extends StatelessWidget {
               html: originalHtml,
               shouldLoadSafeRemoteImages: showImages,
               originalContentUnblocked: originalContentUnblocked,
+              baseFontSize: baseFontSize,
               onRemoteImagesApproved: onShowImages,
               onOriginalContentUnblocked: onUnblockOriginal,
               onLinkTap: onLinkTap,

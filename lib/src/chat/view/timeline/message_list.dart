@@ -183,29 +183,38 @@ class _ChatMessageListState extends State<_ChatMessageList> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: ListView.builder(
-                physics: messageListOptions.scrollPhysics,
-                padding: EdgeInsets.zero,
-                controller: _scrollController,
-                reverse: true,
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final ChatTimelineItem? previousItem =
-                      index < items.length - 1 ? items[index + 1] : null;
-                  final ChatTimelineItem? nextItem = index > 0
-                      ? items[index - 1]
-                      : null;
-                  return RepaintBoundary(
-                    key: ValueKey<String>(items[index].id),
-                    child: _ChatMessageListRow(
-                      item: items[index],
-                      previousItem: previousItem,
-                      nextItem: nextItem,
-                      itemBuilder: itemBuilder,
-                      messageListOptions: messageListOptions,
-                      onMessageRowMounted: _handleMessageRowMounted,
-                      onMessageRowUnmounted: _handleMessageRowUnmounted,
-                    ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final viewportExtent = constraints.hasBoundedHeight
+                      ? constraints.maxHeight
+                      : MediaQuery.sizeOf(context).height;
+                  final cacheExtent = viewportExtent * 3;
+                  return ListView.builder(
+                    cacheExtent: cacheExtent,
+                    physics: messageListOptions.scrollPhysics,
+                    padding: EdgeInsets.zero,
+                    controller: _scrollController,
+                    reverse: true,
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final ChatTimelineItem? previousItem =
+                          index < items.length - 1 ? items[index + 1] : null;
+                      final ChatTimelineItem? nextItem = index > 0
+                          ? items[index - 1]
+                          : null;
+                      return RepaintBoundary(
+                        key: ValueKey<String>(items[index].id),
+                        child: _ChatMessageListRow(
+                          item: items[index],
+                          previousItem: previousItem,
+                          nextItem: nextItem,
+                          itemBuilder: itemBuilder,
+                          messageListOptions: messageListOptions,
+                          onMessageRowMounted: _handleMessageRowMounted,
+                          onMessageRowUnmounted: _handleMessageRowUnmounted,
+                        ),
+                      );
+                    },
                   );
                 },
               ),

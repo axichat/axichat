@@ -232,6 +232,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                         shouldLoadSafeRemoteImages: shouldLoadSafeRemoteImages,
                         originalContentUnblocked:
                             _unblockedEmailContentKey == emailContentKey,
+                        baseFontSize: settings.messageTextSize.fontSize,
                         onRemoteImagesApproved: onRemoteImagesApproved,
                         onOriginalContentUnblocked: () =>
                             _handleOriginalEmailUnblock(

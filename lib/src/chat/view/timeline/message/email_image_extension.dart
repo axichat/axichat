@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:axichat/src/common/network_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -230,6 +231,12 @@ class _EmailHtmlImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (src == HtmlContentCodec.blockedRemoteEmailImagePlaceholderDataUri) {
+      return _EmailHtmlImageFrame(
+        layout: layout,
+        builder: (_, _) => const EmailImagePlaceholder(),
+      );
+    }
     final embeddedBytes = _embeddedEmailImageBytes(src);
     if (embeddedBytes != null) {
       return _EmailEmbeddedImage(bytes: embeddedBytes, layout: layout);

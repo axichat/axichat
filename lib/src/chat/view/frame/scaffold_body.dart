@@ -409,6 +409,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                         searchFiltering: searchFiltering,
                         attachmentsByMessageId: attachmentsByMessageId,
                         groupLeaderByMessageId: groupLeaderByMessageId,
+                        emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
                       );
                     }
                     final messageById = loadingMessages

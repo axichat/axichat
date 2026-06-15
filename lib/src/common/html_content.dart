@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:collection';
+import 'dart:convert';
+
+import 'package:axichat/src/common/url_safety.dart';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 import 'package:xml/xml.dart' as xml;
-import 'package:axichat/src/common/url_safety.dart';
 
 class HtmlContentCodec {
   static const String _htmlNamespaceUri = 'http://www.w3.org/1999/xhtml';
@@ -63,18 +68,13 @@ html, body {
   max-width: 100% !important;
   -webkit-text-size-adjust: 100% !important;
   text-size-adjust: 100% !important;
-  font-size: 16px !important;
-  line-height: 1.5 !important;
 }
 body {
   overflow-wrap: break-word !important;
   word-break: normal !important;
 }
-body * {
+*, *::before, *::after {
   box-sizing: border-box !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-  max-width: 100% !important;
 }
 img {
   max-width: 100% !important;
@@ -86,36 +86,27 @@ table {
 }
 td, th {
   max-width: 100% !important;
-  white-space: normal !important;
 }
 div, p, a, li {
   max-width: 100% !important;
   overflow-wrap: break-word !important;
   word-break: normal !important;
-  white-space: normal !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
 }
 pre, code {
   white-space: pre-wrap !important;
   overflow-wrap: break-word !important;
   word-break: normal !important;
-  font-size: 0.95em !important;
 }
 *[width], *[style*="width"], *[style*="min-width"], *[style*="max-width"] {
   max-width: 100% !important;
 }
-*[nowrap], *[style*="white-space"] {
-  white-space: normal !important;
-}
 ''';
-  static const Set<String> _webViewStylePropertiesToStrip = <String>{
-    'font-size',
-    'line-height',
-    'max-width',
-    'min-width',
-    'white-space',
+  static const Set<String> _webViewStylePropertiesToStrip = <String>{};
+  static const Set<String> _recoverableZeroBoxStyleProperties = <String>{
+    'height',
+    'max-height',
     'width',
+    'max-width',
   };
   static const Set<String> _webViewBlockedStyleProperties = <String>{
     'animation',
@@ -153,9 +144,7 @@ pre, code {
   };
   static const Map<String, Set<String>> _webViewBlockedStyleKeywords =
       <String, Set<String>>{
-        'display': <String>{'none'},
         'position': <String>{'absolute', 'fixed', 'sticky'},
-        'visibility': <String>{'collapse', 'hidden'},
       };
   static const Set<String> _blockTags = <String>{
     'address',
@@ -412,7 +401,7 @@ pre, code {
     caseSensitive: false,
   );
   static final RegExp _emailRecoveryActionLabelPattern = RegExp(
-    r'\b(?:activate|approve|authenticate|authorize|complete|confirm|continue|log[-\s]?in|open|reset|sign[-\s]?in|unlock|verify|view)\b',
+    r'\b(?:activate|approve|authenticate|authorize|complete|confirm|continue|log[-\s]?in|open|reset|sign[-\s]?in|unlock|verify|view(?:\s+more)?)\b',
     caseSensitive: false,
   );
   static final RegExp _emailRecoveryPreheaderLabelPattern = RegExp(
@@ -427,6 +416,7 @@ pre, code {
     r'\b(?:beacon|pixel|spacer|tracking)\b',
     caseSensitive: false,
   );
+  static const int _maxEmailRecoveryCodeOrReferenceLabelLength = 160;
   static final RegExp _cssExpressionPattern = RegExp(
     r'expression\s*\([^)]*\)',
     caseSensitive: false,
@@ -464,6 +454,8 @@ pre, code {
   static const String _doubleLineBreak = '\n\n';
   static final RegExp _spaceCollapse = RegExp(r'[ \t]+');
   static final RegExp _multiLineBreaks = RegExp(r'\n{3,}');
+  static final String blockedRemoteEmailImagePlaceholderDataUri =
+      _buildBlockedRemoteEmailImagePlaceholderDataUri();
 
   static String? normalizeHtml(String? html) {
     final trimmed = html?.trim();
@@ -590,6 +582,150 @@ pre, code {
       return '';
     }
   }
+
+  static const int _maxEmailDerivationEntries = 64;
+  static const int _maxEmailDerivationCacheBytes = 1024 * 1024;
+  static final LinkedHashMap<
+    String,
+    ({EmailHtmlDerivation derivation, int retainedBytes})
+  >
+  _emailDerivationsByDigest =
+      LinkedHashMap<
+        String,
+        ({EmailHtmlDerivation derivation, int retainedBytes})
+      >();
+  static int _emailDerivationCacheBytes = 0;
+  static final Set<String> _emailDerivationPrecacheKeys = <String>{};
+
+  static EmailHtmlDerivation emailDerivations(String normalizedHtml) {
+    final key = _emailDerivationCacheKey(normalizedHtml);
+    final cached = _cachedEmailDerivationForKey(key);
+    if (cached != null) {
+      return cached;
+    }
+    final preparedFlutterHtml = prepareEmailHtmlForFlutterHtml(
+      normalizedHtml,
+      allowRemoteImages: false,
+    );
+    final derivation = (
+      preparedFlutterHtml: preparedFlutterHtml,
+      visibleBodyText: toPlainText(preparedFlutterHtml).trim(),
+      containsRemoteImages: containsRenderableRemoteImages(normalizedHtml),
+    );
+    _putEmailDerivation(key, derivation);
+    return derivation;
+  }
+
+  static EmailHtmlDerivation? cachedEmailDerivations(String normalizedHtml) {
+    return _cachedEmailDerivationForKey(
+      _emailDerivationCacheKey(normalizedHtml),
+    );
+  }
+
+  static Future<bool> precacheEmailDerivations(
+    Iterable<String> normalizedHtmlBodies,
+  ) async {
+    final pending = <String>[];
+    final pendingKeys = <String>[];
+    for (final normalizedHtml in normalizedHtmlBodies) {
+      final key = _emailDerivationCacheKey(normalizedHtml);
+      if (_emailDerivationsByDigest.containsKey(key) ||
+          _emailDerivationPrecacheKeys.contains(key)) {
+        continue;
+      }
+      _emailDerivationPrecacheKeys.add(key);
+      pending.add(normalizedHtml);
+      pendingKeys.add(key);
+    }
+    if (pending.isEmpty) {
+      return false;
+    }
+    try {
+      final derivations = await compute(
+        _deriveEmailHtmlDerivationsForCache,
+        List<String>.unmodifiable(pending),
+      );
+      for (final item in derivations) {
+        final normalizedHtml = item['normalizedHtml'];
+        final preparedFlutterHtml = item['preparedFlutterHtml'];
+        final visibleBodyText = item['visibleBodyText'];
+        final containsRemoteImages = item['containsRemoteImages'];
+        if (normalizedHtml is! String ||
+            preparedFlutterHtml is! String ||
+            visibleBodyText is! String ||
+            containsRemoteImages is! bool) {
+          continue;
+        }
+        _putEmailDerivation(_emailDerivationCacheKey(normalizedHtml), (
+          preparedFlutterHtml: preparedFlutterHtml,
+          visibleBodyText: visibleBodyText,
+          containsRemoteImages: containsRemoteImages,
+        ));
+      }
+    } finally {
+      for (final key in pendingKeys) {
+        _emailDerivationPrecacheKeys.remove(key);
+      }
+    }
+    return true;
+  }
+
+  static EmailHtmlDerivation? _cachedEmailDerivationForKey(String key) {
+    final cached = _emailDerivationsByDigest.remove(key);
+    if (cached == null) {
+      return null;
+    }
+    _emailDerivationsByDigest[key] = cached;
+    return cached.derivation;
+  }
+
+  static void _putEmailDerivation(String key, EmailHtmlDerivation derivation) {
+    final retainedBytes = _emailDerivationRetainedBytes(key, derivation);
+    final replaced = _emailDerivationsByDigest.remove(key);
+    if (replaced != null) {
+      _emailDerivationCacheBytes -= replaced.retainedBytes;
+    }
+    _emailDerivationsByDigest[key] = (
+      derivation: derivation,
+      retainedBytes: retainedBytes,
+    );
+    _emailDerivationCacheBytes += retainedBytes;
+    while (_emailDerivationsByDigest.length > _maxEmailDerivationEntries ||
+        _emailDerivationCacheBytes > _maxEmailDerivationCacheBytes) {
+      final removed = _emailDerivationsByDigest.remove(
+        _emailDerivationsByDigest.keys.first,
+      );
+      if (removed == null) {
+        break;
+      }
+      _emailDerivationCacheBytes -= removed.retainedBytes;
+    }
+  }
+
+  static String _emailDerivationCacheKey(String normalizedHtml) {
+    final digest = sha256.convert(utf8.encode(normalizedHtml));
+    return '${normalizedHtml.length}:$digest';
+  }
+
+  static int _emailDerivationRetainedBytes(
+    String key,
+    EmailHtmlDerivation derivation,
+  ) =>
+      key.length +
+      utf8.encode(derivation.preparedFlutterHtml).length +
+      utf8.encode(derivation.visibleBodyText).length +
+      (derivation.containsRemoteImages ? 1 : 0);
+
+  @visibleForTesting
+  static void resetEmailDerivationCacheForTesting() {
+    _emailDerivationsByDigest.clear();
+    _emailDerivationPrecacheKeys.clear();
+    _emailDerivationCacheBytes = 0;
+  }
+
+  @visibleForTesting
+  static int emailDerivationCacheEntryCountForTesting() =>
+      _emailDerivationsByDigest.length;
 
   static bool looksLikeCssBodyText(String value) {
     final normalized = value.trim().toLowerCase();
@@ -772,7 +908,9 @@ pre, code {
     required bool includeWebViewChrome,
   }) {
     final document = html_parser.parse(_truncateHtmlInput(html));
-    _restoreRecoverableEmailContentNodes(
+    final restoreSubstantialHiddenEmailBody =
+        _visibleEmailTextLooksLikeForwardedEnvelopeOnly(document.nodes);
+    _prepareStaticEmailContentNodes(
       document.nodes,
       _HtmlNodeBudget(
         maxNodes: _maxHtmlNodeCount,
@@ -780,6 +918,7 @@ pre, code {
         maxDuration: _maxHtmlParseDuration,
       ),
       0,
+      restoreSubstantialHiddenEmailBody: restoreSubstantialHiddenEmailBody,
     );
     if (includeWebViewChrome) {
       final head =
@@ -826,7 +965,9 @@ pre, code {
     required bool allowRemoteImages,
   }) {
     final document = html_parser.parse(_truncateHtmlInput(html));
-    _restoreRecoverableEmailContentNodes(
+    final restoreSubstantialHiddenEmailBody =
+        _visibleEmailTextLooksLikeForwardedEnvelopeOnly(document.nodes);
+    _prepareStaticEmailContentNodes(
       document.nodes,
       _HtmlNodeBudget(
         maxNodes: _maxHtmlNodeCount,
@@ -834,6 +975,7 @@ pre, code {
         maxDuration: _maxHtmlParseDuration,
       ),
       0,
+      restoreSubstantialHiddenEmailBody: restoreSubstantialHiddenEmailBody,
     );
     _normalizeFlutterHtmlNodes(
       document.nodes,
@@ -844,11 +986,12 @@ pre, code {
     return document;
   }
 
-  static void _restoreRecoverableEmailContentNodes(
+  static void _prepareStaticEmailContentNodes(
     List<dom.Node> nodes,
     _HtmlNodeBudget budget,
-    int depth,
-  ) {
+    int depth, {
+    required bool restoreSubstantialHiddenEmailBody,
+  }) {
     var index = 0;
     while (index < nodes.length) {
       if (!budget.allow(depth)) {
@@ -879,10 +1022,11 @@ pre, code {
           continue;
         }
         nodes[index] = replacement;
-        _restoreRecoverableEmailContentNodes(
+        _prepareStaticEmailContentNodes(
           replacement.nodes,
           budget,
           depth + 1,
+          restoreSubstantialHiddenEmailBody: restoreSubstantialHiddenEmailBody,
         );
         index++;
         continue;
@@ -905,14 +1049,171 @@ pre, code {
         }
       } else if (_isHiddenEmailElement(node) ||
           _hasRecoverableEmailHidingStyle(node.attributes['style'])) {
-        node.remove();
-        continue;
+        final replacementNodes = _hiddenEmailRecoveryReplacementNodes(node);
+        if (replacementNodes.isNotEmpty) {
+          nodes.removeAt(index);
+          for (
+            var offset = replacementNodes.length - 1;
+            offset >= 0;
+            offset--
+          ) {
+            nodes.insert(index, replacementNodes[offset]);
+          }
+          index += replacementNodes.length;
+          continue;
+        }
+        if (restoreSubstantialHiddenEmailBody &&
+            _hasSubstantialHiddenEmailBodyText(node)) {
+          _restoreSubstantialHiddenEmailBody(node);
+          index++;
+          continue;
+        } else {
+          node.remove();
+          continue;
+        }
       }
       if (node.nodes.isNotEmpty) {
-        _restoreRecoverableEmailContentNodes(node.nodes, budget, depth + 1);
+        _prepareStaticEmailContentNodes(
+          node.nodes,
+          budget,
+          depth + 1,
+          restoreSubstantialHiddenEmailBody: restoreSubstantialHiddenEmailBody,
+        );
       }
       index++;
     }
+  }
+
+  static void _restoreSubstantialHiddenEmailBody(dom.Element element) {
+    _removeUnsafeEmailRecoveryDescendants(element);
+    _restoreEmailElementVisibility(element);
+    for (final descendant in element.querySelectorAll('*')) {
+      _restoreEmailElementVisibility(descendant);
+    }
+  }
+
+  static bool _visibleEmailTextLooksLikeForwardedEnvelopeOnly(
+    List<dom.Node> nodes,
+  ) {
+    final buffer = StringBuffer();
+    final budget = _HtmlNodeBudget(
+      maxNodes: _maxHtmlNodeCount,
+      maxDepth: _maxHtmlDepth,
+      maxDuration: _maxHtmlParseDuration,
+    );
+    _appendVisibleEmailText(buffer, nodes, budget, 0);
+    return _looksLikeForwardedEnvelopeOnlyText(
+      _normalizePlainText(buffer.toString()),
+    );
+  }
+
+  static void _appendVisibleEmailText(
+    StringBuffer buffer,
+    List<dom.Node> nodes,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    for (final node in nodes) {
+      if (!budget.allow(depth)) {
+        return;
+      }
+      if (node is dom.Text) {
+        buffer
+          ..write(node.text)
+          ..write(' ');
+        continue;
+      }
+      if (node is! dom.Element) {
+        if (node.nodes.isNotEmpty) {
+          _appendVisibleEmailText(buffer, node.nodes, budget, depth + 1);
+        }
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (_emailRecoveryExcludedTextTags.contains(tag) ||
+          _isHiddenEmailElement(node) ||
+          _hasRecoverableEmailHidingStyle(node.attributes['style'])) {
+        continue;
+      }
+      if (_lineBreakTags.contains(tag)) {
+        _appendLineBreak(buffer);
+        continue;
+      }
+      final isBlock = _blockTags.contains(tag);
+      if (isBlock) {
+        _appendLineBreak(buffer);
+      }
+      _appendVisibleEmailText(buffer, node.nodes, budget, depth + 1);
+      if (isBlock) {
+        _appendLineBreak(buffer);
+      }
+    }
+  }
+
+  static bool _hasSubstantialHiddenEmailBodyText(dom.Element element) {
+    final text = _safeEmailRecoveryText(element);
+    if (_looksLikeForwardedEnvelopeOnlyText(text)) {
+      return false;
+    }
+    if (text.length < 160) {
+      return false;
+    }
+    final words = RegExp(r'\S+').allMatches(text).length;
+    if (words < 18) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool _looksLikeForwardedEnvelopeOnlyText(String text) {
+    final normalized = _normalizePlainText(text);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final lines = normalized
+        .split(_lineBreak)
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    if (lines.length < 3 || lines.length > 8) {
+      return false;
+    }
+    var hasKnownForwardedHeader = false;
+    for (final line in lines) {
+      final header = _forwardedEnvelopeHeaderForLine(line);
+      if (header == null) {
+        return false;
+      }
+      if (const <String>{'date', 'from', 'to', 'subject'}.contains(header)) {
+        hasKnownForwardedHeader = true;
+      }
+    }
+    return hasKnownForwardedHeader;
+  }
+
+  static String? _forwardedEnvelopeHeaderForLine(String line) {
+    final separatorIndex = line.indexOf(':');
+    if (separatorIndex <= 0 || separatorIndex > 32) {
+      return null;
+    }
+    final header = line
+        .substring(0, separatorIndex)
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ');
+    if (const <String>{
+      'date',
+      'sent',
+      'from',
+      'to',
+      'cc',
+      'bcc',
+      'reply-to',
+      'subject',
+    }.contains(header)) {
+      return header;
+    }
+    return null;
   }
 
   static dom.Element? _formEmailRecoveryReplacement(dom.Element element) {
@@ -1220,6 +1521,13 @@ pre, code {
               allowRemoteImages: allowRemoteImages,
             );
             if (safeValue == null) {
+              if (!allowRemoteImages &&
+                  _isBlockedRemoteImageSource(rawValue) &&
+                  !_isTrackerOrSpacerEmailImage(node)) {
+                node.attributes[attributeName] =
+                    blockedRemoteEmailImagePlaceholderDataUri;
+                continue;
+              }
               removeNode = true;
               break;
             }
@@ -1230,11 +1538,6 @@ pre, code {
         if (removeNode) {
           node.remove();
           continue;
-        }
-        node.attributes.remove('nowrap');
-        final width = node.attributes['width']?.trim();
-        if (width != null && width.isNotEmpty) {
-          node.attributes.remove('width');
         }
         final style = node.attributes['style']?.trim();
         if (style != null && style.isNotEmpty) {
@@ -1283,31 +1586,9 @@ pre, code {
   }
 
   static bool _hasUsefulEmailRecoveryContent(dom.Element element) {
-    if (_isEmailRecoveryCodeOrReferenceLabel(
+    return _isEmailRecoveryCodeOrReferenceLabel(
       _emailRecoveryLabelForElement(element),
-    )) {
-      return true;
-    }
-    for (final descendant in element.querySelectorAll(
-      'a, button, input, option, select, textarea',
-    )) {
-      final tag = (descendant.localName ?? '').toLowerCase();
-      if (tag == 'a' &&
-          _sanitizeUriValue(
-                descendant.attributes[_hrefAttribute] ?? '',
-                _sanitizedLinkSchemes,
-              ) ==
-              null) {
-        continue;
-      }
-      final label = tag == 'input'
-          ? _emailRecoveryInputLabel(descendant)
-          : _emailRecoveryLabelForElement(descendant);
-      if (_isUsefulEmailRecoveryLabel(label ?? '')) {
-        return true;
-      }
-    }
-    return false;
+    );
   }
 
   static bool _isUsefulEmailRecoveryLabel(String label) {
@@ -1327,8 +1608,73 @@ pre, code {
     if (normalized.isEmpty) {
       return false;
     }
+    if (normalized.length > _maxEmailRecoveryCodeOrReferenceLabelLength) {
+      return false;
+    }
     return _isLikelyEmailVerificationCode(normalized) ||
         _emailRecoveryReferencePattern.hasMatch(normalized);
+  }
+
+  static List<dom.Node> _hiddenEmailRecoveryReplacementNodes(
+    dom.Element element,
+  ) {
+    if (!_canExtractHiddenEmailRecoveryDescendants(element)) {
+      return const <dom.Node>[];
+    }
+    final replacements = <dom.Node>[];
+    for (final child in element.nodes) {
+      _collectHiddenEmailRecoveryReplacementNodes(child, replacements);
+    }
+    return replacements;
+  }
+
+  static bool _canExtractHiddenEmailRecoveryDescendants(dom.Element element) {
+    final nonControlText = _hiddenEmailRecoveryNonControlText(element);
+    return nonControlText.isEmpty ||
+        _isUsefulEmailRecoveryLabel(nonControlText);
+  }
+
+  static void _collectHiddenEmailRecoveryReplacementNodes(
+    dom.Node node,
+    List<dom.Node> replacements,
+  ) {
+    if (node is! dom.Element) {
+      return;
+    }
+    final replacement = _hiddenEmailRecoveryReplacementNode(node);
+    if (replacement != null) {
+      replacements.add(replacement);
+      return;
+    }
+    for (final child in node.nodes) {
+      _collectHiddenEmailRecoveryReplacementNodes(child, replacements);
+    }
+  }
+
+  static dom.Node? _hiddenEmailRecoveryReplacementNode(dom.Element element) {
+    final tag = (element.localName ?? '').toLowerCase();
+    if (tag == 'a' && element.attributes.containsKey(_hrefAttribute)) {
+      final safeHref = _sanitizeUriValue(
+        element.attributes[_hrefAttribute] ?? '',
+        _sanitizedLinkSchemes,
+      );
+      final label = _normalizePlainText(_emailRecoveryLabelForElement(element));
+      if (safeHref == null || !_isUsefulEmailRecoveryLabel(label)) {
+        return null;
+      }
+      return dom.Element.tag('a')
+        ..attributes[_hrefAttribute] = safeHref
+        ..text = label;
+    }
+    if (_emailRecoveryStaticReplacementTags.contains(tag)) {
+      return _staticEmailRecoveryReplacement(element);
+    }
+    final label = _normalizePlainText(_emailRecoveryLabelForElement(element));
+    if (!_isEmailRecoveryCodeOrReferenceLabel(label)) {
+      return null;
+    }
+    return dom.Element.tag(_emailRecoveryReplacementTagFor(element))
+      ..text = label;
   }
 
   static String _emailRecoveryLabelForElement(dom.Element element) {
@@ -1432,6 +1778,42 @@ pre, code {
     }
   }
 
+  static String _hiddenEmailRecoveryNonControlText(dom.Node node) {
+    final buffer = StringBuffer();
+    _appendHiddenEmailRecoveryNonControlText(buffer, node);
+    return _normalizePlainText(buffer.toString());
+  }
+
+  static void _appendHiddenEmailRecoveryNonControlText(
+    StringBuffer buffer,
+    dom.Node node,
+  ) {
+    if (node is dom.Text) {
+      buffer
+        ..write(node.text)
+        ..write(' ');
+      return;
+    }
+    if (node is! dom.Element) {
+      return;
+    }
+    final tag = (node.localName ?? '').toLowerCase();
+    if (_emailRecoveryExcludedTextTags.contains(tag) ||
+        tag == 'a' ||
+        _emailRecoveryStaticReplacementTags.contains(tag)) {
+      return;
+    }
+    if (_blockTags.contains(tag) && buffer.isNotEmpty) {
+      buffer.write(_lineBreak);
+    }
+    for (final child in node.nodes) {
+      _appendHiddenEmailRecoveryNonControlText(buffer, child);
+    }
+    if (_blockTags.contains(tag)) {
+      buffer.write(_lineBreak);
+    }
+  }
+
   static bool _isLikelyEmailVerificationCode(String text) {
     final normalized = _normalizePlainText(text).replaceAll(' ', '');
     if (_emailRecoveryStandaloneCodePattern.hasMatch(normalized) &&
@@ -1445,6 +1827,10 @@ pre, code {
   }
 
   static dom.Element _formatFlutterTableRow(dom.Element row) {
+    final scheduleRow = _formatFlutterScheduleTableRow(row);
+    if (scheduleRow != null) {
+      return scheduleRow;
+    }
     final formattedRow = dom.Element.tag('div')
       ..attributes['style'] = _tableRowStyle;
     final children = row.nodes.toList();
@@ -1559,6 +1945,120 @@ pre, code {
     if (tag == 'th') {
       return !hasSemanticBlocks ||
           previewText.length <= maxCompactPreviewTextLength;
+    }
+    return false;
+  }
+
+  static dom.Element? _formatFlutterScheduleTableRow(dom.Element row) {
+    final cells = <dom.Element>[];
+    for (final child in row.nodes) {
+      final isCell =
+          child is dom.Element &&
+          _flutterTableCellTags.contains((child.localName ?? '').toLowerCase());
+      if (isCell) {
+        cells.add(child);
+        continue;
+      }
+      if (child is dom.Comment) {
+        continue;
+      }
+      if (child is dom.Text &&
+          child.text.replaceAll('\u00A0', ' ').trim().isEmpty) {
+        continue;
+      }
+      return null;
+    }
+
+    final textCells = <({dom.Element cell, String text})>[];
+    for (final cell in cells) {
+      if (_containsFlutterScheduleExcludedContent(cell.nodes)) {
+        return null;
+      }
+      final text = _normalizePlainText(toPlainText(cell.innerHtml));
+      if (text.isEmpty) {
+        continue;
+      }
+      textCells.add((cell: cell, text: text));
+    }
+    if (textCells.length != 2 ||
+        !_isFlutterScheduleTimeText(textCells.first.text) ||
+        !_isFlutterScheduleLabelText(textCells.last.text)) {
+      return null;
+    }
+
+    final timeNodes = _compactFlutterTablePreviewNodes(
+      textCells.first.cell.innerHtml,
+    );
+    final labelNodes = _compactFlutterTablePreviewNodes(
+      textCells.last.cell.innerHtml,
+    );
+    if (!_compactFlutterTablePreviewHasContent(timeNodes) ||
+        !_compactFlutterTablePreviewHasContent(labelNodes)) {
+      return null;
+    }
+
+    final formattedRow = dom.Element.tag('div')
+      ..attributes['style'] = _tableRowStyle;
+    formattedRow.nodes
+      ..add(
+        dom.Element.tag('span')
+          ..attributes['style'] = _tableCellInlineDisplayStyle
+          ..nodes.addAll(timeNodes),
+      )
+      ..add(dom.Text('\u00A0\u00A0\u00A0'))
+      ..add(
+        dom.Element.tag('span')
+          ..attributes['style'] = _tableCellInlineDisplayStyle
+          ..nodes.addAll(labelNodes),
+      );
+    return formattedRow;
+  }
+
+  static bool _isFlutterScheduleTimeText(String text) {
+    if (text.contains(_lineBreak)) {
+      return false;
+    }
+    final normalized = text.replaceAll('\u00A0', ' ').trim();
+    return RegExp(
+      r'^\d{1,2}(?::\d{2})?\s*(?:a\.?\s*m\.?|p\.?\s*m\.?|am|pm)$',
+      caseSensitive: false,
+    ).hasMatch(normalized);
+  }
+
+  static bool _isFlutterScheduleLabelText(String text) {
+    const maxScheduleLabelLength = 96;
+    final normalized = text.replaceAll('\u00A0', ' ').trim();
+    return normalized.isNotEmpty &&
+        normalized.length <= maxScheduleLabelLength &&
+        !normalized.contains(_lineBreak) &&
+        !_isFlutterScheduleTimeText(normalized);
+  }
+
+  static bool _containsFlutterScheduleExcludedContent(List<dom.Node> nodes) {
+    for (final node in nodes) {
+      if (node is! dom.Element) {
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'blockquote' ||
+          tag == 'ul' ||
+          tag == 'ol' ||
+          tag == 'li' ||
+          tag == 'pre' ||
+          tag == 'code' ||
+          tag == 'hr' ||
+          tag == 'br' ||
+          tag == 'h1' ||
+          tag == 'h2' ||
+          tag == 'h3' ||
+          tag == 'h4' ||
+          tag == 'h5' ||
+          tag == 'h6') {
+        return true;
+      }
+      if (_containsFlutterScheduleExcludedContent(node.nodes)) {
+        return true;
+      }
     }
     return false;
   }
@@ -1998,6 +2498,13 @@ pre, code {
               allowRemoteImages: allowRemoteImages,
             );
             if (safeValue == null) {
+              if (!allowRemoteImages &&
+                  _isBlockedRemoteImageSource(rawValue) &&
+                  !_isTrackerOrSpacerEmailImage(node)) {
+                node.attributes[attributeName] =
+                    blockedRemoteEmailImagePlaceholderDataUri;
+                continue;
+              }
               removeNode = true;
               break;
             }
@@ -2035,7 +2542,9 @@ pre, code {
     if (tag == 'img' &&
         const <String>{
           _altAttribute,
+          _heightAttribute,
           _titleAttribute,
+          _widthAttribute,
         }.contains(attributeName)) {
       return true;
     }
@@ -2143,6 +2652,28 @@ pre, code {
       return null;
     }
     return safeValue;
+  }
+
+  static bool _isBlockedRemoteImageSource(String value) {
+    final safeValue = _sanitizeUriValue(value, _sanitizedImageSchemes);
+    if (safeValue == null) {
+      return false;
+    }
+    final uri = Uri.tryParse(safeValue);
+    final scheme = uri?.scheme.trim().toLowerCase();
+    return _remoteImageSchemes.contains(scheme);
+  }
+
+  static String _buildBlockedRemoteEmailImagePlaceholderDataUri() {
+    final svg = '''
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180">
+  <rect width="320" height="180" rx="12" fill="#f2f4f7"/>
+  <rect x="1" y="1" width="318" height="178" rx="11" fill="none" stroke="#d0d5dd" stroke-width="2"/>
+  <path d="M105 116l31-34 24 26 15-16 40 44H91z" fill="#d0d5dd"/>
+  <circle cx="210" cy="62" r="15" fill="#d0d5dd"/>
+</svg>
+''';
+    return 'data:image/svg+xml;charset=UTF-8,${Uri.encodeComponent(svg)}';
   }
 
   static void _trimEmptyFlutterHtmlNodes(List<dom.Node> nodes) {
@@ -2364,23 +2895,68 @@ pre, code {
     if (rawDeclarations == null || rawDeclarations.isEmpty) {
       return false;
     }
-    final stripOverflowHidden = _containsZeroBoxHidingDeclaration(
-      rawDeclarations,
-    );
+    var hasOverflowHidden = false;
+    var hasZeroBox = false;
     for (final declaration in rawDeclarations.split(';')) {
       final parts = _parseCssDeclaration(declaration);
       if (parts == null) {
         continue;
       }
-      if (_isRecoverableHidingStyleDeclaration(
-        parts.property,
-        parts.value,
-        stripOverflowHidden: stripOverflowHidden,
-      )) {
+      final property = parts.property;
+      final value = parts.value;
+      if (property == 'display' && _normalizeCssKeywordValue(value) == 'none') {
+        return true;
+      }
+      if (property == 'visibility' &&
+          const <String>{
+            'collapse',
+            'hidden',
+          }.contains(_normalizeCssKeywordValue(value))) {
+        return true;
+      }
+      if (property == 'mso-hide' && _normalizeCssKeywordValue(value) == 'all') {
+        return true;
+      }
+      if (property == 'opacity' && _isZeroCssLength(value)) {
+        return true;
+      }
+      if (_recoverableZeroBoxStyleProperties.contains(property) &&
+          _isZeroCssLength(value)) {
+        hasZeroBox = true;
+      }
+      if (const <String>{'font-size', 'line-height'}.contains(property) &&
+          _isZeroCssLength(value)) {
+        return true;
+      }
+      if (property == 'overflow' &&
+          _normalizeCssKeywordValue(value) == 'hidden') {
+        hasOverflowHidden = true;
+      }
+      if (property == 'text-indent' && _isLargeNegativeCssLength(value)) {
+        return true;
+      }
+      if (const <String>{
+            'left',
+            'right',
+            'top',
+            'bottom',
+            'margin-left',
+            'margin-right',
+            'margin-top',
+            'margin-bottom',
+          }.contains(property) &&
+          _containsLargeNegativeCssLength(value)) {
+        return true;
+      }
+      if (property == 'transform' && _isHidingTransform(value)) {
+        return true;
+      }
+      if (property == 'clip' &&
+          _normalizeCssDeclarationValue(value).contains('rect(0')) {
         return true;
       }
     }
-    return false;
+    return hasOverflowHidden && hasZeroBox;
   }
 
   static bool _containsZeroBoxHidingDeclaration(String rawDeclarations) {
@@ -2389,11 +2965,7 @@ pre, code {
       if (parts == null) {
         continue;
       }
-      if (const <String>{
-            'height',
-            'max-height',
-            'width',
-          }.contains(parts.property) &&
+      if (_recoverableZeroBoxStyleProperties.contains(parts.property) &&
           _isZeroCssLength(parts.value)) {
         return true;
       }
@@ -2438,7 +3010,10 @@ pre, code {
       'mso-hide' => _normalizeCssKeywordValue(value) == 'all',
       'opacity' => _isZeroCssLength(value),
       'font-size' || 'line-height' => _isZeroCssLength(value),
-      'height' || 'max-height' || 'width' => _isZeroCssLength(value),
+      'height' ||
+      'max-height' ||
+      'width' ||
+      'max-width' => _isZeroCssLength(value),
       'overflow' =>
         stripOverflowHidden && _normalizeCssKeywordValue(value) == 'hidden',
       'text-indent' => _isLargeNegativeCssLength(value),
@@ -3106,3 +3681,32 @@ class _HtmlNodeBudget {
     return true;
   }
 }
+
+List<Map<String, Object>> _deriveEmailHtmlDerivationsForCache(
+  List<String> normalizedHtmlBodies,
+) {
+  final derivations = <Map<String, Object>>[];
+  for (final normalizedHtml in normalizedHtmlBodies) {
+    final preparedFlutterHtml = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+      normalizedHtml,
+      allowRemoteImages: false,
+    );
+    derivations.add(<String, Object>{
+      'normalizedHtml': normalizedHtml,
+      'preparedFlutterHtml': preparedFlutterHtml,
+      'visibleBodyText': HtmlContentCodec.toPlainText(
+        preparedFlutterHtml,
+      ).trim(),
+      'containsRemoteImages': HtmlContentCodec.containsRenderableRemoteImages(
+        normalizedHtml,
+      ),
+    });
+  }
+  return derivations;
+}
+
+typedef EmailHtmlDerivation = ({
+  String preparedFlutterHtml,
+  String visibleBodyText,
+  bool containsRemoteImages,
+});

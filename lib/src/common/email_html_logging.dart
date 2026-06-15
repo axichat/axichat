@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 
-const bool emailHtmlLoggingEnabled = kProfileMode;
+const bool emailHtmlLoggingEnabled = bool.fromEnvironment(
+  'AXI_EMAIL_HTML_LOGGING',
+);
 const bool emailPlainTextBubbleExperiment = bool.fromEnvironment(
   'AXI_PLAIN_EMAIL_BUBBLES',
 );
@@ -17,6 +19,7 @@ const Set<String> _maskedAttributes = {
   'title',
   'aria-label',
   'placeholder',
+  'srcdoc',
 };
 
 final Set<Object> _loggedEmailHtmlStageKeys = <Object>{};
@@ -127,6 +130,9 @@ String _maskUrlOrText(String attribute, String value) {
   if (attribute == 'href' || attribute == 'src') {
     return _maskUrl(value);
   }
+  if (attribute == 'srcdoc') {
+    return 'masked-srcdoc-length-${value.length}';
+  }
   return _maskText(value);
 }
 
@@ -152,8 +158,9 @@ String _maskCssUrls(String css) => css.replaceAllMapped(
   (match) => 'url(${_maskUrl(match.group(1) ?? '')})',
 );
 
-String _maskText(String text) =>
-    text.replaceAll(RegExp(r'[A-Za-z]'), 'x').replaceAll(RegExp(r'[0-9]'), '0');
+String _maskText(String text) => text
+    .replaceAll(RegExp(r'\p{L}', unicode: true), 'x')
+    .replaceAll(RegExp(r'\p{N}', unicode: true), '0');
 
 void _printChunked(String text) {
   const chunkSize = 800;

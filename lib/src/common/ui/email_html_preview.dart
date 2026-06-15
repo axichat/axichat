@@ -19,6 +19,7 @@ class AxiEmailHtmlPreview extends StatefulWidget {
     required this.html,
     required this.shouldLoadSafeRemoteImages,
     required this.originalContentUnblocked,
+    required this.baseFontSize,
     required this.onLinkTap,
     this.onRemoteImagesApproved,
     this.onOriginalContentUnblocked,
@@ -27,6 +28,7 @@ class AxiEmailHtmlPreview extends StatefulWidget {
   final String html;
   final bool shouldLoadSafeRemoteImages;
   final bool originalContentUnblocked;
+  final double baseFontSize;
   final ValueChanged<String> onLinkTap;
   final VoidCallback? onRemoteImagesApproved;
   final Future<void> Function()? onOriginalContentUnblocked;
@@ -108,6 +110,7 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
         : _EmailHtmlFallback(
             html: preparedHtmlBodyForFallback,
             shouldLoadImages: false,
+            baseFontSize: widget.baseFontSize,
             onLinkTap: onLinkTap,
           );
     final spacing = context.spacing;
@@ -134,9 +137,7 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (hasBlockedRemoteHtmlImages &&
-                  !isOriginalEmailContent &&
-                  onRemoteImagesApproved != null)
+              if (hasBlockedRemoteHtmlImages && onRemoteImagesApproved != null)
                 Padding(
                   padding: EdgeInsets.all(spacing.s),
                   child: Align(
@@ -151,6 +152,7 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
                 backgroundColor: context.colorScheme.card,
                 textColor: context.colorScheme.foreground,
                 linkColor: context.colorScheme.primary,
+                baseFontSize: widget.baseFontSize,
                 loadingFallback: isOriginalEmailContent
                     ? null
                     : emailHtmlLoadingFallback,
@@ -170,20 +172,17 @@ class _EmailHtmlFallback extends StatelessWidget {
   const _EmailHtmlFallback({
     required this.html,
     required this.shouldLoadImages,
+    required this.baseFontSize,
     required this.onLinkTap,
   });
 
   final String html;
   final bool shouldLoadImages;
+  final double baseFontSize;
   final ValueChanged<String> onLinkTap;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = context.textTheme;
-    final fallbackFontSize =
-        textTheme.p.fontSize ??
-        textTheme.small.fontSize ??
-        context.sizing.menuItemIconSize;
     return Align(
       alignment: Alignment.centerLeft,
       child: SizedBox(
@@ -195,7 +194,7 @@ class _EmailHtmlFallback extends StatelessWidget {
             shouldLoadImages: shouldLoadImages,
           ),
           style: createEmailHtmlStyles(
-            fallbackFontSize: fallbackFontSize,
+            fallbackFontSize: baseFontSize,
             textColor: context.colorScheme.foreground,
             linkColor: context.colorScheme.primary,
           ),
