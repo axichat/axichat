@@ -61,6 +61,8 @@ bool isHiddenInternalMultiDeviceSyncMessage({
 
 final class DeltaAccountDefaults {
   static const int legacyId = 0;
+  // App-local id for Axichat's single Delta context.
+  static const int singleContextId = 1;
 }
 
 // ENUMS WARNING: New values must only be added to the end of the list.

@@ -68,6 +68,8 @@ static _RUNTIME: LazyLock<Runtime> =
     LazyLock::new(|| Runtime::new().expect("failed to create tokio runtime"));
 static _ACTIVE_BACKGROUND_FETCHES: LazyLock<Mutex<HashMap<usize, Arc<Notify>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+static _ACTIVE_CONTEXT_BACKGROUND_FETCHES: LazyLock<Mutex<HashMap<usize, Arc<Notify>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn _block_on<T>(future: impl std::future::Future<Output = T>) -> T {
     _RUNTIME.block_on(future)
@@ -103,6 +105,36 @@ fn _finish_active_background_fetch(accounts: usize) {
         .remove(&accounts);
 }
 
+fn _register_active_context_background_fetch(context: usize) -> Option<Arc<Notify>> {
+    let mut active = _ACTIVE_CONTEXT_BACKGROUND_FETCHES
+        .lock()
+        .expect("active context background fetch registry poisoned");
+    if active.contains_key(&context) {
+        return None;
+    }
+    let signal = Arc::new(Notify::new());
+    active.insert(context, signal.clone());
+    Some(signal)
+}
+
+fn _stop_active_context_background_fetch(context: usize) -> bool {
+    let active = _ACTIVE_CONTEXT_BACKGROUND_FETCHES
+        .lock()
+        .expect("active context background fetch registry poisoned");
+    let Some(signal) = active.get(&context) else {
+        return false;
+    };
+    signal.notify_one();
+    true
+}
+
+fn _finish_active_context_background_fetch(context: usize) {
+    _ACTIVE_CONTEXT_BACKGROUND_FETCHES
+        .lock()
+        .expect("active context background fetch registry poisoned")
+        .remove(&context);
+}
+
 struct _ActiveBackgroundFetchGuard {
     accounts: usize,
 }
@@ -110,6 +142,16 @@ struct _ActiveBackgroundFetchGuard {
 impl Drop for _ActiveBackgroundFetchGuard {
     fn drop(&mut self) {
         _finish_active_background_fetch(self.accounts);
+    }
+}
+
+struct _ActiveContextBackgroundFetchGuard {
+    context: usize,
+}
+
+impl Drop for _ActiveContextBackgroundFetchGuard {
+    fn drop(&mut self) {
+        _finish_active_context_background_fetch(self.context);
     }
 }
 
@@ -989,6 +1031,50 @@ pub unsafe extern "C" fn axichat_dc_accounts_stop_background_fetch(
         return 0;
     }
     if _stop_active_background_fetch(accounts as usize) {
+        return 1;
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_context_background_fetch(
+    context: *mut dc_context_t,
+    timeout_seconds: u64,
+) -> i32 {
+    if context.is_null() || timeout_seconds <= 2 {
+        eprintln!("ignoring careless call to axichat_dc_context_background_fetch()");
+        return 0;
+    }
+
+    let context_key = context as usize;
+    let Some(stop_signal) = _register_active_context_background_fetch(context_key) else {
+        return 0;
+    };
+    let _active_fetch = _ActiveContextBackgroundFetchGuard {
+        context: context_key,
+    };
+
+    let context = &*context;
+    _block_on(async {
+        tokio::select! {
+            result = context.background_fetch() => {
+                if result.is_ok() { 1 } else { 0 }
+            },
+            _ = tokio::time::sleep(Duration::from_secs(timeout_seconds)) => 0,
+            _ = stop_signal.notified() => 0,
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_context_stop_background_fetch(
+    context: *mut dc_context_t,
+) -> i32 {
+    if context.is_null() {
+        eprintln!("ignoring careless call to axichat_dc_context_stop_background_fetch()");
+        return 0;
+    }
+    if _stop_active_context_background_fetch(context as usize) {
         return 1;
     }
     0

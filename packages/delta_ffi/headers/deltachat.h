@@ -197,6 +197,8 @@ void dc_accounts_maybe_network_lost(dc_accounts_t* accounts);
 int dc_accounts_background_fetch(dc_accounts_t* accounts, uint64_t timeout);
 int axichat_dc_accounts_background_fetch(dc_accounts_t* accounts, uint64_t timeout_seconds);
 int axichat_dc_accounts_stop_background_fetch(dc_accounts_t* accounts);
+int axichat_dc_context_background_fetch(dc_context_t* ctx, uint64_t timeout_seconds);
+int axichat_dc_context_stop_background_fetch(dc_context_t* ctx);
 char* axichat_dc_inspect_openpgp_key(const char* armored, const char* expected_addr, int32_t expected_kind);
 char* axichat_dc_import_contact_public_key(dc_context_t* ctx, const char* address, const char* display_name, const char* armored_public_key);
 char* axichat_dc_remove_contact_public_key(dc_context_t* ctx, const char* address, const char* fingerprint, uint32_t contact_id, uint32_t chat_id);

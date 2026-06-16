@@ -401,37 +401,41 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     AppLocalizations Function()? localizationsProvider,
     String? Function()? xmppSelfJidProvider,
     bool persistEvents = true,
+    bool useAccounts = false,
   }) : _databaseBuilder = databaseBuilder,
        _deltaDatabaseFileBuilder = deltaDatabaseFileBuilder,
        _databaseOperationTracker = databaseOperationTracker,
-       _deltaSafe = deltaSafe ?? DeltaSafe(),
+       _deltaSafe = deltaSafe,
        _log = logger ?? Logger('EmailDeltaTransport'),
        _localizationsProvider = localizationsProvider,
        _xmppSelfJidProvider = xmppSelfJidProvider,
-       _persistEvents = persistEvents;
+       _persistEvents = persistEvents,
+       _useAccounts = useAccounts;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final Future<File> Function(String prefix)? _deltaDatabaseFileBuilder;
   Future<T> Function<T>(Future<T> Function() operation)?
   _databaseOperationTracker;
-  final DeltaSafe _deltaSafe;
+  DeltaSafe? _deltaSafe;
   final Logger _log;
   final AppLocalizations Function()? _localizationsProvider;
   final String? Function()? _xmppSelfJidProvider;
   final bool _persistEvents;
+  final bool _useAccounts;
 
   DeltaAccountsHandle? _accounts;
   DeltaContextHandle? _context;
   bool _contextOpened = false;
   Future<void>? _contextOpening;
   bool _ioRunning = false;
-  bool _accountsSupported = true;
   final Map<int, _DeltaAccountSession> _accountSessions = {};
   Map<String, bool> _emailEncryptionBetaEnabledByAddress =
       const <String, bool>{};
 
   @override
   void Function()? onRuntimeRestarted;
+
+  DeltaSafe get _delta => _deltaSafe ??= DeltaSafe();
 
   @override
   void updateDatabaseOperationTracker(
@@ -467,7 +471,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   }
 
   final Map<int, StreamSubscription<DeltaCoreEvent>> _eventSubscriptions = {};
-  final Map<int, Future<void>> _accountOpening = {};
+  final Map<int, Future<_DeltaAccountSession>> _accountOpening = {};
   final List<void Function(DeltaCoreEvent)> _eventListeners = [];
   final Set<int> _activeImexAccountIds = <int>{};
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
@@ -680,6 +684,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     );
     final completer = Completer<void>();
     StreamSubscription<DeltaCoreEvent>? subscription;
+    String? lastErrorDetail;
     try {
       for (final key in _deltaOverrideConfigKeys) {
         if (!overrideKeys.contains(key)) {
@@ -691,26 +696,28 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         if (eventType == null) {
           return;
         }
-        if (completer.isCompleted) {
-          return;
-        }
-        if (eventType == DeltaEventType.configureProgress) {
-          if (event.data1 == 1000) {
-            completer.complete();
-          } else if (event.data1 == 0) {
+        if (eventType == DeltaEventType.error) {
+          lastErrorDetail = event.data2Text ?? event.data1Text;
+          if (!completer.isCompleted) {
             completer.completeError(
               DeltaOperationException(
-                event.data2Text ?? 'Failed to configure email account',
+                lastErrorDetail ?? 'Failed to configure email account',
               ),
             );
           }
           return;
         }
-        if (eventType == DeltaEventType.error) {
+        if (completer.isCompleted ||
+            eventType != DeltaEventType.configureProgress) {
+          return;
+        }
+        if (event.data1 == 1000) {
+          completer.complete();
+        } else if (event.data1 == 0) {
           completer.completeError(
             DeltaOperationException(
               event.data2Text ??
-                  event.data1Text ??
+                  lastErrorDetail ??
                   'Failed to configure email account',
             ),
           );
@@ -1062,8 +1069,11 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     final accounts = _accounts;
     try {
       if (accounts == null) {
-        await _context?.maybeNetworkAvailable();
-        return false;
+        final context = _context;
+        if (context == null) {
+          return false;
+        }
+        return await context.backgroundFetch(timeout);
       }
       return await accounts.backgroundFetch(timeout);
     } finally {
@@ -1203,10 +1213,10 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   }
 
   @override
-  bool get accountsSupported => _accountsSupported;
+  bool get accountsSupported => _useAccounts;
 
   @override
-  bool get accountsActive => _accounts != null;
+  bool get accountsActive => _useAccounts && _accounts != null;
 
   @override
   int get activeAccountId => _defaultAccountId ?? DeltaAccountDefaults.legacyId;
@@ -1219,7 +1229,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
 
   @override
   void setPrimaryAccountId(int? accountId) {
-    _primaryAccountId = accountId;
+    _primaryAccountId = _resolveAccountIdForRequest(accountId);
   }
 
   @override
@@ -1231,23 +1241,28 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   Future<List<int>> accountIds() async {
     await _ensureContextReady();
     final accounts = _accounts;
-    if (accounts != null) {
-      return accounts.accountIds();
+    if (_useAccounts && accounts != null) {
+      final ids = await accounts.accountIds();
+      return _singleSupportedAccountIds(ids);
     }
-    if (_context == null) {
-      return const <int>[];
-    }
-    return const <int>[DeltaAccountDefaults.legacyId];
+    return const <int>[DeltaAccountDefaults.singleContextId];
   }
 
   @override
   Future<int> createAccount({bool closed = false}) async {
     await _ensureContextReady();
+    if (!_useAccounts) {
+      throw const DeltaOperationException('Delta accounts unavailable');
+    }
     final accounts = _accounts;
     if (accounts == null) {
-      throw StateError('Delta accounts unavailable');
+      throw const DeltaOperationException('Delta accounts unavailable');
     }
-    return accounts.addAccount(closed: closed);
+    final accountId = await accounts.addAccount(closed: closed);
+    if (accountId == DeltaAccountDefaults.legacyId) {
+      throw const DeltaAllocationException('Failed to allocate Delta account');
+    }
+    return accountId;
   }
 
   @override
@@ -1490,6 +1505,9 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       return;
     }
     await _ensureContextReady();
+    if (!_useAccounts) {
+      return;
+    }
     final accounts = _accounts;
     if (accounts != null) {
       await accounts.setPushDeviceToken(token);
@@ -1499,36 +1517,96 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   }
 
   int? get _defaultAccountId {
+    if (!_useAccounts) {
+      return DeltaAccountDefaults.singleContextId;
+    }
     final primary = _primaryAccountId;
     if (primary != null) {
-      return primary;
+      if (primary != DeltaAccountDefaults.legacyId) {
+        return primary;
+      }
+      return _canonicalSessionAccountId;
     }
-    const singleSessionCount = 1;
-    if (_accountSessions.length == singleSessionCount) {
-      return _accountSessions.keys.first;
+    if (_accounts != null) {
+      final sessionAccountId = _canonicalSessionAccountId;
+      if (sessionAccountId != null) {
+        return sessionAccountId;
+      }
+      final contextAccountId = _context?.accountId;
+      if (contextAccountId != null &&
+          contextAccountId != DeltaAccountDefaults.legacyId) {
+        return contextAccountId;
+      }
+      return null;
+    }
+    final sessionAccountId = _canonicalSessionAccountId;
+    if (sessionAccountId != null) {
+      return sessionAccountId;
     }
     final context = _context;
     if (context == null) return null;
     final contextAccountId = context.accountId;
-    if (contextAccountId != null) {
+    if (contextAccountId != null &&
+        contextAccountId != DeltaAccountDefaults.legacyId) {
       return contextAccountId;
     }
-    return _accounts == null ? DeltaAccountDefaults.legacyId : null;
+    return null;
+  }
+
+  int? get _canonicalSessionAccountId {
+    final ids = _accountSessions.keys
+        .where((id) => id != DeltaAccountDefaults.legacyId)
+        .toList(growable: false);
+    if (ids.isEmpty) {
+      return null;
+    }
+    final primary = _primaryAccountId;
+    if (primary != null &&
+        primary != DeltaAccountDefaults.legacyId &&
+        ids.contains(primary)) {
+      return primary;
+    }
+    return ids.first;
+  }
+
+  List<int> _singleSupportedAccountIds(Iterable<int> accountIds) {
+    final seen = <int>{};
+    final ids = <int>[];
+    for (final accountId in accountIds) {
+      if (accountId == DeltaAccountDefaults.legacyId) {
+        continue;
+      }
+      if (seen.add(accountId)) {
+        ids.add(accountId);
+      }
+    }
+    if (ids.isEmpty) {
+      return const <int>[];
+    }
+    final primary = _primaryAccountId;
+    if (primary != null &&
+        primary != DeltaAccountDefaults.legacyId &&
+        ids.contains(primary)) {
+      return List<int>.unmodifiable(<int>[primary]);
+    }
+    final contextAccountId = _context?.accountId;
+    if (contextAccountId != null &&
+        contextAccountId != DeltaAccountDefaults.legacyId &&
+        ids.contains(contextAccountId)) {
+      return List<int>.unmodifiable(<int>[contextAccountId]);
+    }
+    return List<int>.unmodifiable(<int>[ids.first]);
   }
 
   int? _resolveAccountIdForRequest(int? accountId) {
+    if (!_useAccounts) {
+      return DeltaAccountDefaults.singleContextId;
+    }
     if (accountId == null) {
       return _defaultAccountId;
     }
     if (accountId != DeltaAccountDefaults.legacyId) {
       return accountId;
-    }
-    if (_accounts == null) {
-      return _context == null ? null : DeltaAccountDefaults.legacyId;
-    }
-    const singleSessionCount = 1;
-    if (_accountSessions.length == singleSessionCount) {
-      return _accountSessions.keys.first;
     }
     return null;
   }
@@ -1562,7 +1640,10 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     if (existing != null) {
       return existing;
     }
-    if (_accounts == null || resolvedId == DeltaAccountDefaults.legacyId) {
+    if (_accounts != null && resolvedId == DeltaAccountDefaults.legacyId) {
+      throw StateError('Legacy Delta account is not valid in accounts mode.');
+    }
+    if (_accounts == null) {
       final context = _context;
       if (context == null) {
         return null;
@@ -1581,6 +1662,9 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     required DeltaContextHandle context,
     bool scheduleHydration = _defaultScheduleAccountHydration,
   }) async {
+    if (_accounts != null && accountId == DeltaAccountDefaults.legacyId) {
+      throw StateError('Legacy Delta account is not valid in accounts mode.');
+    }
     final existing = _accountSessions[accountId];
     if (existing != null) {
       return existing;
@@ -1626,40 +1710,46 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     }
     final opening = _accountOpening[accountId];
     if (opening != null) {
-      await opening;
-      final session = _accountSessions[accountId];
-      if (session != null) {
-        return session;
-      }
+      return opening;
     }
-    final completer = Completer<void>();
-    _accountOpening[accountId] = completer.future;
+    final task = _openAccountSession(accountId);
+    _accountOpening[accountId] = task;
     try {
-      final accounts = _accounts;
-      if (accounts == null) {
-        throw StateError('Delta accounts unavailable for account $accountId');
-      }
-      final passphrase = _databasePassphrase;
-      if (passphrase == null) {
-        throw StateError('Transport not initialized');
-      }
-      final context = accounts.contextFor(accountId);
-      await context.open(passphrase: passphrase);
-      final session = await _registerSession(
-        accountId: accountId,
-        context: context,
-      );
-      _context ??= context;
-      completer.complete();
-      return session;
-    } catch (error, stackTrace) {
-      if (!completer.isCompleted) {
-        completer.completeError(error, stackTrace);
-      }
-      rethrow;
+      return await task;
     } finally {
       _accountOpening.remove(accountId);
     }
+  }
+
+  Future<_DeltaAccountSession> _openAccountSession(int accountId) async {
+    if (!_useAccounts) {
+      final context = _context;
+      if (context == null) {
+        throw const DeltaOperationException('Delta context unavailable');
+      }
+      return _registerSession(
+        accountId: DeltaAccountDefaults.singleContextId,
+        context: context,
+      );
+    }
+    final accounts = _accounts;
+    if (accounts == null) {
+      throw DeltaOperationException(
+        'Delta accounts unavailable for account $accountId',
+      );
+    }
+    final passphrase = _databasePassphrase;
+    if (passphrase == null) {
+      throw StateError('Transport not initialized');
+    }
+    final context = accounts.contextFor(accountId);
+    await context.open(passphrase: passphrase);
+    final session = await _registerSession(
+      accountId: accountId,
+      context: context,
+    );
+    _context ??= context;
+    return session;
   }
 
   void _attachEventSubscription(
@@ -1720,11 +1810,11 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     if (accountId != null && accountId != DeltaAccountDefaults.legacyId) {
       return accountId;
     }
-    const int singleSessionCount = 1;
-    if (_accountSessions.length == singleSessionCount) {
-      return _accountSessions.keys.first;
-    }
-    return null;
+    final sessionIds = _accountSessions.keys
+        .where((id) => id != DeltaAccountDefaults.legacyId)
+        .toSet();
+    const singleSessionCount = 1;
+    return sessionIds.length == singleSessionCount ? sessionIds.single : null;
   }
 
   bool _imexEventBelongsToAccount(DeltaCoreEvent event, int accountId) {
@@ -1804,38 +1894,76 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     _accountSessions.remove(accountId);
   }
 
+  bool get _singleContextReady =>
+      !_useAccounts &&
+      _context != null &&
+      _contextOpened &&
+      _accountSessions.containsKey(DeltaAccountDefaults.singleContextId);
+
   Future<void> _ensureContextReady() async {
-    if (_contextOpening != null) {
-      await _contextOpening!;
+    final opening = _contextOpening;
+    if (opening != null) {
+      await opening;
       return;
     }
-    final completer = Completer<void>();
-    _contextOpening = completer.future;
+    if (_singleContextReady) {
+      return;
+    }
+    final task = _openContextReady();
+    _contextOpening = task;
     try {
-      final prefix = _databasePrefix;
-      final passphrase = _databasePassphrase;
-      if (prefix == null || passphrase == null) {
-        throw StateError('Transport not initialized');
-      }
-      var opened = false;
-      if (_accountsSupported) {
-        opened = await _tryOpenAccountsContext(prefix, passphrase);
-      }
-      if (!opened) {
-        await _openSingleContext(prefix, passphrase);
-      }
-      completer.complete();
-    } catch (error, stackTrace) {
-      if (!completer.isCompleted) {
-        completer.completeError(error, stackTrace);
-      }
-      rethrow;
+      await task;
     } finally {
-      _contextOpening = null;
+      if (identical(_contextOpening, task)) {
+        _contextOpening = null;
+      }
     }
   }
 
-  Future<bool> _tryOpenAccountsContext(String prefix, String passphrase) async {
+  Future<void> _openContextReady() async {
+    final prefix = _databasePrefix;
+    final passphrase = _databasePassphrase;
+    if (prefix == null || passphrase == null) {
+      throw StateError('Transport not initialized');
+    }
+    if (_useAccounts) {
+      await _openAccountsContext(prefix, passphrase);
+      return;
+    }
+    await _openSingleContext(prefix, passphrase);
+  }
+
+  Future<void> _openSingleContext(String prefix, String passphrase) async {
+    final databaseFile = await _deltaDatabaseFile(prefix);
+    try {
+      _context ??= await _delta.createContext(
+        databasePath: databaseFile.path,
+        osName: Platform.operatingSystem,
+      );
+      if (!_contextOpened) {
+        await _context!.open(passphrase: passphrase);
+        _contextOpened = true;
+      }
+      _primaryAccountId ??= DeltaAccountDefaults.singleContextId;
+      await _registerSession(
+        accountId: DeltaAccountDefaults.singleContextId,
+        context: _context!,
+      );
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to open Delta context at ${databaseFile.path}',
+        error,
+        stackTrace,
+      );
+      await _context?.close();
+      _context = null;
+      _contextOpened = false;
+      await _clearSessions();
+      rethrow;
+    }
+  }
+
+  Future<void> _openAccountsContext(String prefix, String passphrase) async {
     var firstFailure = true;
     bool shouldRetry() {
       if (firstFailure) {
@@ -1849,18 +1977,13 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       try {
         _accounts ??= await _createAccounts(prefix);
       } on DeltaSafeException catch (error, stackTrace) {
-        _log.warning(
-          'Delta accounts unavailable, falling back to single-account mode',
-          error,
-          stackTrace,
-        );
-        _accountsSupported = false;
+        _log.warning('Delta accounts unavailable', error, stackTrace);
         await _accounts?.dispose();
         _accounts = null;
         _context = null;
         _contextOpened = false;
         await _clearSessions();
-        return false;
+        rethrow;
       }
       final databaseFile = await _deltaDatabaseFile(prefix);
       final databasePath = await databaseFile.exists()
@@ -1871,6 +1994,11 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         accountId = await _accounts!.ensureAccount(
           legacyDatabasePath: databasePath,
         );
+        if (accountId == DeltaAccountDefaults.legacyId) {
+          throw const DeltaAllocationException(
+            'Failed to allocate Delta account',
+          );
+        }
       } on DeltaSafeException catch (error, stackTrace) {
         if (!shouldRetry()) {
           _log.warning(
@@ -1933,50 +2061,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       if (_context != null) {
         await _registerSession(accountId: accountId, context: _context!);
       }
-      return true;
-    }
-  }
-
-  Future<void> _openSingleContext(String prefix, String passphrase) async {
-    final file = await _deltaDatabaseFile(prefix);
-    await file.parent.create(recursive: true);
-    while (true) {
-      if (_context == null) {
-        _log.fine('Opening Delta context at ${file.path}');
-        _context = await _deltaSafe.createContext(
-          databasePath: file.path,
-          osName: 'dart',
-        );
-        _contextOpened = false;
-        _primaryAccountId ??= DeltaAccountDefaults.legacyId;
-        await _registerSession(
-          accountId: DeltaAccountDefaults.legacyId,
-          context: _context!,
-          scheduleHydration: _contextOpened,
-        );
-      }
-      if (_contextOpened) {
-        break;
-      }
-      try {
-        await _context!.open(passphrase: passphrase);
-        _contextOpened = true;
-        await _scheduleAccountAddressHydration(
-          context: _context!,
-          accountId: DeltaAccountDefaults.legacyId,
-        );
-      } on DeltaSafeException catch (error, stackTrace) {
-        _log.warning(
-          'Delta context open failed at ${file.path}',
-          error,
-          stackTrace,
-        );
-        await _context?.close();
-        _context = null;
-        _contextOpened = false;
-        await _clearSessions();
-        rethrow;
-      }
+      return;
     }
   }
 
@@ -2490,6 +2575,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     if (parent.path != directory.path) {
       await parent.create(recursive: true);
     }
+    await directory.create(recursive: true);
     Future<void> logAccountsDirState(String reason) async {
       final entries = <String>[];
       if (await directory.exists()) {
@@ -2504,7 +2590,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     }
 
     try {
-      return await _deltaSafe.createAccounts(directory: directory.path);
+      return await _delta.createAccounts(directory: directory.path);
     } on DeltaSafeException catch (error, stackTrace) {
       await logAccountsDirState('initial create');
       _log.warning(

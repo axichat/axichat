@@ -1794,6 +1794,7 @@ final class _EmailDeltaWorkerServer {
       localizationsProvider: () => _l10n,
       xmppSelfJidProvider: () => _xmppSelfJid,
       persistEvents: false,
+      useAccounts: true,
     );
     _transport.updateEmailEncryptionBetaSettings(
       _emailEncryptionBetaEnabledByAddress,

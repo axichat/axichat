@@ -21,16 +21,25 @@ typedef DeltaBackgroundFetchRunner = Future<bool> Function({
   required int timeoutSeconds,
 });
 
+typedef DeltaContextBackgroundFetchRunner = Future<bool> Function({
+  required int contextAddress,
+  required int timeoutSeconds,
+});
+
 class DeltaSafe {
   DeltaSafe({
     DeltaChatBindings? bindings,
     DeltaBackgroundFetchRunner? backgroundFetchRunner,
+    DeltaContextBackgroundFetchRunner? contextBackgroundFetchRunner,
   })  : _bindings = bindings ?? deltaBindings,
         _backgroundFetchRunner =
-            backgroundFetchRunner ?? _runNativeAccountsBackgroundFetch;
+            backgroundFetchRunner ?? _runNativeAccountsBackgroundFetch,
+        _contextBackgroundFetchRunner =
+            contextBackgroundFetchRunner ?? _runNativeContextBackgroundFetch;
 
   final DeltaChatBindings _bindings;
   final DeltaBackgroundFetchRunner _backgroundFetchRunner;
+  final DeltaContextBackgroundFetchRunner _contextBackgroundFetchRunner;
 
   Future<DeltaContextHandle> createContext({
     required String databasePath,
@@ -62,7 +71,11 @@ class DeltaSafe {
       );
     }
 
-    return DeltaContextHandle._owned(_bindings, ctx);
+    return DeltaContextHandle._owned(
+      _bindings,
+      ctx,
+      contextBackgroundFetchRunner: _contextBackgroundFetchRunner,
+    );
   }
 
   Future<DeltaAccountsHandle> createAccounts({
@@ -92,6 +105,21 @@ Future<bool> _runNativeAccountsBackgroundFetch({
     final accounts = ffi.Pointer<dc_accounts_t>.fromAddress(accountsAddress);
     return bindings.axichat_dc_accounts_background_fetch(
           accounts,
+          timeoutSeconds,
+        ) !=
+        0;
+  });
+}
+
+Future<bool> _runNativeContextBackgroundFetch({
+  required int contextAddress,
+  required int timeoutSeconds,
+}) {
+  return Isolate.run(() {
+    final bindings = DeltaChatBindings(loadDeltaLibrary());
+    final context = ffi.Pointer<dc_context_t>.fromAddress(contextAddress);
+    return bindings.axichat_dc_context_background_fetch(
+          context,
           timeoutSeconds,
         ) !=
         0;
@@ -962,8 +990,12 @@ class DeltaFreshMessageCount {
 }
 
 class DeltaContextHandle {
-  DeltaContextHandle._owned(this._bindings, this._context)
-      : _accountsOwner = null,
+  DeltaContextHandle._owned(
+    this._bindings,
+    this._context, {
+    required DeltaContextBackgroundFetchRunner contextBackgroundFetchRunner,
+  })  : _contextBackgroundFetchRunner = contextBackgroundFetchRunner,
+        _accountsOwner = null,
         _accountId = null,
         _ownsContext = true;
 
@@ -972,12 +1004,14 @@ class DeltaContextHandle {
     this._context,
     this._accountsOwner,
     this._accountId,
-  ) : _ownsContext = false;
+  )   : _contextBackgroundFetchRunner = null,
+        _ownsContext = false;
 
   final DeltaChatBindings _bindings;
   final ffi.Pointer<dc_context_t> _context;
   final DeltaAccountsHandle? _accountsOwner;
   final int? _accountId;
+  final DeltaContextBackgroundFetchRunner? _contextBackgroundFetchRunner;
   final bool _ownsContext;
   static const _lastSpecialContactId = DeltaContactId.lastSpecial;
 
@@ -992,6 +1026,7 @@ class DeltaContextHandle {
   bool get supportsMessageRfc822Body => _deltaOptionalMsgRfc822Body.isAvailable;
 
   _DeltaEventLoop? _eventLoop;
+  Future<bool>? _activeBackgroundFetch;
 
   bool _opened = false;
   bool _closed = false;
@@ -1116,9 +1151,19 @@ class DeltaContextHandle {
       await owner.stopIo();
       return;
     }
-    if (!_ioRunning) return;
-    _bindings.dc_stop_io(_context);
-    _ioRunning = false;
+    final activeFetch = _activeBackgroundFetch;
+    try {
+      await _signalActiveBackgroundFetch(activeFetch);
+    } finally {
+      try {
+        if (_ioRunning) {
+          _bindings.dc_stop_io(_context);
+          _ioRunning = false;
+        }
+      } finally {
+        await _awaitActiveBackgroundFetch(activeFetch);
+      }
+    }
   }
 
   Future<void> maybeNetworkAvailable() async {
@@ -1129,6 +1174,38 @@ class DeltaContextHandle {
   Future<void> maybeNetworkLost() async {
     _ensureState(_opened, 'notify network change');
     _bindings.dc_maybe_network(_context);
+  }
+
+  Future<bool> backgroundFetch(Duration timeout) async {
+    final owner = _accountsOwner;
+    if (owner != null) {
+      return owner.backgroundFetch(timeout);
+    }
+    if (_closed) return false;
+    _ensureState(_opened, 'background fetch');
+    final active = _activeBackgroundFetch;
+    if (active != null) {
+      return active;
+    }
+    final timeoutSeconds = timeout.inSeconds;
+    final runner = _contextBackgroundFetchRunner;
+    if (timeoutSeconds <= 2 || runner == null) {
+      return false;
+    }
+    final task = Future<bool>.sync(
+      () => runner(
+        contextAddress: _context.address,
+        timeoutSeconds: timeoutSeconds,
+      ),
+    );
+    _activeBackgroundFetch = task;
+    try {
+      return await task;
+    } finally {
+      if (identical(_activeBackgroundFetch, task)) {
+        _activeBackgroundFetch = null;
+      }
+    }
   }
 
   Stream<DeltaCoreEvent> events() {
@@ -2280,6 +2357,34 @@ class DeltaContextHandle {
     await stopIo();
     await eventLoop?.dispose();
     _bindings.dc_context_unref(_context);
+  }
+
+  Future<void> _signalActiveBackgroundFetch(Future<bool>? activeFetch) async {
+    if (activeFetch == null) return;
+    while (identical(_activeBackgroundFetch, activeFetch)) {
+      try {
+        final stopped = _bindings.axichat_dc_context_stop_background_fetch(
+          _context,
+        );
+        if (stopped != 0) return;
+      } on ArgumentError {
+        return;
+      } on UnsupportedError {
+        return;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  Future<void> _awaitActiveBackgroundFetch(Future<bool>? activeFetch) async {
+    if (activeFetch == null) return;
+    try {
+      await activeFetch;
+    } finally {
+      if (identical(_activeBackgroundFetch, activeFetch)) {
+        _activeBackgroundFetch = null;
+      }
+    }
   }
 
   Future<void> _setConfig(String key, String value) async {

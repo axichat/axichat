@@ -740,8 +740,11 @@ class EmailService {
        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     _transportFactory =
         transportFactory ??
-        () => EmailDeltaWorkerRuntime(
+        () => EmailDeltaTransport(
+          databaseBuilder: _databaseBuilder,
+          databaseOperationTracker: _trackAppDatabaseOperation,
           logger: _log,
+          localizationsProvider: () => _l10n,
           xmppSelfJidProvider: _xmppSelfJidProvider,
         );
     _transport = transport ?? _transportFactory();

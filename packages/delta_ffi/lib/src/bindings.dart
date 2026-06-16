@@ -254,6 +254,39 @@ class DeltaChatBindings {
       _axichat_dc_accounts_stop_background_fetchPtr
           .asFunction<int Function(ffi.Pointer<dc_accounts_t>)>();
 
+  int axichat_dc_context_background_fetch(
+    ffi.Pointer<dc_context_t> ctx,
+    int timeout_seconds,
+  ) {
+    return _axichat_dc_context_background_fetch(
+      ctx,
+      timeout_seconds,
+    );
+  }
+
+  late final _axichat_dc_context_background_fetchPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Int Function(ffi.Pointer<dc_context_t>,
+              ffi.Uint64)>>('axichat_dc_context_background_fetch');
+  late final _axichat_dc_context_background_fetch =
+      _axichat_dc_context_background_fetchPtr
+          .asFunction<int Function(ffi.Pointer<dc_context_t>, int)>();
+
+  int axichat_dc_context_stop_background_fetch(
+    ffi.Pointer<dc_context_t> ctx,
+  ) {
+    return _axichat_dc_context_stop_background_fetch(
+      ctx,
+    );
+  }
+
+  late final _axichat_dc_context_stop_background_fetchPtr =
+      _lookup<ffi.NativeFunction<ffi.Int Function(ffi.Pointer<dc_context_t>)>>(
+          'axichat_dc_context_stop_background_fetch');
+  late final _axichat_dc_context_stop_background_fetch =
+      _axichat_dc_context_stop_background_fetchPtr
+          .asFunction<int Function(ffi.Pointer<dc_context_t>)>();
+
   ffi.Pointer<ffi.Char> axichat_dc_inspect_openpgp_key(
     ffi.Pointer<ffi.Char> armored,
     ffi.Pointer<ffi.Char> expected_addr,
