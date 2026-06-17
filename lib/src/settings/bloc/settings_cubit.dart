@@ -75,6 +75,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       CredentialStore.registerKey('background_messaging_by_address_v1');
   final RegisteredCredentialKey _accountWelcomeShownKey =
       CredentialStore.registerKey('account_welcome_shown_by_address_v1');
+  final RegisteredCredentialKey _emailWebViewTipShownKey =
+      CredentialStore.registerKey('email_webview_tip_shown_by_address_v1');
   final RegisteredCredentialKey _recoveryWelcomeDismissedKey =
       CredentialStore.registerKey('recovery_welcome_dismissed_by_address_v1');
   SettingsState _bootstrapState = const SettingsState();
@@ -328,6 +330,27 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       return;
     }
     await _writeAccountWelcomeShown({...shown, normalized});
+  }
+
+  Future<bool> emailWebViewTipShownFor(String? accountJid) async {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null) {
+      return true;
+    }
+    final shown = await _readEmailWebViewTipShown();
+    return shown.contains(normalized);
+  }
+
+  Future<void> markEmailWebViewTipShownFor(String? accountJid) async {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    final shown = await _readEmailWebViewTipShown();
+    if (shown.contains(normalized)) {
+      return;
+    }
+    await _writeEmailWebViewTipShown({...shown, normalized});
   }
 
   bool recoveryAvailableForAccount(String? accountJid) =>
@@ -1052,9 +1075,20 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     return _readDismissedAccounts(_accountWelcomeShownKey);
   }
 
+  Future<Set<String>> _readEmailWebViewTipShown() async {
+    return _readDismissedAccounts(_emailWebViewTipShownKey);
+  }
+
   Future<void> _writeAccountWelcomeShown(Set<String> shownAccounts) async {
     await _writeDismissedAccounts(
       key: _accountWelcomeShownKey,
+      dismissedAccounts: shownAccounts,
+    );
+  }
+
+  Future<void> _writeEmailWebViewTipShown(Set<String> shownAccounts) async {
+    await _writeDismissedAccounts(
+      key: _emailWebViewTipShownKey,
       dismissedAccounts: shownAccounts,
     );
   }

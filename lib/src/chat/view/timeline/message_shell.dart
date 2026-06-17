@@ -63,8 +63,7 @@ _resolveTimelineMessageChromeActions({
   onPinToggleRequested,
   required void Function(Message message, {String? inviteeJidFallback})
   onRevokeInviteRequested,
-  required void Function(Message message, {required bool showUnreadIndicator})
-  onBubbleTapRequested,
+  required void Function(Message message) onBubbleTapRequested,
   required void Function(Message message, String emoji)
   onToggleQuickReactionRequested,
   required Future<void> Function(Message message) onReactionSelectionRequested,
@@ -243,7 +242,6 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
     required this.rowKey,
     required this.measuredBubbleWidth,
     required this.animate,
-    required this.onTapOutside,
     required this.availableWidth,
     required this.inboundClampedBubbleWidth,
     required this.outboundClampedBubbleWidth,
@@ -256,10 +254,12 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
     required this.forwardedPreview,
     required this.actionBar,
     required this.reactionManager,
+    required this.bubbleWrapper,
     required this.onToggleMultiSelectRequested,
     required this.onToggleQuickReactionRequested,
     required this.onRecipientTap,
     required this.onBubbleTap,
+    required this.onTapOutside,
     required this.onBubbleSizeChanged,
   });
 
@@ -277,7 +277,6 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
   final Key? rowKey;
   final double? measuredBubbleWidth;
   final bool animate;
-  final TapRegionCallback? onTapOutside;
   final double availableWidth;
   final double inboundClampedBubbleWidth;
   final double outboundClampedBubbleWidth;
@@ -324,11 +323,13 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
   final Widget? forwardedPreview;
   final Widget actionBar;
   final Widget? reactionManager;
+  final Widget Function(Widget child)? bubbleWrapper;
   final void Function(Message message) onToggleMultiSelectRequested;
   final void Function(Message message, String emoji)
   onToggleQuickReactionRequested;
   final void Function(chat_models.Chat chat) onRecipientTap;
   final VoidCallback? onBubbleTap;
+  final TapRegionCallback? onTapOutside;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
 
   @override
@@ -376,6 +377,7 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
       forwardedPreview: forwardedPreview,
       actionBar: actionBar,
       reactionManager: reactionManager,
+      bubbleWrapper: bubbleWrapper,
       bubbleRegionRegistry: bubbleRegionRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
       rowKey: rowKey,
@@ -411,6 +413,7 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
     required this.forwardedPreview,
     required this.actionBar,
     required this.reactionManager,
+    required this.bubbleWrapper,
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
     required this.rowKey,
@@ -446,6 +449,7 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
     Widget bubble,
     EdgeInsets outerPadding,
     double bubbleMaxWidthForLayout,
+    double replyPreviewMaxWidth,
     double bubbleBottomCutoutPadding,
     BoxConstraints bubbleExtraConstraints,
     List<BoxShadow> bubbleShadows,
@@ -457,6 +461,7 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
   final Widget? forwardedPreview;
   final Widget actionBar;
   final Widget? reactionManager;
+  final Widget Function(Widget child)? bubbleWrapper;
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
   final Key? rowKey;
@@ -503,14 +508,12 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
       readOnly: readOnly,
       self: self,
       isSingleSelection: isSingleSelection,
-      isEmailMessage: isEmailMessage,
-      showUnreadIndicator: timelineMessageItem.showUnreadIndicator,
       messageRowMaxWidth: messageRowMaxWidth,
       bubblePreviewWidth: shellData.bubbleMaxWidthForLayout,
-      replyPreviewMaxWidth: messageRowMaxWidth,
+      replyPreviewMaxWidth: shellData.replyPreviewMaxWidth,
       messageRowAlignment: self ? Alignment.centerRight : Alignment.centerLeft,
       outerPadding: shellData.outerPadding,
-      bubble: shellData.bubble,
+      bubble: bubbleWrapper?.call(shellData.bubble) ?? shellData.bubble,
       senderLabel: senderLabel,
       forwardedPreview: forwardedPreview,
       quotedPreview: quotedPreview,
@@ -521,9 +524,9 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
       selectionTapRegionGroup: selectionTapRegionGroup,
       animate: animate,
       onBubbleTap: onBubbleTap,
+      onTapOutside: onTapOutside,
       onBubbleSizeChanged: (size) =>
           onBubbleSizeChanged(messageModel.stanzaID, size),
-      onTapOutside: onTapOutside,
     );
   }
 }

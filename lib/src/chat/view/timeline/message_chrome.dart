@@ -387,6 +387,9 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required this.shareRequestStatus,
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
+    required this.showEmailWebViewTip,
+    required this.emailWebViewTipKey,
+    required this.emailWebViewTipScope,
     required this.messageKeys,
     required this.bubbleWidthByMessageId,
     required this.shouldAnimateMessage,
@@ -456,6 +459,9 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   final RequestStatus shareRequestStatus;
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
+  final bool showEmailWebViewTip;
+  final GlobalKey emailWebViewTipKey;
+  final String emailWebViewTipScope;
   final Map<String, GlobalKey> messageKeys;
   final Map<String, double> bubbleWidthByMessageId;
   final bool Function(Message message) shouldAnimateMessage;
@@ -604,8 +610,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   onPinToggleRequested;
   final void Function(Message message, {String? inviteeJidFallback})
   onRevokeInviteRequested;
-  final void Function(Message message, {required bool showUnreadIndicator})
-  onBubbleTapRequested;
+  final void Function(Message message) onBubbleTapRequested;
   final void Function(Message message) onToggleMultiSelectRequested;
   final void Function(Message message, String emoji)
   onToggleQuickReactionRequested;
@@ -623,10 +628,6 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     final rowKey = messageKeys[messageModel.stanzaID];
     final measuredBubbleWidth = bubbleWidthByMessageId[messageModel.stanzaID];
     final animate = shouldAnimateMessage(messageModel);
-    final onTapOutside =
-        !multiSelectActive && selectedMessageId == messageModel.stanzaID
-        ? onTapOutsideRequested
-        : null;
     final (
       detailId: detailId,
       extraStyle: extraStyle,
@@ -743,15 +744,18 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       readOnly: readOnly,
       isGroupChat: isGroupChat,
       multiSelectActive: multiSelectActive,
+      selectedMessageId: selectedMessageId,
       canTogglePins: canTogglePins,
       shareRequestStatus: shareRequestStatus,
       resendLoading: state.isMessageResendLoading(messageModel.stanzaID),
       bubbleRegionRegistry: bubbleRegionRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
+      showEmailWebViewTip: showEmailWebViewTip,
+      emailWebViewTipKey: emailWebViewTipKey,
+      emailWebViewTipScope: emailWebViewTipScope,
       rowKey: rowKey,
       measuredBubbleWidth: measuredBubbleWidth,
       animate: animate,
-      onTapOutside: onTapOutside,
       availableWidth: availableWidth,
       inboundClampedBubbleWidth: inboundClampedBubbleWidth,
       outboundClampedBubbleWidth: outboundClampedBubbleWidth,
@@ -804,6 +808,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       onPinToggleRequested: onPinToggleRequested,
       onRevokeInviteRequested: onRevokeInviteRequested,
       onBubbleTapRequested: onBubbleTapRequested,
+      onTapOutsideRequested: onTapOutsideRequested,
       onToggleMultiSelectRequested: onToggleMultiSelectRequested,
       onToggleQuickReactionRequested: onToggleQuickReactionRequested,
       onReactionSelectionRequested: onReactionSelectionRequested,
@@ -829,15 +834,18 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.readOnly,
     required this.isGroupChat,
     required this.multiSelectActive,
+    required this.selectedMessageId,
     required this.canTogglePins,
     required this.shareRequestStatus,
     required this.resendLoading,
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
+    required this.showEmailWebViewTip,
+    required this.emailWebViewTipKey,
+    required this.emailWebViewTipScope,
     required this.rowKey,
     required this.measuredBubbleWidth,
     required this.animate,
-    required this.onTapOutside,
     required this.availableWidth,
     required this.inboundClampedBubbleWidth,
     required this.outboundClampedBubbleWidth,
@@ -859,6 +867,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.onPinToggleRequested,
     required this.onRevokeInviteRequested,
     required this.onBubbleTapRequested,
+    required this.onTapOutsideRequested,
     required this.onToggleMultiSelectRequested,
     required this.onToggleQuickReactionRequested,
     required this.onReactionSelectionRequested,
@@ -880,15 +889,18 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   final bool readOnly;
   final bool isGroupChat;
   final bool multiSelectActive;
+  final String? selectedMessageId;
   final bool canTogglePins;
   final RequestStatus shareRequestStatus;
   final bool resendLoading;
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
+  final bool showEmailWebViewTip;
+  final GlobalKey emailWebViewTipKey;
+  final String emailWebViewTipScope;
   final Key? rowKey;
   final double? measuredBubbleWidth;
   final bool animate;
-  final TapRegionCallback? onTapOutside;
   final double availableWidth;
   final double inboundClampedBubbleWidth;
   final double outboundClampedBubbleWidth;
@@ -967,8 +979,8 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   onPinToggleRequested;
   final void Function(Message message, {String? inviteeJidFallback})
   onRevokeInviteRequested;
-  final void Function(Message message, {required bool showUnreadIndicator})
-  onBubbleTapRequested;
+  final void Function(Message message) onBubbleTapRequested;
+  final TapRegionCallback onTapOutsideRequested;
   final void Function(Message message) onToggleMultiSelectRequested;
   final void Function(Message message, String emoji)
   onToggleQuickReactionRequested;
@@ -1081,6 +1093,18 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       onToggleQuickReactionRequested: onToggleQuickReactionRequested,
       onReactionSelectionRequested: onReactionSelectionRequested,
     );
+    final onTapOutside =
+        !multiSelectActive && selectedMessageId == messageModel.stanzaID
+        ? onTapOutsideRequested
+        : null;
+    final Widget Function(Widget child)? bubbleWrapper = showEmailWebViewTip
+        ? (child) => _EmailWebViewTipTarget(
+            showcaseKey: emailWebViewTipKey,
+            showcaseScope: emailWebViewTipScope,
+            onTargetTap: onBubbleTap,
+            child: child,
+          )
+        : null;
     return _ChatTimelineMessageShellView(
       currentItem: currentItem,
       previous: previous,
@@ -1096,7 +1120,6 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       rowKey: rowKey,
       measuredBubbleWidth: measuredBubbleWidth,
       animate: animate,
-      onTapOutside: onTapOutside,
       availableWidth: availableWidth,
       inboundClampedBubbleWidth: inboundClampedBubbleWidth,
       outboundClampedBubbleWidth: outboundClampedBubbleWidth,
@@ -1109,11 +1132,125 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       forwardedPreview: forwardedPreview,
       actionBar: actionBar,
       reactionManager: reactionManager,
+      bubbleWrapper: bubbleWrapper,
       onToggleMultiSelectRequested: onToggleMultiSelectRequested,
       onToggleQuickReactionRequested: onToggleQuickReactionRequested,
       onRecipientTap: onRecipientTap,
       onBubbleTap: onBubbleTap,
+      onTapOutside: onTapOutside,
       onBubbleSizeChanged: onBubbleSizeChanged,
+    );
+  }
+}
+
+class _EmailWebViewTipTarget extends StatelessWidget {
+  const _EmailWebViewTipTarget({
+    required this.showcaseKey,
+    required this.showcaseScope,
+    required this.onTargetTap,
+    required this.child,
+  });
+
+  final GlobalKey showcaseKey;
+  final String showcaseScope;
+  final VoidCallback? onTargetTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final targetPadding = EdgeInsets.all(context.spacing.xs);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: _EmailWebViewTipTargetOverlay(
+              showcaseKey: showcaseKey,
+              showcaseScope: showcaseScope,
+              targetPadding: targetPadding,
+              onTargetTap: onTargetTap,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmailWebViewTipTargetOverlay extends StatelessWidget {
+  const _EmailWebViewTipTargetOverlay({
+    required this.showcaseKey,
+    required this.showcaseScope,
+    required this.targetPadding,
+    required this.onTargetTap,
+  });
+
+  final GlobalKey showcaseKey;
+  final String showcaseScope;
+  final EdgeInsets targetPadding;
+  final VoidCallback? onTargetTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final viewportHeight =
+        _ChatMessageListViewportScope.maybeOf(context) ??
+        MediaQuery.sizeOf(context).height;
+    final maxTargetHeight = math.max(
+      0.0,
+      viewportHeight - targetPadding.vertical,
+    );
+    final motion = context.motion;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bubbleHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : maxTargetHeight;
+        final targetHeight = _emailWebViewTipTargetHeight(
+          bubbleHeight: bubbleHeight,
+          viewportHeight: viewportHeight,
+          targetPaddingVertical: targetPadding.vertical,
+        );
+        if (!constraints.hasBoundedWidth ||
+            constraints.maxWidth <= 0.0 ||
+            targetHeight <= 0.0) {
+          return const SizedBox.shrink();
+        }
+        return Align(
+          alignment: Alignment.topCenter,
+          child: Showcase(
+            key: showcaseKey,
+            scope: showcaseScope,
+            title: context.l10n.chatEmailWebViewTipTitle,
+            description: context.l10n.chatEmailWebViewTipDescription,
+            targetShapeBorder: RoundedSuperellipseBorder(
+              borderRadius: context.radius,
+            ),
+            targetBorderRadius: context.radius,
+            targetPadding: targetPadding,
+            tooltipPadding: EdgeInsets.all(context.spacing.s),
+            tooltipBorderRadius: context.radius,
+            tooltipBackgroundColor: context.colorScheme.card,
+            textColor: context.colorScheme.foreground,
+            titleTextStyle: context.textTheme.small,
+            descTextStyle: context.textTheme.muted,
+            overlayColor: context.colorScheme.foreground,
+            overlayOpacity: motion.tapFocusAlpha + motion.tapHoverAlpha,
+            scrollLoadingWidget: const AxiProgressIndicator(),
+            disableMovingAnimation: context
+                .watch<SettingsCubit>()
+                .state
+                .lowMotion,
+            disableScaleAnimation: context
+                .watch<SettingsCubit>()
+                .state
+                .lowMotion,
+            disposeOnTap: true,
+            onTargetClick: onTargetTap ?? () {},
+            child: SizedBox(width: constraints.maxWidth, height: targetHeight),
+          ),
+        );
+      },
     );
   }
 }
@@ -1570,6 +1707,7 @@ _resolveTimelineMessageBubbleContent({
   Widget bubble,
   EdgeInsets outerPadding,
   double bubbleMaxWidthForLayout,
+  double replyPreviewMaxWidth,
   double bubbleBottomCutoutPadding,
   BoxConstraints bubbleExtraConstraints,
   List<BoxShadow> bubbleShadows,
@@ -1742,6 +1880,7 @@ _resolveTimelineMessageShellData({
     bubble: bubble,
     outerPadding: outerPadding,
     bubbleMaxWidthForLayout: bubbleMaxWidthForLayout,
+    replyPreviewMaxWidth: messageRowMaxWidth,
     bubbleBottomCutoutPadding: bubbleBottomCutoutPadding,
     bubbleExtraConstraints: bubbleExtraConstraints,
     bubbleShadows: bubbleShadows,
@@ -1871,8 +2010,7 @@ _resolveTimelineMessageActionCallbacks({
   onPinToggleRequested,
   required void Function(Message message, {String? inviteeJidFallback})
   onRevokeInviteRequested,
-  required void Function(Message message, {required bool showUnreadIndicator})
-  onBubbleTapRequested,
+  required void Function(Message message) onBubbleTapRequested,
   required void Function(Message message, String emoji)
   onToggleQuickReactionRequested,
   required Future<void> Function(Message message) onReactionSelectionRequested,
@@ -1957,10 +2095,7 @@ _resolveTimelineMessageActionCallbacks({
 
   VoidCallback? onBubbleTap;
   if (!readOnly) {
-    onBubbleTap = () => onBubbleTapRequested(
-      messageModel,
-      showUnreadIndicator: timelineMessageItem.showUnreadIndicator,
-    );
+    onBubbleTap = () => onBubbleTapRequested(messageModel);
   }
 
   void onAddReaction() => unawaited(onReactionSelectionRequested(messageModel));

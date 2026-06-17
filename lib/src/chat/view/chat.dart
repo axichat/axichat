@@ -76,6 +76,7 @@ import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -129,6 +130,7 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -250,6 +252,152 @@ bool shouldShowSelectedEmailImageLoadButtonForTesting({
     !shouldLoadImages &&
     hasLoadCallback;
 
+@visibleForTesting
+double emailWebViewTipTargetHeightForTesting({
+  required double bubbleHeight,
+  required double viewportHeight,
+  required double targetPaddingVertical,
+}) => _emailWebViewTipTargetHeight(
+  bubbleHeight: bubbleHeight,
+  viewportHeight: viewportHeight,
+  targetPaddingVertical: targetPaddingVertical,
+);
+
+double _emailWebViewTipTargetHeight({
+  required double bubbleHeight,
+  required double viewportHeight,
+  required double targetPaddingVertical,
+}) => math.min(
+  bubbleHeight,
+  math.max(0.0, viewportHeight - targetPaddingVertical),
+);
+
+@visibleForTesting
+bool shouldShowEmailWebViewTipForTesting({
+  required bool isEmailMessage,
+  required bool readOnly,
+  required bool multiSelectActive,
+  required bool isSingleSelection,
+  required String? normalizedHtmlBody,
+  required String? renderedText,
+  required EmailHtmlDerivation? emailDerivation,
+}) {
+  if (!isEmailMessage ||
+      readOnly ||
+      multiSelectActive ||
+      isSingleSelection ||
+      normalizedHtmlBody == null ||
+      emailDerivation == null) {
+    return false;
+  }
+  final hasSelectedWebViewContent =
+      _emailHtmlHasVisibleTimelineContent(
+        normalizedHtmlBody: normalizedHtmlBody,
+        normalizedHtmlText: emailDerivation.visibleBodyText,
+        derivation: emailDerivation,
+      ) ||
+      emailDerivation.containsBlockedWebViewContent ||
+      emailDerivation.containsCidImages;
+  if (!hasSelectedWebViewContent) {
+    return false;
+  }
+  return HtmlContentCodec.shouldRenderRichEmailHtml(
+        normalizedHtmlBody: normalizedHtmlBody,
+        normalizedHtmlText: emailDerivation.visibleBodyText,
+        renderedText: renderedText ?? _emptyText,
+      ) ||
+      emailDerivation.containsBlockedWebViewContent ||
+      emailDerivation.containsCidImages;
+}
+
+@visibleForTesting
+bool shouldDeferReadThresholdSyncForTesting({
+  required bool messagesLoaded,
+  required bool initialTimelineReadinessPending,
+}) => !messagesLoaded || initialTimelineReadinessPending;
+
+@visibleForTesting
+String? firstEmailWebViewTipTargetMessageIdForTesting({
+  required Iterable<
+    ({
+      String messageId,
+      bool isEmailMessage,
+      String? normalizedHtmlBody,
+      String? renderedText,
+      EmailHtmlDerivation? emailDerivation,
+    })
+  >
+  items,
+  required Set<String> renderedMessageIds,
+  required bool readOnly,
+  required bool multiSelectActive,
+  required String? selectedMessageId,
+}) {
+  if (readOnly ||
+      multiSelectActive ||
+      selectedMessageId != null ||
+      renderedMessageIds.isEmpty) {
+    return null;
+  }
+  for (final item in items) {
+    final messageId = item.messageId.trim();
+    if (messageId.isEmpty || !renderedMessageIds.contains(messageId)) {
+      continue;
+    }
+    if (shouldShowEmailWebViewTipForTesting(
+      isEmailMessage: item.isEmailMessage,
+      readOnly: readOnly,
+      multiSelectActive: multiSelectActive,
+      isSingleSelection: false,
+      normalizedHtmlBody: item.normalizedHtmlBody,
+      renderedText: item.renderedText,
+      emailDerivation: item.emailDerivation,
+    )) {
+      return messageId;
+    }
+  }
+  return null;
+}
+
+String? _firstEmailWebViewTipTargetMessageId({
+  required Iterable<ChatTimelineItem> items,
+  required Set<String> renderedMessageIds,
+  required bool readOnly,
+  required bool multiSelectActive,
+  required String? selectedMessageId,
+}) {
+  if (readOnly ||
+      multiSelectActive ||
+      selectedMessageId != null ||
+      renderedMessageIds.isEmpty) {
+    return null;
+  }
+  for (final item in items) {
+    if (item is! ChatTimelineMessageItem) {
+      continue;
+    }
+    final messageId = item.id.trim();
+    if (messageId.isEmpty || !renderedMessageIds.contains(messageId)) {
+      continue;
+    }
+    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
+      item.resolvedHtmlBody,
+    );
+    if (shouldShowEmailWebViewTipForTesting(
+      isEmailMessage: item.isEmailMessage,
+      readOnly: readOnly,
+      multiSelectActive: multiSelectActive,
+      isSingleSelection: false,
+      normalizedHtmlBody: normalizedHtmlBody,
+      renderedText: item.renderedText,
+      emailDerivation: emailHtmlDerivationForBody(normalizedHtmlBody),
+    )) {
+      return messageId;
+    }
+  }
+  return null;
+}
+
 double _bubbleCornerClearance(BorderRadius baseRadius) =>
     math.max(baseRadius.topLeft.x, baseRadius.topLeft.y);
 
@@ -309,6 +457,8 @@ class Chat extends StatefulWidget {
   State<Chat> createState() => _ChatState();
 }
 
+enum _InitialEmailViewportWarmupStatus { pending, warming, warmed }
+
 class _ChatState extends State<Chat> {
   static bool get _debugShowAllComposerBanners => kDebugMode && false;
 
@@ -348,11 +498,23 @@ class _ChatState extends State<Chat> {
   bool _chatCalendarCanHandleBack = false;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
+  var _selectedMessageVisibilityRequest = 0;
   final _multiSelectedMessageIds = <String>{};
   final _selectedMessageSnapshots = <String, Message>{};
   final _pendingReactionPreviewsByMessageId =
       <String, ({List<ReactionPreview> base, List<ReactionPreview> preview})>{};
+  final _unreadDividerKey = GlobalKey();
   final _messageKeys = <String, GlobalKey>{};
+  final _mountedTimelineItemIds = <String>{};
+  final _emailWebViewTipKey = GlobalKey(debugLabel: 'emailWebViewTip');
+  final String _emailWebViewTipScope = 'chat-email-webview-tip-${UniqueKey()}';
+  var _activeUnreadDividerScrollRequestId = 0;
+  var _completedUnreadDividerScrollRequestId = 0;
+  var _initialEmailViewportWarmupStatus =
+      _InitialEmailViewportWarmupStatus.pending;
+  Set<int> _initialEmailViewportDeltaIds = const <int>{};
+  var _initialEmailViewportWarmupRequestId = 0;
+  String? _lastRenderedHydrationSignature;
   List<RosterItem>? _cachedRosterItems;
   List<chat_models.Chat>? _cachedChatItems;
   String? _cachedSelfAvatarPath;
@@ -369,6 +531,8 @@ class _ChatState extends State<Chat> {
   Map<int, String>? _cachedEmailFullHtmlByDeltaId;
   Map<String, Message> _cachedMessageById = const {};
   List<Message> _cachedFilteredItems = const [];
+  List<ChatTimelineItem> _cachedTimelineItems = const [];
+  Set<String> _renderedTimelineMessageIds = const <String>{};
   final _bubbleWidthByMessageId = <String, double>{};
   final _emailWebViewHeightByContentKey =
       <String, ({String messageId, double height})>{};
@@ -398,6 +562,7 @@ class _ChatState extends State<Chat> {
   Message? _quotedDraft;
   var _replyResolveRequestId = 0;
   List<PendingAttachment> _pendingAttachments = const [];
+  MessageTransport? _inlineRetryTransportOverride;
   var _pendingAttachmentSeed = 0;
   var _handledPendingOpenMessageRequestId = 0;
 
@@ -476,6 +641,10 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  void _clearInlineRetryTransportOverride() {
+    _inlineRetryTransportOverride = null;
+  }
+
   void _handleComposerTextChanged(String text) {
     final hasText = text.isNotEmpty;
     final chatState = context.read<ChatBloc>().state;
@@ -491,7 +660,10 @@ class _ChatState extends State<Chat> {
     if (_composerHasText != trimmedHasText && mounted) {
       setState(() {
         _composerHasText = trimmedHasText;
+        _clearInlineRetryTransportOverride();
       });
+    } else {
+      _clearInlineRetryTransportOverride();
     }
     _maybeClearPendingCalendarTaskIcs(text);
     if (!hasText) return;
@@ -555,9 +727,18 @@ class _ChatState extends State<Chat> {
   }
 
   String? _recipientAddError(Contact target) {
+    final chatState = context.read<ChatBloc>().state;
+    final chat = chatState.chat;
+    final forceEmailDomain =
+        chat != null &&
+            chatState.canOfferEmailOutboundOverride &&
+            chatState.activeTransportForSend(chat).isEmail
+        ? addressDomainPart(chatState.emailSelfJid)
+        : null;
     if (!exceedsComposeRecipientLimit(
       recipients: _recipients,
       target: target,
+      forceEmailDomain: forceEmailDomain,
     )) {
       return null;
     }
@@ -581,6 +762,7 @@ class _ChatState extends State<Chat> {
         ..[index] = recipient.withTarget(target).withIncluded(true);
       setState(() {
         _recipients = updated;
+        _clearInlineRetryTransportOverride();
       });
       _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
       return true;
@@ -590,6 +772,7 @@ class _ChatState extends State<Chat> {
         ..._recipients,
         ComposerRecipient(target: target, included: true),
       ];
+      _clearInlineRetryTransportOverride();
     });
     _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
     return true;
@@ -631,6 +814,7 @@ class _ChatState extends State<Chat> {
     if (updated.length == _recipients.length) return;
     setState(() {
       _recipients = updated;
+      _clearInlineRetryTransportOverride();
     });
     _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
@@ -659,6 +843,7 @@ class _ChatState extends State<Chat> {
       _pendingCalendarTaskIcs = null;
       _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
       _pendingCalendarSeedText = null;
+      _clearInlineRetryTransportOverride();
     });
   }
 
@@ -721,6 +906,9 @@ class _ChatState extends State<Chat> {
       messageId: messageId,
       height: normalizedHeight,
     );
+    if (_selectedMessageId == messageId) {
+      _scheduleSelectedMessageVisibilityCheck(messageId);
+    }
   }
 
   void _pruneEmailWebViewHeights(Set<String> availableIds) {
@@ -831,6 +1019,7 @@ class _ChatState extends State<Chat> {
           _pendingCalendarTaskIcs = null;
           _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
           _pendingCalendarSeedText = null;
+          _clearInlineRetryTransportOverride();
         });
       }
       _appendTaskShareText(payload.snapshot, shareText: share.text);
@@ -841,6 +1030,7 @@ class _ChatState extends State<Chat> {
       _pendingCalendarTaskIcs = share.task;
       _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
       _pendingCalendarSeedText = share.text;
+      _clearInlineRetryTransportOverride();
     });
     _appendTaskShareText(payload.snapshot, shareText: share.text);
   }
@@ -1426,8 +1616,6 @@ class _ChatState extends State<Chat> {
       if (bubbleRect == null || bubbleRect.height <= 0) {
         continue;
       }
-      // The side indicator sits halfway down the bubble edge, so wait until it
-      // has entered the viewport before clearing read state.
       final thresholdY = bubbleRect.top + (bubbleRect.height * 0.6);
       if (thresholdY < viewportRect.top || thresholdY > viewportRect.bottom) {
         continue;
@@ -1442,6 +1630,14 @@ class _ChatState extends State<Chat> {
       return;
     }
     final chatState = context.read<ChatBloc>().state;
+    if (shouldDeferReadThresholdSyncForTesting(
+      messagesLoaded: chatState.messagesLoaded,
+      initialTimelineReadinessPending: _initialTimelineReadinessPending(
+        chatState,
+      ),
+    )) {
+      return;
+    }
     final nextIds = _readThresholdMessageIds(chatState);
     if (nextIds.length == _reportedReadThresholdMessageIds.length &&
         nextIds.containsAll(_reportedReadThresholdMessageIds)) {
@@ -1452,12 +1648,268 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatReadThresholdChanged(messageIds));
   }
 
-  void _requestReadOnTap(Message message) {
-    final messageId = message.stanzaID.trim();
-    if (messageId.isEmpty) {
+  bool _unreadDividerScrollTargetPending(ChatState state) {
+    return state.scrollTargetMessageId ==
+            ChatBloc.unreadDividerScrollTargetMessageId &&
+        state.scrollTargetRequestId > _completedUnreadDividerScrollRequestId;
+  }
+
+  bool _initialUnreadScrollPending(ChatState state) {
+    return state.messagesLoaded && _unreadDividerScrollTargetPending(state);
+  }
+
+  bool _chatHasEmailBackedMessages(ChatState state) {
+    for (final message in state.items) {
+      if (message.isEmailBacked) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _initialEmailViewportFullHtmlSettled(ChatState state) {
+    for (final deltaMessageId in _initialEmailViewportDeltaIds) {
+      if (!state.emailFullHtmlByDeltaId.containsKey(deltaMessageId) &&
+          !state.emailFullHtmlUnavailable.contains(deltaMessageId)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _initialEmailViewportReadinessPending(ChatState state) {
+    if (!state.messagesLoaded || !_chatHasEmailBackedMessages(state)) {
+      return false;
+    }
+    if (_initialEmailViewportWarmupStatus !=
+        _InitialEmailViewportWarmupStatus.warmed) {
+      return true;
+    }
+    return !_initialEmailViewportFullHtmlSettled(state);
+  }
+
+  bool _initialTimelineReadinessPending(ChatState state) {
+    return state.messagesLoaded &&
+        (_unreadDividerScrollTargetPending(state) ||
+            _initialEmailViewportReadinessPending(state));
+  }
+
+  void _resetInitialTimelineReadiness() {
+    _initialEmailViewportWarmupStatus =
+        _InitialEmailViewportWarmupStatus.pending;
+    _initialEmailViewportDeltaIds = const <int>{};
+    _lastRenderedHydrationSignature = null;
+    _initialEmailViewportWarmupRequestId += 1;
+  }
+
+  List<Message> _emailWarmWindowForRenderedMessages(
+    List<Message> renderedMessages,
+  ) {
+    if (_cachedFilteredItems.isEmpty || renderedMessages.isEmpty) {
+      return renderedMessages;
+    }
+    final indexByStanzaId = <String, int>{
+      for (var index = 0; index < _cachedFilteredItems.length; index += 1)
+        _cachedFilteredItems[index].stanzaID: index,
+    };
+    int? minIndex;
+    int? maxIndex;
+    for (final message in renderedMessages) {
+      final index = indexByStanzaId[message.stanzaID];
+      if (index == null) {
+        continue;
+      }
+      minIndex = minIndex == null ? index : math.min(minIndex, index);
+      maxIndex = maxIndex == null ? index : math.max(maxIndex, index);
+    }
+    if (minIndex == null || maxIndex == null) {
+      return renderedMessages;
+    }
+    final margin = ChatBloc.messageBatchSize ~/ 2;
+    final start = math.max(0, minIndex - margin);
+    final end = math.min(_cachedFilteredItems.length, maxIndex + margin + 1);
+    return List<Message>.unmodifiable(_cachedFilteredItems.sublist(start, end));
+  }
+
+  Set<int> _visibleEmailDeltaIdsForInitialReadiness(
+    List<Message> renderedMessages,
+  ) {
+    final ids = <int>{};
+    for (final message in renderedMessages) {
+      if (!message.isEmailBacked) {
+        continue;
+      }
+      final deltaMessageId = message.deltaMsgId;
+      if (deltaMessageId != null && deltaMessageId > 0) {
+        ids.add(deltaMessageId);
+      }
+    }
+    return Set<int>.unmodifiable(ids);
+  }
+
+  String _renderedHydrationSignature(
+    List<Message> renderedMessages,
+    ChatState state,
+  ) {
+    final buffer = StringBuffer();
+    buffer
+      ..write(state.emailServiceAvailable)
+      ..write('|')
+      ..write(state.emailFullHtmlUnavailable.length)
+      ..write('|')
+      ..write(state.emailQuotedTextUnavailable.length)
+      ..write(';');
+    for (final message in renderedMessages) {
+      buffer
+        ..write(message.stanzaID)
+        ..write('|')
+        ..write(message.deltaMsgId ?? '')
+        ..write('|')
+        ..write(message.displayed)
+        ..write(';');
+    }
+    return SafeLogging.profileFingerprint(buffer.toString());
+  }
+
+  Set<String> _renderedTimelineIdsForMessages(List<Message> renderedMessages) {
+    return Set<String>.unmodifiable(
+      renderedMessages
+          .map((message) => message.stanzaID.trim())
+          .where((messageId) => messageId.isNotEmpty),
+    );
+  }
+
+  bool _sameStringSet(Set<String> first, Set<String> second) {
+    return first.length == second.length && first.containsAll(second);
+  }
+
+  String? _emailWebViewTipTargetForRenderedIds(Set<String> renderedIds) {
+    return _firstEmailWebViewTipTargetMessageId(
+      items: _cachedTimelineItems,
+      renderedMessageIds: renderedIds,
+      readOnly: widget.readOnly,
+      multiSelectActive: _multiSelectedMessageIds.isNotEmpty,
+      selectedMessageId: _selectedMessageId,
+    );
+  }
+
+  void _syncRenderedTimelineMessageIds(List<Message> renderedMessages) {
+    final nextIds = _renderedTimelineIdsForMessages(renderedMessages);
+    if (_sameStringSet(_renderedTimelineMessageIds, nextIds)) {
       return;
     }
-    context.read<ChatBloc>().add(ChatMessageReadRequested(messageId));
+    final previousTarget = _emailWebViewTipTargetForRenderedIds(
+      _renderedTimelineMessageIds,
+    );
+    final nextTarget = _emailWebViewTipTargetForRenderedIds(nextIds);
+    if (previousTarget == nextTarget) {
+      _renderedTimelineMessageIds = nextIds;
+      return;
+    }
+    setState(() {
+      _renderedTimelineMessageIds = nextIds;
+    });
+  }
+
+  void _handleRenderedMessagesChanged(
+    List<Message> renderedMessages, {
+    required T Function<T>() locate,
+  }) {
+    _syncRenderedTimelineMessageIds(renderedMessages);
+    if (renderedMessages.isEmpty) {
+      return;
+    }
+    final chatBloc = locate<ChatBloc>();
+    final chatState = chatBloc.state;
+    final warmWindow = _emailWarmWindowForRenderedMessages(renderedMessages);
+    final warmup = _prewarmEmailHtmlDerivationsForMessages(
+      messages: warmWindow,
+      emailFullHtmlByDeltaId: chatState.emailFullHtmlByDeltaId,
+      source:
+          _initialEmailViewportWarmupStatus ==
+              _InitialEmailViewportWarmupStatus.warmed
+          ? 'renderedWindow'
+          : 'initialViewport',
+    );
+    final hydrationSignature = _renderedHydrationSignature(
+      renderedMessages,
+      chatState,
+    );
+    if (hydrationSignature != _lastRenderedHydrationSignature) {
+      _lastRenderedHydrationSignature = hydrationSignature;
+      chatBloc.add(ChatRenderedMessagesHydrationRequested(renderedMessages));
+    }
+    if (!_initialEmailViewportWarmupApplies(chatState)) {
+      unawaited(warmup);
+      return;
+    }
+    final requestId = _initialEmailViewportWarmupRequestId + 1;
+    _initialEmailViewportWarmupRequestId = requestId;
+    _initialEmailViewportWarmupStatus =
+        _InitialEmailViewportWarmupStatus.warming;
+    _initialEmailViewportDeltaIds = _visibleEmailDeltaIdsForInitialReadiness(
+      renderedMessages,
+    );
+    unawaited(_completeInitialEmailViewportWarmup(requestId, warmup));
+  }
+
+  bool _initialEmailViewportWarmupApplies(ChatState state) {
+    return state.messagesLoaded &&
+        !_unreadDividerScrollTargetPending(state) &&
+        _chatHasEmailBackedMessages(state) &&
+        _initialEmailViewportWarmupStatus !=
+            _InitialEmailViewportWarmupStatus.warmed;
+  }
+
+  Future<void> _completeInitialEmailViewportWarmup(
+    int requestId,
+    Future<void> warmup,
+  ) async {
+    await warmup;
+    if (!mounted || requestId != _initialEmailViewportWarmupRequestId) {
+      return;
+    }
+    setState(() {
+      _initialEmailViewportWarmupStatus =
+          _InitialEmailViewportWarmupStatus.warmed;
+    });
+    _scheduleReadThresholdSync();
+  }
+
+  void _handlePendingUnreadDividerScroll(ChatState state) {
+    if (!_initialUnreadScrollPending(state)) {
+      return;
+    }
+    if (state.scrollTargetRequestId == _activeUnreadDividerScrollRequestId) {
+      return;
+    }
+    _activeUnreadDividerScrollRequestId = state.scrollTargetRequestId;
+    unawaited(
+      _handleUnreadBoundaryScrollRequest(
+        state.unreadBoundaryStanzaId,
+        requestId: state.scrollTargetRequestId,
+      ),
+    );
+  }
+
+  void _completeUnreadDividerScrollRequest(int requestId) {
+    if (_activeUnreadDividerScrollRequestId == requestId) {
+      _activeUnreadDividerScrollRequestId = 0;
+    }
+    if (requestId <= _completedUnreadDividerScrollRequestId) {
+      return;
+    }
+    if (!mounted) {
+      _completedUnreadDividerScrollRequestId = requestId;
+      return;
+    }
+    setState(() {
+      _completedUnreadDividerScrollRequestId = math.max(
+        _completedUnreadDividerScrollRequestId,
+        requestId,
+      );
+    });
+    _scheduleReadThresholdSync();
   }
 
   void _scheduleReadThresholdSync() {
@@ -1475,8 +1927,19 @@ class _ChatState extends State<Chat> {
   }
 
   void _restoreScrollOffsetForCurrentChat() {
+    if (_unreadDividerScrollTargetPending(context.read<ChatBloc>().state)) {
+      _scheduleReadThresholdSync();
+      return;
+    }
     final target = _restoreScrollOffset();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (_unreadDividerScrollTargetPending(context.read<ChatBloc>().state)) {
+        _scheduleReadThresholdSync();
+        return;
+      }
       if (!_scrollController.hasClients) {
         _scheduleReadThresholdSync();
         return;
@@ -1923,19 +2386,6 @@ class _ChatState extends State<Chat> {
           shouldLoadImages: shouldLoadImagesInWebView,
           hasLoadCallback: onLoadRequested != null,
         );
-    _logSelectedEmailImageDecision(
-      bubbleContentKey: bubbleContentKey,
-      isSingleSelection: isSingleSelection,
-      shouldRenderHtmlBody: shouldRenderHtmlBody,
-      shouldUseSelectedInlineEmailWebView: shouldUseSelectedInlineEmailWebView,
-      hasRemoteHtmlImages: hasRemoteHtmlImages,
-      shouldLoadImagesInWebView: shouldLoadImagesInWebView,
-      hasLoadCallback: onLoadRequested != null,
-      shouldShowLoadImagesButton: shouldShowLoadImagesButton,
-      normalizedHtmlBody: normalizedHtmlBody,
-      preparedHtmlBody: preparedHtmlBody,
-      emailDerivation: emailDerivation,
-    );
     final initialChildCount = bubbleTextChildren.length;
     if (!shouldRenderHtmlBody &&
         emailFallbackText != null &&
@@ -3115,6 +3565,7 @@ class _ChatState extends State<Chat> {
     }
     setState(() {
       _quotedDraft = quotedMessage;
+      _clearInlineRetryTransportOverride();
     });
     _inlineComposerController.requestTextFocus();
   }
@@ -3122,15 +3573,10 @@ class _ChatState extends State<Chat> {
   void _clearQuotedDraftAndInvalidateReplyResolution() {
     _replyResolveRequestId += 1;
     _quotedDraft = null;
+    _clearInlineRetryTransportOverride();
   }
 
-  void _handleTimelineBubbleTap(
-    Message message, {
-    required bool showUnreadIndicator,
-  }) {
-    if (showUnreadIndicator) {
-      _requestReadOnTap(message);
-    }
+  void _handleTimelineBubbleTap(Message message) {
     unawaited(_toggleMessageSelection(message));
   }
 
@@ -3475,7 +3921,7 @@ class _ChatState extends State<Chat> {
     }
     _lastSubjectValue = text;
     if (mounted) {
-      setState(() {});
+      setState(_clearInlineRetryTransportOverride);
     }
     context.read<ChatBloc>().add(ChatSubjectChanged(text));
   }
@@ -3535,11 +3981,11 @@ class _ChatState extends State<Chat> {
     if (chat.defaultTransport.isEmail) {
       return true;
     }
-    return recipients.hasEmailRecipients(allowHint: true);
+    return recipients.hasEmailComposeHint;
   }
 
   bool _hasEmailRecipient(List<ComposerRecipient> recipients) =>
-      recipients.hasEmailRecipients(allowHint: true);
+      recipients.hasEmailComposeHint;
 
   bool _isEmailComposerActive({
     required ChatState chatState,
@@ -3559,6 +4005,24 @@ class _ChatState extends State<Chat> {
       }
     }
     return _hasEmailRecipient(recipients ?? _recipients);
+  }
+
+  int _emailRecipientCountForSend({
+    required ChatState chatState,
+    required chat_models.Chat chat,
+    required List<ComposerRecipient> recipients,
+    MessageTransport? oneShotTransportOverride,
+  }) {
+    final activeTransport = chatState.canOfferEmailOutboundOverride
+        ? chatState.activeTransportForSend(
+            chat,
+            oneShotOverride: oneShotTransportOverride,
+          )
+        : chat.defaultTransport;
+    if (activeTransport.isEmail) {
+      return recipients.length;
+    }
+    return recipients.emailComposeHintCount;
   }
 
   String _emailComposerWatermarkLabel() {
@@ -3716,8 +4180,8 @@ class _ChatState extends State<Chat> {
     required List<ComposerRecipient> recipients,
     required SettingsState settings,
   }) {
-    final hasEmail = recipients.hasEmailRecipients();
-    final hasXmpp = recipients.hasXmppRecipients();
+    final hasEmail = recipients.hasEmailRecipients;
+    final hasXmpp = recipients.hasXmppRecipients;
     if (hasEmail && hasXmpp) {
       return settings.chatSendOnEnter && settings.emailSendOnEnter;
     }
@@ -3996,37 +4460,13 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  void _markPendingAttachmentsUploading(Iterable<String> ids) {
-    final resolvedIds = ids.toSet();
-    if (resolvedIds.isEmpty) {
-      return;
-    }
-    setState(() {
-      final updated = List<PendingAttachment>.from(_pendingAttachments);
-      for (var index = 0; index < updated.length; index += 1) {
-        final pending = updated[index];
-        if (!resolvedIds.contains(pending.id) || pending.isPreparing) {
-          continue;
-        }
-        updated[index] = pending.copyWith(
-          status: PendingAttachmentStatus.uploading,
-          clearErrorMessage: true,
-        );
-      }
-      _pendingAttachments = updated;
-    });
-  }
-
   Future<void> _handleSendMessage({
     required ChatState chatState,
     required ChatSettingsSnapshot settingsSnapshot,
     MessageTransport? oneShotTransportOverride,
   }) async {
     final l10n = context.l10n;
-    final initialComposerClearId = context
-        .read<ChatBloc>()
-        .state
-        .composerClearId;
+    final locate = context.read;
     final rawComposerText = _inlineComposerController.text;
     final rawText =
         _isEmailComposerWatermarkOnly(
@@ -4066,14 +4506,33 @@ class _ChatState extends State<Chat> {
     if (chat == null) {
       return;
     }
+    if (chatState.composerSendStatus.isLoading) {
+      return;
+    }
+    final retryTransportOverride =
+        oneShotTransportOverride ?? _inlineRetryTransportOverride;
     final resolvedTransportOverride =
-        oneShotTransportOverride ??
+        retryTransportOverride ??
         (chatState.usesSavedEmailTransportOverride
             ? MessageTransport.email
             : null);
+    final sendRecipients = _recipients.includedRecipients;
+    if (_emailRecipientCountForSend(
+          chatState: chatState,
+          chat: chat,
+          recipients: sendRecipients,
+          oneShotTransportOverride: resolvedTransportOverride,
+        ) >
+        composeRecipientLimit) {
+      _showSnackbar(
+        context.l10n.fanOutErrorTooManyRecipients(composeRecipientLimit),
+      );
+      return;
+    }
     final shouldSend = await _confirmEmailSendIfNeeded(
       chatState: chatState,
       chat: chat,
+      recipients: sendRecipients,
       body: resolvedText,
       attachmentNames: queuedAttachments
           .map((pending) => pending.attachment.fileName)
@@ -4085,17 +4544,12 @@ class _ChatState extends State<Chat> {
     }
     final calendarTaskShareText = _pendingCalendarTaskIcs?.toShareText(l10n);
     final chatJid = chat.jid;
-    final completer = Completer<List<PendingAttachment>>();
-    if (queuedAttachments.isNotEmpty) {
-      _markPendingAttachmentsUploading(
-        queuedAttachments.map((pending) => pending.id),
-      );
-    }
-    context.read<ChatBloc>().add(
+    final completer = Completer<ChatSendOutcome>();
+    locate<ChatBloc>().add(
       ChatMessageSent(
         chat: chat,
         text: resolvedText,
-        recipients: _recipients,
+        recipients: sendRecipients,
         pendingAttachments: pendingAttachments,
         settings: settingsSnapshot,
         supportsHttpFileUpload: chatState.supportsHttpFileUpload,
@@ -4110,29 +4564,37 @@ class _ChatState extends State<Chat> {
         completer: completer,
       ),
     );
-    final updatedAttachments = await completer.future;
-    if (!mounted || context.read<ChatBloc>().state.chat?.jid != chatJid) {
+    final outcome = await completer.future;
+    if (!mounted || locate<ChatBloc>().jid != chatJid) {
       return;
     }
     setState(() {
-      _pendingAttachments = updatedAttachments;
+      _pendingAttachments = outcome.pendingAttachments;
+      if (outcome.incomplete) {
+        _inlineRetryTransportOverride = retryTransportOverride;
+      }
     });
-    if (context.read<ChatBloc>().state.composerClearId !=
-        initialComposerClearId) {
+    if (outcome.completed) {
+      _inlineRetryTransportOverride = null;
       await _handleInlineComposerSendComplete();
+      return;
+    }
+    if (outcome.incomplete) {
+      _applyIncompleteInlineSendOutcome(outcome, chatState: chatState);
     }
   }
 
   Future<bool> _confirmEmailSendIfNeeded({
     required ChatState chatState,
     required chat_models.Chat chat,
+    required List<ComposerRecipient> recipients,
     required String body,
     required List<String> attachmentNames,
     MessageTransport? oneShotTransportOverride,
   }) async {
     if (!_isEmailComposerActive(
       chatState: chatState,
-      recipients: _recipients,
+      recipients: recipients,
       oneShotTransportOverride: oneShotTransportOverride,
     )) {
       return true;
@@ -4144,13 +4606,13 @@ class _ChatState extends State<Chat> {
     if (!sendConfirmationEnabled) {
       return true;
     }
-    final recipients = _resolveDraftRecipients(
+    final draftRecipients = _resolveDraftRecipients(
       chat: chat,
-      recipients: _recipients,
+      recipients: recipients,
     );
     final decision = await confirmEmailSend(
       context,
-      recipients: recipients,
+      recipients: draftRecipients,
       body: body,
       attachmentNames: attachmentNames,
     );
@@ -4248,12 +4710,11 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatAttachmentFailed);
       return false;
     }
-    final quotedReference = _quotedDraft?.replyReference(
-      isGroupChat: chat.type == ChatType.groupChat,
-    );
     final quoteTarget = DraftQuoteTarget.fromDraft(
-      stanzaId: quotedReference?.value,
-      referenceKind: quotedReference?.kind,
+      stanzaId: _quotedDraft?.quoteStanzaId(
+        isGroupChat: chat.type == ChatType.groupChat,
+      ),
+      referenceKind: null,
     );
     final recipients = _resolveDraftRecipients(
       chat: chat,
@@ -4390,6 +4851,7 @@ class _ChatState extends State<Chat> {
     _composerHasText = false;
     _clearQuotedDraftAndInvalidateReplyResolution();
     _pendingAttachments = const [];
+    _inlineRetryTransportOverride = null;
     _pendingCalendarTaskIcs = null;
     _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
     _pendingCalendarSeedText = null;
@@ -4438,9 +4900,6 @@ class _ChatState extends State<Chat> {
     final visibleRecipients = _recipients.includedRecipients
         .map((recipient) => recipient.target.key)
         .toList(growable: false);
-    final quotedReference = _quotedDraft?.replyReference(
-      isGroupChat: chat?.type == ChatType.groupChat,
-    );
     final attachments = pendingAttachments ?? _pendingAttachments;
     return Object.hashAll(<Object?>[
       _normalizedInlineDraftBody(
@@ -4448,8 +4907,9 @@ class _ChatState extends State<Chat> {
         chatState: chatState,
       ),
       _inlineComposerController.subject,
-      quotedReference?.value,
-      quotedReference?.kind,
+      _quotedDraft?.quoteStanzaId(
+        isGroupChat: chat?.type == ChatType.groupChat,
+      ),
       ...visibleRecipients,
       ...resolvedRecipients,
       ...attachments.map(_inlineAttachmentSignature),
@@ -4536,12 +4996,22 @@ class _ChatState extends State<Chat> {
     final emailRecipientsUnavailable =
         !settings.endpointConfig.smtpEnabled &&
         (chatState.usesSavedEmailTransportOverride ||
-            activeRecipients.emailRecipients().isNotEmpty);
+            activeRecipients.hasEmailRecipients);
     if (emailRecipientsUnavailable) {
       return context.l10n.chatComposerEmailRecipientUnavailable;
     }
     if (activeRecipients.isEmpty) {
       return context.l10n.draftNoRecipients;
+    }
+    final chat = chatState.chat;
+    if (chat != null &&
+        _emailRecipientCountForSend(
+              chatState: chatState,
+              chat: chat,
+              recipients: activeRecipients,
+            ) >
+            composeRecipientLimit) {
+      return context.l10n.fanOutErrorTooManyRecipients(composeRecipientLimit);
     }
     final body = _normalizedInlineDraftBody(
       text: _inlineComposerController.text,
@@ -4688,6 +5158,16 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  void _applyIncompleteInlineSendOutcome(
+    ChatSendOutcome outcome, {
+    required ChatState chatState,
+  }) {
+    setState(() {
+      _recipients = List<ComposerRecipient>.from(outcome.incompleteRecipients);
+    });
+    _syncEmailComposerWatermark(chatState: chatState);
+  }
+
   Future<bool> _prepareChatExit({
     required bool openChatCalendar,
     required ChatState chatState,
@@ -4766,6 +5246,7 @@ class _ChatState extends State<Chat> {
 
   List<ChatComposerAccessory> _composerAccessories({
     required bool canSend,
+    required bool sending,
     required bool attachmentsEnabled,
     required TextEditingController textController,
     required FocusNode attachmentButtonFocusNode,
@@ -4801,11 +5282,12 @@ class _ChatState extends State<Chat> {
           order: const NumericFocusOrder(4),
           child: _SendMessageAccessory(
             enabled: canSend,
+            loading: sending,
             onPressed: () => _handleSendMessage(
               chatState: chatState,
               settingsSnapshot: settingsSnapshot,
             ),
-            onLongPress: widget.readOnly
+            onLongPress: widget.readOnly || sending
                 ? null
                 : () => _handleSendButtonLongPress(
                     chatState: chatState,
@@ -4964,6 +5446,7 @@ class _ChatState extends State<Chat> {
             isPreparing: true,
           ),
         ];
+        _clearInlineRetryTransportOverride();
       });
       final completer = CancelableCompleter<PendingAttachment?>();
       final operation = completer.operation;
@@ -5036,6 +5519,7 @@ class _ChatState extends State<Chat> {
     }
     setState(() {
       _pendingAttachments = [..._pendingAttachments, ...additions];
+      _clearInlineRetryTransportOverride();
     });
   }
 
@@ -5109,6 +5593,7 @@ class _ChatState extends State<Chat> {
       final updated = List<PendingAttachment>.from(_pendingAttachments)
         ..removeAt(index);
       _pendingAttachments = updated;
+      _clearInlineRetryTransportOverride();
     });
   }
 
@@ -5282,6 +5767,7 @@ class _ChatState extends State<Chat> {
 
   Future<void> _clearMessageSelection() async {
     if (_selectedMessageId == null) return;
+    _selectedMessageVisibilityRequest += 1;
     setState(() {
       _selectedMessageId = null;
     });
@@ -5444,8 +5930,8 @@ class _ChatState extends State<Chat> {
     _cachedChatAvatarPathsByJid = chatAvatarPathsByJid;
   }
 
-  void _scheduleEmailHtmlDerivationPrewarm({
-    required Iterable<Message> messages,
+  List<String> _emailHtmlDerivationPrewarmBodies({
+    required List<Message> messages,
     required Map<int, String> emailFullHtmlByDeltaId,
   }) {
     final normalizedHtmlBodies = <String>[];
@@ -5467,27 +5953,74 @@ class _ChatState extends State<Chat> {
         addHtml(emailFullHtmlByDeltaId[deltaMessageId]);
       }
     }
+    return normalizedHtmlBodies;
+  }
+
+  Future<void> _prewarmEmailHtmlDerivationsForMessages({
+    required List<Message> messages,
+    required Map<int, String> emailFullHtmlByDeltaId,
+    required String source,
+  }) async {
+    final normalizedHtmlBodies = _emailHtmlDerivationPrewarmBodies(
+      messages: messages,
+      emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+    );
     if (normalizedHtmlBodies.isEmpty) {
       return;
     }
-    unawaited(_precacheEmailHtmlDerivations(normalizedHtmlBodies));
+    SafeLogging.profileTrace(
+      'chat.emailHtmlPrewarm',
+      'requested',
+      fields: <String, Object?>{
+        'source': source,
+        'messageCount': messages.length,
+        'pendingCount': normalizedHtmlBodies.length,
+        'signature': SafeLogging.profileFingerprint(
+          normalizedHtmlBodies.join('|'),
+        ),
+      },
+    );
+    await _precacheEmailHtmlDerivations(normalizedHtmlBodies, source: source);
   }
 
-  Future<void> _precacheEmailHtmlDerivations(
-    List<String> normalizedHtmlBodies,
-  ) async {
+  Future<bool> _precacheEmailHtmlDerivations(
+    List<String> normalizedHtmlBodies, {
+    required String source,
+  }) async {
+    final stopwatch = Stopwatch()..start();
     final bool cacheUpdated;
     try {
       cacheUpdated = await HtmlContentCodec.precacheEmailDerivations(
         normalizedHtmlBodies,
       );
     } on Exception {
-      return;
+      SafeLogging.profileTrace(
+        'chat.emailHtmlPrewarm',
+        'end',
+        fields: <String, Object?>{
+          'source': source,
+          'pendingCount': normalizedHtmlBodies.length,
+          'result': 'error',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return false;
     }
+    SafeLogging.profileTrace(
+      'chat.emailHtmlPrewarm',
+      'end',
+      fields: <String, Object?>{
+        'source': source,
+        'pendingCount': normalizedHtmlBodies.length,
+        'cacheUpdated': cacheUpdated,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
     if (!mounted || !cacheUpdated) {
-      return;
+      return cacheUpdated;
     }
     setState(() {});
+    return cacheUpdated;
   }
 
   void _ensureMessageCaches({
@@ -5537,10 +6070,6 @@ class _ChatState extends State<Chat> {
       }
     }
     final activeItems = searchFiltering ? searchResults : items;
-    _scheduleEmailHtmlDerivationPrewarm(
-      messages: activeItems,
-      emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
-    );
     bool isGroupedNonLeader(Message message) {
       final messageId = message.id;
       if (messageId == null || messageId.isEmpty) {
@@ -5584,6 +6113,28 @@ class _ChatState extends State<Chat> {
     _cachedFilteredItems = filteredItems;
   }
 
+  void _syncTimelineItems(List<ChatTimelineItem> items) {
+    if (identical(items, _cachedTimelineItems)) {
+      return;
+    }
+    final availableIds = items.map((item) => item.id).toSet();
+    _mountedTimelineItemIds.removeWhere((id) => !availableIds.contains(id));
+    if (_renderedTimelineMessageIds.isNotEmpty) {
+      _renderedTimelineMessageIds = Set<String>.unmodifiable(
+        _renderedTimelineMessageIds.where(availableIds.contains),
+      );
+    }
+    _cachedTimelineItems = items;
+  }
+
+  void _handleTimelineItemMounted(String itemId) {
+    _mountedTimelineItemIds.add(itemId);
+  }
+
+  void _handleTimelineItemUnmounted(String itemId) {
+    _mountedTimelineItemIds.remove(itemId);
+  }
+
   void _clearMultiSelection() {
     if (_multiSelectedMessageIds.isEmpty) return;
     setState(() {
@@ -5622,7 +6173,19 @@ class _ChatState extends State<Chat> {
       _selectedMessageId = messageId;
     });
     if (!mounted) return;
-    await _scrollSelectedMessageIntoView(messageId);
+    _scheduleSelectedMessageVisibilityCheck(messageId);
+  }
+
+  void _scheduleSelectedMessageVisibilityCheck(String messageId) {
+    final request = ++_selectedMessageVisibilityRequest;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          request != _selectedMessageVisibilityRequest ||
+          _selectedMessageId != messageId) {
+        return;
+      }
+      unawaited(_scrollSelectedMessageIntoView(messageId));
+    });
   }
 
   Future<void> _scrollSelectedMessageIntoView(String messageId) async {
@@ -5638,8 +6201,12 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  Future<bool> _waitForMessageContext(String messageId) async {
-    if (_messageKeys[messageId]?.currentContext != null) {
+  BuildContext? get _unreadDividerContext {
+    return _unreadDividerKey.currentContext;
+  }
+
+  Future<bool> _waitForUnreadDividerContext() async {
+    if (_unreadDividerContext != null) {
       return true;
     }
     for (var attempt = 0; attempt < 8; attempt += 1) {
@@ -5647,10 +6214,72 @@ class _ChatState extends State<Chat> {
       if (!mounted) {
         return false;
       }
-      if (_messageKeys[messageId]?.currentContext != null) {
+      if (_unreadDividerContext != null) {
         return true;
       }
     }
+    return _unreadDividerContext != null;
+  }
+
+  Future<void> _handleUnreadBoundaryScrollRequest(
+    String? boundaryMessageId, {
+    required int requestId,
+  }) async {
+    try {
+      final messageId = boundaryMessageId?.trim();
+      final dividerPrepared = await _prepareTimelineItemContextForScroll(
+        ChatBloc.unreadDividerScrollTargetMessageId,
+        jumpBeforeWaiting: true,
+      );
+      if (dividerPrepared) {
+        await WidgetsBinding.instance.endOfFrame;
+        final ready = await _waitForUnreadDividerContext();
+        final dividerContext = _unreadDividerContext;
+        if (mounted &&
+            ready &&
+            dividerContext != null &&
+            dividerContext.mounted) {
+          await Scrollable.ensureVisible(
+            dividerContext,
+            alignment: 1,
+            alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+            duration: Duration.zero,
+          );
+          await WidgetsBinding.instance.endOfFrame;
+          _scheduleReadThresholdSync();
+        }
+        return;
+      }
+      if (_hasCachedTimelineItem(ChatBloc.unreadDividerScrollTargetMessageId)) {
+        return;
+      }
+      if (messageId != null && messageId.isNotEmpty) {
+        await _prepareMessageContextForScroll(
+          messageId,
+          jumpBeforeWaiting: true,
+        );
+      }
+      if (messageId == null || messageId.isEmpty) {
+        return;
+      }
+      final messageContext = _messageKeys[messageId]?.currentContext;
+      if (!mounted || messageContext == null || !messageContext.mounted) {
+        return;
+      }
+      await Scrollable.ensureVisible(
+        messageContext,
+        alignment: 1.0,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+        duration: Duration.zero,
+      );
+      await WidgetsBinding.instance.endOfFrame;
+      _scheduleReadThresholdSync();
+    } finally {
+      _completeUnreadDividerScrollRequest(requestId);
+    }
+  }
+
+  bool _hasMessageContext(String messageId) {
     return _messageKeys[messageId]?.currentContext != null;
   }
 
@@ -5680,11 +6309,74 @@ class _ChatState extends State<Chat> {
     return (min: minIndex, max: maxIndex);
   }
 
-  Future<bool> _prepareMessageContextForScroll(String messageId) async {
-    if (await _waitForMessageContext(messageId)) {
+  bool _hasTimelineItemContext(String itemId) {
+    return _mountedTimelineItemIds.contains(itemId);
+  }
+
+  int? _displayedTimelineItemIndex(String itemId) {
+    for (var index = 0; index < _cachedTimelineItems.length; index += 1) {
+      if (_cachedTimelineItems[index].id == itemId) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  bool _hasCachedTimelineItem(String itemId) {
+    return _displayedTimelineItemIndex(itemId) != null;
+  }
+
+  ({int min, int max})? _mountedTimelineItemIndexRange() {
+    int? minIndex;
+    int? maxIndex;
+    for (var index = 0; index < _cachedTimelineItems.length; index += 1) {
+      final itemId = _cachedTimelineItems[index].id;
+      if (!_mountedTimelineItemIds.contains(itemId)) {
+        continue;
+      }
+      minIndex = minIndex == null ? index : math.min(minIndex, index);
+      maxIndex = maxIndex == null ? index : math.max(maxIndex, index);
+    }
+    if (minIndex == null || maxIndex == null) {
+      return null;
+    }
+    return (min: minIndex, max: maxIndex);
+  }
+
+  Future<bool> _waitForIndexedContext(bool Function() hasTargetContext) async {
+    if (hasTargetContext()) {
       return true;
     }
-    await WidgetsBinding.instance.endOfFrame;
+    for (var attempt = 0; attempt < 8; attempt += 1) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) {
+        return false;
+      }
+      if (hasTargetContext()) {
+        return true;
+      }
+    }
+    return hasTargetContext();
+  }
+
+  Future<bool> _prepareIndexedContextForScroll({
+    required int? Function() targetIndex,
+    required int Function() itemCount,
+    required bool Function() hasTargetContext,
+    required ({int min, int max})? Function() mountedIndexRange,
+    bool jumpBeforeWaiting = false,
+  }) async {
+    if (jumpBeforeWaiting) {
+      if (hasTargetContext()) {
+        return true;
+      }
+    } else if (await _waitForIndexedContext(hasTargetContext)) {
+      return true;
+    }
+    if (!_scrollController.hasClients ||
+        !_scrollController.position.hasPixels) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
     if (!mounted || !_scrollController.hasClients) {
       return false;
     }
@@ -5692,16 +6384,18 @@ class _ChatState extends State<Chat> {
     if (!position.hasPixels) {
       return false;
     }
-    final targetIndex = _displayedMessageIndex(messageId);
-    if (targetIndex == null) {
-      return false;
-    }
-    final maxScrollExtent = math.max(0.0, position.maxScrollExtent);
-    final itemCount = _cachedFilteredItems.length;
     var lowerOffsetBound = 0.0;
-    var upperOffsetBound = maxScrollExtent;
+    var upperOffsetBound = double.infinity;
     final attemptedOffsets = <double>[];
+    double currentUpperOffsetBound() {
+      final maxScrollExtent = math.max(0.0, position.maxScrollExtent);
+      return upperOffsetBound.isFinite
+          ? math.min(upperOffsetBound, maxScrollExtent)
+          : maxScrollExtent;
+    }
+
     double clampOffset(double offset) {
+      final maxScrollExtent = math.max(0.0, position.maxScrollExtent);
       return offset.clamp(0.0, maxScrollExtent).toDouble();
     }
 
@@ -5715,25 +6409,45 @@ class _ChatState extends State<Chat> {
     }
 
     for (var attempt = 0; attempt < 14; attempt += 1) {
-      if (await _waitForMessageContext(messageId)) {
+      if (jumpBeforeWaiting) {
+        if (hasTargetContext()) {
+          return true;
+        }
+      } else if (await _waitForIndexedContext(hasTargetContext)) {
         return true;
       }
       if (!mounted || !_scrollController.hasClients) {
         return false;
       }
-      final mountedRange = _mountedMessageIndexRange();
+      final currentTargetIndex = targetIndex();
+      final currentItemCount = itemCount();
+      if (currentTargetIndex == null || currentItemCount <= 0) {
+        if (jumpBeforeWaiting) {
+          await WidgetsBinding.instance.endOfFrame;
+          if (!mounted) {
+            return false;
+          }
+        }
+        continue;
+      }
+      final maxScrollExtent = math.max(0.0, position.maxScrollExtent);
+      final mountedRange = mountedIndexRange();
       double targetOffset;
       if (mountedRange == null) {
-        targetOffset = itemCount <= 1
+        targetOffset = currentItemCount <= 1
             ? _scrollController.offset
-            : clampOffset(maxScrollExtent * (targetIndex / (itemCount - 1)));
-      } else if (targetIndex > mountedRange.max) {
+            : clampOffset(
+                maxScrollExtent * (currentTargetIndex / (currentItemCount - 1)),
+              );
+      } else if (currentTargetIndex > mountedRange.max) {
         lowerOffsetBound = math.max(lowerOffsetBound, _scrollController.offset);
-        targetOffset = clampOffset((lowerOffsetBound + upperOffsetBound) / 2);
+        targetOffset = clampOffset(
+          (lowerOffsetBound + currentUpperOffsetBound()) / 2,
+        );
         if ((targetOffset - _scrollController.offset).abs() < 1) {
-          targetOffset = upperOffsetBound;
+          targetOffset = currentUpperOffsetBound();
         }
-      } else if (targetIndex < mountedRange.min) {
+      } else if (currentTargetIndex < mountedRange.min) {
         upperOffsetBound = math.min(upperOffsetBound, _scrollController.offset);
         targetOffset = clampOffset((lowerOffsetBound + upperOffsetBound) / 2);
         if ((targetOffset - _scrollController.offset).abs() < 1) {
@@ -5748,7 +6462,7 @@ class _ChatState extends State<Chat> {
       }
       if (wasAttempted(targetOffset)) {
         final lowerCandidate = clampOffset(lowerOffsetBound);
-        final upperCandidate = clampOffset(upperOffsetBound);
+        final upperCandidate = clampOffset(currentUpperOffsetBound());
         if (!wasAttempted(lowerCandidate) &&
             (_scrollController.offset - lowerCandidate).abs() >= 1) {
           targetOffset = lowerCandidate;
@@ -5761,11 +6475,49 @@ class _ChatState extends State<Chat> {
       }
       attemptedOffsets.add(targetOffset);
       if ((_scrollController.offset - targetOffset).abs() < 1) {
+        if (jumpBeforeWaiting) {
+          await WidgetsBinding.instance.endOfFrame;
+          if (!mounted) {
+            return false;
+          }
+        }
         continue;
       }
       _scrollController.jumpTo(targetOffset);
+      if (jumpBeforeWaiting) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) {
+          return false;
+        }
+      }
     }
-    return _messageKeys[messageId]?.currentContext != null;
+    return hasTargetContext();
+  }
+
+  Future<bool> _prepareMessageContextForScroll(
+    String messageId, {
+    bool jumpBeforeWaiting = false,
+  }) {
+    return _prepareIndexedContextForScroll(
+      targetIndex: () => _displayedMessageIndex(messageId),
+      itemCount: () => _cachedFilteredItems.length,
+      hasTargetContext: () => _hasMessageContext(messageId),
+      mountedIndexRange: _mountedMessageIndexRange,
+      jumpBeforeWaiting: jumpBeforeWaiting,
+    );
+  }
+
+  Future<bool> _prepareTimelineItemContextForScroll(
+    String itemId, {
+    bool jumpBeforeWaiting = false,
+  }) {
+    return _prepareIndexedContextForScroll(
+      targetIndex: () => _displayedTimelineItemIndex(itemId),
+      itemCount: () => _cachedTimelineItems.length,
+      hasTargetContext: () => _hasTimelineItemContext(itemId),
+      mountedIndexRange: _mountedTimelineItemIndexRange,
+      jumpBeforeWaiting: jumpBeforeWaiting,
+    );
   }
 
   Future<void> _handleScrollTargetRequest(String messageId) async {
@@ -5796,6 +6548,12 @@ class _ChatState extends State<Chat> {
     _syncSelectionCaches(context.read<ChatBloc>().state, notify: false);
     _scheduleReadThresholdSync();
     final initialState = context.read<ChatBloc>().state;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _handlePendingUnreadDividerScroll(context.read<ChatBloc>().state);
+    });
     final chat = initialState.chat;
     _recipientsChatJid = chat?.jid;
     final settings = context.read<SettingsCubit>().state;
@@ -6100,12 +6858,27 @@ class _ChatState extends State<Chat> {
               ),
               BlocListener<ChatBloc, ChatState>(
                 listenWhen: (previous, current) =>
-                    previous.scrollTargetRequestId !=
-                        current.scrollTargetRequestId &&
-                    current.scrollTargetMessageId != null,
+                    current.scrollTargetMessageId != null &&
+                    (current.scrollTargetMessageId ==
+                            ChatBloc.unreadDividerScrollTargetMessageId
+                        ? _initialUnreadScrollPending(current) &&
+                              (previous.scrollTargetRequestId !=
+                                      current.scrollTargetRequestId ||
+                                  previous.messagesLoaded !=
+                                      current.messagesLoaded ||
+                                  previous.items != current.items ||
+                                  previous.unreadBoundaryStanzaId !=
+                                      current.unreadBoundaryStanzaId)
+                        : previous.scrollTargetRequestId !=
+                              current.scrollTargetRequestId),
                 listener: (_, state) {
                   final messageId = state.scrollTargetMessageId;
                   if (messageId == null || messageId.trim().isEmpty) {
+                    return;
+                  }
+                  if (messageId ==
+                      ChatBloc.unreadDividerScrollTargetMessageId) {
+                    _handlePendingUnreadDividerScroll(state);
                     return;
                   }
                   unawaited(_handleScrollTargetRequest(messageId));
@@ -6115,6 +6888,13 @@ class _ChatState extends State<Chat> {
                 listenWhen: (previous, current) =>
                     previous.chat?.jid != current.chat?.jid,
                 listener: (_, state) {
+                  _activeUnreadDividerScrollRequestId = 0;
+                  _completedUnreadDividerScrollRequestId = 0;
+                  _reportedReadThresholdMessageIds = const <String>{};
+                  _resetInitialTimelineReadiness();
+                  _mountedTimelineItemIds.clear();
+                  _renderedTimelineMessageIds = const <String>{};
+                  _cachedTimelineItems = const [];
                   _animatedMessageIds.clear();
                   _hydratedAnimatedMessages = false;
                   _clearInlineComposerControllers();
@@ -6195,7 +6975,11 @@ class _ChatState extends State<Chat> {
                 listenWhen: (previous, current) =>
                     previous.chat?.jid != current.chat?.jid ||
                     previous.items != current.items ||
-                    previous.messagesLoaded != current.messagesLoaded,
+                    previous.messagesLoaded != current.messagesLoaded ||
+                    previous.emailFullHtmlByDeltaId !=
+                        current.emailFullHtmlByDeltaId ||
+                    previous.emailFullHtmlUnavailable !=
+                        current.emailFullHtmlUnavailable,
                 listener: (_, _) => _scheduleReadThresholdSync(),
               ),
             ],
@@ -6450,12 +7234,8 @@ class _ChatState extends State<Chat> {
                     final recipients = failedStatuses
                         .map(
                           (status) => ComposerRecipient(
-                            target: Contact.chat(
-                              chat: status.chat,
-                              shareSignatureEnabled:
-                                  status.chat.shareSignatureEnabled ??
-                                  settingsSnapshot.shareTokenSignatureEnabled,
-                            ),
+                            target: status.requestedTarget.toContact(),
+                            recipientKey: status.recipientKey,
                             included: true,
                           ),
                         )
@@ -7393,18 +8173,16 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  Map<String, FanOutRecipientState> _latestRecipientStatuses(ChatState state) {
+  Map<ComposerRecipientKey, FanOutRecipientState> _latestRecipientStatuses(
+    ChatState state,
+  ) {
     if (state.fanOutReports.isEmpty) {
       return const {};
     }
     final lastEntry = state.fanOutReports.entries.last.value;
-    final statuses = <String, FanOutRecipientState>{};
+    final statuses = <ComposerRecipientKey, FanOutRecipientState>{};
     for (final status in lastEntry.statuses) {
-      statuses[status.chat.jid] = status.state;
-      final emailKey = normalizedAddressValue(status.chat.emailAddress);
-      if (emailKey != null && emailKey.isNotEmpty) {
-        statuses[emailKey] = status.state;
-      }
+      statuses[status.recipientKey] = status.state;
     }
     return statuses;
   }

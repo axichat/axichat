@@ -555,6 +555,18 @@ abstract class AppLocalizations {
   /// **'Close search'**
   String get chatSearchClose;
 
+  /// No description provided for @chatEmailWebViewTipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'View full email'**
+  String get chatEmailWebViewTipTitle;
+
+  /// No description provided for @chatEmailWebViewTipDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the message bubble to open the full email view.'**
+  String get chatEmailWebViewTipDescription;
+
   /// No description provided for @commonSearch.
   ///
   /// In en, this message translates to:

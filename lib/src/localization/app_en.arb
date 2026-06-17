@@ -92,6 +92,8 @@
     }
   },
   "chatSearchClose": "Close search",
+  "chatEmailWebViewTipTitle": "View full email",
+  "chatEmailWebViewTipDescription": "Tap the message bubble to open the full email view.",
   "commonSearch": "Search",
   "commonClear": "Clear",
   "commonCancel": "Cancel",

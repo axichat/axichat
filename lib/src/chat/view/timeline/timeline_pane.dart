@@ -68,6 +68,12 @@ class _ChatMainTimelineList extends StatelessWidget {
     required this.shareRequestStatus,
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
+    required this.unreadDividerKey,
+    required this.emailWebViewTipTargetMessageId,
+    required this.emailWebViewTipKey,
+    required this.emailWebViewTipScope,
+    required this.onTimelineItemMounted,
+    required this.onTimelineItemUnmounted,
     required this.messageKeys,
     required this.bubbleWidthByMessageId,
     required this.shouldAnimateMessage,
@@ -142,6 +148,12 @@ class _ChatMainTimelineList extends StatelessWidget {
   final RequestStatus shareRequestStatus;
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
+  final GlobalKey unreadDividerKey;
+  final String? emailWebViewTipTargetMessageId;
+  final GlobalKey emailWebViewTipKey;
+  final String emailWebViewTipScope;
+  final ValueChanged<String> onTimelineItemMounted;
+  final ValueChanged<String> onTimelineItemUnmounted;
   final Map<String, GlobalKey> messageKeys;
   final Map<String, double> bubbleWidthByMessageId;
   final bool Function(Message message) shouldAnimateMessage;
@@ -290,8 +302,7 @@ class _ChatMainTimelineList extends StatelessWidget {
   onPinToggleRequested;
   final void Function(Message message, {String? inviteeJidFallback})
   onRevokeInviteRequested;
-  final void Function(Message message, {required bool showUnreadIndicator})
-  onBubbleTapRequested;
+  final void Function(Message message) onBubbleTapRequested;
   final void Function(Message message) onToggleMultiSelectRequested;
   final void Function(Message message, String emoji)
   onToggleQuickReactionRequested;
@@ -310,6 +321,8 @@ class _ChatMainTimelineList extends StatelessWidget {
         scrollToBottomOptions: const ScrollToBottomOptions(),
         onRenderedMessagesChanged: onRenderedMessagesChanged,
         renderedMessagesHydrationKey: renderedMessagesHydrationKey,
+        onTimelineItemMounted: onTimelineItemMounted,
+        onTimelineItemUnmounted: onTimelineItemUnmounted,
         itemBuilder: (currentItem, previous, next) => _ChatTimelineItemView(
           currentItem: currentItem,
           previous: previous,
@@ -353,6 +366,10 @@ class _ChatMainTimelineList extends StatelessWidget {
           shareRequestStatus: shareRequestStatus,
           bubbleRegionRegistry: bubbleRegionRegistry,
           selectionTapRegionGroup: selectionTapRegionGroup,
+          unreadDividerKey: unreadDividerKey,
+          emailWebViewTipTargetMessageId: emailWebViewTipTargetMessageId,
+          emailWebViewTipKey: emailWebViewTipKey,
+          emailWebViewTipScope: emailWebViewTipScope,
           messageKeys: messageKeys,
           bubbleWidthByMessageId: bubbleWidthByMessageId,
           shouldAnimateMessage: shouldAnimateMessage,

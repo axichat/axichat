@@ -8,6 +8,8 @@ class _ChatMessageList extends StatefulWidget {
     required this.scrollToBottomOptions,
     required this.onRenderedMessagesChanged,
     required this.renderedMessagesHydrationKey,
+    required this.onTimelineItemMounted,
+    required this.onTimelineItemUnmounted,
     this.readOnly = false,
   });
 
@@ -22,10 +24,29 @@ class _ChatMessageList extends StatefulWidget {
   final ScrollToBottomOptions scrollToBottomOptions;
   final ValueChanged<List<Message>> onRenderedMessagesChanged;
   final Object? renderedMessagesHydrationKey;
+  final ValueChanged<String> onTimelineItemMounted;
+  final ValueChanged<String> onTimelineItemUnmounted;
   final bool readOnly;
 
   @override
   State<_ChatMessageList> createState() => _ChatMessageListState();
+}
+
+class _ChatMessageListViewportScope extends InheritedWidget {
+  const _ChatMessageListViewportScope({
+    required this.height,
+    required super.child,
+  });
+
+  final double height;
+
+  static double? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_ChatMessageListViewportScope>()
+      ?.height;
+
+  @override
+  bool updateShouldNotify(_ChatMessageListViewportScope oldWidget) =>
+      height != oldWidget.height;
 }
 
 class _ChatMessageListRow extends StatefulWidget {
@@ -35,6 +56,8 @@ class _ChatMessageListRow extends StatefulWidget {
     required this.nextItem,
     required this.itemBuilder,
     required this.messageListOptions,
+    required this.onTimelineItemMounted,
+    required this.onTimelineItemUnmounted,
     required this.onMessageRowMounted,
     required this.onMessageRowUnmounted,
   });
@@ -49,6 +72,8 @@ class _ChatMessageListRow extends StatefulWidget {
   )
   itemBuilder;
   final MessageListOptions messageListOptions;
+  final ValueChanged<String> onTimelineItemMounted;
+  final ValueChanged<String> onTimelineItemUnmounted;
   final ValueChanged<Message> onMessageRowMounted;
   final ValueChanged<Message> onMessageRowUnmounted;
 
@@ -65,6 +90,7 @@ class _ChatMessageListRowState extends State<_ChatMessageListRow> {
   @override
   void initState() {
     super.initState();
+    widget.onTimelineItemMounted(widget.item.id);
     final message = _message;
     if (message != null) {
       widget.onMessageRowMounted(message);
@@ -75,6 +101,10 @@ class _ChatMessageListRowState extends State<_ChatMessageListRow> {
   void didUpdateWidget(covariant _ChatMessageListRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     final oldItem = oldWidget.item;
+    if (oldItem.id != widget.item.id) {
+      oldWidget.onTimelineItemUnmounted(oldItem.id);
+      widget.onTimelineItemMounted(widget.item.id);
+    }
     final oldMessage = oldItem is ChatTimelineMessageItem
         ? oldItem.messageModel
         : null;
@@ -99,6 +129,7 @@ class _ChatMessageListRowState extends State<_ChatMessageListRow> {
 
   @override
   void dispose() {
+    widget.onTimelineItemUnmounted(widget.item.id);
     final message = _message;
     if (message != null) {
       widget.onMessageRowUnmounted(message);
@@ -189,32 +220,38 @@ class _ChatMessageListState extends State<_ChatMessageList> {
                       ? constraints.maxHeight
                       : MediaQuery.sizeOf(context).height;
                   final cacheExtent = viewportExtent * 3;
-                  return ListView.builder(
-                    cacheExtent: cacheExtent,
-                    physics: messageListOptions.scrollPhysics,
-                    padding: EdgeInsets.zero,
-                    controller: _scrollController,
-                    reverse: true,
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final ChatTimelineItem? previousItem =
-                          index < items.length - 1 ? items[index + 1] : null;
-                      final ChatTimelineItem? nextItem = index > 0
-                          ? items[index - 1]
-                          : null;
-                      return RepaintBoundary(
-                        key: ValueKey<String>(items[index].id),
-                        child: _ChatMessageListRow(
-                          item: items[index],
-                          previousItem: previousItem,
-                          nextItem: nextItem,
-                          itemBuilder: itemBuilder,
-                          messageListOptions: messageListOptions,
-                          onMessageRowMounted: _handleMessageRowMounted,
-                          onMessageRowUnmounted: _handleMessageRowUnmounted,
-                        ),
-                      );
-                    },
+                  return _ChatMessageListViewportScope(
+                    height: viewportExtent,
+                    child: ListView.builder(
+                      cacheExtent: cacheExtent,
+                      physics: messageListOptions.scrollPhysics,
+                      padding: EdgeInsets.zero,
+                      controller: _scrollController,
+                      reverse: true,
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final ChatTimelineItem? previousItem =
+                            index < items.length - 1 ? items[index + 1] : null;
+                        final ChatTimelineItem? nextItem = index > 0
+                            ? items[index - 1]
+                            : null;
+                        return RepaintBoundary(
+                          key: ValueKey<String>(items[index].id),
+                          child: _ChatMessageListRow(
+                            item: items[index],
+                            previousItem: previousItem,
+                            nextItem: nextItem,
+                            itemBuilder: itemBuilder,
+                            messageListOptions: messageListOptions,
+                            onTimelineItemMounted: widget.onTimelineItemMounted,
+                            onTimelineItemUnmounted:
+                                widget.onTimelineItemUnmounted,
+                            onMessageRowMounted: _handleMessageRowMounted,
+                            onMessageRowUnmounted: _handleMessageRowUnmounted,
+                          ),
+                        );
+                      },
+                    ),
                   );
                 },
               ),
@@ -314,9 +351,15 @@ class _ChatMessageListState extends State<_ChatMessageList> {
         return;
       }
       _lastRenderedMessageIds = messageIds;
-      if (_renderedMessagesById.isEmpty) {
-        return;
-      }
+      SafeLogging.profileTrace(
+        'chat.renderedMessages',
+        'emit',
+        fields: <String, Object?>{
+          'count': _renderedMessagesById.length,
+          'forced': forced,
+          'signature': SafeLogging.profileFingerprint(messageIds.join('|')),
+        },
+      );
       widget.onRenderedMessagesChanged(
         List<Message>.unmodifiable(_renderedMessagesById.values),
       );
@@ -364,6 +407,8 @@ Widget debugChatMessageListForTesting({
     scrollToBottomOptions: scrollToBottomOptions,
     onRenderedMessagesChanged: onRenderedMessagesChanged,
     renderedMessagesHydrationKey: renderedMessagesHydrationKey,
+    onTimelineItemMounted: (_) {},
+    onTimelineItemUnmounted: (_) {},
     readOnly: readOnly,
   );
 }

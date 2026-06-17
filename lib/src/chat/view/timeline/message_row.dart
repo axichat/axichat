@@ -102,60 +102,6 @@ class _SenderLabelBlock extends StatelessWidget {
   }
 }
 
-class _UnreadBubbleSideIndicator extends StatelessWidget {
-  const _UnreadBubbleSideIndicator({
-    required this.visible,
-    required this.isSelf,
-  });
-
-  final bool visible;
-  final bool isSelf;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    final collapseAlignment = isSelf
-        ? Alignment.centerRight
-        : Alignment.centerLeft;
-    final indicatorAlignment = isSelf
-        ? Alignment.centerLeft
-        : Alignment.centerRight;
-    final dotSize = sizing.statusDotSize;
-    final indicatorExtent = dotSize + spacing.xs;
-    return AxiAnimatedSize(
-      duration: _bubbleFocusDuration,
-      reverseDuration: _bubbleFocusDuration,
-      curve: _bubbleFocusCurve,
-      alignment: collapseAlignment,
-      clipBehavior: Clip.none,
-      child: SizedBox(
-        width: visible ? indicatorExtent : 0,
-        height: dotSize,
-        child: Align(
-          alignment: indicatorAlignment,
-          child: AnimatedOpacity(
-            duration: _bubbleFocusDuration,
-            curve: _bubbleFocusCurve,
-            opacity: visible ? 1 : 0,
-            child: SizedBox(
-              width: dotSize,
-              height: dotSize,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colors.destructive,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ChatTimelineMessageRowView extends StatelessWidget {
   const _ChatTimelineMessageRowView({
     required this.messageId,
@@ -163,8 +109,6 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
     required this.readOnly,
     required this.self,
     required this.isSingleSelection,
-    required this.isEmailMessage,
-    required this.showUnreadIndicator,
     required this.messageRowMaxWidth,
     required this.bubblePreviewWidth,
     required this.replyPreviewMaxWidth,
@@ -190,8 +134,6 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
   final bool readOnly;
   final bool self;
   final bool isSingleSelection;
-  final bool isEmailMessage;
-  final bool showUnreadIndicator;
   final double messageRowMaxWidth;
   final double bubblePreviewWidth;
   final double replyPreviewMaxWidth;
@@ -214,17 +156,9 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final sizing = context.sizing;
     final messageColumnAlignment = self
         ? CrossAxisAlignment.end
         : CrossAxisAlignment.start;
-    final unreadIndicatorReserve = showUnreadIndicator
-        ? sizing.statusDotSize + spacing.xs
-        : 0.0;
-    final bubbleMaxWidth = (bubblePreviewWidth - unreadIndicatorReserve).clamp(
-      0.0,
-      double.infinity,
-    );
     final selectableBubble = MouseRegion(
       cursor: readOnly ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
@@ -247,37 +181,18 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
           )
         : bubbleStack;
     final bubbleWithSlack = ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
+      constraints: BoxConstraints(maxWidth: bubblePreviewWidth),
       child: measuredBubbleStack,
     );
-    final bubbleWithIndicator = isEmailMessage
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (self)
-                _UnreadBubbleSideIndicator(
-                  visible: showUnreadIndicator,
-                  isSelf: self,
-                ),
-              _MessageBubbleRegion(
-                messageId: messageId,
-                registry: bubbleRegionRegistry,
-                child: bubbleWithSlack,
-              ),
-              if (!self)
-                _UnreadBubbleSideIndicator(
-                  visible: showUnreadIndicator,
-                  isSelf: self,
-                ),
-            ],
-          )
-        : bubbleWithSlack;
     final bubbleStackWithReply = _ReplyPreviewBubbleColumn(
       forwardedPreview: forwardedPreview,
       quotedPreview: quotedPreview,
       senderLabel: senderLabel,
-      bubble: bubbleWithIndicator,
+      bubble: _MessageBubbleRegion(
+        messageId: messageId,
+        registry: bubbleRegionRegistry,
+        child: bubbleWithSlack,
+      ),
       previewMaxWidth: replyPreviewMaxWidth,
       spacing: spacing.s,
       previewSpacing: spacing.xxs,
@@ -291,14 +206,15 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
       clipBehavior: Clip.none,
       child: bubbleStackWithReply,
     );
+    final stableMessageContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: messageColumnAlignment,
+      children: [animatedBubbleStackWithReply, if (showExtras) extrasAligned],
+    );
     final messageBody = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: messageColumnAlignment,
-      children: [
-        animatedBubbleStackWithReply,
-        if (showExtras) extrasAligned,
-        attachmentsAligned,
-      ],
+      children: [stableMessageContent, attachmentsAligned],
     );
     final messageArrival = _MessageArrivalAnimator(
       key: ValueKey<String>('arrival-$messageId'),

@@ -263,6 +263,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatSearchClose => 'Cerrar búsqueda';
 
   @override
+  String get chatEmailWebViewTipTitle => 'View full email';
+
+  @override
+  String get chatEmailWebViewTipDescription =>
+      'Tap the message bubble to open the full email view.';
+
+  @override
   String get commonSearch => 'Buscar';
 
   @override

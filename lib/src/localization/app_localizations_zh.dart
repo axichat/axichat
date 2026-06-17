@@ -248,6 +248,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSearchClose => '关闭搜索';
 
   @override
+  String get chatEmailWebViewTipTitle => 'View full email';
+
+  @override
+  String get chatEmailWebViewTipDescription =>
+      'Tap the message bubble to open the full email view.';
+
+  @override
   String get commonSearch => '搜索';
 
   @override
