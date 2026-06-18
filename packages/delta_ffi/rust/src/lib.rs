@@ -292,7 +292,11 @@ fn _rfc822_body_json_from_raw_mime(raw_mime: &[u8]) -> String {
         }
     };
     let mut parts = _Rfc822BodyParts::default();
-    _collect_rfc822_body_parts(&mail, &mut parts);
+    let mut attached_message_parts = _Rfc822BodyParts::default();
+    _collect_rfc822_body_parts(&mail, &mut parts, &mut attached_message_parts);
+    if parts.is_empty() {
+        parts = attached_message_parts;
+    }
     json!({
         "ok": !parts.is_empty(),
         "reason": if parts.is_empty() { Some("missing_body") } else { None },
@@ -302,25 +306,74 @@ fn _rfc822_body_json_from_raw_mime(raw_mime: &[u8]) -> String {
     .to_string()
 }
 
-fn _collect_rfc822_body_parts(mail: &ParsedMail<'_>, parts: &mut _Rfc822BodyParts) {
+fn _collect_rfc822_body_parts(
+    mail: &ParsedMail<'_>,
+    parts: &mut _Rfc822BodyParts,
+    attached_message_parts: &mut _Rfc822BodyParts,
+) {
     if parts.is_complete() {
         return;
     }
     let mimetype = mail.ctype.mimetype.to_ascii_lowercase();
-    if mail.get_content_disposition().disposition == DispositionType::Attachment {
-        return;
-    }
+    let is_attachment = mail.get_content_disposition().disposition == DispositionType::Attachment;
     if mimetype == "message/rfc822" {
         if let Ok(raw_body) = mail.get_body_raw() {
             if let Ok(nested) = parse_mail(&raw_body) {
-                _collect_rfc822_body_parts(&nested, parts);
+                if is_attachment {
+                    _collect_rfc822_body_parts_without_attachment_fallback(
+                        &nested,
+                        attached_message_parts,
+                    );
+                } else {
+                    _collect_rfc822_body_parts_without_attachment_fallback(&nested, parts);
+                }
+            }
+        }
+        return;
+    }
+    if is_attachment {
+        return;
+    }
+    if !mail.subparts.is_empty() {
+        for subpart in &mail.subparts {
+            _collect_rfc822_body_parts(subpart, parts, attached_message_parts);
+            if parts.is_complete() {
+                return;
+            }
+        }
+        return;
+    }
+    if mimetype == "text/plain" && parts.plain_text.is_none() {
+        parts.plain_text = mail.get_body().ok().and_then(_clean_rfc822_body_part);
+        return;
+    }
+    if mimetype == "text/html" && parts.html_body.is_none() {
+        parts.html_body = mail.get_body().ok().and_then(_clean_rfc822_body_part);
+    }
+}
+
+fn _collect_rfc822_body_parts_without_attachment_fallback(
+    mail: &ParsedMail<'_>,
+    parts: &mut _Rfc822BodyParts,
+) {
+    if parts.is_complete() {
+        return;
+    }
+    if mail.get_content_disposition().disposition == DispositionType::Attachment {
+        return;
+    }
+    let mimetype = mail.ctype.mimetype.to_ascii_lowercase();
+    if mimetype == "message/rfc822" {
+        if let Ok(raw_body) = mail.get_body_raw() {
+            if let Ok(nested) = parse_mail(&raw_body) {
+                _collect_rfc822_body_parts_without_attachment_fallback(&nested, parts);
             }
         }
         return;
     }
     if !mail.subparts.is_empty() {
         for subpart in &mail.subparts {
-            _collect_rfc822_body_parts(subpart, parts);
+            _collect_rfc822_body_parts_without_attachment_fallback(subpart, parts);
             if parts.is_complete() {
                 return;
             }
@@ -1163,7 +1216,7 @@ MIME-Version: 1.0
     }
 
     #[test]
-    fn rfc822_body_parser_ignores_attached_message_rfc822_body() {
+    fn rfc822_body_parser_uses_attached_message_rfc822_body_as_fallback() {
         let raw_mime = br#"From: alice@example.org
 To: bob@example.org
 Subject: Attached EML
@@ -1187,8 +1240,42 @@ Nested attachment body.
 
         let decoded = decode_rfc822_body_json(_rfc822_body_json_from_raw_mime(raw_mime));
 
-        assert_eq!(decoded["ok"], false);
-        assert_eq!(decoded["reason"], "missing_body");
+        assert_eq!(decoded["ok"], true);
+        assert_eq!(decoded["plainText"], "Nested attachment body.");
+    }
+
+    #[test]
+    fn rfc822_body_parser_prefers_normal_body_over_attached_message_rfc822_body() {
+        let raw_mime = br#"From: alice@example.org
+To: bob@example.org
+Subject: Attached EML With Intro
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="outer"
+
+--outer
+Content-Type: text/plain; charset=utf-8
+
+Intro body.
+
+--outer
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename="forwarded.eml"
+
+From: carol@example.org
+To: dave@example.org
+Subject: Nested
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Nested attachment body.
+
+--outer--
+"#;
+
+        let decoded = decode_rfc822_body_json(_rfc822_body_json_from_raw_mime(raw_mime));
+
+        assert_eq!(decoded["ok"], true);
+        assert_eq!(decoded["plainText"], "Intro body.");
     }
 
     #[test]
