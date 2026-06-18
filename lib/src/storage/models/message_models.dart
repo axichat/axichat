@@ -68,11 +68,14 @@ final class DeltaAccountDefaults {
 enum EmailRfc822BodyStatus {
   unknown,
   hydrated,
-  unavailable;
+  unavailable,
+  pendingDownload;
 
   bool get isHydrated => this == hydrated;
 
   bool get isUnavailable => this == unavailable;
+
+  bool get isPendingDownload => this == pendingDownload;
 }
 
 // ENUMS WARNING: New values must only be added to the end of the list.

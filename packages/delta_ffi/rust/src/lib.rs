@@ -292,10 +292,9 @@ fn _rfc822_body_json_from_raw_mime(raw_mime: &[u8]) -> String {
         }
     };
     let mut parts = _Rfc822BodyParts::default();
-    let mut attached_message_parts = _Rfc822BodyParts::default();
-    _collect_rfc822_body_parts(&mail, &mut parts, &mut attached_message_parts);
+    _collect_rfc822_body_parts_without_attachment_fallback(&mail, &mut parts);
     if parts.is_empty() {
-        parts = attached_message_parts;
+        _collect_attached_rfc822_body_fallback(&mail, &mut parts);
     }
     json!({
         "ok": !parts.is_empty(),
@@ -306,50 +305,40 @@ fn _rfc822_body_json_from_raw_mime(raw_mime: &[u8]) -> String {
     .to_string()
 }
 
-fn _collect_rfc822_body_parts(
+fn _collect_attached_rfc822_body_fallback(
     mail: &ParsedMail<'_>,
     parts: &mut _Rfc822BodyParts,
-    attached_message_parts: &mut _Rfc822BodyParts,
-) {
-    if parts.is_complete() {
-        return;
-    }
+) -> bool {
     let mimetype = mail.ctype.mimetype.to_ascii_lowercase();
     let is_attachment = mail.get_content_disposition().disposition == DispositionType::Attachment;
     if mimetype == "message/rfc822" {
         if let Ok(raw_body) = mail.get_body_raw() {
             if let Ok(nested) = parse_mail(&raw_body) {
                 if is_attachment {
-                    _collect_rfc822_body_parts_without_attachment_fallback(
-                        &nested,
-                        attached_message_parts,
-                    );
-                } else {
-                    _collect_rfc822_body_parts_without_attachment_fallback(&nested, parts);
+                    let mut candidate = _Rfc822BodyParts::default();
+                    _collect_rfc822_body_parts_without_attachment_fallback(&nested, &mut candidate);
+                    if !candidate.is_empty() {
+                        *parts = candidate;
+                        return true;
+                    }
+                } else if _collect_attached_rfc822_body_fallback(&nested, parts) {
+                    return true;
                 }
             }
         }
-        return;
+        return false;
     }
     if is_attachment {
-        return;
+        return false;
     }
     if !mail.subparts.is_empty() {
         for subpart in &mail.subparts {
-            _collect_rfc822_body_parts(subpart, parts, attached_message_parts);
-            if parts.is_complete() {
-                return;
+            if _collect_attached_rfc822_body_fallback(subpart, parts) {
+                return true;
             }
         }
-        return;
     }
-    if mimetype == "text/plain" && parts.plain_text.is_none() {
-        parts.plain_text = mail.get_body().ok().and_then(_clean_rfc822_body_part);
-        return;
-    }
-    if mimetype == "text/html" && parts.html_body.is_none() {
-        parts.html_body = mail.get_body().ok().and_then(_clean_rfc822_body_part);
-    }
+    false
 }
 
 fn _collect_rfc822_body_parts_without_attachment_fallback(
@@ -1242,6 +1231,48 @@ Nested attachment body.
 
         assert_eq!(decoded["ok"], true);
         assert_eq!(decoded["plainText"], "Nested attachment body.");
+    }
+
+    #[test]
+    fn rfc822_body_parser_does_not_merge_separate_attached_messages() {
+        let raw_mime = br#"From: alice@example.org
+To: bob@example.org
+Subject: Multiple Attached EML
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="outer"
+
+--outer
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename="plain.eml"
+
+From: carol@example.org
+To: dave@example.org
+Subject: Plain Nested
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+First attachment plain body.
+
+--outer
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename="html.eml"
+
+From: erin@example.org
+To: frank@example.org
+Subject: HTML Nested
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+
+<p>Second attachment HTML body.</p>
+
+--outer--
+"#;
+
+        let decoded = decode_rfc822_body_json(_rfc822_body_json_from_raw_mime(raw_mime));
+
+        assert_eq!(decoded["ok"], true);
+        assert_eq!(decoded["plainText"], "First attachment plain body.");
+        assert!(decoded["htmlBody"].is_null());
     }
 
     #[test]

@@ -203,7 +203,6 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     final itemBuilder = widget.itemBuilder;
     final messageListOptions = widget.messageListOptions;
     final scrollToBottomOptions = widget.scrollToBottomOptions;
-    const double loadEarlierTopInset = 8.0;
     final shouldShowLoadEarlierSpinner =
         _isLoadingMore &&
         (_loadEarlierStartingCount == null ||
@@ -228,8 +227,18 @@ class _ChatMessageListState extends State<_ChatMessageList> {
                       padding: EdgeInsets.zero,
                       controller: _scrollController,
                       reverse: true,
-                      itemCount: items.length,
+                      itemCount:
+                          items.length + (shouldShowLoadEarlierSpinner ? 1 : 0),
                       itemBuilder: (context, index) {
+                        if (index == items.length) {
+                          return messageListOptions.loadEarlierBuilder ??
+                              Padding(
+                                padding: EdgeInsets.all(context.spacing.m),
+                                child: const Center(
+                                  child: AxiProgressIndicator(),
+                                ),
+                              );
+                        }
                         final ChatTimelineItem? previousItem =
                             index < items.length - 1 ? items[index + 1] : null;
                         final ChatTimelineItem? nextItem = index > 0
@@ -260,17 +269,6 @@ class _ChatMessageListState extends State<_ChatMessageList> {
               messageListOptions.chatFooterBuilder!,
           ],
         ),
-        if (shouldShowLoadEarlierSpinner)
-          Positioned(
-            top: loadEarlierTopInset,
-            right: 0,
-            left: 0,
-            child:
-                messageListOptions.loadEarlierBuilder ??
-                const Center(
-                  child: SizedBox(child: CircularProgressIndicator()),
-                ),
-          ),
         if (!scrollToBottomOptions.disabled && _scrollToBottomVisible)
           scrollToBottomOptions.scrollToBottomBuilder != null
               ? scrollToBottomOptions.scrollToBottomBuilder!(_scrollController)

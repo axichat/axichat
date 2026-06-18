@@ -660,8 +660,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                       onLoadEarlier:
                           loadingMessages ||
                               searchFiltering ||
-                              state.items.length % ChatBloc.messageBatchSize !=
-                                  0
+                              !state.canLoadEarlier
                           ? null
                           : () async {
                               final completer = Completer<void>();

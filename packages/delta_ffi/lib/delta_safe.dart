@@ -1798,6 +1798,38 @@ class DeltaContextHandle {
     }
   }
 
+  Future<DeltaMessageStatus?> getMessageStatus(int messageId) async {
+    _ensureState(_opened, 'get message status');
+    if (messageId <= _zeroValue) return null;
+    final msgPtr = _bindings.dc_get_msg(_context, messageId);
+    if (msgPtr == ffi.nullptr) {
+      return null;
+    }
+    try {
+      final state = _bindings.dc_msg_get_state(msgPtr);
+      final normalizedState =
+          state == DeltaMessageState.undefined ? null : state;
+      final timestampSeconds = _bindings.dc_msg_get_timestamp(msgPtr);
+      final timestamp = timestampSeconds == 0
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              timestampSeconds * 1000,
+              isUtc: true,
+            ).toLocal();
+      return DeltaMessageStatus(
+        id: _bindings.dc_msg_get_id(msgPtr),
+        chatId: _bindings.dc_msg_get_chat_id(msgPtr),
+        state: normalizedState,
+        timestamp: timestamp,
+        isOutgoing: _messageIsOutgoing(msgPtr),
+        error: _getMessageError(msgPtr),
+        showPadlock: _getShowPadlock(msgPtr),
+      );
+    } finally {
+      _bindings.dc_msg_unref(msgPtr);
+    }
+  }
+
   Future<String?> getMessageMimeHeaders(int messageId) async {
     _ensureState(_opened, 'get message mime headers');
     if (messageId <= _zeroValue) return null;
@@ -2886,6 +2918,26 @@ class DeltaMessage {
   bool get needsDownload =>
       downloadState == DeltaDownloadState.available ||
       downloadState == DeltaDownloadState.failure;
+}
+
+class DeltaMessageStatus {
+  const DeltaMessageStatus({
+    required this.id,
+    required this.chatId,
+    this.state,
+    this.timestamp,
+    this.isOutgoing = false,
+    this.error,
+    this.showPadlock = false,
+  });
+
+  final int id;
+  final int chatId;
+  final int? state;
+  final DateTime? timestamp;
+  final bool isOutgoing;
+  final String? error;
+  final bool showPadlock;
 }
 
 class DeltaMessageRfc822Body {

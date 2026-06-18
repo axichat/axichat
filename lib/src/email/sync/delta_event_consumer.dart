@@ -51,6 +51,20 @@ final class _DeltaHydrationResult {
   final MessageSaveResult? saveResult;
 }
 
+final class _DeltaStatusHydrationResult {
+  const _DeltaStatusHydrationResult({
+    required this.status,
+    required this.repairedUnread,
+    required this.unreadStateResolved,
+    this.updatedFields = const <MessageDiffField>[],
+  });
+
+  final DeltaMessageStatus status;
+  final bool repairedUnread;
+  final bool unreadStateResolved;
+  final List<MessageDiffField> updatedFields;
+}
+
 final class _DeltaIngestOutcome {
   const _DeltaIngestOutcome({
     required this.repairedUnread,
@@ -61,6 +75,28 @@ final class _DeltaIngestOutcome {
   final bool repairedUnread;
   final bool unreadStateResolved;
   final MessageSaveResult? saveResult;
+}
+
+final class DeltaFreshSyncResult {
+  const DeltaFreshSyncResult({
+    this.freshIdCount = 0,
+    this.storedExactCount = 0,
+    this.storedMissingContentCount = 0,
+    this.hydratedCount = 0,
+    this.affectedChatCount = 0,
+    this.cancelled = false,
+  });
+
+  final int freshIdCount;
+  final int storedExactCount;
+  final int storedMissingContentCount;
+  final int hydratedCount;
+  final int affectedChatCount;
+  final bool cancelled;
+
+  bool get hadFreshIds => freshIdCount > 0;
+
+  bool get projectedLocalState => affectedChatCount > 0 || hydratedCount > 0;
 }
 
 enum MessageDiffField {
@@ -98,6 +134,7 @@ enum MessageDiffField {
   deltaAccountId,
   deltaChatId,
   deltaMsgId,
+  rfc822BodyStatus,
 }
 
 extension MessageDiffFieldX on MessageDiffField {
@@ -167,7 +204,10 @@ abstract interface class DeltaEventCore {
     int? beforeMessageId,
   });
   Future<DeltaMessage?> getMessage(int messageId);
+  Future<DeltaMessageStatus?> getMessageStatus(int messageId);
   Future<List<DeltaMessage>> getMessages(List<int> messageIds);
+  Future<List<DeltaMessageStatus>> getMessageStatuses(List<int> messageIds);
+  Future<List<int>> getFreshMessageIds();
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId);
   Future<bool> downloadFullMessage(int messageId);
   Future<String?> getMessageRfc724Mid(int messageId);
@@ -233,6 +273,10 @@ final class DeltaContextEventCore implements DeltaEventCore {
       _context.getMessage(messageId);
 
   @override
+  Future<DeltaMessageStatus?> getMessageStatus(int messageId) =>
+      _context.getMessageStatus(messageId);
+
+  @override
   Future<List<DeltaMessage>> getMessages(List<int> messageIds) async {
     final messages = <DeltaMessage>[];
     for (final messageId in messageIds) {
@@ -243,6 +287,23 @@ final class DeltaContextEventCore implements DeltaEventCore {
     }
     return messages;
   }
+
+  @override
+  Future<List<DeltaMessageStatus>> getMessageStatuses(
+    List<int> messageIds,
+  ) async {
+    final statuses = <DeltaMessageStatus>[];
+    for (final messageId in messageIds) {
+      final status = await _context.getMessageStatus(messageId);
+      if (status != null) {
+        statuses.add(status);
+      }
+    }
+    return statuses;
+  }
+
+  @override
+  Future<List<int>> getFreshMessageIds() => _context.getFreshMessageIds();
 
   @override
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId) =>
@@ -317,7 +378,9 @@ const DeltaMessageDeliveryStatus _deltaOutgoingUnknownStatus =
     DeltaMessageDeliveryStatus(acked: true, received: false, displayed: false);
 const DeltaMessageDeliveryStatus _deltaIncomingUnseenStatus =
     DeltaMessageDeliveryStatus(acked: false, received: true, displayed: false);
-const DeltaMessageDeliveryStatus _deltaIncomingSeenStatus =
+// For incoming Delta email, local displayed means no longer locally fresh.
+// Delta InSeen is still verified separately before read receipt work completes.
+const DeltaMessageDeliveryStatus _deltaIncomingNoLongerFreshStatus =
     DeltaMessageDeliveryStatus(acked: false, received: true, displayed: true);
 
 extension DeltaMessageStateChecks on DeltaMessage {
@@ -355,7 +418,48 @@ extension DeltaMessageStateChecks on DeltaMessage {
       return _deltaOutgoingPendingStatus;
     }
     if (isIncomingNoLongerFresh) {
-      return _deltaIncomingSeenStatus;
+      return _deltaIncomingNoLongerFreshStatus;
+    }
+    return _deltaIncomingUnseenStatus;
+  }
+}
+
+extension DeltaMessageStatusStateChecks on DeltaMessageStatus {
+  bool get hasKnownState => state != null;
+
+  bool get isOutgoingDelivered =>
+      isOutgoing &&
+      (state == DeltaMessageState.outDelivered ||
+          state == DeltaMessageState.outMdnRcvd);
+
+  bool get isOutgoingRead =>
+      isOutgoing && state == DeltaMessageState.outMdnRcvd;
+
+  bool get isOutgoingFailed =>
+      isOutgoing && state == DeltaMessageState.outFailed;
+
+  bool get isIncomingSeen => !isOutgoing && state == DeltaMessageState.inSeen;
+
+  bool get isIncomingNoticed =>
+      !isOutgoing && state == DeltaMessageState.inNoticed;
+
+  bool get isIncomingNoLongerFresh => isIncomingNoticed || isIncomingSeen;
+
+  DeltaMessageDeliveryStatus get deliveryStatus {
+    if (isOutgoing) {
+      if (!hasKnownState) {
+        return _deltaOutgoingUnknownStatus;
+      }
+      if (isOutgoingRead) {
+        return _deltaOutgoingReadStatus;
+      }
+      if (isOutgoingDelivered) {
+        return _deltaOutgoingDeliveredStatus;
+      }
+      return _deltaOutgoingPendingStatus;
+    }
+    if (isIncomingNoLongerFresh) {
+      return _deltaIncomingNoLongerFreshStatus;
     }
     return _deltaIncomingUnseenStatus;
   }
@@ -428,6 +532,10 @@ extension MessageDiffX on Message {
     );
     addIf(deltaChatId != other.deltaChatId, MessageDiffField.deltaChatId);
     addIf(deltaMsgId != other.deltaMsgId, MessageDiffField.deltaMsgId);
+    addIf(
+      rfc822BodyStatus != other.rfc822BodyStatus,
+      MessageDiffField.rfc822BodyStatus,
+    );
     return fields;
   }
 }
@@ -565,6 +673,9 @@ class DeltaEventConsumer {
     milliseconds: 100,
   );
   static const int _deltaProfileTraceNoopBatchSize = 25;
+  static const int _undisplayedReadStateReconcilePageSize = 100;
+  static const int _undisplayedReadStateReconcileMaxPages = 5;
+  static const int _chatLevelHydrationWindow = 32;
 
   static const String _emailPartDiagPrefix = 'EMAIL_PART_DIAG';
   static const String _emailUpdateDiffDiagPrefix = 'EMAIL_UPDATE_DIFF_DIAG';
@@ -1319,10 +1430,194 @@ class DeltaEventConsumer {
     }
   }
 
+  Future<
+    ({
+      _DeltaStatusHydrationResult? hydration,
+      String result,
+      int resolvedChatId,
+    })
+  >
+  _applyDeltaMessageStatus({
+    required int eventChatId,
+    required DeltaMessageStatus status,
+    int? expectedChatId,
+  }) async {
+    final resolvedChatId = status.chatId > 0 ? status.chatId : eventChatId;
+    if (expectedChatId != null && resolvedChatId != expectedChatId) {
+      return (
+        hydration: null,
+        result: 'chatMismatch',
+        resolvedChatId: resolvedChatId,
+      );
+    }
+    if (resolvedChatId <= _deltaChatLastSpecialId) {
+      return (
+        hydration: null,
+        result: 'systemChat',
+        resolvedChatId: resolvedChatId,
+      );
+    }
+    final db = await _db();
+    final existingByDeltaId = await db.getMessageByDeltaId(
+      status.id,
+      deltaAccountId: _deltaAccountId,
+    );
+    if (existingByDeltaId == null) {
+      return (
+        hydration: null,
+        result: 'missingLocalMessage',
+        resolvedChatId: resolvedChatId,
+      );
+    }
+    final resolvedChat = await _ensureChat(resolvedChatId);
+    var existing = existingByDeltaId;
+    if (!_storedDeltaLocatorMatches(
+      existing,
+      msgId: status.id,
+      chatId: resolvedChatId,
+      accountId: _deltaAccountId,
+      chatJid: resolvedChat.jid,
+    )) {
+      final repaired = await db.rehomeDeltaMessage(
+        deltaMsgId: status.id,
+        deltaAccountId: _deltaAccountId,
+        deltaChatId: resolvedChatId,
+        chatJid: resolvedChat.jid,
+        senderJid: existing.senderJid,
+        selfJid: _xmppSelfJid,
+        emailSelfJid: _selfJid,
+      );
+      if (repaired == null) {
+        return (
+          hydration: null,
+          result: 'staleLocatorUnrepaired',
+          resolvedChatId: resolvedChatId,
+        );
+      }
+      existing = repaired;
+    }
+    final next = _mergeDeltaMessageStatus(existing: existing, status: status);
+    final update = await _persistStatusOnlyStatusUpdate(
+      db: db,
+      existing: existing,
+      next: next,
+      status: status,
+    );
+    return (
+      hydration: _DeltaStatusHydrationResult(
+        status: status,
+        repairedUnread: update.repairedUnread,
+        unreadStateResolved: true,
+        updatedFields: update.updatedFields,
+      ),
+      result: update.updatedFields.isEmpty
+          ? 'statusNoDiff'
+          : update.repairedUnread
+          ? 'statusRepairedUnread'
+          : 'statusUpdated',
+      resolvedChatId: resolvedChatId,
+    );
+  }
+
+  Future<_DeltaStatusHydrationResult?> _hydrateMessageStatus(
+    int chatId,
+    int msgId, {
+    int? expectedChatId,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    final status = await _core.getMessageStatus(msgId);
+    if (status == null) {
+      SafeLogging.profileTrace(
+        'email.deltaHydrateMessageStatus',
+        'end',
+        fields: <String, Object?>{
+          'chatId': chatId,
+          'msgId': msgId,
+          'result': 'missingCoreMessage',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return null;
+    }
+    final applied = await _applyDeltaMessageStatus(
+      eventChatId: chatId,
+      status: status,
+      expectedChatId: expectedChatId,
+    );
+    SafeLogging.profileTrace(
+      'email.deltaHydrateMessageStatus',
+      'end',
+      fields: <String, Object?>{
+        'chatId': chatId,
+        'msgId': msgId,
+        'result': applied.result,
+        'resolvedChatId': applied.resolvedChatId,
+        'updatedFieldCount': applied.hydration?.updatedFields.length,
+        'updatedFieldHash': applied.hydration == null
+            ? null
+            : _messageDiffProfileHash(applied.hydration!.updatedFields),
+        'repairedUnread': applied.hydration?.repairedUnread,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+    return applied.hydration;
+  }
+
+  Future<List<_DeltaStatusHydrationResult>> _hydrateMessageStatuses(
+    int chatId,
+    Iterable<int> msgIds, {
+    int? expectedChatId,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    final ids = <int>[];
+    final seenIds = <int>{};
+    for (final msgId in msgIds) {
+      if (msgId <= _deltaMessageIdUnset || _isDeltaMessageMarkerId(msgId)) {
+        continue;
+      }
+      if (seenIds.add(msgId)) {
+        ids.add(msgId);
+      }
+    }
+    if (ids.isEmpty) {
+      return const <_DeltaStatusHydrationResult>[];
+    }
+    final statuses = await _core.getMessageStatuses(ids);
+    final hydrations = <_DeltaStatusHydrationResult>[];
+    var skippedCount = 0;
+    for (final status in statuses) {
+      final applied = await _applyDeltaMessageStatus(
+        eventChatId: chatId,
+        status: status,
+        expectedChatId: expectedChatId,
+      );
+      final hydration = applied.hydration;
+      if (hydration == null) {
+        skippedCount += 1;
+        continue;
+      }
+      hydrations.add(hydration);
+    }
+    SafeLogging.profileTrace(
+      'email.deltaHydrateMessageStatuses',
+      'end',
+      fields: <String, Object?>{
+        'chatId': chatId,
+        'requestedCount': ids.length,
+        'statusCount': statuses.length,
+        'hydratedCount': hydrations.length,
+        'skippedCount': skippedCount,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+    return hydrations;
+  }
+
   Future<_DeltaHydrationResult?> _hydrateMessage(
     int chatId,
     int msgId, {
     bool statusOnly = false,
+    int? expectedChatId,
   }) async {
     final stopwatch = Stopwatch()..start();
     final msg = await _core.getMessage(msgId);
@@ -1339,6 +1634,25 @@ class DeltaEventConsumer {
         },
       );
       return null;
+    }
+    if (expectedChatId != null) {
+      final resolvedChatId = msg.chatId > 0 ? msg.chatId : chatId;
+      if (resolvedChatId != expectedChatId) {
+        SafeLogging.profileTrace(
+          'email.deltaHydrateMessage',
+          'end',
+          fields: <String, Object?>{
+            'chatId': chatId,
+            'msgId': msgId,
+            'statusOnly': statusOnly,
+            'result': 'chatMismatch',
+            'expectedChatId': expectedChatId,
+            'actualChatId': resolvedChatId,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
+        return null;
+      }
     }
     final outcome = await _ingestDeltaMessage(
       eventChatId: chatId,
@@ -1455,8 +1769,8 @@ class DeltaEventConsumer {
     if (_isDeltaMessageMarkerId(msgId)) {
       return;
     }
-    final result = await _hydrateMessage(chatId, msgId, statusOnly: true);
-    if (result == null || result.message.isOutgoing) {
+    final result = await _hydrateMessageStatus(chatId, msgId);
+    if (result == null || result.status.isOutgoing) {
       return;
     }
     if (!result.unreadStateResolved) {
@@ -1468,7 +1782,138 @@ class DeltaEventConsumer {
     if (chatId <= _deltaChatLastSpecialId) {
       return;
     }
-    await reconcileChatReadStateFromCore(chatId);
+    await reconcileUndisplayedChatReadStateFromCore(chatId);
+  }
+
+  Future<int> reconcileUndisplayedChatReadStateFromCore(
+    int chatId, {
+    bool repairUnreadWhenNoTargets = false,
+  }) async {
+    if (chatId <= _deltaChatLastSpecialId) {
+      return 0;
+    }
+    var totalReconciled = 0;
+    var truncated = false;
+    final attemptedDeltaIds = <int>{};
+    for (
+      var page = 0;
+      page < _undisplayedReadStateReconcileMaxPages;
+      page += 1
+    ) {
+      final queriedLimit = _undisplayedReadStateReconcilePageSize * (page + 1);
+      final db = await _db();
+      final messages = await db.getUndisplayedMessagesByDeltaChat(
+        deltaAccountId: _deltaAccountId,
+        deltaChatId: chatId,
+        limit: queriedLimit,
+      );
+      if (messages.isEmpty) {
+        if (page == 0 && repairUnreadWhenNoTargets) {
+          await _updateUnreadCount(chatId);
+        }
+        break;
+      }
+      final ids = <int>[];
+      for (final message in messages) {
+        if (!message.countsTowardUnread(
+          selfJid: _selfJid,
+          isGroupChat: false,
+          myOccupantJid: null,
+        )) {
+          continue;
+        }
+        final deltaMsgId = message.deltaMsgId;
+        if (deltaMsgId == null) {
+          continue;
+        }
+        if (!attemptedDeltaIds.add(deltaMsgId)) {
+          continue;
+        }
+        ids.add(deltaMsgId);
+      }
+      final reconciled = await reconcileDeltaMessageReadStateFromCore(
+        chatId: chatId,
+        messageIds: ids,
+        source: 'undisplayed',
+        repairUnreadWhenNoTargets: page == 0 && repairUnreadWhenNoTargets,
+      );
+      totalReconciled += reconciled;
+      if (messages.length < queriedLimit) {
+        break;
+      }
+      truncated = page == _undisplayedReadStateReconcileMaxPages - 1;
+    }
+    if (truncated) {
+      SafeLogging.profileTrace(
+        'email.deltaTargetedReadStateReconcile',
+        'truncated',
+        fields: <String, Object?>{
+          'accountId': _deltaAccountId,
+          'chatId': chatId,
+          'pageSize': _undisplayedReadStateReconcilePageSize,
+          'maxPages': _undisplayedReadStateReconcileMaxPages,
+          'reconciledCount': totalReconciled,
+        },
+      );
+    }
+    return totalReconciled;
+  }
+
+  Future<int> reconcileDeltaMessageReadStateFromCore({
+    required int chatId,
+    required Iterable<int> messageIds,
+    String source = 'targeted',
+    bool repairUnreadWhenNoTargets = false,
+  }) async {
+    if (chatId <= _deltaChatLastSpecialId) {
+      return 0;
+    }
+    final stopwatch = Stopwatch()..start();
+    final ids = <int>[];
+    final seenIds = <int>{};
+    for (final messageId in messageIds) {
+      if (messageId <= _deltaMessageIdUnset ||
+          _isDeltaMessageMarkerId(messageId)) {
+        continue;
+      }
+      if (seenIds.add(messageId)) {
+        ids.add(messageId);
+      }
+    }
+    var reconciledCount = 0;
+    var repairedUnread = false;
+    final results = await _hydrateMessageStatuses(
+      chatId,
+      ids,
+      expectedChatId: chatId,
+    );
+    for (final result in results) {
+      if (result.status.isOutgoing) {
+        continue;
+      }
+      reconciledCount += 1;
+      repairedUnread = repairedUnread || result.repairedUnread;
+    }
+    if (ids.isNotEmpty) {
+      await _updateUnreadCount(chatId);
+    } else if (repairUnreadWhenNoTargets) {
+      await _updateUnreadCount(chatId);
+      repairedUnread = true;
+    }
+    SafeLogging.profileTrace(
+      'email.deltaTargetedReadStateReconcile',
+      'end',
+      fields: <String, Object?>{
+        'accountId': _deltaAccountId,
+        'chatId': chatId,
+        'source': source,
+        'targetCount': ids.length,
+        'reconciledCount': reconciledCount,
+        'repairedUnread': repairedUnread,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+    return reconciledCount;
   }
 
   Future<int> reconcileChatReadStateFromCore(int chatId) async {
@@ -1481,17 +1926,24 @@ class DeltaEventConsumer {
       deltaAccountId: _deltaAccountId,
       deltaChatId: chatId,
     );
-    var reconciledCount = 0;
-    var repairedUnread = false;
+    final msgIds = <int>[];
     for (final message in storedMessages) {
       final msgId = message.deltaMsgId;
-      if (msgId == null ||
-          msgId <= _deltaMessageIdUnset ||
-          _isDeltaMessageMarkerId(msgId)) {
-        continue;
+      if (msgId != null &&
+          msgId > _deltaMessageIdUnset &&
+          !_isDeltaMessageMarkerId(msgId)) {
+        msgIds.add(msgId);
       }
-      final result = await _hydrateMessage(chatId, msgId, statusOnly: true);
-      if (result == null || result.message.isOutgoing) {
+    }
+    var reconciledCount = 0;
+    var repairedUnread = false;
+    final results = await _hydrateMessageStatuses(
+      chatId,
+      msgIds,
+      expectedChatId: chatId,
+    );
+    for (final result in results) {
+      if (result.status.isOutgoing) {
         continue;
       }
       reconciledCount += 1;
@@ -1616,85 +2068,21 @@ class DeltaEventConsumer {
     if (chat == null) {
       return;
     }
-    final messageIds = await _core.getChatMessageIds(chatId: chatId);
-    final filteredIds = messageIds
-        .where((id) => !_isDeltaMessageMarkerId(id))
-        .toList();
-    if (filteredIds.isEmpty) {
-      return;
-    }
-    const int startIndex = 0;
-    final visibleIds = filteredIds
-        .skip(startIndex)
-        .where((id) => id > _deltaMessageIdUnset)
-        .toList(growable: false);
-    if (visibleIds.isEmpty) {
-      return;
-    }
-    final visibleIdSet = visibleIds.toSet();
-    final snapshots = await db.getMessageDeltaSnapshot(
-      chat.jid,
-      deltaAccountId: _deltaAccountId,
-    );
-    final localDeltaIds = <int>{};
-    for (final snapshot in snapshots) {
-      final deltaId = snapshot.deltaMsgId;
-      if (deltaId == null) {
-        continue;
-      }
-      if (visibleIdSet.contains(deltaId)) {
-        localDeltaIds.add(deltaId);
-      }
-    }
-    final missingIds = <int>[];
-    for (final deltaId in visibleIds) {
-      if (!localDeltaIds.contains(deltaId)) {
-        missingIds.add(deltaId);
-      }
-    }
-    final hydrationCandidates = await _classifyDeltaIdsForHydration(
-      db: db,
-      chat: chat,
+    final hydratedLatestWindow = await _hydrateLatestChatWindowForSnapshot(
       chatId: chatId,
-      candidateIds: missingIds,
+      chat: chat,
+      db: db,
+      requestedWindow: _chatLevelHydrationWindow,
     );
-    final unresolvedMissingIds = hydrationCandidates.missingIds;
     SafeLogging.profileTrace(
       'email.deltaSyncChatMessages',
       'decision',
       fields: <String, Object?>{
         'chatId': chatId,
         'chatHash': SafeLogging.profileFingerprint(chat.jid.trim()),
-        'visibleCount': visibleIds.length,
-        'localCount': localDeltaIds.length,
-        'missingCount': unresolvedMissingIds.length,
-        'snapshotMissingCount': missingIds.length,
-        'storedExactCount': hydrationCandidates.storedExactCount,
-        'storedStaleLocatorCount': hydrationCandidates.storedStaleLocatorCount,
-        'storedConflictingLocatorCount':
-            hydrationCandidates.storedConflictingLocatorCount,
+        'hydratedLatestWindow': hydratedLatestWindow,
       },
     );
-    const int batchSize = 8;
-    for (
-      var index = 0;
-      index < unresolvedMissingIds.length;
-      index += batchSize
-    ) {
-      final chunk = unresolvedMissingIds.skip(index).take(batchSize).toList();
-      final messages = await Future.wait(chunk.map(_core.getMessage));
-      for (final msg in messages) {
-        if (msg == null) {
-          continue;
-        }
-        await _ingestDeltaMessage(
-          eventChatId: chatId,
-          msg: msg,
-          chat: chat,
-          skipSystemChatCheck: true,
-        );
-      }
-    }
   }
 
   Future<void> _syncChatFromCore(int chatId) async {
@@ -1721,7 +2109,7 @@ class DeltaEventConsumer {
     await _ingestDeltaMessage(eventChatId: msg.chatId, msg: msg);
   }
 
-  Future<int> syncFreshMessages(
+  Future<DeltaFreshSyncResult> syncFreshMessages(
     Iterable<int> messageIds, {
     bool Function()? isCurrent,
   }) async {
@@ -1750,7 +2138,7 @@ class DeltaEventConsumer {
           'elapsedMs': stopwatch.elapsedMilliseconds,
         },
       );
-      return 0;
+      return const DeltaFreshSyncResult();
     }
 
     final affectedChatIds = <int>{};
@@ -1844,7 +2232,14 @@ class DeltaEventConsumer {
         'elapsedMs': stopwatch.elapsedMilliseconds,
       },
     );
-    return hydratedCount;
+    return DeltaFreshSyncResult(
+      freshIdCount: freshIds.length,
+      storedExactCount: storedExactCount,
+      storedMissingContentCount: storedMissingContentCount,
+      hydratedCount: hydratedCount,
+      affectedChatCount: affectedChatIds.length,
+      cancelled: cancelled(),
+    );
   }
 
   Future<void> recoverOutgoingMessageStatuses({
@@ -1862,13 +2257,21 @@ class DeltaEventConsumer {
       since: DateTime.timestamp().subtract(window),
       limit: limit,
     );
+    final messageIdsByChat = <int, List<int>>{};
     for (final message in messages) {
       final msgId = message.deltaMsgId;
       final chatId = message.deltaChatId;
       if (msgId == null || chatId == null) {
         continue;
       }
-      await _hydrateMessage(chatId, msgId, statusOnly: true);
+      messageIdsByChat.putIfAbsent(chatId, () => <int>[]).add(msgId);
+    }
+    for (final entry in messageIdsByChat.entries) {
+      await _hydrateMessageStatuses(
+        entry.key,
+        entry.value,
+        expectedChatId: entry.key,
+      );
     }
   }
 
@@ -2629,8 +3032,23 @@ class DeltaEventConsumer {
     return MessageError.none;
   }
 
+  MessageError _messageErrorForDeltaStatus(DeltaMessageStatus status) {
+    if (status.isOutgoingFailed) {
+      return DeltaErrorMapper.resolve(status.error);
+    }
+    return MessageError.none;
+  }
+
   EncryptionProtocol _encryptionProtocolForDelta(DeltaMessage msg) {
     return msg.showPadlock
+        ? EncryptionProtocol.openPgp
+        : EncryptionProtocol.none;
+  }
+
+  EncryptionProtocol _encryptionProtocolForDeltaStatus(
+    DeltaMessageStatus status,
+  ) {
+    return status.showPadlock
         ? EncryptionProtocol.openPgp
         : EncryptionProtocol.none;
   }
@@ -2650,6 +3068,27 @@ class DeltaEventConsumer {
       next = next.copyWith(encryptionProtocol: encryptionProtocol);
     }
     return _mergeIncomingErrorState(next: next, msg: msg);
+  }
+
+  Message _mergeDeltaMessageStatus({
+    required Message existing,
+    required DeltaMessageStatus status,
+  }) {
+    var next = existing;
+    final DateTime? timestamp = status.timestamp;
+    if (timestamp != null && next.timestamp != timestamp) {
+      next = next.copyWith(timestamp: timestamp);
+    }
+    next = _mergeDeltaStatusDeliveryState(
+      existing: existing,
+      next: next,
+      status: status,
+    );
+    final encryptionProtocol = _encryptionProtocolForDeltaStatus(status);
+    if (next.encryptionProtocol != encryptionProtocol) {
+      next = next.copyWith(encryptionProtocol: encryptionProtocol);
+    }
+    return _mergeDeltaStatusError(next: next, status: status);
   }
 
   Message _mergeDeltaDeliveryState({
@@ -2684,6 +3123,38 @@ class DeltaEventConsumer {
     return merged;
   }
 
+  Message _mergeDeltaStatusDeliveryState({
+    required Message existing,
+    required Message next,
+    required DeltaMessageStatus status,
+  }) {
+    if (!status.hasKnownState) {
+      return next;
+    }
+    var merged = next;
+    final deliveryStatus = status.deliveryStatus;
+    final displayed = existing.displayed || deliveryStatus.displayed;
+    if (deliveryStatus.acked != existing.acked ||
+        deliveryStatus.received != existing.received ||
+        displayed != existing.displayed) {
+      merged = merged.copyWith(
+        acked: deliveryStatus.acked,
+        received: deliveryStatus.received,
+        displayed: displayed,
+      );
+    }
+    if (status.isOutgoingFailed) {
+      if (existing.error == MessageError.none) {
+        merged = merged.copyWith(error: DeltaErrorMapper.resolve(status.error));
+      }
+    } else if (status.isOutgoingDelivered || status.isOutgoingRead) {
+      if (existing.error != MessageError.none) {
+        merged = merged.copyWith(error: MessageError.none);
+      }
+    }
+    return merged;
+  }
+
   Message _mergeIncomingErrorState({
     required Message next,
     required DeltaMessage msg,
@@ -2700,6 +3171,55 @@ class DeltaEventConsumer {
       return next.copyWith(error: MessageError.none);
     }
     return next;
+  }
+
+  Message _mergeDeltaStatusError({
+    required Message next,
+    required DeltaMessageStatus status,
+  }) {
+    if (!status.isOutgoing) {
+      return next;
+    }
+    final statusError = _messageErrorForDeltaStatus(status);
+    if (statusError != MessageError.none && next.error != statusError) {
+      return next.copyWith(error: statusError);
+    }
+    if (statusError == MessageError.none &&
+        next.error == MessageError.notEncryptedForDevice) {
+      return next.copyWith(error: MessageError.none);
+    }
+    return next;
+  }
+
+  Future<({bool repairedUnread, List<MessageDiffField> updatedFields})>
+  _persistStatusOnlyStatusUpdate({
+    required XmppDatabase db,
+    required Message existing,
+    required Message next,
+    required DeltaMessageStatus status,
+  }) async {
+    final updatedFields = existing.diffFields(next);
+    if (updatedFields.isEmpty) {
+      return (repairedUnread: false, updatedFields: const <MessageDiffField>[]);
+    }
+    await db.updateMessage(next);
+    var repairedUnread = false;
+    if (updatedFields.contains(MessageDiffField.displayed) &&
+        !status.isOutgoing) {
+      await db.repairUnreadCountForChat(
+        next.chatJid,
+        selfJid: _xmppSelfJid,
+        emailSelfJid: _selfJid,
+      );
+      repairedUnread = true;
+    }
+    if (updatedFields.contains(MessageDiffField.encryptionProtocol)) {
+      await _ensureEmailEncryptionStatusMarkerForMessage(db: db, message: next);
+    }
+    if (_messageUpdateAffectsChatSummary(updatedFields)) {
+      await _refreshStoredChatSummary(chatJid: next.chatJid, db: db);
+    }
+    return (repairedUnread: repairedUnread, updatedFields: updatedFields);
   }
 
   Future<({bool repairedUnread, List<MessageDiffField> updatedFields})>
@@ -2855,7 +3375,9 @@ class DeltaEventConsumer {
         );
         repairedUnread = true;
       }
-      await _refreshStoredChatSummary(chatJid: next.chatJid, db: db);
+      if (_messageUpdateAffectsChatSummary(updatedFields)) {
+        await _refreshStoredChatSummary(chatJid: next.chatJid, db: db);
+      }
     }
     await _ensureEmailEncryptionStatusMarkerForMessage(db: db, message: next);
     _traceDeltaUpdateMessage(
@@ -3018,6 +3540,13 @@ class DeltaEventConsumer {
       return (missReason: 'metadataMismatch', reuse: false);
     }
     final inlineContent = _deltaInlineContentProjection(msg);
+    if (existing.rfc822BodyStatus.isPendingDownload) {
+      return (missReason: 'pendingRfc822BodyDownload', reuse: false);
+    }
+    if (existing.rfc822BodyContentUnavailable &&
+        _looksLikeDeltaBodyPlaceholder(inlineContent.rawText)) {
+      return (missReason: 'unavailableRfc822Placeholder', reuse: false);
+    }
     final contentMatches = _storedContentMatchesDeltaInlineProjection(
       existing: existing,
       inlineContent: inlineContent,
@@ -3723,7 +4252,13 @@ class DeltaEventConsumer {
         message: message,
       );
     }
-    if (previous.rfc822BodyContentUnavailable) {
+    final retryUnavailablePlaceholder =
+        previous.rfc822BodyContentUnavailable &&
+        (_looksLikeDeltaBodyPlaceholder(msg.text) ||
+            _looksLikeDeltaBodyPlaceholder(message.body));
+    if (previous.rfc822BodyContentUnavailable &&
+        !msg.needsDownload &&
+        !retryUnavailablePlaceholder) {
       return message.copyWith(
         rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
         pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
@@ -3734,6 +4269,7 @@ class DeltaEventConsumer {
       return _preserveOrMarkUnavailableRfc822BodyContent(
         previous: previous,
         message: message,
+        pendingDownload: msg.needsDownload,
       );
     }
     final normalizedHtml = HtmlContentCodec.normalizeHtml(rfc822Body.htmlBody);
@@ -3751,6 +4287,7 @@ class DeltaEventConsumer {
       return _preserveOrMarkUnavailableRfc822BodyContent(
         previous: previous,
         message: message,
+        pendingDownload: msg.needsDownload,
       );
     }
     final hasRenderableHtml =
@@ -3761,6 +4298,7 @@ class DeltaEventConsumer {
       return _preserveOrMarkUnavailableRfc822BodyContent(
         previous: previous,
         message: message,
+        pendingDownload: msg.needsDownload,
       );
     }
     return message.copyWith(
@@ -3802,6 +4340,7 @@ class DeltaEventConsumer {
   Message _preserveOrMarkUnavailableRfc822BodyContent({
     required Message previous,
     required Message message,
+    required bool pendingDownload,
   }) {
     if (previous.hasRfc822BodyContent) {
       return _preserveExistingRfc822BodyContent(
@@ -3810,7 +4349,9 @@ class DeltaEventConsumer {
       );
     }
     return message.copyWith(
-      rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
+      rfc822BodyStatus: pendingDownload
+          ? EmailRfc822BodyStatus.pendingDownload
+          : EmailRfc822BodyStatus.unavailable,
       pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
     );
   }

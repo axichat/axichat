@@ -766,9 +766,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .where((message) => message.isEmailBacked)
           .toList(growable: false);
       emailUnreadCount = emailUnreadCandidates.length;
-      if (emailService.hasInMemoryReconnectContext &&
-          (chat.defaultTransport.isEmail ||
-              scopedItems.any((message) => message.isEmailBacked))) {
+      final emailReadStateRelevant =
+          chat.defaultTransport.isEmail ||
+          scopedItems.any((message) => message.isEmailBacked);
+      if (emailService.hasInMemoryReconnectContext && emailReadStateRelevant) {
         final noticeResult = await emailService.syncChatNoticeState(chat);
         noticeSyncStatus = noticeResult.status.name;
         noticedRequested = noticeResult.coreNoticeRequested;
@@ -921,17 +922,68 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return candidate.trim().isNotEmpty;
   }
 
+  bool _canPageXmppHistory(Chat chat) {
+    if (!_xmppAllowedForChat(chat) || chat.isAxiImServerAnnouncementThread) {
+      return false;
+    }
+    return true;
+  }
+
   bool _isLocalOnlyXmppTarget({required String? jid, Contact? target}) {
     return isAxichatWelcomeThreadJid(jid) ||
         target?.chat?.isAxichatWelcomeThread == true;
   }
 
   bool _canPageEmailHistory(Chat chat) {
+    return _canPageEmailHistoryWithState(chat, state.emailSyncState);
+  }
+
+  bool _canPageEmailHistoryWithState(Chat chat, EmailSyncState syncState) {
     if (!chat.isEmailBacked) return false;
-    final status = state.emailSyncState.status;
+    final status = syncState.status;
     return status == EmailSyncStatus.ready ||
         status == EmailSyncStatus.recovering;
   }
+
+  ChatHistoryPaginationSourceState _emailPaginationStateFor(
+    Chat? chat, {
+    EmailSyncState? syncState,
+    ChatHistoryPaginationSourceState? previous,
+    bool reset = false,
+  }) {
+    final effectiveSyncState = syncState ?? state.emailSyncState;
+    if (chat == null ||
+        !_canPageEmailHistoryWithState(chat, effectiveSyncState)) {
+      return ChatHistoryPaginationSourceState.unavailable;
+    }
+    if (!reset && previous == ChatHistoryPaginationSourceState.exhausted) {
+      return ChatHistoryPaginationSourceState.exhausted;
+    }
+    return ChatHistoryPaginationSourceState.available;
+  }
+
+  ChatHistoryPaginationSourceState _xmppPaginationStateFor(
+    Chat? chat, {
+    ConnectionState? connectionState,
+    ChatHistoryPaginationSourceState? previous,
+    bool reset = false,
+  }) {
+    if (chat == null || !_canPageXmppHistory(chat)) {
+      return ChatHistoryPaginationSourceState.unavailable;
+    }
+    final xmppService = _xmppService;
+    if (xmppService != null &&
+        (connectionState ?? state.xmppConnectionState) !=
+            ConnectionState.connected) {
+      return ChatHistoryPaginationSourceState.temporarilyUnavailable;
+    }
+    if (!reset && previous == ChatHistoryPaginationSourceState.exhausted) {
+      return ChatHistoryPaginationSourceState.exhausted;
+    }
+    return ChatHistoryPaginationSourceState.available;
+  }
+
+  int _messageProbeLimit(int visibleLimit) => visibleLimit + 1;
 
   Future<void> sendCalendarSyncMessage({
     required String jid,
@@ -1015,45 +1067,50 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
-  String? _oldestLoadedStanzaId() {
-    final items = state.items;
-    if (items.isEmpty) {
-      return null;
+  String? _oldestLoadedXmppStanzaId() {
+    for (final message in state.items.reversed) {
+      if (message.isEmailBacked) {
+        continue;
+      }
+      final stanzaId = message.stanzaID.trim();
+      if (stanzaId.isNotEmpty) {
+        return stanzaId;
+      }
     }
-    final stanzaId = items.last.stanzaID.trim();
-    if (stanzaId.isEmpty) {
-      return null;
-    }
-    return stanzaId;
+    return null;
   }
 
-  Future<void> _loadEarlierFromMam() async {
+  Future<MamPageResult?> _loadEarlierFromMam() async {
     final chat = state.chat;
-    if (chat == null) return;
+    if (chat == null) return null;
     try {
-      await _messageService.loadEarlierFromMamForChatSession(
+      return await _messageService.loadEarlierFromMamForChatSession(
         sessionId: _chatArchiveSessionId,
         chat: chat,
-        fallbackBeforeId: _oldestLoadedStanzaId(),
+        fallbackBeforeId: _oldestLoadedXmppStanzaId(),
         filter: state.viewFilter,
         pageSize: messageBatchSize,
       );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_mamLoadFailedLogMessage, error, stackTrace);
+      return const MamPageResult(complete: false);
     }
   }
 
-  Future<void> _loadEarlierFromEmail({required int desiredWindow}) async {
+  Future<int?> _loadEarlierFromEmail({
+    required int desiredWindow,
+    int? maxImportCount,
+  }) async {
     if (_emailHistoryLoading) {
-      return;
+      return null;
     }
     final chat = state.chat;
     final emailService = _emailService;
     if (chat == null || emailService == null) {
-      return;
+      return null;
     }
     if (!_canPageEmailHistory(chat)) {
-      return;
+      return null;
     }
     final items = state.items;
     final oldest = items.isEmpty
@@ -1064,15 +1121,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
     _emailHistoryLoading = true;
     try {
-      await emailService.backfillChatHistory(
+      return await emailService.backfillChatHistory(
         chat: chat,
         desiredWindow: desiredWindow,
         beforeMessageId: oldest?.deltaMsgId,
         beforeTimestamp: oldest?.timestamp,
         filter: state.viewFilter,
+        maxImportCount: maxImportCount,
       );
     } on Exception catch (error, stackTrace) {
       _log.fine('Failed to backfill email history', error, stackTrace);
+      return null;
     } finally {
       _emailHistoryLoading = false;
     }
@@ -1202,7 +1261,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             messageId: messageId,
             filter: state.viewFilter,
             visibleWindowEmpty: state.items.isEmpty,
-            fallbackBeforeId: _oldestLoadedStanzaId(),
+            fallbackBeforeId: _oldestLoadedXmppStanzaId(),
             pageSize: messageBatchSize,
           );
     } on Exception catch (error, stackTrace) {
@@ -1247,7 +1306,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         messageId: messageId,
         filter: state.viewFilter,
         visibleWindowEmpty: state.items.isEmpty,
-        fallbackBeforeId: _oldestLoadedStanzaId(),
+        fallbackBeforeId: _oldestLoadedXmppStanzaId(),
         pageSize: messageBatchSize,
       );
     } on Exception catch (error, stackTrace) {
@@ -1335,7 +1394,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         desiredWindow: desiredWindow,
         filter: state.viewFilter,
         visibleWindowEmpty: state.items.isEmpty,
-        fallbackBeforeId: _oldestLoadedStanzaId(),
+        fallbackBeforeId: _oldestLoadedXmppStanzaId(),
         pageSize: messageBatchSize,
       );
     } on Exception catch (error, stackTrace) {
@@ -1410,8 +1469,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (state.viewFilter == filter) {
       return;
     }
-    emit(state.copyWith(viewFilter: filter));
     final chat = state.chat;
+    emit(
+      state.copyWith(
+        viewFilter: filter,
+        hasMoreLocalMessages: false,
+        emailHistoryPaginationState: _emailPaginationStateFor(
+          chat,
+          reset: true,
+        ),
+        xmppHistoryPaginationState: _xmppPaginationStateFor(chat, reset: true),
+      ),
+    );
     final resetChat = chat?.jid == chatJid ? chat : null;
     _messageService.resetChatArchiveSession(
       sessionId: _chatArchiveSessionId,
@@ -1762,9 +1831,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailService = _emailService;
     final useEmailService =
         !forceXmppFallback && chat?.defaultTransport.isEmail == true;
+    final queryLimit = _messageProbeLimit(limit);
     if (useEmailService && emailService != null) {
       _messageSubscription = emailService
-          .messageStreamForChat(targetJid, end: limit, filter: filter)
+          .messageStreamForChat(targetJid, end: queryLimit, filter: filter)
           .listen(
             (items) => add(_ChatMessagesUpdated(items)),
             onError: (Object error, StackTrace stackTrace) async {
@@ -1779,7 +1849,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     _messageSubscription = _messageService
-        .messageStreamForChat(targetJid, end: limit, filter: filter)
+        .messageStreamForChat(targetJid, end: queryLimit, filter: filter)
         .listen((items) => add(_ChatMessagesUpdated(items)));
   }
 
@@ -1953,6 +2023,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final transportChanged =
         state.chat?.defaultTransport != event.chat.defaultTransport;
+    final paginationContextChanged =
+        chatWasUninitialized ||
+        state.chat?.jid != event.chat.jid ||
+        transportChanged ||
+        state.chat?.isEmailBacked != event.chat.isEmailBacked;
     final previousPinnedSourceKey = state.chat == null
         ? null
         : _resolvePinnedMessagesChatJid(state.chat!);
@@ -2013,6 +2088,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             : state.typingParticipants,
         typing: event.chat.defaultTransport.isEmail ? false : state.typing,
         viewFilter: nextViewFilter,
+        hasMoreLocalMessages: paginationContextChanged
+            ? false
+            : state.hasMoreLocalMessages,
+        emailHistoryPaginationState: _emailPaginationStateFor(
+          event.chat,
+          previous: state.emailHistoryPaginationState,
+          reset: paginationContextChanged,
+        ),
+        xmppHistoryPaginationState: _xmppPaginationStateFor(
+          event.chat,
+          previous: state.xmppHistoryPaginationState,
+          reset: paginationContextChanged,
+        ),
         pinnedMessages: resetPinnedMessages
             ? const <PinnedMessageItem>[]
             : state.pinnedMessages,
@@ -2135,7 +2223,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _subscribeToPinnedMessages(event.chat);
       if (emit.isDone) return;
     }
-    if (_xmppAllowedForChat(event.chat)) {
+    if (_canPageXmppHistory(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
       if (emit.isDone) return;
       if (state.messagesLoaded) {
@@ -2525,6 +2613,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           attachmentMaps.groupQuotedReferenceByMessageId,
     );
     filteredItems = _messagesNewestFirst(filteredItems);
+    final hasMoreLocalMessages =
+        event.items.length > _currentMessageLimit ||
+        filteredItems.length > _currentMessageLimit;
+    if (filteredItems.length > _currentMessageLimit) {
+      filteredItems = filteredItems
+          .take(_currentMessageLimit)
+          .toList(growable: false);
+    }
     filteredCount = filteredItems.length;
     final chat = state.chat;
     if (chat == null) {
@@ -2627,6 +2723,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       state.copyWith(
         items: filteredItems,
         messagesLoaded: chat != null && !holdMessagesForUnreadBoundary,
+        hasMoreLocalMessages: hasMoreLocalMessages,
         attachmentMetadataIdsByMessageId: filtered.attachmentsByMessageId,
         attachmentGroupLeaderByMessageId: filtered.groupLeaderByMessageId,
         fileMetadataById: nextFileMetadataById,
@@ -4499,9 +4596,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _applyEmailSyncState(EmailSyncState nextState, Emitter<ChatState> emit) {
+    final nextEmailPaginationState = _emailPaginationStateFor(
+      state.chat,
+      syncState: nextState,
+      previous: state.emailHistoryPaginationState,
+    );
     if (!_isEmailChat && !state.usesSavedEmailTransportOverride) {
-      if (state.emailSyncState != nextState) {
-        emit(state.copyWith(emailSyncState: nextState));
+      if (state.emailSyncState != nextState ||
+          state.emailHistoryPaginationState != nextEmailPaginationState) {
+        emit(
+          state.copyWith(
+            emailSyncState: nextState,
+            emailHistoryPaginationState: nextEmailPaginationState,
+          ),
+        );
       }
       return;
     }
@@ -4517,7 +4625,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       composerError = message;
     }
     emit(
-      state.copyWith(emailSyncState: nextState, composerError: composerError),
+      state.copyWith(
+        emailSyncState: nextState,
+        composerError: composerError,
+        emailHistoryPaginationState: nextEmailPaginationState,
+      ),
     );
   }
 
@@ -4529,8 +4641,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final stateChanged = state.xmppConnectionState != event.state;
-    if (stateChanged) {
-      emit(state.copyWith(xmppConnectionState: event.state));
+    final nextXmppPaginationState = _xmppPaginationStateFor(
+      state.chat,
+      connectionState: event.state,
+      previous: state.xmppHistoryPaginationState,
+      reset:
+          state.xmppConnectionState != ConnectionState.connected &&
+          event.state == ConnectionState.connected,
+    );
+    if (stateChanged ||
+        state.xmppHistoryPaginationState != nextXmppPaginationState) {
+      emit(
+        state.copyWith(
+          xmppConnectionState: event.state,
+          xmppHistoryPaginationState: nextXmppPaginationState,
+        ),
+      );
     }
     if (_isClosing || isClosed) {
       return;
@@ -4545,7 +4671,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return;
       }
     }
-    if (_xmppAllowedForChat(chat)) {
+    if (_canPageXmppHistory(chat)) {
       await _catchUpFromMam();
       if (_isClosing || isClosed) {
         return;
@@ -4768,16 +4894,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     String? fullHtml;
     if (!message.hasRfc822BodyContent) {
+      ({String? html, bool settled}) rfc822Hydration = (
+        html: null,
+        settled: false,
+      );
       try {
-        await emailService.hydrateStoredRfc822BodyContent(message);
+        rfc822Hydration = await emailService.hydrateStoredRfc822BodyContent(
+          message,
+        );
       } on Exception {
         // Full HTML is still useful as a fallback when row hydration fails.
       }
+      final hydratedHtml = rfc822Hydration.html?.trim();
+      if (hydratedHtml != null && hydratedHtml.isNotEmpty) {
+        fullHtml = hydratedHtml;
+      }
+    } else {
+      fullHtml = message.normalizedHtmlBody;
     }
-    try {
-      fullHtml = await emailService.getMessageFullHtml(message);
-    } on Exception {
-      fullHtml = null;
+    if (fullHtml == null || fullHtml.trim().isEmpty) {
+      try {
+        fullHtml = await emailService.getMessageFullHtml(message);
+      } on Exception {
+        fullHtml = null;
+      }
     }
     final updatedLoading = Set<int>.from(state.emailFullHtmlLoading)
       ..remove(deltaMessageId);
@@ -6419,13 +6559,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     try {
-      await _enqueueLoadEarlier();
+      await _enqueueLoadEarlier(emit);
     } finally {
       event.completer?.complete();
     }
   }
 
-  Future<void> _enqueueLoadEarlier() {
+  Future<void> _enqueueLoadEarlier(Emitter<ChatState> emit) {
     _loadEarlierQueue = _loadEarlierQueue.then((_) async {
       try {
         final chat = state.chat;
@@ -6433,26 +6573,62 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           return;
         }
         final chatJid = chat.jid;
-        final nextLimit = state.items.length + messageBatchSize;
+        final hadMoreLocalMessages = state.hasMoreLocalMessages;
+        final nextLimit = _currentMessageLimit + messageBatchSize;
         await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
         if (state.chat?.jid != chatJid) {
           return;
         }
+        if (hadMoreLocalMessages) {
+          return;
+        }
         final canPageEmail = _canPageEmailHistory(chat);
-        final canPageXmpp = _xmppAllowedForChat(chat);
+        final canPageXmpp = _canPageXmppHistory(chat);
         if (!canPageEmail && !canPageXmpp) {
           return;
         }
-        if (canPageEmail) {
-          await _loadEarlierFromEmail(desiredWindow: nextLimit);
+        if (canPageEmail && state.emailHistoryPaginationState.canAttempt) {
+          emit(
+            state.copyWith(
+              emailHistoryPaginationState:
+                  ChatHistoryPaginationSourceState.loading,
+            ),
+          );
+          final imported = await _loadEarlierFromEmail(
+            desiredWindow: nextLimit,
+            maxImportCount: messageBatchSize,
+          );
           if (state.chat?.jid != chatJid) {
             return;
           }
+          emit(
+            state.copyWith(
+              emailHistoryPaginationState: imported == 0
+                  ? ChatHistoryPaginationSourceState.exhausted
+                  : _emailPaginationStateFor(chat, reset: imported == null),
+            ),
+          );
         }
-        if (chat.defaultTransport.isEmail || !canPageXmpp) {
+        if (!canPageXmpp || !state.xmppHistoryPaginationState.canAttempt) {
           return;
         }
-        await _loadEarlierFromMam();
+        emit(
+          state.copyWith(
+            xmppHistoryPaginationState:
+                ChatHistoryPaginationSourceState.loading,
+          ),
+        );
+        final mamResult = await _loadEarlierFromMam();
+        if (state.chat?.jid != chatJid) {
+          return;
+        }
+        emit(
+          state.copyWith(
+            xmppHistoryPaginationState: mamResult == null || mamResult.complete
+                ? ChatHistoryPaginationSourceState.exhausted
+                : _xmppPaginationStateFor(chat),
+          ),
+        );
       } on Exception catch (error, stackTrace) {
         _log.safeFine('Failed to load earlier', error, stackTrace);
       }

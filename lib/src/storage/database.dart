@@ -209,6 +209,12 @@ abstract interface class XmppDatabase implements Database {
     required int deltaChatId,
   });
 
+  Future<List<Message>> getUndisplayedMessagesByDeltaChat({
+    required int deltaAccountId,
+    required int deltaChatId,
+    int limit = 100,
+  });
+
   Future<void> clearMessageDeltaHandles(String stanzaID);
 
   Future<Message?> rehomeDeltaMessage({
@@ -2931,13 +2937,18 @@ WHERE stanza_i_d = ?
     int? beforeDeltaMsgId,
     required int limit,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
-  }) {
+  }) async {
+    final beforeRowId = await _chatMessageCursorRowId(
+      jid: jid,
+      beforeStanzaId: beforeStanzaId,
+      beforeDeltaMsgId: beforeDeltaMsgId,
+    );
     return _chatMessagesBeforeSelectable(
       jid: jid,
       filter: filter,
       limit: limit,
       beforeTimestamp: beforeTimestamp,
-      beforeStanzaId: beforeStanzaId,
+      beforeRowId: beforeRowId,
     ).get().then(_filterMessagesForDisplay);
   }
 
@@ -2947,38 +2958,14 @@ WHERE stanza_i_d = ?
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
     bool includePseudoMessages = true,
   }) async {
-    final filterValue = filter.index;
-    final query = await customSelect(
-      '''
-      SELECT COUNT(*) AS count
-      FROM messages m
-      LEFT JOIN message_copies mc
-        ON mc.dc_msg_id = m.delta_msg_id
-       AND mc.dc_account_id = m.delta_account_id
-      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-      LEFT JOIN message_participants mp
-        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-      WHERE m.chat_jid = ?
-        AND (? = 1 OR m.pseudo_message_type IS NULL)
-        AND ${_visibleMessageSqlPredicate('m')}
-        AND (
-          CASE WHEN ? = 0 THEN
-            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-          ELSE
-            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-          END
-        )
-      ''',
-      variables: [
-        Variable<String>(jid),
-        Variable<String>(jid),
-        Variable<int>(includePseudoMessages ? 1 : 0),
-        Variable<int>(filterValue),
-      ],
-      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
-    ).getSingle();
-
-    return query.read<int>('count');
+    final countExpression = messages.rowId.count(distinct: true);
+    final query = _chatMessagesCountJoin(jid: jid, filter: filter)
+      ..addColumns([countExpression]);
+    if (!includePseudoMessages) {
+      query.where(messages.pseudoMessageType.isNull());
+    }
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
   }
 
   @override
@@ -2988,44 +2975,20 @@ WHERE stanza_i_d = ?
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
     bool includePseudoMessages = true,
   }) async {
-    final filterValue = filter.index;
-    final accountClause = deltaAccountId == null
-        ? ''
-        : ' AND m.delta_account_id = ?';
-    final query = await customSelect(
-      '''
-      SELECT COUNT(*) AS count
-      FROM messages m
-      LEFT JOIN message_copies mc
-        ON mc.dc_msg_id = m.delta_msg_id
-       AND mc.dc_account_id = m.delta_account_id
-      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-      LEFT JOIN message_participants mp
-        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-      WHERE m.chat_jid = ?
-        AND (? = 1 OR m.pseudo_message_type IS NULL)
-        AND (m.delta_chat_id IS NOT NULL OR m.delta_msg_id IS NOT NULL)
-        $accountClause
-        AND ${_visibleMessageSqlPredicate('m')}
-        AND (
-          CASE WHEN ? = 0 THEN
-            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-          ELSE
-            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-          END
-        )
-      ''',
-      variables: [
-        Variable<String>(jid),
-        Variable<String>(jid),
-        Variable<int>(includePseudoMessages ? 1 : 0),
-        if (deltaAccountId != null) Variable<int>(deltaAccountId),
-        Variable<int>(filterValue),
-      ],
-      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
-    ).getSingle();
-
-    return query.read<int>('count');
+    final countExpression = messages.rowId.count(distinct: true);
+    final query = _chatMessagesCountJoin(jid: jid, filter: filter)
+      ..addColumns([countExpression])
+      ..where(
+        messages.deltaChatId.isNotNull() | messages.deltaMsgId.isNotNull(),
+      );
+    if (!includePseudoMessages) {
+      query.where(messages.pseudoMessageType.isNull());
+    }
+    if (deltaAccountId != null) {
+      query.where(messages.deltaAccountId.equals(deltaAccountId));
+    }
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
   }
 
   String _visibleMessageSqlPredicate(String alias) =>
@@ -3041,8 +3004,16 @@ WHERE stanza_i_d = ?
     )
   ''';
 
-  bool _shouldDisplayMessage(Message message) =>
-      !message.isHiddenMultiDeviceSyncMessage;
+  bool _shouldDisplayMessage(Message message) {
+    if (message.isHiddenMultiDeviceSyncMessage) {
+      return false;
+    }
+    if ((message.deltaChatId != null || message.deltaMsgId != null) &&
+        message.deltaAccountId == DeltaAccountDefaults.legacyId) {
+      return false;
+    }
+    return true;
+  }
 
   List<Message> _filterMessagesForDisplay(Iterable<Message> messages) {
     return messages.where(_shouldDisplayMessage).toList(growable: false);
@@ -3056,49 +3027,22 @@ WHERE stanza_i_d = ?
     int? throughDeltaMsgId,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
-    final filterValue = filter.index;
-    final query = await customSelect(
-      '''
-      SELECT COUNT(*) AS count
-      FROM messages m
-      LEFT JOIN message_copies mc
-        ON mc.dc_msg_id = m.delta_msg_id
-       AND mc.dc_account_id = m.delta_account_id
-      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-      LEFT JOIN message_participants mp
-        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-      WHERE m.chat_jid = ?
-        AND ${_visibleMessageSqlPredicate('m')}
-        AND (
-          CASE WHEN ? = 0 THEN
-            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-          ELSE
-            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-          END
-        )
-        AND (
-          m.timestamp > ?
-          OR (
-            m.timestamp = ?
-            AND m.rowid >= COALESCE(
-              (SELECT rowid FROM messages WHERE stanza_i_d = ?),
-              9223372036854775807
-            )
-          )
-        )
-      ''',
-      variables: [
-        Variable<String>(jid),
-        Variable<String>(jid),
-        Variable<int>(filterValue),
-        Variable<DateTime>(throughTimestamp),
-        Variable<DateTime>(throughTimestamp),
-        Variable<String>(throughStanzaId),
-      ],
-      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
-    ).getSingle();
-
-    return query.read<int>('count');
+    final throughRowId = await _chatMessageCursorRowId(
+      jid: jid,
+      beforeStanzaId: throughStanzaId,
+      beforeDeltaMsgId: throughDeltaMsgId,
+    );
+    final rowCursor = throughRowId ?? 9223372036854775807;
+    final countExpression = messages.rowId.count(distinct: true);
+    final query = _chatMessagesCountJoin(jid: jid, filter: filter)
+      ..addColumns([countExpression])
+      ..where(
+        messages.timestamp.isBiggerThanValue(throughTimestamp) |
+            (messages.timestamp.equals(throughTimestamp) &
+                messages.rowId.isBiggerOrEqualValue(rowCursor)),
+      );
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
   }
 
   Selectable<Message> _chatMessagesSelectable({
@@ -3107,46 +3051,26 @@ WHERE stanza_i_d = ?
     required int limit,
     required int offset,
   }) {
-    final filterValue = filter.index;
-    final query = customSelect(
-      '''
-      SELECT m.*
-      FROM messages m
-      LEFT JOIN message_copies mc
-        ON mc.dc_msg_id = m.delta_msg_id
-       AND mc.dc_account_id = m.delta_account_id
-      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-      LEFT JOIN message_participants mp
-        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-      WHERE m.chat_jid = ?
-        AND ${_visibleMessageSqlPredicate('m')}
-        AND (
-          CASE WHEN ? = 0 THEN
-            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-          ELSE
-            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-          END
-        )
-      ORDER BY m.timestamp DESC, m.rowid DESC
-      LIMIT ?
-      OFFSET ?
-      ''',
-      variables: [
-        Variable<String>(jid),
-        Variable<String>(jid),
-        Variable<int>(filterValue),
-        Variable<int>(limit),
-        Variable<int>(offset),
-      ],
-      readsFrom: {
-        messages,
-        messageCopies,
-        messageShares,
-        messageParticipants,
-        messageAttachments,
-      },
-    );
-    return query.map((row) => messages.map(row.data));
+    final query = _chatMessagesJoin(jid: jid, filter: filter)
+      ..orderBy([
+        OrderingTerm(expression: messages.timestamp, mode: OrderingMode.desc),
+        OrderingTerm(expression: messages.rowId, mode: OrderingMode.desc),
+      ])
+      ..limit(limit, offset: offset);
+    return query.map((row) => row.readTable(messages));
+  }
+
+  JoinedSelectStatement<HasResultSet, dynamic> _chatMessagesCountJoin({
+    required String jid,
+    required MessageTimelineFilter filter,
+  }) {
+    final query = selectOnly(messages).join(_chatMessageShareJoins(jid))
+      ..where(
+        messages.chatJid.equals(jid) &
+            _timelineDisplayableMessageExpression(messages) &
+            _timelineShareFilterExpression(filter),
+      );
+    return query;
   }
 
   Selectable<Message> _chatMessagesBeforeSelectable({
@@ -3154,53 +3078,150 @@ WHERE stanza_i_d = ?
     required MessageTimelineFilter filter,
     required int limit,
     required DateTime beforeTimestamp,
-    required String beforeStanzaId,
+    required int? beforeRowId,
   }) {
-    final filterValue = filter.index;
-    final query = customSelect(
-      '''
-      SELECT m.*
-      FROM messages m
-      LEFT JOIN message_copies mc
-        ON mc.dc_msg_id = m.delta_msg_id
-       AND mc.dc_account_id = m.delta_account_id
-      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-      LEFT JOIN message_participants mp
-        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-      WHERE m.chat_jid = ?
-        AND ${_visibleMessageSqlPredicate('m')}
-        AND (
-          CASE WHEN ? = 0 THEN
-            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-          ELSE
-            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-          END
-        )
-        AND (
-          m.timestamp < ?
-          OR (
-            m.timestamp = ?
-            AND m.rowid < COALESCE(
-              (SELECT rowid FROM messages WHERE stanza_i_d = ?),
-              -1
-            )
-          )
-        )
-      ORDER BY m.timestamp DESC, m.rowid DESC
-      LIMIT ?
-      ''',
-      variables: [
-        Variable<String>(jid),
-        Variable<String>(jid),
-        Variable<int>(filterValue),
-        Variable<DateTime>(beforeTimestamp),
-        Variable<DateTime>(beforeTimestamp),
-        Variable<String>(beforeStanzaId),
-        Variable<int>(limit),
-      ],
-      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
-    );
-    return query.map((row) => messages.map(row.data));
+    final rowCursor = beforeRowId ?? -1;
+    final query = _chatMessagesJoin(jid: jid, filter: filter)
+      ..where(
+        messages.timestamp.isSmallerThanValue(beforeTimestamp) |
+            (messages.timestamp.equals(beforeTimestamp) &
+                messages.rowId.isSmallerThanValue(rowCursor)),
+      )
+      ..orderBy([
+        OrderingTerm(expression: messages.timestamp, mode: OrderingMode.desc),
+        OrderingTerm(expression: messages.rowId, mode: OrderingMode.desc),
+      ])
+      ..limit(limit);
+    return query.map((row) => row.readTable(messages));
+  }
+
+  JoinedSelectStatement<HasResultSet, dynamic> _chatMessagesJoin({
+    required String jid,
+    required MessageTimelineFilter filter,
+  }) {
+    final query = select(messages).join(_chatMessageShareJoins(jid))
+      ..where(
+        messages.chatJid.equals(jid) &
+            _timelineDisplayableMessageExpression(messages) &
+            _timelineShareFilterExpression(filter),
+      );
+    return query;
+  }
+
+  List<Join> _chatMessageShareJoins(String jid) {
+    return [
+      leftOuterJoin(
+        messageCopies,
+        messageCopies.dcMsgId.equalsExp(messages.deltaMsgId) &
+            messageCopies.dcAccountId.equalsExp(messages.deltaAccountId),
+      ),
+      leftOuterJoin(
+        messageShares,
+        messageShares.shareId.equalsExp(messageCopies.shareId),
+      ),
+      leftOuterJoin(
+        messageParticipants,
+        messageParticipants.shareId.equalsExp(messageCopies.shareId) &
+            messageParticipants.contactJid.equals(jid),
+      ),
+    ];
+  }
+
+  Expression<bool> _timelineDisplayableMessageExpression(
+    $MessagesTable messageTable,
+  ) {
+    return _timelineVisibleSyncMessageExpression(messageTable) &
+        ((messageTable.deltaMsgId.isNull() &
+                messageTable.deltaChatId.isNull()) |
+            messageTable.deltaAccountId.isBiggerThanValue(
+              DeltaAccountDefaults.legacyId,
+            ));
+  }
+
+  Expression<bool> _timelineVisibleSyncMessageExpression(
+    $MessagesTable messageTable,
+  ) {
+    final normalizedSender = coalesce<String>([
+      messageTable.senderJid,
+      const Constant(''),
+    ]).trim().lower();
+    final normalizedChat = coalesce<String>([
+      messageTable.chatJid,
+      const Constant(''),
+    ]).trim().lower();
+    final normalizedSubject = coalesce<String>([
+      messageTable.subject,
+      const Constant(''),
+    ]).trim().lower();
+    final normalizedBody = coalesce<String>([
+      messageTable.body,
+      const Constant(''),
+    ]).trim().lower();
+    final hiddenSyncMessage =
+        messageTable.received.equals(false) &
+        normalizedSender.equalsExp(normalizedChat) &
+        normalizedSubject.equals('multi device synchronization') &
+        normalizedBody.like(
+          'this message is used to synchronize data between your devices%',
+        );
+    return hiddenSyncMessage.not();
+  }
+
+  Expression<bool> _timelineShareFilterExpression(
+    MessageTimelineFilter filter,
+  ) {
+    if (filter.isDirect) {
+      return messageCopies.shareId.isNull() |
+          coalesce<int>([
+            messageShares.participantCount,
+            const Constant(0),
+          ]).isSmallerOrEqualValue(2);
+    }
+    return messageCopies.shareId.isNull() |
+        messageParticipants.contactJid.isNotNull();
+  }
+
+  Future<int?> _chatMessageCursorRowId({
+    required String jid,
+    required String beforeStanzaId,
+    int? beforeDeltaMsgId,
+  }) async {
+    final normalizedStanzaId = beforeStanzaId.trim();
+    if (normalizedStanzaId.isNotEmpty) {
+      final row =
+          await (selectOnly(messages)
+                ..addColumns([messages.rowId])
+                ..where(
+                  messages.chatJid.equals(jid) &
+                      messages.stanzaID.equals(normalizedStanzaId) &
+                      _timelineDisplayableMessageExpression(messages),
+                ))
+              .getSingleOrNull();
+      final rowId = row?.read(messages.rowId);
+      if (rowId != null) {
+        return rowId;
+      }
+    }
+    if (beforeDeltaMsgId == null ||
+        beforeDeltaMsgId <= DeltaAccountDefaults.legacyId) {
+      return null;
+    }
+    final row =
+        await (selectOnly(messages)
+              ..addColumns([messages.rowId])
+              ..where(
+                messages.chatJid.equals(jid) &
+                    messages.deltaMsgId.equals(beforeDeltaMsgId) &
+                    _timelineDisplayableMessageExpression(messages),
+              )
+              ..orderBy([
+                OrderingTerm(
+                  expression: messages.rowId,
+                  mode: OrderingMode.desc,
+                ),
+              ]))
+            .getSingleOrNull();
+    return row?.read(messages.rowId);
   }
 
   @override
@@ -3591,6 +3612,32 @@ WHERE stanza_i_d = ?
             (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
             (tbl) => OrderingTerm.asc(tbl.stanzaID),
           ]))
+        .get();
+  }
+
+  @override
+  Future<List<Message>> getUndisplayedMessagesByDeltaChat({
+    required int deltaAccountId,
+    required int deltaChatId,
+    int limit = 100,
+  }) {
+    if (deltaAccountId <= 0 || deltaChatId <= 0 || limit <= 0) {
+      return Future.value(const <Message>[]);
+    }
+    return (select(messages)
+          ..where(
+            (tbl) =>
+                tbl.deltaAccountId.equals(deltaAccountId) &
+                tbl.deltaChatId.equals(deltaChatId) &
+                tbl.deltaMsgId.isNotNull() &
+                tbl.displayed.equals(false),
+          )
+          ..orderBy([
+            (tbl) => OrderingTerm.asc(tbl.timestamp),
+            (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
+            (tbl) => OrderingTerm.asc(tbl.stanzaID),
+          ])
+          ..limit(limit))
         .get();
   }
 

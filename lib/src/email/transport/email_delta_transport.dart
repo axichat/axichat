@@ -365,8 +365,13 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
   });
   Future<DeltaMessage?> getDraft(int chatId, {int? accountId});
   Future<DeltaMessage?> getMessage(int messageId, {int? accountId});
+  Future<DeltaMessageStatus?> getMessageStatus(int messageId, {int? accountId});
 
   Future<List<DeltaMessage>> getMessages(
+    List<int> messageIds, {
+    int? accountId,
+  });
+  Future<List<DeltaMessageStatus>> getMessageStatuses(
     List<int> messageIds, {
     int? accountId,
   });
@@ -3028,6 +3033,20 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   }
 
   @override
+  Future<DeltaMessageStatus?> getMessageStatus(
+    int messageId, {
+    int? accountId,
+  }) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return null;
+    }
+    return context.getMessageStatus(messageId);
+  }
+
+  @override
   Future<List<DeltaMessage>> getMessages(
     List<int> messageIds, {
     int? accountId,
@@ -3054,6 +3073,36 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       }
     }
     return messages;
+  }
+
+  @override
+  Future<List<DeltaMessageStatus>> getMessageStatuses(
+    List<int> messageIds, {
+    int? accountId,
+  }) async {
+    if (messageIds.isEmpty) return const <DeltaMessageStatus>[];
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return const <DeltaMessageStatus>[];
+    }
+    final statuses = <DeltaMessageStatus>[];
+    for (final messageId in messageIds) {
+      try {
+        final status = await context.getMessageStatus(messageId);
+        if (status != null) {
+          statuses.add(status);
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.fine(
+          'Skipping unreadable Delta message status $messageId in bulk fetch.',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    return statuses;
   }
 
   /// Gets raw MIME headers by message ID from core.

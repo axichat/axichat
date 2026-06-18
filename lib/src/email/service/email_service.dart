@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:archive/archive_io.dart';
@@ -103,6 +104,7 @@ enum _EmailCatchUpProjectDecision {
   skippedFetchFailed,
   requested,
   incremental,
+  incrementalWithSnapshotFallback,
 }
 
 final class _EmailCatchUpResult {
@@ -112,6 +114,8 @@ final class _EmailCatchUpResult {
     this.fetched = false,
     this.projected = false,
     this.projectedMessageCount = 0,
+    this.projectedFreshIdCount = 0,
+    this.projectedAffectedChatCount = 0,
     this.networkNotified = false,
   });
 
@@ -120,12 +124,31 @@ final class _EmailCatchUpResult {
   final bool fetched;
   final bool projected;
   final int projectedMessageCount;
+  final int projectedFreshIdCount;
+  final int projectedAffectedChatCount;
   final bool networkNotified;
 
   static const skipped = _EmailCatchUpResult(
     fetchDecision: _EmailCatchUpFetchDecision.none,
     projectDecision: _EmailCatchUpProjectDecision.none,
   );
+}
+
+final class _EmailFreshProjectionResult {
+  const _EmailFreshProjectionResult({
+    this.freshIdCount = 0,
+    this.syncedMessageCount = 0,
+    this.affectedChatCount = 0,
+  });
+
+  final int freshIdCount;
+  final int syncedMessageCount;
+  final int affectedChatCount;
+
+  bool get hadFreshIds => freshIdCount > 0;
+
+  bool get projectedLocalState =>
+      syncedMessageCount > 0 || affectedChatCount > 0;
 }
 
 enum EmailChatNoticeSyncStatus {
@@ -495,8 +518,20 @@ final class _EmailRuntimeEventCore implements DeltaEventCore {
       _transport.getMessage(messageId, accountId: _accountId);
 
   @override
+  Future<DeltaMessageStatus?> getMessageStatus(int messageId) =>
+      _transport.getMessageStatus(messageId, accountId: _accountId);
+
+  @override
   Future<List<DeltaMessage>> getMessages(List<int> messageIds) =>
       _transport.getMessages(messageIds, accountId: _accountId);
+
+  @override
+  Future<List<DeltaMessageStatus>> getMessageStatuses(List<int> messageIds) =>
+      _transport.getMessageStatuses(messageIds, accountId: _accountId);
+
+  @override
+  Future<List<int>> getFreshMessageIds() =>
+      _transport.getFreshMessageIds(accountId: _accountId);
 
   @override
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(int chatId) =>
@@ -695,6 +730,8 @@ class EmailService {
   static const Duration _connectivityProbeTimeout = Duration(seconds: 1);
   static const Duration _notificationFlushDelay = Duration(milliseconds: 500);
   static const Duration _contactsSyncDebounce = Duration(seconds: 2);
+  static const Duration _mailPushIoSettleProjectionDelay = Duration(seconds: 2);
+  static const int _mailPushIoSettleProjectionMaxAttempts = 5;
   static const int _connectivityConnectedMin = 4000;
   static const int _connectivityWorkingMin = 3000;
   static const int _connectivityConnectingMin = 2000;
@@ -981,6 +1018,8 @@ class EmailService {
 
   Future<bool>? _backgroundFetchInFlight;
 
+  Timer? _mailPushIoSettleProjectionTimer;
+  int _mailPushIoSettleProjectionAttempt = 0;
   Timer? _imapSyncTimer;
   Object? _imapSyncLoopToken;
   final EmailAsyncQueue _imapSyncQueue = EmailAsyncQueue();
@@ -1320,6 +1359,9 @@ class EmailService {
     );
     var projected = false;
     var projectedMessageCount = 0;
+    var projectedFreshIdCount = 0;
+    var projectedAffectedChatCount = 0;
+    String? fullSnapshotFallbackReason;
     if (projectDecision == _EmailCatchUpProjectDecision.requested) {
       await refreshChatlistFromCore(
         source: reason.name,
@@ -1330,11 +1372,28 @@ class EmailService {
         ),
       );
       projected = true;
-    } else if (projectDecision == _EmailCatchUpProjectDecision.incremental) {
-      projectedMessageCount = await _syncFreshFromCore(
+    } else if (projectDecision == _EmailCatchUpProjectDecision.incremental ||
+        projectDecision ==
+            _EmailCatchUpProjectDecision.incrementalWithSnapshotFallback) {
+      final freshProjection = await _syncFreshFromCore(
         isStillRelevant: isStillRelevant,
       );
+      projectedMessageCount = freshProjection.syncedMessageCount;
+      projectedFreshIdCount = freshProjection.freshIdCount;
+      projectedAffectedChatCount = freshProjection.affectedChatCount;
       projected = true;
+      fullSnapshotFallbackReason = _incrementalCatchUpSnapshotFallbackReason(
+        reason: reason,
+        freshProjection: freshProjection,
+        ioRunning: ioRunningForProjection,
+      );
+      if (fullSnapshotFallbackReason != null) {
+        await refreshChatlistFromCore(source: reason.name);
+      } else if (reason == _EmailCatchUpReason.mailPushHint &&
+          ioRunningForProjection &&
+          !freshProjection.hadFreshIds) {
+        _scheduleMailPushIoSettleProjection(parentTraceId: traceId);
+      }
     }
     if (_shouldFlushNotificationsForCatchUp(reason)) {
       await _flushQueuedNotifications();
@@ -1357,6 +1416,8 @@ class EmailService {
       fetched: fetched,
       projected: projected,
       projectedMessageCount: projectedMessageCount,
+      projectedFreshIdCount: projectedFreshIdCount,
+      projectedAffectedChatCount: projectedAffectedChatCount,
       networkNotified: networkNotified,
     );
     _traceEmailOperation(
@@ -1373,6 +1434,9 @@ class EmailService {
         'projectDecision': projectDecision.name,
         'projected': projected,
         'projectedMessageCount': projectedMessageCount,
+        'projectedFreshIdCount': projectedFreshIdCount,
+        'projectedAffectedChatCount': projectedAffectedChatCount,
+        'fullSnapshotFallback': fullSnapshotFallbackReason,
         'networkNotified': networkNotified,
         'syncStatus': _syncState.status.name,
         'elapsedMs': stopwatch.elapsedMilliseconds,
@@ -1419,14 +1483,15 @@ class EmailService {
   String _catchUpProjectPolicyLabel(_EmailCatchUpReason reason) {
     switch (reason) {
       case _EmailCatchUpReason.mailPushHint:
-        return 'fetchSuccessOrIoRunning';
+        return 'incrementalAfterFetchOrIoRunning';
       case _EmailCatchUpReason.periodicIdleTick:
         return 'fetchSuccessIncremental';
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return 'incrementalWithFallback';
       case _EmailCatchUpReason.homeUnreadRefresh:
       case _EmailCatchUpReason.homeHistoryRefresh:
       case _EmailCatchUpReason.syncInboxAndSent:
       case _EmailCatchUpReason.backgroundFetchDone:
-      case _EmailCatchUpReason.incomingMsgBunch:
       case _EmailCatchUpReason.channelOverflow:
       case _EmailCatchUpReason.reconnectCatchUp:
         return 'always';
@@ -1441,20 +1506,48 @@ class EmailService {
     switch (reason) {
       case _EmailCatchUpReason.mailPushHint:
         return fetched || ioRunning
-            ? _EmailCatchUpProjectDecision.requested
+            ? _EmailCatchUpProjectDecision.incrementalWithSnapshotFallback
             : _EmailCatchUpProjectDecision.skippedFetchFailed;
       case _EmailCatchUpReason.periodicIdleTick:
         return fetched
             ? _EmailCatchUpProjectDecision.incremental
             : _EmailCatchUpProjectDecision.skippedFetchFailed;
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return _EmailCatchUpProjectDecision.incrementalWithSnapshotFallback;
       case _EmailCatchUpReason.homeUnreadRefresh:
       case _EmailCatchUpReason.homeHistoryRefresh:
       case _EmailCatchUpReason.syncInboxAndSent:
       case _EmailCatchUpReason.backgroundFetchDone:
-      case _EmailCatchUpReason.incomingMsgBunch:
       case _EmailCatchUpReason.channelOverflow:
       case _EmailCatchUpReason.reconnectCatchUp:
         return _EmailCatchUpProjectDecision.requested;
+    }
+  }
+
+  String? _incrementalCatchUpSnapshotFallbackReason({
+    required _EmailCatchUpReason reason,
+    required _EmailFreshProjectionResult freshProjection,
+    required bool ioRunning,
+  }) {
+    if (freshProjection.hadFreshIds || freshProjection.projectedLocalState) {
+      return null;
+    }
+    if (_hasRecentChatlistRefreshCovering(accountId: null)) {
+      return null;
+    }
+    switch (reason) {
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return 'emptyIncremental';
+      case _EmailCatchUpReason.mailPushHint:
+        return ioRunning ? null : 'emptyIncrementalAfterFetch';
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.periodicIdleTick:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.channelOverflow:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return null;
     }
   }
 
@@ -3116,6 +3209,7 @@ class EmailService {
     _detachTransportListener(transport: transport);
     await _stopForegroundKeepalive();
     _stopImapSyncLoop();
+    _cancelMailPushIoSettleProjection();
     _cancelContactsSyncTimer();
     _cancelConnectivityDowngrade();
     _suppressedConnectivityChangedEvents = 0;
@@ -3248,6 +3342,7 @@ class EmailService {
     );
     await _stopForegroundKeepalive();
     _stopImapSyncLoop();
+    _cancelMailPushIoSettleProjection();
     _cancelContactsSyncTimer();
     _cancelConnectivityDowngrade();
     _suppressedConnectivityChangedEvents = 0;
@@ -5396,24 +5491,25 @@ class EmailService {
     }
   }
 
-  Future<void> backfillChatHistory({
+  Future<int> backfillChatHistory({
     required Chat chat,
     required int desiredWindow,
     int? beforeMessageId,
     DateTime? beforeTimestamp,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    int? maxImportCount,
   }) async {
     if (!chat.isEmailBacked) {
-      return;
+      return 0;
     }
     if (desiredWindow < _minimumHistoryWindow) {
-      return;
+      return 0;
     }
     await _ensureReady();
     final String scope = _requireActiveScope();
     final _EmailAccountBinding account = await _accountBindingForChat(chat);
     if (_blocksRuntimeReentry) {
-      return;
+      return 0;
     }
     final Chat resolvedChat = await _trackAppDatabaseOperation(
       () => _storedEmailChatForAccount(
@@ -5422,7 +5518,7 @@ class EmailService {
       ),
     );
     if (_blocksRuntimeReentry) {
-      return;
+      return 0;
     }
     await _ensureAccountConfigured(scope: scope, account: account);
     final int? chatId = await _deltaChatIdForAccount(
@@ -5430,7 +5526,7 @@ class EmailService {
       deltaAccountId: account.deltaAccountId,
     );
     if (chatId == null) {
-      return;
+      return 0;
     }
     final Chat effectiveChat = await _trackAppDatabaseOperation(() async {
       final db = await _databaseBuilder();
@@ -5441,7 +5537,7 @@ class EmailService {
           resolvedChat;
     });
     if (_blocksRuntimeReentry) {
-      return;
+      return 0;
     }
     final localCount = await _trackAppDatabaseOperation(() async {
       final db = await _databaseBuilder();
@@ -5453,16 +5549,19 @@ class EmailService {
       );
     });
     if (_blocksRuntimeReentry) {
-      return;
+      return 0;
     }
-    if (localCount >= desiredWindow) {
-      return;
+    final targetWindow = maxImportCount == null
+        ? desiredWindow
+        : math.min(desiredWindow, localCount + maxImportCount);
+    if (localCount >= targetWindow) {
+      return 0;
     }
     await _performBackgroundFetchIfIdle(timeout: _foregroundFetchTimeout);
-    await _backfillChatHistoryOnMain(
+    return _backfillChatHistoryOnMain(
       chatId: chatId,
       chatJid: effectiveChat.jid,
-      desiredWindow: desiredWindow,
+      desiredWindow: targetWindow,
       targetChat: effectiveChat,
       beforeMessageId: beforeMessageId,
       beforeTimestamp: beforeTimestamp,
@@ -5812,7 +5911,9 @@ class EmailService {
     _recordChatlistRefreshCompleted(accountId: accountId);
   }
 
-  Future<int> _syncFreshFromCore({bool Function()? isStillRelevant}) async {
+  Future<_EmailFreshProjectionResult> _syncFreshFromCore({
+    bool Function()? isStillRelevant,
+  }) async {
     bool cancelled() => isStillRelevant?.call() == false;
     final traceId = _nextTraceId('email.freshProjection');
     final stopwatch = Stopwatch()..start();
@@ -5835,11 +5936,12 @@ class EmailService {
           'elapsedMs': stopwatch.elapsedMilliseconds,
         },
       );
-      return 0;
+      return const _EmailFreshProjectionResult();
     }
 
     var syncedCount = 0;
     var freshIdCount = 0;
+    var affectedChatCount = 0;
     final accountIds = await _deltaAccountIdsForScope(null);
     for (final accountId in accountIds) {
       if (cancelled()) {
@@ -5852,11 +5954,15 @@ class EmailService {
       );
       freshIdCount += freshIds.length;
       var accountSyncedCount = 0;
+      var accountAffectedChatCount = 0;
       if (freshIds.isNotEmpty && !cancelled()) {
-        accountSyncedCount = await _deltaConsumerForAccount(
+        final syncResult = await _deltaConsumerForAccount(
           accountId,
         ).syncFreshMessages(freshIds, isCurrent: isStillRelevant);
+        accountSyncedCount = syncResult.hydratedCount;
+        accountAffectedChatCount = syncResult.affectedChatCount;
         syncedCount += accountSyncedCount;
+        affectedChatCount += accountAffectedChatCount;
       }
       _traceEmailOperation(
         'email.freshProjection.account',
@@ -5866,6 +5972,7 @@ class EmailService {
           'accountId': accountId,
           'freshIdCount': freshIds.length,
           'syncedMessageCount': accountSyncedCount,
+          'affectedChatCount': accountAffectedChatCount,
           'elapsedMs': accountWatch.elapsedMilliseconds,
         },
       );
@@ -5878,11 +5985,16 @@ class EmailService {
         'accountCount': accountIds.length,
         'freshIdCount': freshIdCount,
         'syncedMessageCount': syncedCount,
+        'affectedChatCount': affectedChatCount,
         'cancelled': cancelled(),
         'elapsedMs': stopwatch.elapsedMilliseconds,
       },
     );
-    return syncedCount;
+    return _EmailFreshProjectionResult(
+      freshIdCount: freshIdCount,
+      syncedMessageCount: syncedCount,
+      affectedChatCount: affectedChatCount,
+    );
   }
 
   Future<void> _refreshStartupChatlistSnapshot({required int accountId}) async {
@@ -5897,7 +6009,7 @@ class EmailService {
     }
   }
 
-  Future<void> _backfillChatHistoryOnMain({
+  Future<int> _backfillChatHistoryOnMain({
     required int chatId,
     required String chatJid,
     required int desiredWindow,
@@ -5910,10 +6022,10 @@ class EmailService {
     final resolvedAccountId = accountId;
     if (resolvedAccountId == null) {
       _log.fine('Skipping Delta chat history backfill without account id.');
-      return;
+      return 0;
     }
     await _transport.ensureAccountSession(resolvedAccountId);
-    await _deltaConsumerForAccount(resolvedAccountId).backfillChatHistory(
+    return _deltaConsumerForAccount(resolvedAccountId).backfillChatHistory(
       chatId: chatId,
       chatJid: chatJid,
       desiredWindow: desiredWindow,
@@ -7490,6 +7602,91 @@ class EmailService {
     _imapSyncLoopToken = null;
     _imapSyncTimer?.cancel();
     _imapSyncTimer = null;
+  }
+
+  void _scheduleMailPushIoSettleProjection({required String parentTraceId}) {
+    if (_mailPushIoSettleProjectionTimer != null) {
+      _traceEmailOperation(
+        'email.mailPush.settleProjection',
+        'coalesced',
+        fields: <String, Object?>{
+          'parent': parentTraceId,
+          'attempt': _mailPushIoSettleProjectionAttempt,
+        },
+      );
+      return;
+    }
+    _mailPushIoSettleProjectionAttempt = 0;
+    _scheduleNextMailPushIoSettleProjection(parentTraceId: parentTraceId);
+  }
+
+  void _scheduleNextMailPushIoSettleProjection({
+    required String parentTraceId,
+  }) {
+    _mailPushIoSettleProjectionTimer = Timer(
+      _mailPushIoSettleProjectionDelay,
+      () async {
+        _mailPushIoSettleProjectionTimer = null;
+        if (!hasActiveSession || _nativeCleanupPending) {
+          _traceEmailOperation(
+            'email.mailPush.settleProjection',
+            'skip',
+            fields: <String, Object?>{
+              'parent': parentTraceId,
+              'reason': 'inactive',
+            },
+          );
+          return;
+        }
+        if (_transport.isIoRunning &&
+            _mailPushIoSettleProjectionAttempt <
+                _mailPushIoSettleProjectionMaxAttempts) {
+          _mailPushIoSettleProjectionAttempt += 1;
+          _traceEmailOperation(
+            'email.mailPush.settleProjection',
+            'rescheduled',
+            fields: <String, Object?>{
+              'parent': parentTraceId,
+              'attempt': _mailPushIoSettleProjectionAttempt,
+            },
+          );
+          _scheduleNextMailPushIoSettleProjection(parentTraceId: parentTraceId);
+          return;
+        }
+        if (_transport.isIoRunning) {
+          _traceEmailOperation(
+            'email.mailPush.settleProjection',
+            'exhausted',
+            fields: <String, Object?>{
+              'parent': parentTraceId,
+              'attempt': _mailPushIoSettleProjectionAttempt,
+            },
+          );
+          _mailPushIoSettleProjectionAttempt = 0;
+          return;
+        }
+        _mailPushIoSettleProjectionAttempt = 0;
+        try {
+          await _requestEmailCatchUp(
+            _EmailCatchUpReason.mailPushHint,
+            parentTraceId: parentTraceId,
+            isStillRelevant: () => hasActiveSession && !_nativeCleanupPending,
+          );
+        } on Exception catch (error, stackTrace) {
+          _log.fine(
+            'Email mail-push settle projection failed.',
+            error,
+            stackTrace,
+          );
+        }
+      },
+    );
+  }
+
+  void _cancelMailPushIoSettleProjection() {
+    _mailPushIoSettleProjectionTimer?.cancel();
+    _mailPushIoSettleProjectionTimer = null;
+    _mailPushIoSettleProjectionAttempt = 0;
   }
 
   void _scheduleNextImapSync(Object token) {
@@ -9695,6 +9892,27 @@ class EmailService {
           (sum, ids) => sum + ids.length,
         );
         var reconciledMessageCount = 0;
+        if (freshBeforeCount == 0) {
+          if (resolvedChat.unreadCount > _emptyUnreadCount) {
+            final consumer = _deltaConsumerForAccount(account.deltaAccountId);
+            for (final chatId in chatIds) {
+              reconciledMessageCount += await consumer
+                  .reconcileUndisplayedChatReadStateFromCore(
+                    chatId,
+                    repairUnreadWhenNoTargets: true,
+                  );
+            }
+          }
+          syncResult = EmailChatNoticeSyncResult(
+            status: EmailChatNoticeSyncStatus.alreadyNoFresh,
+            deltaAccountId: account.deltaAccountId,
+            chatIds: chatIds,
+            freshBeforeCount: 0,
+            freshAfterCount: 0,
+            reconciledMessageCount: reconciledMessageCount,
+          );
+          return;
+        }
         var coreNoticeRequested = false;
         var coreNoticeAccepted = false;
         final consumer = _deltaConsumerForAccount(account.deltaAccountId);
@@ -9708,9 +9926,13 @@ class EmailService {
               accountId: account.deltaAccountId,
             );
             coreNoticeAccepted = coreNoticeAccepted || result;
+            reconciledMessageCount += await consumer
+                .reconcileDeltaMessageReadStateFromCore(
+                  chatId: chatId,
+                  messageIds: freshIds,
+                  source: 'freshNotice',
+                );
           }
-          reconciledMessageCount += await consumer
-              .reconcileChatReadStateFromCore(chatId);
         }
         final freshAfterByChat = await _freshMessageIdsByChatIds(
           accountId: account.deltaAccountId,
@@ -9792,9 +10014,10 @@ class EmailService {
               messages: messages,
             );
           });
-          final idsByAccount = await _deltaIdsByResolvedAccountForMessages(
+          final deltaTargets = await _deltaReadStateTargetsForMessages(
             candidates,
           );
+          final idsByAccount = deltaTargets.byAccount;
           if (idsByAccount.isEmpty) {
             syncResult = const EmailMessageSeenSyncResult(
               status: EmailMessageSeenSyncStatus.unresolved,
@@ -9826,6 +10049,7 @@ class EmailService {
             idsByAccount,
             transportAcceptedCount: transportAcceptedCount,
           );
+          await _reconcileSeenMessageReadState(deltaTargets.byAccountAndChat);
         });
       });
       return syncResult;
@@ -9874,19 +10098,26 @@ class EmailService {
     if (freshIds.isEmpty) {
       return const <int, List<int>>{};
     }
-    final freshIdsByChat = <int, List<int>>{};
+    final filteredFreshIds = <int>[];
+    final seenFreshIds = <int>{};
     for (final freshId in freshIds) {
-      if (freshId <= DeltaMessageId.none) {
-        continue;
+      if (freshId > DeltaMessageId.none && seenFreshIds.add(freshId)) {
+        filteredFreshIds.add(freshId);
       }
-      final message = await _transport.getMessage(
-        freshId,
-        accountId: accountId,
-      );
-      if (message == null || !chatIdSet.contains(message.chatId)) {
-        continue;
+    }
+    if (filteredFreshIds.isEmpty) {
+      return const <int, List<int>>{};
+    }
+    final statuses = await _transport.getMessageStatuses(
+      filteredFreshIds,
+      accountId: accountId,
+    );
+    final freshIdsByChat = <int, List<int>>{};
+    for (final status in statuses) {
+      final chatId = status.chatId;
+      if (chatIdSet.contains(chatId)) {
+        freshIdsByChat.putIfAbsent(chatId, () => <int>[]).add(status.id);
       }
-      freshIdsByChat.putIfAbsent(message.chatId, () => <int>[]).add(freshId);
     }
     return {
       for (final entry in freshIdsByChat.entries)
@@ -9969,14 +10200,26 @@ class EmailService {
 
   Future<Map<int, List<int>>> _deltaIdsByResolvedAccountForMessages(
     List<Message> messages,
-  ) async {
+  ) async => (await _deltaReadStateTargetsForMessages(messages)).byAccount;
+
+  Future<
+    ({
+      Map<int, List<int>> byAccount,
+      Map<int, Map<int, List<int>>> byAccountAndChat,
+    })
+  >
+  _deltaReadStateTargetsForMessages(List<Message> messages) async {
     if (messages.isEmpty) {
-      return const {};
+      return (
+        byAccount: const <int, List<int>>{},
+        byAccountAndChat: const <int, Map<int, List<int>>>{},
+      );
     }
     final validAccounts = _usableDeltaAccountIds(
       await _transport.accountIds(),
     ).toSet();
     final idsByAccount = <int, LinkedHashSet<int>>{};
+    final idsByAccountAndChat = <int, Map<int, LinkedHashSet<int>>>{};
     for (final message in messages) {
       final deltaId = message.deltaMsgId;
       if (deltaId == null) {
@@ -9990,11 +10233,45 @@ class EmailService {
         continue;
       }
       idsByAccount.putIfAbsent(accountId, LinkedHashSet<int>.new).add(deltaId);
+      final deltaChatId = message.deltaChatId;
+      if (deltaChatId != null && deltaChatId > 0) {
+        idsByAccountAndChat
+            .putIfAbsent(accountId, () => <int, LinkedHashSet<int>>{})
+            .putIfAbsent(deltaChatId, LinkedHashSet<int>.new)
+            .add(deltaId);
+      }
     }
-    return {
-      for (final entry in idsByAccount.entries)
-        if (entry.value.isNotEmpty) entry.key: entry.value.toList(),
-    };
+    return (
+      byAccount: {
+        for (final entry in idsByAccount.entries)
+          if (entry.value.isNotEmpty)
+            entry.key: List<int>.unmodifiable(entry.value),
+      },
+      byAccountAndChat: {
+        for (final accountEntry in idsByAccountAndChat.entries)
+          if (accountEntry.value.values.any((ids) => ids.isNotEmpty))
+            accountEntry.key: {
+              for (final chatEntry in accountEntry.value.entries)
+                if (chatEntry.value.isNotEmpty)
+                  chatEntry.key: List<int>.unmodifiable(chatEntry.value),
+            },
+      },
+    );
+  }
+
+  Future<void> _reconcileSeenMessageReadState(
+    Map<int, Map<int, List<int>>> idsByAccountAndChat,
+  ) async {
+    for (final accountEntry in idsByAccountAndChat.entries) {
+      final consumer = _deltaConsumerForAccount(accountEntry.key);
+      for (final chatEntry in accountEntry.value.entries) {
+        await consumer.reconcileDeltaMessageReadStateFromCore(
+          chatId: chatEntry.key,
+          messageIds: chatEntry.value,
+          source: 'seen',
+        );
+      }
+    }
   }
 
   Future<List<Message>> _seenMessageCandidatesForRfcGroup({
@@ -10062,34 +10339,38 @@ class EmailService {
     if (freshIds.isEmpty) {
       return null;
     }
-    DeltaMessage? oldest;
+    final filteredFreshIds = <int>[];
+    final seenFreshIds = <int>{};
     for (final freshId in freshIds) {
-      if (freshId <= _deltaMessageIdUnset) {
-        continue;
+      if (freshId > _deltaMessageIdUnset && seenFreshIds.add(freshId)) {
+        filteredFreshIds.add(freshId);
       }
-      final message = await _transport.getMessage(
-        freshId,
-        accountId: account.deltaAccountId,
-      );
-      if (message == null || !chatIdSet.contains(message.chatId)) {
+    }
+    final statuses = await _transport.getMessageStatuses(
+      filteredFreshIds,
+      accountId: account.deltaAccountId,
+    );
+    DeltaMessageStatus? oldest;
+    for (final status in statuses) {
+      if (!chatIdSet.contains(status.chatId)) {
         continue;
       }
       if (oldest == null) {
-        oldest = message;
+        oldest = status;
         continue;
       }
-      final messageTimestamp = message.timestamp;
+      final messageTimestamp = status.timestamp;
       final oldestTimestamp = oldest.timestamp;
       if (oldestTimestamp == null && messageTimestamp == null) {
-        if (message.id < oldest.id) {
-          oldest = message;
+        if (status.id < oldest.id) {
+          oldest = status;
         }
         continue;
       }
       if (oldestTimestamp == null ||
           (messageTimestamp != null &&
               messageTimestamp.isBefore(oldestTimestamp))) {
-        oldest = message;
+        oldest = status;
       }
     }
     return oldest?.id;
@@ -10668,11 +10949,19 @@ class EmailService {
     return _transport.getMessageRfc822Body(deltaId, accountId: accountId);
   }
 
-  Future<bool> hydrateStoredRfc822BodyContent(Message message) async {
+  Future<({String? html, bool settled})> hydrateStoredRfc822BodyContent(
+    Message message,
+  ) async {
     final deltaId = message.deltaMsgId;
-    if (deltaId == null || deltaId <= _deltaMessageIdUnset) return false;
-    if (message.hasRfc822BodyContent) return false;
-    if (message.rfc822BodyContentUnavailable) return false;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
+      return (html: null, settled: false);
+    }
+    if (message.hasRfc822BodyContent) {
+      return (html: message.normalizedHtmlBody, settled: true);
+    }
+    if (message.rfc822BodyContentUnavailable) {
+      return (html: null, settled: true);
+    }
     final traceId = _nextTraceId('email.rfc822BodyHydration');
     final watch = Stopwatch()..start();
     _traceEmailOperation(
@@ -10696,14 +10985,34 @@ class EmailService {
           'elapsedMs': watch.elapsedMilliseconds,
         },
       );
-      return false;
+      return (html: null, settled: false);
+    }
+    if (message.rfc822BodyStatus.isPendingDownload) {
+      final deltaMessage = await _transport.getMessage(
+        deltaId,
+        accountId: accountId,
+      );
+      if (deltaMessage?.needsDownload ?? true) {
+        _traceEmailOperation(
+          'email.rfc822BodyHydration',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': 'pendingDownload',
+            'accountId': accountId,
+            'elapsedMs': watch.elapsedMilliseconds,
+          },
+        );
+        return (html: null, settled: false);
+      }
     }
     final rfc822Body = await _transport.getMessageRfc822Body(
       deltaId,
       accountId: accountId,
     );
     var result = 'missingStoredMessage';
-    var stored = false;
+    var settled = false;
+    String? hydratedHtml;
     await _trackAppDatabaseOperation(() async {
       final db = await _databaseBuilder();
       final current = await db.getMessageByStanzaID(message.stanzaID);
@@ -10712,10 +11021,13 @@ class EmailService {
       }
       if (current.hasRfc822BodyContent) {
         result = 'alreadyStored';
+        settled = true;
+        hydratedHtml = current.normalizedHtmlBody;
         return;
       }
       if (current.rfc822BodyContentUnavailable) {
         result = 'alreadyUnavailable';
+        settled = true;
         return;
       }
       final updated = _messageWithRfc822BodyContent(
@@ -10723,8 +11035,16 @@ class EmailService {
         rfc822Body: rfc822Body,
       );
       await db.updateMessage(updated);
-      stored = updated.hasRfc822BodyContent;
-      result = stored ? 'stored' : 'missingBody';
+      settled =
+          updated.hasRfc822BodyContent || updated.rfc822BodyContentUnavailable;
+      hydratedHtml = updated.hasRfc822BodyContent
+          ? updated.normalizedHtmlBody
+          : null;
+      result = updated.hasRfc822BodyContent
+          ? 'stored'
+          : updated.rfc822BodyContentUnavailable
+          ? 'unavailable'
+          : 'missingBody';
     });
     _traceEmailOperation(
       'email.rfc822BodyHydration',
@@ -10738,7 +11058,7 @@ class EmailService {
         'elapsedMs': watch.elapsedMilliseconds,
       },
     );
-    return stored;
+    return (html: hydratedHtml, settled: settled);
   }
 
   Message _messageWithRfc822BodyContent({

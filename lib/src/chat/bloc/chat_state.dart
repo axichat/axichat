@@ -23,6 +23,16 @@ enum ChatPinnedMessagesStatus {
   bool get canRetry => this == failure;
 }
 
+enum ChatHistoryPaginationSourceState {
+  unavailable,
+  temporarilyUnavailable,
+  available,
+  loading,
+  exhausted;
+
+  bool get canAttempt => this == available;
+}
+
 final class ChatPinnedMessageNotice extends Equatable
     implements Comparable<ChatPinnedMessageNotice> {
   const ChatPinnedMessageNotice({
@@ -210,6 +220,11 @@ abstract class ChatState with _$ChatState {
     @Default(false) bool typing,
     @Default(<String>[]) List<String> typingParticipants,
     @Default(true) bool showAlert,
+    @Default(false) bool hasMoreLocalMessages,
+    @Default(ChatHistoryPaginationSourceState.unavailable)
+    ChatHistoryPaginationSourceState emailHistoryPaginationState,
+    @Default(ChatHistoryPaginationSourceState.unavailable)
+    ChatHistoryPaginationSourceState xmppHistoryPaginationState,
     @Default(MessageTimelineFilter.allWithContact)
     MessageTimelineFilter viewFilter,
     @Default(<String, FanOutSendReport>{})
@@ -260,6 +275,15 @@ abstract class ChatState with _$ChatState {
     @Default(ChatCollectionActionIdle())
     ChatCollectionActionState collectionActionState,
   }) = _ChatState;
+}
+
+extension ChatStateHistoryPagination on ChatState {
+  bool get canLoadEarlier {
+    return messagesLoaded &&
+        (hasMoreLocalMessages ||
+            emailHistoryPaginationState.canAttempt ||
+            xmppHistoryPaginationState.canAttempt);
+  }
 }
 
 extension ChatStatePinnedMessageNoticeVisibility on ChatState {

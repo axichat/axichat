@@ -4481,8 +4481,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  bool _chatSupportsArchiveQueries(Chat? chat) =>
-      chat?.defaultTransport.isXmpp ?? true;
+  bool _chatSupportsArchiveQueries(Chat? chat) {
+    if (chat == null) {
+      return true;
+    }
+    if (chat.isAxichatWelcomeThread || chat.isAxiImServerAnnouncementThread) {
+      return false;
+    }
+    final jid = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
+    return jid.trim().isNotEmpty;
+  }
 
   Future<Chat?> _loadPinChat(String chatJid) async {
     return await _dbOpReturning<XmppDatabase, Chat?>(
@@ -8384,7 +8392,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  Future<void> loadEarlierFromMamForChatSession({
+  Future<MamPageResult?> loadEarlierFromMamForChatSession({
     required String sessionId,
     required Chat chat,
     required String? fallbackBeforeId,
@@ -8393,11 +8401,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }) async {
     final session = _chatMamSession(sessionId, chat: chat);
     if (session.loading || session.complete) {
-      return;
+      return null;
     }
     final beforeId = session.beforeId ?? fallbackBeforeId?.trim();
     if (beforeId == null || beforeId.isEmpty) {
-      return;
+      return null;
     }
     final loadingToken = _beginChatMamLoad(session);
     try {
@@ -8412,6 +8420,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         result: result,
         filter: filter,
       );
+      if (result.complete ||
+          result.firstId == null ||
+          result.firstId == beforeId) {
+        session.complete = true;
+      }
+      return result;
     } finally {
       _finishChatMamLoad(session, loadingToken);
     }
@@ -9513,6 +9527,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           decision.stackTrace,
         );
       }
+    }
+
+    if (!isDatabaseReady || connectionState != ConnectionState.connected) {
+      return;
     }
 
     List<Chat> chats;
