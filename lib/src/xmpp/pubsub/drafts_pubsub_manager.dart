@@ -48,6 +48,7 @@ const String _forwardedConvertedTextTag = 'converted_text';
 const String _forwardedQuotedContextTag = 'quoted_context';
 const String _forwardedQuotedSenderLabelAttr = 'sender_label';
 const String _forwardedQuotedPlainTextTag = 'plain';
+const String _quoteStanzaIdAttr = 'quote_stanza_id';
 const String _quoteIdAttr = 'quote_id';
 const String _quoteKindAttr = 'quote_kind';
 const String _attachmentsTag = 'attachments';
@@ -295,7 +296,6 @@ final class DraftSyncPayload {
     this.body,
     this.html,
     this.quotingStanzaId,
-    this.quotingReferenceKind,
     this.attachments = const <DraftAttachmentRef>[],
     this.calendarTaskIcsMessage,
     this.forwardedBlocks = const <DraftForwardedBlock>[],
@@ -308,8 +308,7 @@ final class DraftSyncPayload {
   final String? subject;
   final String? body;
   final String? html;
-  final WireMessageReference? quotingStanzaId;
-  final MessageReferenceKind? quotingReferenceKind;
+  final String? quotingStanzaId;
   final List<DraftAttachmentRef> attachments;
   final CalendarTaskIcsMessage? calendarTaskIcsMessage;
   final List<DraftForwardedBlock> forwardedBlocks;
@@ -328,8 +327,7 @@ final class DraftSyncPayload {
     String? subject,
     String? body,
     String? html,
-    WireMessageReference? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
+    String? quotingStanzaId,
     List<DraftAttachmentRef>? attachments,
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock>? forwardedBlocks,
@@ -343,7 +341,6 @@ final class DraftSyncPayload {
       body: body ?? this.body,
       html: html ?? this.html,
       quotingStanzaId: quotingStanzaId ?? this.quotingStanzaId,
-      quotingReferenceKind: quotingReferenceKind ?? this.quotingReferenceKind,
       attachments: attachments ?? this.attachments,
       calendarTaskIcsMessage:
           calendarTaskIcsMessage ?? this.calendarTaskIcsMessage,
@@ -409,17 +406,20 @@ final class DraftSyncPayload {
             .whereType<DraftForwardedBlock>()
             .toList(growable: false) ??
         const <DraftForwardedBlock>[];
-    final quotingReferenceKind = _parseReferenceKind(
-      node.attributes[_quoteKindAttr]?.toString(),
-    );
-    final quotingStanzaId = _parseQuoteReference(
-      _normalizeText(
-        node.attributes[_quoteIdAttr]?.toString(),
-        maxBytes: draftSyncMaxIdBytes,
-      ),
-      quotingReferenceKind,
-    );
-    final hasQuote = quotingStanzaId != null && quotingReferenceKind != null;
+    final quotingStanzaId =
+        _parseQuoteStanzaId(
+          _normalizeText(
+            node.attributes[_quoteStanzaIdAttr]?.toString(),
+            maxBytes: draftSyncMaxIdBytes,
+          ),
+        ) ??
+        _parseLegacyQuoteReference(
+          _normalizeText(
+            node.attributes[_quoteIdAttr]?.toString(),
+            maxBytes: draftSyncMaxIdBytes,
+          ),
+          _parseReferenceKind(node.attributes[_quoteKindAttr]?.toString()),
+        );
 
     final attachmentsNode = node.firstTag(_attachmentsTag);
     final attachments =
@@ -441,8 +441,7 @@ final class DraftSyncPayload {
       subject: subject,
       body: body,
       html: html,
-      quotingStanzaId: hasQuote ? quotingStanzaId : null,
-      quotingReferenceKind: hasQuote ? quotingReferenceKind : null,
+      quotingStanzaId: quotingStanzaId,
       attachments: attachments,
       calendarTaskIcsMessage: calendarTaskIcsMessage,
       forwardedBlocks: forwardedBlocks,
@@ -477,10 +476,9 @@ final class DraftSyncPayload {
               .toList(growable: false)
         : forwardedBlocks;
     final normalizedQuoteId = _normalizeText(
-      quotingStanzaId?.value,
+      quotingStanzaId,
       maxBytes: draftSyncMaxIdBytes,
     );
-    final normalizedQuoteKind = _referenceKindAttrValue(quotingReferenceKind);
     final limitedRecipients = recipients.length > draftSyncMaxRecipients
         ? recipients.take(draftSyncMaxRecipients).toList(growable: false)
         : recipients;
@@ -494,8 +492,7 @@ final class DraftSyncPayload {
         _draftSyncIdAttr: escapeXmlAttribute(syncId),
         _draftUpdatedAtAttr: updatedAtIso,
         _draftSourceIdAttr: ?escapeXmlAttributeOrNull(normalizedSourceId),
-        _quoteIdAttr: ?escapeXmlAttributeOrNull(normalizedQuoteId),
-        _quoteKindAttr: ?escapeXmlAttributeOrNull(normalizedQuoteKind),
+        _quoteStanzaIdAttr: ?escapeXmlAttributeOrNull(normalizedQuoteId),
       },
       children: [
         if (limitedRecipients.isNotEmpty)
@@ -782,16 +779,17 @@ final class DraftSyncPayload {
     };
   }
 
-  static String? _referenceKindAttrValue(MessageReferenceKind? kind) {
-    return switch (kind) {
-      MessageReferenceKind.stanzaId => 'stanza',
-      MessageReferenceKind.originId => 'origin',
-      MessageReferenceKind.mucStanzaId => 'muc',
-      null => null,
-    };
+  static String? _parseQuoteStanzaId(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null ||
+        normalized.isEmpty ||
+        _isLegacyReferenceValue(normalized)) {
+      return null;
+    }
+    return normalized;
   }
 
-  static WireMessageReference? _parseQuoteReference(
+  static String? _parseLegacyQuoteReference(
     String? value,
     MessageReferenceKind? kind,
   ) {
@@ -799,18 +797,11 @@ final class DraftSyncPayload {
     if (normalized == null ||
         normalized.isEmpty ||
         kind == null ||
+        kind == MessageReferenceKind.originId ||
         _isLegacyReferenceValue(normalized)) {
       return null;
     }
-    if (kind == MessageReferenceKind.originId) {
-      final emailReference = WireMessageReference.tryParseEmailMessageId(
-        normalized,
-      );
-      if (emailReference != null) {
-        return emailReference;
-      }
-    }
-    return WireMessageReference.tryParseXmpp(kind: kind, value: normalized);
+    return normalized;
   }
 
   static bool _isLegacyReferenceValue(String? value) =>

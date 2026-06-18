@@ -230,10 +230,10 @@ abstract class ChatState with _$ChatState {
     @Default(<String, FileMetadataData?>{})
     Map<String, FileMetadataData?> fileMetadataById,
     ChatMessageKey? composerError,
+    @Default(RequestStatus.none) RequestStatus composerSendStatus,
     @Default(0) int composerHydrationId,
     String? composerHydrationText,
     CalendarTaskIcsMessage? composerHydrationCalendarTaskIcsMessage,
-    @Default(0) int composerClearId,
     String? emailSubject,
     @Default(true) bool emailSubjectAutofillEligible,
     @Default(false) bool emailSubjectAutofilled,

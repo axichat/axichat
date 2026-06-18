@@ -687,6 +687,7 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
 }
 
 @UseRowClass(Chat, constructor: 'fromDb')
+@TableIndex(name: 'idx_chats_last_change', columns: {#lastChangeTimestamp})
 class Chats extends Table {
   TextColumn get jid => text()();
 
@@ -855,6 +856,7 @@ extension ChatSettingsSyncModel on Chat {
 }
 
 @DataClassName('RecipientAddress')
+@TableIndex(name: 'idx_recipient_addresses_last_seen', columns: {#lastSeen})
 class RecipientAddresses extends Table {
   TextColumn get address => text()();
 
@@ -1117,21 +1119,6 @@ class Contact extends Equatable implements Insertable<Contact> {
     return values;
   }
 
-  List<String> get statusLookupKeys {
-    final values = <String>[];
-    final existingChatJid = chatJid;
-    if (existingChatJid != null && existingChatJid.isNotEmpty) {
-      values.add(existingChatJid);
-    }
-    for (final normalized in normalizedIdentityKeys) {
-      if (values.contains(normalized)) {
-        continue;
-      }
-      values.add(normalized);
-    }
-    return values;
-  }
-
   String get displayName {
     final chatDisplayName = chat?.displayName.trim();
     if (chatDisplayName != null && chatDisplayName.isNotEmpty) {
@@ -1163,29 +1150,6 @@ class Contact extends Equatable implements Insertable<Contact> {
 
   bool get needsTransportSelection {
     return chat == null && transport == null && resolvedAddress != null;
-  }
-
-  bool usesEmailTransport({bool allowHint = false}) {
-    final resolvedTransport =
-        configuredTransport ?? (allowHint ? hintedTransport : null);
-    return resolvedTransport?.isEmail ?? false;
-  }
-
-  String? xmppJid({bool allowHint = false}) {
-    final resolvedTransport =
-        configuredTransport ?? (allowHint ? hintedTransport : null);
-    if (resolvedTransport?.isEmail ?? false) {
-      return null;
-    }
-    final targetChat = chat;
-    if (targetChat != null) {
-      return resolvedTransport?.isXmpp ?? false ? targetChat.jid : null;
-    }
-    final candidate = normalizedOrResolvedAddress;
-    if (candidate == null || candidate.isEmpty) {
-      return null;
-    }
-    return resolvedTransport?.isXmpp ?? false ? candidate : null;
   }
 
   Contact withTransport(MessageTransport nextTransport) {

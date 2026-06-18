@@ -194,12 +194,10 @@ final class _RoomRosterUpdated extends ChatEvent {
 }
 
 final class _RoomChatsUpdated extends ChatEvent {
-  const _RoomChatsUpdated(this.items);
-
-  final List<Chat> items;
+  const _RoomChatsUpdated();
 
   @override
-  List<Object?> get props => [items];
+  List<Object?> get props => [];
 }
 
 final class _RoomSelfAvatarUpdated extends ChatEvent {
@@ -274,15 +272,6 @@ final class ChatReadThresholdChanged extends ChatEvent {
   List<Object?> get props => [messageIds];
 }
 
-final class ChatMessageReadRequested extends ChatEvent {
-  const ChatMessageReadRequested(this.messageId);
-
-  final String messageId;
-
-  @override
-  List<Object?> get props => [messageId];
-}
-
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 
@@ -351,6 +340,67 @@ final class _TypingParticipantsUpdated extends ChatEvent {
   List<Object?> get props => [participants];
 }
 
+final class ChatSendOutcome {
+  ChatSendOutcome._({
+    required this.status,
+    List<PendingAttachment> pendingAttachments = const <PendingAttachment>[],
+    List<ComposerRecipient> incompleteRecipients = const <ComposerRecipient>[],
+    Map<ComposerRecipientKey, SendRecipientOutcome> recipientOutcomes =
+        const <ComposerRecipientKey, SendRecipientOutcome>{},
+    this.resendMayDuplicate = false,
+    this.message,
+    this.retryContext,
+  }) : pendingAttachments = List.unmodifiable(pendingAttachments),
+       incompleteRecipients = List.unmodifiable(incompleteRecipients),
+       recipientOutcomes = Map.unmodifiable(recipientOutcomes);
+
+  factory ChatSendOutcome.completed({
+    List<PendingAttachment> pendingAttachments = const <PendingAttachment>[],
+  }) => ChatSendOutcome._(
+    status: ComposerSendOutcomeStatus.completed,
+    pendingAttachments: pendingAttachments,
+  );
+
+  factory ChatSendOutcome.blocked({
+    required ChatMessageKey message,
+    List<PendingAttachment> pendingAttachments = const <PendingAttachment>[],
+  }) => ChatSendOutcome._(
+    status: ComposerSendOutcomeStatus.blocked,
+    pendingAttachments: pendingAttachments,
+    message: message,
+  );
+
+  factory ChatSendOutcome.incomplete({
+    required List<ComposerRecipient> recipients,
+    required List<PendingAttachment> pendingAttachments,
+    Map<ComposerRecipientKey, SendRecipientOutcome> recipientOutcomes =
+        const <ComposerRecipientKey, SendRecipientOutcome>{},
+    bool resendMayDuplicate = false,
+    ChatMessageKey? message,
+    Object? retryContext,
+  }) => ChatSendOutcome._(
+    status: ComposerSendOutcomeStatus.incomplete,
+    pendingAttachments: pendingAttachments,
+    incompleteRecipients: recipients,
+    recipientOutcomes: recipientOutcomes,
+    resendMayDuplicate: resendMayDuplicate,
+    message: message,
+    retryContext: retryContext,
+  );
+
+  final ComposerSendOutcomeStatus status;
+  final List<PendingAttachment> pendingAttachments;
+  final List<ComposerRecipient> incompleteRecipients;
+  final Map<ComposerRecipientKey, SendRecipientOutcome> recipientOutcomes;
+  final bool resendMayDuplicate;
+  final ChatMessageKey? message;
+  final Object? retryContext;
+
+  bool get completed => status == ComposerSendOutcomeStatus.completed;
+  bool get blocked => status == ComposerSendOutcomeStatus.blocked;
+  bool get incomplete => status == ComposerSendOutcomeStatus.incomplete;
+}
+
 final class ChatMessageSent extends ChatEvent {
   const ChatMessageSent({
     required this.chat,
@@ -384,7 +434,7 @@ final class ChatMessageSent extends ChatEvent {
   final bool calendarTaskIcsReadOnly;
   final String? calendarTaskShareText;
   final MessageTransport? oneShotTransportOverride;
-  final Completer<List<PendingAttachment>>? completer;
+  final Completer<ChatSendOutcome>? completer;
 
   @override
   List<Object?> get props => [

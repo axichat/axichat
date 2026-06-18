@@ -440,6 +440,7 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
   String? pendingEmailContentLabel,
   String? unavailableEmailContentLabel,
   required String emailEncryptionStatusLabel,
+  bool deriveEmailHtmlIfMissing = true,
   required bool isGroupChat,
   required bool isEmailChat,
   DateTime? staleUnackedCutoff,
@@ -497,7 +498,9 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
       resolvedHtmlBody: _resolvedEmailHtmlBodyForProjection(
         message: message,
         emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+        deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
       ),
+      deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
     ),
     isAuthoritativeBody: (message) => message.hasRfc822BodyContent,
     requireMeaningfulBody: false,
@@ -549,6 +552,7 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
       unavailableEmailContentLabel: unavailableEmailContentLabel,
       unknownAuthorLabel: unknownAuthorLabel,
       inviteActionLabel: inviteActionLabel,
+      deriveEmailHtmlIfMissing: deriveEmailHtmlIfMissing,
       supportsMarkers: supportsMarkers,
       supportsReceipts: supportsReceipts,
       attachmentsForMessage: attachmentsForMessage,
@@ -646,14 +650,11 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
   final boundaryMessage = messages
       .where((message) => message.stanzaID == unreadBoundaryStanzaId)
       .firstOrNull;
-  if (boundaryMessage == null || boundaryMessage.displayed) {
+  if (boundaryMessage == null) {
     return (stanzaId: unreadBoundaryStanzaId, shouldInsert: false);
   }
   final group = rfcEmailGroupsByStanzaId[unreadBoundaryStanzaId];
   if (group == null) {
-    return (stanzaId: unreadBoundaryStanzaId, shouldInsert: true);
-  }
-  if (!group.shouldHideTimelineMessage(boundaryMessage)) {
     return (stanzaId: unreadBoundaryStanzaId, shouldInsert: true);
   }
   return (stanzaId: group.leader.stanzaID, shouldInsert: true);
@@ -776,6 +777,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   String? unavailableEmailContentLabel,
   required String unknownAuthorLabel,
   required String Function(String roomDisplayName) inviteActionLabel,
+  bool deriveEmailHtmlIfMissing = true,
   required bool supportsMarkers,
   required bool supportsReceipts,
   required List<String> Function(Message message) attachmentsForMessage,
@@ -819,15 +821,6 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     message: message,
     isEmailChat: isEmailChat,
   );
-  final unreadSelfJid = isEmailMessage ? resolvedEmailSelfJid : currentUserId;
-  final showUnreadIndicator =
-      isEmailMessage &&
-      !message.displayed &&
-      message.countsTowardUnread(
-        selfJid: unreadSelfJid,
-        isGroupChat: isGroupChat,
-        myOccupantJid: myOccupantJid,
-      );
   final quotedMessage = message.quoting == null
       ? null
       : messageById[message.quoting!];
@@ -883,14 +876,17 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final resolvedForwardHtml = _resolvedEmailHtmlBodyForProjection(
     message: message,
     emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+    deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
   );
-  final hasResolvedForwardHtml = resolvedForwardHtml?.trim().isNotEmpty == true;
   final emailFullHtmlIsUnavailable =
       deltaMessageId != null &&
       emailFullHtmlUnavailable.contains(deltaMessageId);
   final forwardedHtmlText = resolvedForwardHtml == null
       ? null
-      : HtmlContentCodec.toPlainText(resolvedForwardHtml);
+      : emailHtmlVisibleBodyText(
+          resolvedForwardHtml,
+          deriveIfMissing: deriveEmailHtmlIfMissing,
+        );
   final forwardedSubjectSenderLabel =
       syntheticForwardDisplaySenderLabel(
         subjectLabel: rawSubjectLabel,
@@ -901,10 +897,12 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       forwardedBodySenderLabel(rawBodyText) ??
       forwardedBodySenderLabel(forwardedHtmlText);
   if (forwardedSubjectSenderLabel != null) {
-    final forwardedContent = splitSyntheticForwardBody(bodyText);
-    subjectLabel = forwardedContent.subject;
-    bodyText = forwardedContent.body;
-    showSubjectHeader = subjectLabel?.trim().isNotEmpty == true;
+    final forwardedContent = splitForwardedBodyContent(bodyText);
+    if (forwardedContent.subject != null || forwardedContent.body != bodyText) {
+      subjectLabel = forwardedContent.subject;
+      bodyText = forwardedContent.body;
+      showSubjectHeader = subjectLabel?.trim().isNotEmpty == true;
+    }
   }
   if (isEmailMessage) {
     final trimmedSubject = subjectLabel?.trim();
@@ -920,6 +918,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       bodyText = rfcEmailBodyText(
         message: message,
         resolvedHtmlBody: resolvedForwardHtml,
+        deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
       );
     }
   }
@@ -936,6 +935,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       rfcEmailBodyText(
         message: message,
         resolvedHtmlBody: resolvedForwardHtml,
+        deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
       ).trim().isEmpty) {
     bodyText = '';
   }
@@ -968,6 +968,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       _hasRenderableEmailSourceContent(
         message: message,
         resolvedHtmlBody: resolvedForwardHtml,
+        deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
       );
   final shouldUseUnavailableEmailContentLabel =
       isEmailMessage &&
@@ -976,7 +977,6 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       !hasAttachment &&
       deltaMessageId != null &&
       deltaMessageId > 0 &&
-      !hasResolvedForwardHtml &&
       !hasRenderableEmailSourceContent &&
       emailFullHtmlIsUnavailable &&
       bodyTextTrimmed.isEmpty &&
@@ -989,7 +989,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       !hasAttachment &&
       deltaMessageId != null &&
       deltaMessageId > 0 &&
-      !hasResolvedForwardHtml &&
+      !hasRenderableEmailSourceContent &&
       !emailFullHtmlIsUnavailable &&
       bodyTextTrimmed.isEmpty &&
       normalizedPendingEmailContentLabel != null &&
@@ -1006,6 +1006,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       ? rfcEmailBodyText(
           message: message,
           resolvedHtmlBody: resolvedForwardHtml,
+          deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
         ).trim()
       : '';
   final renderedText = shouldReplaceInviteBody
@@ -1028,6 +1029,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       : _rfcEmailBodyBlocksForGroup(
           group: rfcEmailGroup,
           emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+          deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
         );
   final resolvedRenderedText = emailBodyBlocks.isEmpty
       ? renderedText
@@ -1041,6 +1043,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     resolvedHtmlBody: resolvedForwardHtml,
     rfcEmailGroup: rfcEmailGroup,
     emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+    deriveHtmlIfMissing: deriveEmailHtmlIfMissing,
   );
   final hasRenderableSubjectHeader =
       showSubjectHeader && subjectText.isNotEmpty;
@@ -1076,7 +1079,6 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
           isEmailChat: isEmailChat,
           staleBefore: staleUnackedCutoff,
         ),
-    showUnreadIndicator: showUnreadIndicator,
     error: message.error,
     trusted: message.trusted,
     renderedText: resolvedRenderedText,
@@ -1150,6 +1152,7 @@ ChatTimelineMessageItem? buildPreviewChatTimelineMessageItem({
   String? unavailableEmailContentLabel,
   required String unknownAuthorLabel,
   required String Function(String roomDisplayName) inviteActionLabel,
+  bool deriveEmailHtmlIfMissing = true,
   required bool supportsMarkers,
   required bool supportsReceipts,
   required List<String> Function(Message message) attachmentsForMessage,
@@ -1198,6 +1201,7 @@ ChatTimelineMessageItem? buildPreviewChatTimelineMessageItem({
     unavailableEmailContentLabel: unavailableEmailContentLabel,
     unknownAuthorLabel: unknownAuthorLabel,
     inviteActionLabel: inviteActionLabel,
+    deriveEmailHtmlIfMissing: deriveEmailHtmlIfMissing,
     supportsMarkers: supportsMarkers,
     supportsReceipts: supportsReceipts,
     attachmentsForMessage: attachmentsForMessage,
@@ -1221,7 +1225,6 @@ ChatTimelineMessageItem? buildPreviewChatTimelineMessageItem({
     timelineItem,
     id: previewId,
     messageModel: message.copyWith(stanzaID: previewId, id: previewDatabaseId),
-    showUnreadIndicator: false,
   );
 }
 
@@ -1229,7 +1232,6 @@ ChatTimelineMessageItem _copyChatTimelineMessageItem(
   ChatTimelineMessageItem item, {
   required String id,
   required Message messageModel,
-  required bool showUnreadIndicator,
 }) {
   return ChatTimelineMessageItem(
     id: id,
@@ -1244,7 +1246,6 @@ ChatTimelineMessageItem _copyChatTimelineMessageItem(
     isSelf: item.isSelf,
     isEmailMessage: item.isEmailMessage,
     canSendAgain: item.canSendAgain,
-    showUnreadIndicator: showUnreadIndicator,
     error: item.error,
     trusted: item.trusted,
     renderedText: item.renderedText,
@@ -1287,6 +1288,7 @@ ChatTimelineEmailVisualKind _emailVisualKindForTimelineItem({
   required String? resolvedHtmlBody,
   required RfcEmailGroup? rfcEmailGroup,
   required Map<int, String> emailFullHtmlByDeltaId,
+  required bool deriveHtmlIfMissing,
 }) {
   if (!isEmailMessage) {
     return ChatTimelineEmailVisualKind.none;
@@ -1298,6 +1300,7 @@ ChatTimelineEmailVisualKind _emailVisualKindForTimelineItem({
       _rfcEmailGroupHasHtml(
         group: rfcEmailGroup,
         emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+        deriveHtmlIfMissing: deriveHtmlIfMissing,
       )) {
     return ChatTimelineEmailVisualKind.html;
   }
@@ -1310,11 +1313,13 @@ ChatTimelineEmailVisualKind _emailVisualKindForTimelineItem({
 bool _rfcEmailGroupHasHtml({
   required RfcEmailGroup group,
   required Map<int, String> emailFullHtmlByDeltaId,
+  required bool deriveHtmlIfMissing,
 }) {
   for (final source in group.bodySources) {
     final resolvedHtmlBody = _resolvedEmailHtmlBodyForProjection(
       message: source,
       emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+      deriveHtmlIfMissing: deriveHtmlIfMissing,
     );
     if (_emailBodyHasHtml(resolvedHtmlBody: resolvedHtmlBody)) {
       return true;
@@ -1331,32 +1336,39 @@ bool _emailBodyHasHtml({required String? resolvedHtmlBody}) {
 String? _resolvedEmailHtmlBodyForProjection({
   required Message message,
   required Map<int, String> emailFullHtmlByDeltaId,
+  required bool deriveHtmlIfMissing,
 }) => resolvedEmailHtmlBodyForMessage(
   message: message,
   emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+  deriveHtmlIfMissing: deriveHtmlIfMissing,
 );
 
 bool _hasRenderableEmailSourceContent({
   required Message message,
   required String? resolvedHtmlBody,
+  required bool deriveHtmlIfMissing,
 }) => rfcEmailBodyText(
   message: message,
   resolvedHtmlBody: resolvedHtmlBody,
+  deriveHtmlIfMissing: deriveHtmlIfMissing,
 ).trim().isNotEmpty;
 
 List<ChatTimelineEmailBodyBlock> _rfcEmailBodyBlocksForGroup({
   required RfcEmailGroup group,
   required Map<int, String> emailFullHtmlByDeltaId,
+  required bool deriveHtmlIfMissing,
 }) {
   final blocks = <ChatTimelineEmailBodyBlock>[];
   for (final source in group.bodySources) {
     final resolvedHtmlBody = _resolvedEmailHtmlBodyForProjection(
       message: source,
       emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+      deriveHtmlIfMissing: deriveHtmlIfMissing,
     );
     final plainText = rfcEmailBodyText(
       message: source,
       resolvedHtmlBody: resolvedHtmlBody,
+      deriveHtmlIfMissing: deriveHtmlIfMissing,
     );
     if (plainText.trim().isEmpty &&
         HtmlContentCodec.normalizeHtml(resolvedHtmlBody) == null) {

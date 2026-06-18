@@ -108,6 +108,18 @@ class MessageCollections extends Table {
 }
 
 @DataClassName('MessageCollectionMembershipEntry')
+@TableIndex(
+  name: 'idx_message_collection_memberships_collection_added',
+  columns: {#collectionId, #active, #addedAt, #messageReferenceId},
+)
+@TableIndex(
+  name: 'idx_message_collection_memberships_chat_added',
+  columns: {#chatJid, #active, #addedAt, #messageReferenceId},
+)
+@TableIndex(
+  name: 'idx_message_collection_memberships_delta',
+  columns: {#deltaAccountId, #deltaMsgId},
+)
 class MessageCollectionMemberships extends Table {
   TextColumn get collectionId => text()();
 

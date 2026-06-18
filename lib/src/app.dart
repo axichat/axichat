@@ -197,6 +197,7 @@ class _AxichatState extends State<Axichat> {
                   credentialStore: context.read<CredentialStore>(),
                   databaseBuilder: () => context.read<XmppService>().database,
                   notificationService: context.read<NotificationService>(),
+                  endpointConfig: settingsState.endpointConfig,
                   emailReadReceiptsEnabled: settingsState.emailReadReceipts,
                   emailEncryptionBetaEnabledByAddress:
                       settingsState.emailEncryptionBetaEnabledByAddress,
@@ -450,8 +451,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   Timer? _pendingAuthNavigation;
   Future<void>? _exitCleanupFuture;
   AuthenticationState? _lastAuthState;
-  String? _pendingNotificationChatJid;
   String? _pendingNotificationPayload;
+  String? _pendingNotificationChatJid;
   bool _checkedInitialNotificationLaunchDetails = false;
   late final AppLifecycleListener _lifecycleListener = AppLifecycleListener(
     onResume: _handleLifecycleResume,

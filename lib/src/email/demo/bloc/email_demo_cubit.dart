@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/models/email_account.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -184,7 +185,12 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
     );
     try {
       if (kEnableDemoChats) {
-        if (demoTarget == null) {
+        final demoIntent = demoTarget == null
+            ? null
+            : ComposerRecipient(
+                target: demoTarget,
+              ).forcedEmailIntent(emailDomain: null);
+        if (demoIntent == null) {
           emit(
             state.copyWith(
               status: EmailDemoStatus.sendFailed,
@@ -195,7 +201,7 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
           return;
         }
         final report = await _emailService.fanOutSend(
-          targets: [demoTarget],
+          targets: [demoIntent],
           body: body,
         );
         if (report.hasFailures) {

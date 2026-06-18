@@ -1540,11 +1540,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _EmailReconnectRecovery recovery = _EmailReconnectRecovery.normal,
     required int emailReconnectGeneration,
   }) async {
-    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) return;
+    if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
+      return;
+    }
     final EndpointConfig config = endpointConfig;
-    if (!config.smtpEnabled) return;
+    if (!config.smtpEnabled) {
+      return;
+    }
     final EmailService? emailService = _emailService;
-    if (emailService == null) return;
+    if (emailService == null) {
+      return;
+    }
     if (_deferredEmailProvisioningCompleter != null) {
       return;
     }
@@ -1694,6 +1700,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (emailService == null) {
       return;
     }
+    if (state is! AuthenticationComplete) {
+      return;
+    }
     final lastError = _lastEmailProvisioningError;
     final syncState = emailService.syncState;
     if (!(lastError?.isRecoverable ?? false) &&
@@ -1776,6 +1785,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           ),
         ),
       );
+      return;
     }
   }
 
@@ -2885,15 +2895,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _markSmtpProvisioned();
       if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
         return _ProvisioningStatus.blockedTransient;
-      }
-      try {
-        await emailService.start();
-        if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
-          return _ProvisioningStatus.blockedTransient;
-        }
-        await emailService.handleNetworkAvailable();
-      } on Exception catch (error, stackTrace) {
-        _log.finer('Failed to start email sync', error, stackTrace);
       }
       return _ProvisioningStatus.ready;
     } on EmailProvisioningException catch (error) {

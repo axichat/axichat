@@ -351,7 +351,7 @@ class _ChatScaffoldLayout extends StatelessWidget {
   final bool roomBootstrapInProgress;
   final bool roomJoinFailed;
   final RoomState? roomJoinFailureState;
-  final Map<String, FanOutRecipientState> latestStatuses;
+  final Map<ComposerRecipientKey, FanOutRecipientState> latestStatuses;
   final bool isChatBlocked;
   final BlocklistEntry? chatBlocklistEntry;
   final String? blockAddress;

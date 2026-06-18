@@ -6,6 +6,10 @@ import 'package:drift/drift.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 
 @DataClassName('PinnedMessageEntry')
+@TableIndex(
+  name: 'idx_pinned_messages_chat_pinned',
+  columns: {#chatJid, #active, #pinnedAt, #messageStanzaId},
+)
 class PinnedMessages extends Table {
   TextColumn get messageStanzaId => text()();
 
@@ -20,6 +24,14 @@ class PinnedMessages extends Table {
 }
 
 @DataClassName('PinEntry')
+@TableIndex(
+  name: 'idx_message_pins_chat_reference',
+  columns: {#chatJid, #messageReferenceKind, #messageReferenceId},
+)
+@TableIndex(
+  name: 'idx_message_pins_chat_active_pinned',
+  columns: {#chatJid, #active, #pinnedAt, #messageReferenceId},
+)
 class MessagePins extends Table {
   TextColumn get chatJid => text()();
 

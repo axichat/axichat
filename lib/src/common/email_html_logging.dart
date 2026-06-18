@@ -27,13 +27,15 @@ final Set<Object> _loggedEmailHtmlStageKeys = <Object>{};
 void logEmailHtmlStages({
   required Object contentKey,
   required Map<String, String?> stages,
+  bool dedupe = true,
+  bool force = false,
 }) {
-  if (!emailHtmlLoggingEnabled) {
+  if (!force && !emailHtmlLoggingEnabled) {
     return;
   }
   final entries = <MapEntry<String, String?>>[];
   for (final entry in stages.entries) {
-    if (_loggedEmailHtmlStageKeys.add((contentKey, entry.key))) {
+    if (!dedupe || _loggedEmailHtmlStageKeys.add((contentKey, entry.key))) {
       entries.add(entry);
     }
   }

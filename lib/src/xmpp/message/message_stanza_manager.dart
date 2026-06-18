@@ -558,7 +558,7 @@ enum PinMessageMutationScope {
 final class PinMessageMutationData implements mox.StanzaHandlerExtension {
   PinMessageMutationData({
     String? messageId,
-    MessageReference? reference,
+    LocalMessageReference? reference,
     MessageReferenceKind? messageReferenceKind,
     required this.pinned,
     required this.timestamp,
@@ -566,12 +566,12 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
   }) : assert(reference != null || messageId != null),
        reference =
            reference ??
-           MessageReference(
+           LocalMessageReference(
              kind: messageReferenceKind ?? MessageReferenceKind.stanzaId,
              value: messageId ?? '',
            );
 
-  final MessageReference reference;
+  final LocalMessageReference reference;
   final bool pinned;
   final DateTime timestamp;
   final PinMessageMutationScope scope;
@@ -585,7 +585,6 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       attributes: {
         _pinMutationVersionAttr: _pinMutationVersionValue,
         _pinMutationMessageIdAttr: escapeXmlAttribute(reference.value),
-        _pinMutationReferenceKindAttr: reference.kind.wireValue,
         _pinMutationPinnedAttr: pinned.toString(),
         _pinMutationScopeAttr: scope.wireValue,
         _pinMutationTimestampAttr: timestamp.toUtc().toIso8601String(),
@@ -601,6 +600,7 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
         .trim();
     if (messageId == null ||
         messageId.isEmpty ||
+        isLegacyWireMessageReferenceValue(messageId) ||
         messageId.length > _pinMutationMessageIdMaxLength) {
       return null;
     }
@@ -617,6 +617,9 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
         (stanza.type == _messageTypeGroupchat
             ? MessageReferenceKind.mucStanzaId
             : MessageReferenceKind.stanzaId);
+    if (referenceKind == MessageReferenceKind.originId) {
+      return null;
+    }
     final scope = PinMessageMutationScope.fromWireValue(
       node.attributes[_pinMutationScopeAttr]?.toString(),
     );
@@ -633,7 +636,7 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       return null;
     }
     return PinMessageMutationData(
-      reference: MessageReference(kind: referenceKind, value: messageId),
+      reference: LocalMessageReference(kind: referenceKind, value: messageId),
       pinned: pinned,
       scope: scope,
       timestamp: timestamp.toUtc(),

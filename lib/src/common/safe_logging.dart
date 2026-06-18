@@ -8,6 +8,8 @@ import 'package:logging/logging.dart';
 
 class SafeLogging {
   static const String _debugLogDefaultName = 'Axichat';
+  static const String profileFrameTimingLoggerName = 'FrameTiming';
+  static const String profileTraceLoggerName = 'ProfileTrace';
   static const String redactedAccount = '<account>';
   static const String redactedPath = '<path>';
   static const String redactedSecret = '<secret>';
@@ -160,6 +162,54 @@ class SafeLogging {
     );
   }
 
+  static void profileTrace(
+    String operation,
+    String phase, {
+    Map<String, Object?> fields = const <String, Object?>{},
+  }) {
+    final buffer = StringBuffer('Lag probe op=$operation phase=$phase');
+    for (final entry in fields.entries) {
+      buffer
+        ..write(' ')
+        ..write(entry.key)
+        ..write('=')
+        ..write(_profileTraceValue(entry.value));
+    }
+    Logger(profileTraceLoggerName).info(buffer.toString());
+  }
+
+  static String profileFingerprint(String value) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
+
+  static String _profileTraceValue(Object? value) {
+    if (value == null) {
+      return 'null';
+    }
+    if (value is Duration) {
+      return '${value.inMilliseconds}ms';
+    }
+    if (value is String) {
+      final collapsed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (RegExp(r'^[A-Za-z][A-Za-z0-9_]*$').hasMatch(collapsed) &&
+          collapsed.length >= _minSecretLength) {
+        return collapsed
+            .replaceAllMapped(
+              RegExp(r'([a-z0-9])([A-Z])'),
+              (match) => '${match.group(1)} ${match.group(2)}',
+            )
+            .replaceAll('_', ' ');
+      }
+      return collapsed;
+    }
+    return value.toString().trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
   static bool shouldEmitDebugRecord(LogRecord record) {
     if (record.level >= Level.WARNING) {
       return true;
@@ -203,16 +253,30 @@ class SafeLogging {
     return !record.message.contains('completer for ');
   }
 
-  static String formatDebugRecord(LogRecord record) {
+  static bool shouldEmitProfileRecord(LogRecord record) {
+    if (record.loggerName == profileFrameTimingLoggerName ||
+        record.loggerName == profileTraceLoggerName) {
+      return true;
+    }
+    if (record.error != null || record.stackTrace != null) {
+      return true;
+    }
+    return record.level >= Level.SEVERE;
+  }
+
+  static String formatDebugRecord(LogRecord record) => formatRecord(record);
+
+  static String formatRecord(LogRecord record) {
     final sanitizedMessage = sanitizeMessage(record.message);
     final sanitizedError = sanitizeError(record.error);
     final sanitizedStackTrace = sanitizeStackTrace(record.stackTrace);
     final buffer = StringBuffer()
       ..write('${record.level.name}: ${record.time}: $sanitizedMessage');
+    if (record.error != null) {
+      buffer.write(' Exception: $sanitizedError');
+    }
     if (record.stackTrace != null) {
-      buffer
-        ..write(' Exception: $sanitizedError')
-        ..write(' Stack Trace: $sanitizedStackTrace');
+      buffer.write(' Stack Trace: $sanitizedStackTrace');
     }
     return buffer.toString();
   }

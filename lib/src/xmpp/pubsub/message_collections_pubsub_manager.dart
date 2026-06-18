@@ -226,10 +226,7 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
         return emailReference;
       }
     }
-    return WireMessageReference.tryParseXmpp(
-      kind: MessageReferenceKind.originId,
-      value: normalized,
-    );
+    return null;
   }
 
   static XmppWireMessageReference? _parseXmppReference({

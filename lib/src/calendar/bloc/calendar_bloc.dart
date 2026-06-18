@@ -21,6 +21,7 @@ import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -115,6 +116,8 @@ class CalendarBloc extends BaseCalendarBloc {
 
   CalendarAvailabilityShareCoordinator? get availabilityCoordinator =>
       _availabilityCoordinator;
+
+  String? get accountJid => _xmppService.myJid;
 
   void _configureHomeCoordinators({required Storage storage}) {
     if (_chatCalendarStorage == storage &&
@@ -654,14 +657,25 @@ class CalendarBloc extends BaseCalendarBloc {
         return;
       }
       final shareText = _calendarTaskShareText(event.task, event.shareText);
-      final emailTargets = recipients
-          .where((target) => !target.hasBackingChat || target.hasEmailThread)
-          .toList(growable: false);
-      final xmppChats = recipients
-          .map((target) => target.chat)
-          .whereType<Chat>()
-          .where((chat) => !chat.defaultTransport.isEmail)
-          .toList(growable: false);
+      final emailTargets = <EmailRecipientIntent>[];
+      final xmppChats = <Chat>[];
+      for (final target in recipients) {
+        final chat = target.chat;
+        if (chat != null && !chat.defaultTransport.isEmail) {
+          xmppChats.add(chat);
+          continue;
+        }
+        final intent = ComposerRecipient(
+          target: target,
+        ).forcedEmailIntent(emailDomain: null);
+        if (intent == null) {
+          completer.complete(
+            const CalendarShareResult.failure(CalendarShareFailure.sendFailed),
+          );
+          return;
+        }
+        emailTargets.add(intent);
+      }
       final emailService = _emailService;
       final demoOfflineTaskShare =
           kEnableDemoChats && _xmppService.demoOfflineMode;
@@ -715,10 +729,16 @@ class CalendarBloc extends BaseCalendarBloc {
         attachment = attachment.copyWith(caption: shareText);
       }
       if (emailTargets.isNotEmpty) {
-        await emailService!.fanOutSend(
+        final report = await emailService!.fanOutSend(
           targets: emailTargets,
           attachment: attachment!,
         );
+        if (report.hasFailures) {
+          completer.complete(
+            const CalendarShareResult.failure(CalendarShareFailure.sendFailed),
+          );
+          return;
+        }
       }
       if (xmppChats.isNotEmpty) {
         for (final chat in envelopeChats) {

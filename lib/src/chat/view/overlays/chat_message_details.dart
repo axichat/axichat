@@ -6,11 +6,13 @@ class ChatMessageDetails extends StatefulWidget {
     this.onAddRecipient,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
+    required this.focusedTimelineMessageItem,
   });
 
   final bool Function(storage_models.Chat recipient)? onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
+  final ChatTimelineMessageItem? focusedTimelineMessageItem;
 
   @override
   State<ChatMessageDetails> createState() => _ChatMessageDetailsState();
@@ -108,10 +110,12 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 : () => locate<ChatBloc>().add(
                     ChatEmailHeadersRequested(message),
                   );
-            final String? resolvedHtmlBody = deltaMessageId == null
-                ? message.htmlBody
-                : state.emailFullHtmlByDeltaId[deltaMessageId] ??
-                      message.htmlBody;
+            final String? resolvedHtmlBody =
+                widget.focusedTimelineMessageItem?.resolvedHtmlBody ??
+                resolvedEmailHtmlBodyForMessage(
+                  message: message,
+                  emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+                );
             final normalizedHtmlBody = resolvedHtmlBody?.trim();
             final hasHtmlBody =
                 normalizedHtmlBody != null && normalizedHtmlBody.isNotEmpty;
@@ -136,6 +140,10 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   };
             final String? emailFallbackText =
                 fallbackBodyText ?? fallbackQuotedText;
+            final projectedEmailBodyEntries =
+                _emailDetailBodyEntriesForTimelineItem(
+                  widget.focusedTimelineMessageItem,
+                );
             final xmppCapabilities = state.xmppCapabilities;
             final supportsXmppMarkers =
                 xmppCapabilities?.supportsMarkers == true;
@@ -196,6 +204,16 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 ),
               );
             }
+            final deltaAccountId = message.deltaAccountId;
+            final deltaAccountLabel = deltaAccountId.toString();
+            metadataItems.add(
+              _MessageDetailsInfo(
+                label: l10n.chatMessageDetailsDeltaAccountIdLabel,
+                value: deltaAccountLabel,
+                copyValue: deltaAccountLabel,
+                copyLabel: copyLabel,
+              ),
+            );
             if (deltaMessageId != null) {
               final deltaLabel = deltaMessageId.toString();
               metadataItems.add(
@@ -226,7 +244,50 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   spacing: spacing.l,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    if (hasHtmlBody)
+                    if (projectedEmailBodyEntries.isNotEmpty)
+                      Column(
+                        spacing: spacing.m,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final entry in projectedEmailBodyEntries)
+                            if (entry.html != null)
+                              AxiEmailHtmlPreview(
+                                html: entry.html!,
+                                shouldLoadSafeRemoteImages:
+                                    _shouldLoadEmailDetailRemoteImages(
+                                      autoLoadEmailImages:
+                                          state
+                                              .chat
+                                              ?.emailRemoteImagesEnabled ??
+                                          settings.autoLoadEmailImages,
+                                      loadedEmailImageMessageIds:
+                                          widget.loadedEmailImageMessageIds,
+                                      messageDatabaseId:
+                                          entry.sourceMessageDatabaseId,
+                                    ),
+                                originalContentUnblocked:
+                                    _unblockedEmailContentKey ==
+                                    emailContentKey,
+                                baseFontSize: settings.messageTextSize.fontSize,
+                                onRemoteImagesApproved:
+                                    entry.sourceMessageDatabaseId == null
+                                    ? onRemoteImagesApproved
+                                    : () => widget.onEmailImagesApproved(
+                                        entry.sourceMessageDatabaseId!,
+                                      ),
+                                onOriginalContentUnblocked: () =>
+                                    _handleOriginalEmailUnblock(
+                                      context,
+                                      emailContentKey,
+                                    ),
+                                onLinkTap: (url) =>
+                                    _handleLinkTap(context, url),
+                              )
+                            else
+                              SelectableText(entry.text, style: textTheme.lead),
+                        ],
+                      )
+                    else if (hasHtmlBody)
                       AxiEmailHtmlPreview(
                         html: normalizedHtmlBody,
                         shouldLoadSafeRemoteImages: shouldLoadSafeRemoteImages,
@@ -848,6 +909,50 @@ class _MessageStatusIndicator extends StatelessWidget {
     );
   }
 }
+
+List<({String? html, String? sourceMessageDatabaseId, String text})>
+_emailDetailBodyEntriesForTimelineItem(ChatTimelineMessageItem? item) {
+  final blocks = item?.emailBodyBlocks;
+  if (blocks == null || blocks.isEmpty) {
+    return const <
+      ({String? html, String? sourceMessageDatabaseId, String text})
+    >[];
+  }
+  final entries =
+      <({String? html, String? sourceMessageDatabaseId, String text})>[];
+  for (final block in blocks) {
+    final entry = _emailDetailBodyEntryForBlock(block);
+    if (entry != null) {
+      entries.add(entry);
+    }
+  }
+  return List<
+    ({String? html, String? sourceMessageDatabaseId, String text})
+  >.unmodifiable(entries);
+}
+
+({String? html, String? sourceMessageDatabaseId, String text})?
+_emailDetailBodyEntryForBlock(ChatTimelineEmailBodyBlock block) {
+  final html = block.resolvedHtmlBody?.trim();
+  final text = block.plainText.trim();
+  if ((html == null || html.isEmpty) && text.isEmpty) {
+    return null;
+  }
+  return (
+    html: html == null || html.isEmpty ? null : html,
+    sourceMessageDatabaseId: block.sourceMessageDatabaseId,
+    text: text,
+  );
+}
+
+bool _shouldLoadEmailDetailRemoteImages({
+  required bool autoLoadEmailImages,
+  required Set<String> loadedEmailImageMessageIds,
+  required String? messageDatabaseId,
+}) =>
+    autoLoadEmailImages ||
+    (messageDatabaseId != null &&
+        loadedEmailImageMessageIds.contains(messageDatabaseId));
 
 class _MessageDetailsInfo extends StatelessWidget {
   const _MessageDetailsInfo({

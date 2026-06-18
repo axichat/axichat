@@ -697,13 +697,18 @@ class _PinnedMessageTile extends StatelessWidget {
         ? null
         : resolvedHtmlBodyFor(effectiveMessage);
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
-    final normalizedHtmlText = normalizedHtmlBody == null
-        ? null
-        : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
-    final hasVisibleEmailHtmlContent = _emailHtmlHasVisibleTimelineContent(
-      normalizedHtmlBody: normalizedHtmlBody,
-      normalizedHtmlText: normalizedHtmlText,
+    final emailDerivation = emailHtmlDerivationForBody(
+      normalizedHtmlBody,
+      deriveIfMissing: false,
     );
+    final normalizedHtmlText = emailDerivation?.visibleBodyText;
+    final hasVisibleEmailHtmlContent =
+        emailDerivation != null &&
+        _emailHtmlHasVisibleTimelineContent(
+          normalizedHtmlBody: normalizedHtmlBody,
+          normalizedHtmlText: normalizedHtmlText,
+          derivation: emailDerivation,
+        );
     final bool shouldRenderTextContent =
         !hideTaskText && !hideFragmentText && !hideAvailabilityText;
     final messageText = renderedText;
@@ -856,12 +861,14 @@ class _PinnedMessageTile extends StatelessWidget {
           !isInviteMessage &&
           !isInviteRevocationMessage &&
           shouldRenderInlineEmailHtmlBody) {
-        final preparedHtmlBody =
-            HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-              normalizedHtmlBody,
-              allowRemoteImages:
-                  chat.emailRemoteImagesEnabled ?? settings.autoLoadEmailImages,
-            );
+        final shouldLoadImages =
+            chat.emailRemoteImagesEnabled ?? settings.autoLoadEmailImages;
+        final preparedHtmlBody = shouldLoadImages
+            ? HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+                normalizedHtmlBody,
+                allowRemoteImages: true,
+              )
+            : emailDerivation.preparedFlutterHtml;
         if (preparedHtmlBody.trim().isNotEmpty) {
           contentChildren.add(
             _MessageHtmlBody(
@@ -870,8 +877,7 @@ class _PinnedMessageTile extends StatelessWidget {
               textStyle: baseTextStyle,
               textColor: textColor,
               linkColor: isSelf ? colors.primaryForeground : colors.primary,
-              shouldLoadImages:
-                  chat.emailRemoteImagesEnabled ?? settings.autoLoadEmailImages,
+              shouldLoadImages: shouldLoadImages,
               onLinkTap: onMessageLinkTap,
             ),
           );

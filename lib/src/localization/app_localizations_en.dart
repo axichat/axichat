@@ -607,6 +607,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Unable to send message. Please try again.';
 
   @override
+  String get chatComposerPartialSendWarning =>
+      'Some recipients or parts were not sent. Resending may duplicate content that was already delivered.';
+
+  @override
   String get chatComposerAttachmentBundleFailed =>
       'Unable to bundle attachments. Please try again.';
 
@@ -864,7 +868,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get draftPartialSendNotice =>
-      'Some recipients were not sent. Sent recipients were removed; retry the remaining recipients.';
+      'Some recipients or parts were not sent. Resending may duplicate content that was already delivered.';
 
   @override
   String get draftSent => 'Sent';
@@ -3732,6 +3736,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarCriticalPathDragHint => 'Drag tasks to reorder';
 
   @override
+  String get calendarTaskDragShowcaseTitle => 'Drag tasks';
+
+  @override
+  String get calendarTaskDragShowcaseDescription =>
+      'Drag tasks to the grid to schedule them, to lists to move or reorder them, to screen edges to change pages, or to the bottom bar to switch views.';
+
+  @override
+  String get calendarTaskDragHoldShowcaseTitle => 'Hold to drag';
+
+  @override
+  String get calendarTaskDragHoldShowcaseDescription =>
+      'Hold a task to start dragging it.';
+
+  @override
+  String get calendarTaskDragGridDropTipTitle => 'Schedule task';
+
+  @override
+  String get calendarTaskDragGridDropTipDescription =>
+      'Drop on the grid to schedule the task.';
+
+  @override
+  String get calendarTaskDragListDropTipTitle => 'Move task';
+
+  @override
+  String get calendarTaskDragListDropTipDescription =>
+      'Drop on a list to move or reorder the task.';
+
+  @override
+  String get calendarTaskDragPageEdgeTipTitle => 'Change page';
+
+  @override
+  String get calendarTaskDragPageEdgeTipDescription =>
+      'Drag to the side of the grid to change pages.';
+
+  @override
+  String get calendarTaskDragBottomBarTipTitle => 'Switch view';
+
+  @override
+  String get calendarTaskDragBottomBarTipDescription =>
+      'Drag to the bottom bar to switch between schedule and task lists.';
+
+  @override
   String get calendarCriticalPathEmptyTasks => 'No tasks in this path yet';
 
   @override
@@ -6517,6 +6563,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatMessageDetailsOccupantIdLabel => 'Occupant ID';
+
+  @override
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta message ID';

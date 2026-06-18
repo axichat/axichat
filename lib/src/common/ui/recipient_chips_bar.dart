@@ -54,7 +54,7 @@ class RecipientChipsBar extends StatefulWidget {
   final String? selfJid;
   final FutureOr<bool> Function(Contact target) onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
-  final Map<String, FanOutRecipientState> latestStatuses;
+  final Map<ComposerRecipientKey, FanOutRecipientState> latestStatuses;
   final SelfAvatar selfIdentity;
   final bool collapsedByDefault;
   final Set<String> suggestionAddresses;
@@ -955,13 +955,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   FanOutRecipientState? _statusFor(ComposerRecipient recipient) {
-    for (final key in recipient.target.statusLookupKeys) {
-      final status = widget.latestStatuses[key];
-      if (status != null) {
-        return status;
-      }
-    }
-    return null;
+    return widget.latestStatuses[recipient.recipientKey];
   }
 
   String? _extractDomain(String? raw) {

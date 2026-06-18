@@ -620,6 +620,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo enviar el mensaje. Inténtalo de nuevo.';
 
   @override
+  String get chatComposerPartialSendWarning =>
+      'Algunos destinatarios o partes no se enviaron. Reenviar puede duplicar contenido que ya se entregó.';
+
+  @override
   String get chatComposerAttachmentBundleFailed =>
       'No se pudieron agrupar los archivos adjuntos. Inténtalo de nuevo.';
 
@@ -883,7 +887,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get draftPartialSendNotice =>
-      'Algunos destinatarios no recibieron el mensaje. Los destinatarios enviados se quitaron; vuelve a intentar con los restantes.';
+      'Algunos destinatarios o partes no se enviaron. Reenviar puede duplicar contenido que ya se entregó.';
 
   @override
   String get draftSent => 'Enviado';
@@ -3796,6 +3800,48 @@ class AppLocalizationsEs extends AppLocalizations {
       'Arrastra las tareas para reordenar';
 
   @override
+  String get calendarTaskDragShowcaseTitle => 'Arrastra tareas';
+
+  @override
+  String get calendarTaskDragShowcaseDescription =>
+      'Arrastra tareas a la cuadrícula para programarlas, a las listas para moverlas o reordenarlas, a los bordes de la pantalla para cambiar de página o a la barra inferior para cambiar de vista.';
+
+  @override
+  String get calendarTaskDragHoldShowcaseTitle => 'Mantén para arrastrar';
+
+  @override
+  String get calendarTaskDragHoldShowcaseDescription =>
+      'Mantén pulsada una tarea para empezar a arrastrarla.';
+
+  @override
+  String get calendarTaskDragGridDropTipTitle => 'Programar tarea';
+
+  @override
+  String get calendarTaskDragGridDropTipDescription =>
+      'Suelta en la cuadrícula para programar la tarea.';
+
+  @override
+  String get calendarTaskDragListDropTipTitle => 'Mover tarea';
+
+  @override
+  String get calendarTaskDragListDropTipDescription =>
+      'Suelta en una lista para mover o reordenar la tarea.';
+
+  @override
+  String get calendarTaskDragPageEdgeTipTitle => 'Cambiar página';
+
+  @override
+  String get calendarTaskDragPageEdgeTipDescription =>
+      'Arrastra al borde de la cuadrícula para cambiar de página.';
+
+  @override
+  String get calendarTaskDragBottomBarTipTitle => 'Cambiar vista';
+
+  @override
+  String get calendarTaskDragBottomBarTipDescription =>
+      'Arrastra a la barra inferior para cambiar entre horario y listas de tareas.';
+
+  @override
   String get calendarCriticalPathEmptyTasks =>
       'No hay tareas en esta ruta todavía';
 
@@ -6613,6 +6659,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatMessageDetailsOccupantIdLabel => 'ID de ocupante';
+
+  @override
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'ID de mensaje Delta';

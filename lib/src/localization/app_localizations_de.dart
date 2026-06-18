@@ -624,6 +624,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Nachricht konnte nicht gesendet werden. Bitte erneut versuchen.';
 
   @override
+  String get chatComposerPartialSendWarning =>
+      'Einige Empfänger oder Teile wurden nicht gesendet. Erneutes Senden kann bereits zugestellte Inhalte duplizieren.';
+
+  @override
   String get chatComposerAttachmentBundleFailed =>
       'Anhänge konnten nicht gebündelt werden. Bitte erneut versuchen.';
 
@@ -889,7 +893,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get draftPartialSendNotice =>
-      'Einige Empfänger wurden nicht erreicht. Gesendete Empfänger wurden entfernt; versuche die verbleibenden Empfänger erneut.';
+      'Einige Empfänger oder Teile wurden nicht gesendet. Erneutes Senden kann bereits zugestellte Inhalte duplizieren.';
 
   @override
   String get draftSent => 'Gesendet';
@@ -3810,6 +3814,48 @@ class AppLocalizationsDe extends AppLocalizations {
       'Aufgaben ziehen, um sie neu anzuordnen';
 
   @override
+  String get calendarTaskDragShowcaseTitle => 'Aufgaben ziehen';
+
+  @override
+  String get calendarTaskDragShowcaseDescription =>
+      'Ziehe Aufgaben in das Raster, um sie zu planen, in Listen, um sie zu verschieben oder neu anzuordnen, an die Bildschirmränder, um die Seite zu wechseln, oder in die untere Leiste, um die Ansicht zu wechseln.';
+
+  @override
+  String get calendarTaskDragHoldShowcaseTitle => 'Halten zum Ziehen';
+
+  @override
+  String get calendarTaskDragHoldShowcaseDescription =>
+      'Halte eine Aufgabe, um sie zu ziehen.';
+
+  @override
+  String get calendarTaskDragGridDropTipTitle => 'Aufgabe planen';
+
+  @override
+  String get calendarTaskDragGridDropTipDescription =>
+      'Lege sie im Raster ab, um die Aufgabe zu planen.';
+
+  @override
+  String get calendarTaskDragListDropTipTitle => 'Aufgabe verschieben';
+
+  @override
+  String get calendarTaskDragListDropTipDescription =>
+      'Lege sie in einer Liste ab, um die Aufgabe zu verschieben oder neu anzuordnen.';
+
+  @override
+  String get calendarTaskDragPageEdgeTipTitle => 'Seite wechseln';
+
+  @override
+  String get calendarTaskDragPageEdgeTipDescription =>
+      'Ziehe an den Rand des Rasters, um die Seite zu wechseln.';
+
+  @override
+  String get calendarTaskDragBottomBarTipTitle => 'Ansicht wechseln';
+
+  @override
+  String get calendarTaskDragBottomBarTipDescription =>
+      'Ziehe zur unteren Leiste, um zwischen Zeitplan und Aufgabenlisten zu wechseln.';
+
+  @override
   String get calendarCriticalPathEmptyTasks => 'Keine Aufgaben in diesem Pfad';
 
   @override
@@ -6620,6 +6666,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatMessageDetailsOccupantIdLabel => 'Occupant-ID';
+
+  @override
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta-Nachrichten-ID';

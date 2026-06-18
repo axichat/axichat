@@ -124,12 +124,14 @@ class _DeltaAccountSession {
 DeltaCoreEvent _deltaEventForAccount({
   required DeltaCoreEvent event,
   required int accountId,
+  bool preserveNativeAccountId = false,
 }) {
   final eventAccountId = event.accountId;
   if (eventAccountId == accountId) {
     return event;
   }
-  if (eventAccountId != null &&
+  if (preserveNativeAccountId &&
+      eventAccountId != null &&
       eventAccountId != DeltaAccountDefaults.legacyId) {
     return event;
   }
@@ -1836,7 +1838,11 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       return;
     }
     await _handleEvent(
-      event: _deltaEventForAccount(event: event, accountId: accountId),
+      event: _deltaEventForAccount(
+        event: event,
+        accountId: accountId,
+        preserveNativeAccountId: true,
+      ),
       consumer: session.consumer,
     );
   }

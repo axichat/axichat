@@ -626,6 +626,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible d\'envoyer le message. Veuillez réessayer.';
 
   @override
+  String get chatComposerPartialSendWarning =>
+      'Certains destinataires ou éléments n’ont pas été envoyés. Un renvoi peut dupliquer du contenu déjà remis.';
+
+  @override
   String get chatComposerAttachmentBundleFailed =>
       'Impossible de regrouper les pièces jointes. Veuillez réessayer.';
 
@@ -889,7 +893,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get draftPartialSendNotice =>
-      'Certains destinataires n’ont pas reçu le message. Les destinataires déjà envoyés ont été retirés ; réessayez avec les destinataires restants.';
+      'Certains destinataires ou éléments n’ont pas été envoyés. Un renvoi peut dupliquer du contenu déjà remis.';
 
   @override
   String get draftSent => 'Envoyé';
@@ -3812,6 +3816,48 @@ class AppLocalizationsFr extends AppLocalizations {
       'Faites glisser les tâches pour réorganiser';
 
   @override
+  String get calendarTaskDragShowcaseTitle => 'Faites glisser les tâches';
+
+  @override
+  String get calendarTaskDragShowcaseDescription =>
+      'Faites glisser les tâches vers la grille pour les planifier, vers les listes pour les déplacer ou les réorganiser, vers les bords de l\'écran pour changer de page, ou vers la barre inférieure pour changer de vue.';
+
+  @override
+  String get calendarTaskDragHoldShowcaseTitle => 'Maintenez pour déplacer';
+
+  @override
+  String get calendarTaskDragHoldShowcaseDescription =>
+      'Maintenez une tâche pour commencer à la déplacer.';
+
+  @override
+  String get calendarTaskDragGridDropTipTitle => 'Planifier la tâche';
+
+  @override
+  String get calendarTaskDragGridDropTipDescription =>
+      'Déposez-la sur la grille pour planifier la tâche.';
+
+  @override
+  String get calendarTaskDragListDropTipTitle => 'Déplacer la tâche';
+
+  @override
+  String get calendarTaskDragListDropTipDescription =>
+      'Déposez-la sur une liste pour déplacer ou réorganiser la tâche.';
+
+  @override
+  String get calendarTaskDragPageEdgeTipTitle => 'Changer de page';
+
+  @override
+  String get calendarTaskDragPageEdgeTipDescription =>
+      'Faites glisser vers le bord de la grille pour changer de page.';
+
+  @override
+  String get calendarTaskDragBottomBarTipTitle => 'Changer de vue';
+
+  @override
+  String get calendarTaskDragBottomBarTipDescription =>
+      'Faites glisser vers la barre inférieure pour passer du planning aux listes de tâches.';
+
+  @override
   String get calendarCriticalPathEmptyTasks =>
       'Aucune tâche dans ce chemin pour le moment';
 
@@ -6640,6 +6686,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatMessageDetailsOccupantIdLabel => 'ID d occupant';
+
+  @override
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'ID de message Delta';

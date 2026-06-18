@@ -86,18 +86,32 @@ Future<void> _migrateLegacyRootStorage({
     recursive: false,
     followLinks: false,
   )) {
+    final entityName = p.basename(entity.path);
+    if (entity is Directory) {
+      if (!_isLegacyRootStorageDirectory(entityName)) {
+        continue;
+      }
+      await _mergeDirectoryContents(
+        sourceDirectory: entity,
+        targetDirectory: Directory(p.join(targetDirectory.path, entityName)),
+      );
+      continue;
+    }
     if (entity is! File) {
       continue;
     }
-    final fileName = p.basename(entity.path);
-    if (!_isLegacyRootStorageFile(fileName)) {
+    if (!_isLegacyRootStorageFile(entityName)) {
       continue;
     }
     await _moveFileIfMissing(
       sourceFile: entity,
-      targetFile: File(p.join(targetDirectory.path, fileName)),
+      targetFile: File(p.join(targetDirectory.path, entityName)),
     );
   }
+}
+
+bool _isLegacyRootStorageDirectory(String directoryName) {
+  return directoryName.endsWith('.axichat.drift.accounts');
 }
 
 bool _isLegacyRootStorageFile(String fileName) {

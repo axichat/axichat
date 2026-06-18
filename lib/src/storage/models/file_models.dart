@@ -142,23 +142,17 @@ final class DraftSyncMetadata {
 }
 
 final class DraftQuoteTarget {
-  const DraftQuoteTarget({required this.stanzaId, required this.referenceKind});
+  const DraftQuoteTarget({required this.stanzaId});
 
   final String stanzaId;
-  final MessageReferenceKind referenceKind;
-
-  MessageReference get messageReference =>
-      MessageReference(kind: referenceKind, value: stanzaId);
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DraftQuoteTarget &&
-          other.stanzaId == stanzaId &&
-          other.referenceKind == referenceKind;
+      other is DraftQuoteTarget && other.stanzaId == stanzaId;
 
   @override
-  int get hashCode => Object.hash(stanzaId, referenceKind);
+  int get hashCode => stanzaId.hashCode;
 
   static DraftQuoteTarget? fromDraft({
     required String? stanzaId,
@@ -168,13 +162,11 @@ final class DraftQuoteTarget {
     if (normalizedStanzaId == null || normalizedStanzaId.isEmpty) {
       return null;
     }
-    if (referenceKind == null) {
+    if (referenceKind == MessageReferenceKind.originId ||
+        isLegacyWireMessageReferenceValue(normalizedStanzaId)) {
       return null;
     }
-    return DraftQuoteTarget(
-      stanzaId: normalizedStanzaId,
-      referenceKind: referenceKind,
-    );
+    return DraftQuoteTarget(stanzaId: normalizedStanzaId);
   }
 }
 
@@ -809,7 +801,7 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
   Draft copyWithQuoteTarget(DraftQuoteTarget? target) {
     return copyWith(
       quotingStanzaId: target?.stanzaId,
-      quotingReferenceKind: target?.referenceKind,
+      quotingReferenceKind: null,
     );
   }
 

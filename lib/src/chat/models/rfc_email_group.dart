@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/storage/models.dart';
 
 final class RfcEmailGroup {
@@ -57,6 +58,8 @@ final class RfcEmailGroup {
       !hasAttachments(message) &&
       (isBodySource(message) ||
           isDuplicateBodyMessage(message) ||
+          message.body?.trim().isNotEmpty == true ||
+          message.htmlBody?.trim().isNotEmpty == true ||
           _isGeneratedAttachmentCaptionOnly(message));
 
   bool shouldSuppressTimelineText(Message message) =>
@@ -215,6 +218,7 @@ String? rfcEmailGroupKey(Message message) {
 String? resolvedEmailHtmlBodyForMessage({
   required Message message,
   required Map<int, String> emailFullHtmlByDeltaId,
+  bool deriveHtmlIfMissing = true,
 }) {
   final deltaMessageId = message.deltaMsgId;
   if (deltaMessageId == null) {
@@ -224,7 +228,10 @@ String? resolvedEmailHtmlBodyForMessage({
   if (!message.hasRfc822BodyContent) {
     return fullHtml ?? message.htmlBody;
   }
-  if (emailHtmlHasVisibleBodyContent(message.htmlBody)) {
+  if (emailHtmlHasVisibleBodyContent(
+    message.htmlBody,
+    deriveIfMissing: deriveHtmlIfMissing,
+  )) {
     return message.htmlBody;
   }
   return fullHtml;
@@ -243,47 +250,49 @@ EmailHtmlDerivation? emailHtmlDerivationForBody(
       : HtmlContentCodec.cachedEmailDerivations(normalizedHtml);
 }
 
-bool emailHtmlHasVisibleBodyContent(String? html) {
-  final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
-  if (normalizedHtml == null) {
+bool emailHtmlHasVisibleBodyContent(
+  String? html, {
+  bool deriveIfMissing = true,
+}) {
+  final derivation = emailHtmlDerivationForBody(
+    html,
+    deriveIfMissing: deriveIfMissing,
+  );
+  if (derivation == null) {
     return false;
   }
-  return emailHtmlVisibleBodyText(normalizedHtml).isNotEmpty ||
-      HtmlContentCodec.containsRenderableRemoteImages(normalizedHtml);
+  return derivation.visibleBodyText.isNotEmpty ||
+      derivation.containsRemoteImages;
 }
 
-String emailHtmlVisibleBodyText(String? html) {
-  final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
-  if (normalizedHtml == null) {
+String emailHtmlVisibleBodyText(String? html, {bool deriveIfMissing = true}) {
+  final derivation = emailHtmlDerivationForBody(
+    html,
+    deriveIfMissing: deriveIfMissing,
+  );
+  if (derivation == null) {
     return '';
   }
-  final preparedHtml = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-    normalizedHtml,
-    allowRemoteImages: false,
-  );
-  return HtmlContentCodec.toPlainText(preparedHtml).trim();
+  return derivation.visibleBodyText;
 }
 
 String rfcEmailBodyText({
   required Message message,
   required String? resolvedHtmlBody,
+  bool deriveHtmlIfMissing = true,
 }) {
   final body = _plainEmailBodyCandidate(message);
   if (message.hasGeneratedEmailAttachmentCaption &&
       _looksGeneratedEmailAttachmentCaption(body)) {
     return '';
   }
-  final htmlText = emailHtmlVisibleBodyText(
-    resolvedHtmlBody ?? message.htmlBody,
-  );
-  if (body.isNotEmpty) {
-    if (message.hasRfc822BodyContent &&
-        HtmlContentCodec.looksLikeCssBodyText(body)) {
-      return htmlText;
-    }
+  if (body.isNotEmpty &&
+      !(message.hasRfc822BodyContent &&
+          HtmlContentCodec.looksLikeCssBodyText(body))) {
     return body;
   }
-  return htmlText;
+  final html = resolvedHtmlBody ?? message.htmlBody;
+  return emailHtmlVisibleBodyText(html, deriveIfMissing: deriveHtmlIfMissing);
 }
 
 String _plainEmailBodyCandidate(Message message) {
@@ -298,7 +307,19 @@ String _plainEmailBodyCandidate(Message message) {
           subject: subject!,
         )
       : split.body;
-  return ChatSubjectCodec.previewBodyText(body).trim();
+  final previewBody = ChatSubjectCodec.previewBodyText(body).trim();
+  final forwardedContent = splitForwardedBodyContent(body);
+  if (forwardedContent.body.trim().isEmpty) {
+    return previewBody;
+  }
+  final forwardedSubject = forwardedContent.subject?.trim();
+  final forwardedBody = forwardedSubject?.isNotEmpty == true
+      ? ChatSubjectCodec.stripRepeatedSubject(
+          body: forwardedContent.body,
+          subject: forwardedSubject!,
+        )
+      : forwardedContent.body;
+  return ChatSubjectCodec.previewBodyText(forwardedBody).trim();
 }
 
 bool _looksGeneratedEmailAttachmentCaption(String value) {

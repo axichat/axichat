@@ -99,11 +99,13 @@ class _ChatDetailsOverlay extends StatelessWidget {
     required this.onAddRecipient,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
+    required this.focusedTimelineMessageItem,
   });
 
   final bool Function(chat_models.Chat chat) onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
+  final ChatTimelineMessageItem? focusedTimelineMessageItem;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +119,7 @@ class _ChatDetailsOverlay extends StatelessWidget {
             onAddRecipient: onAddRecipient,
             loadedEmailImageMessageIds: loadedEmailImageMessageIds,
             onEmailImagesApproved: onEmailImagesApproved,
+            focusedTimelineMessageItem: focusedTimelineMessageItem,
           ),
         ),
       ),
@@ -449,6 +452,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
     required this.chatEntity,
     required this.calendarAvailable,
     required this.state,
+    required this.focusedTimelineMessageItem,
     required this.canRenameContact,
     required this.isChatBlocked,
     required this.chatBlocklistEntry,
@@ -471,6 +475,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
   final chat_models.Chat? chatEntity;
   final bool calendarAvailable;
   final ChatState state;
+  final ChatTimelineMessageItem? focusedTimelineMessageItem;
   final bool canRenameContact;
   final bool isChatBlocked;
   final BlocklistEntry? chatBlocklistEntry;
@@ -507,6 +512,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
           currentRoute: currentRoute,
           chatEntity: chatEntity,
           state: state,
+          focusedTimelineMessageItem: focusedTimelineMessageItem,
           canRenameContact: canRenameContact,
           isChatBlocked: isChatBlocked,
           chatBlocklistEntry: chatBlocklistEntry,
@@ -552,6 +558,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
     required this.currentRoute,
     required this.chatEntity,
     required this.state,
+    required this.focusedTimelineMessageItem,
     required this.canRenameContact,
     required this.isChatBlocked,
     required this.chatBlocklistEntry,
@@ -569,6 +576,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
   final ChatRouteIndex currentRoute;
   final chat_models.Chat? chatEntity;
   final ChatState state;
+  final ChatTimelineMessageItem? focusedTimelineMessageItem;
   final bool canRenameContact;
   final bool isChatBlocked;
   final BlocklistEntry? chatBlocklistEntry;
@@ -591,6 +599,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
         onAddRecipient: onAddRecipientFromChat,
         loadedEmailImageMessageIds: loadedEmailImageMessageIds,
         onEmailImagesApproved: onEmailImagesApproved,
+        focusedTimelineMessageItem: focusedTimelineMessageItem,
       ),
       ChatRouteIndex.settings => _ChatSettingsOverlay(
         state: state,
@@ -616,6 +625,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
     required this.currentRoute,
     required this.chatEntity,
     required this.state,
+    required this.focusedTimelineMessageItem,
     required this.canRenameContact,
     required this.isChatBlocked,
     required this.chatBlocklistEntry,
@@ -639,6 +649,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
   final ChatRouteIndex currentRoute;
   final chat_models.Chat? chatEntity;
   final ChatState state;
+  final ChatTimelineMessageItem? focusedTimelineMessageItem;
   final bool canRenameContact;
   final bool isChatBlocked;
   final BlocklistEntry? chatBlocklistEntry;
@@ -682,6 +693,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
           currentRoute: currentRoute,
           chatEntity: chatEntity,
           state: state,
+          focusedTimelineMessageItem: focusedTimelineMessageItem,
           canRenameContact: canRenameContact,
           isChatBlocked: isChatBlocked,
           chatBlocklistEntry: chatBlocklistEntry,

@@ -43,6 +43,7 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
   late bool _hasBlockedHtmlContent;
   late bool _hasCidHtmlImages;
   late String _preparedHtmlBodyForFallback;
+  int _derivationRequestId = 0;
 
   @override
   void initState() {
@@ -59,6 +60,8 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
   }
 
   void _deriveFromHtml() {
+    _derivationRequestId += 1;
+    final requestId = _derivationRequestId;
     _normalizedHtmlBody = widget.html.trim();
     if (_normalizedHtmlBody.isEmpty) {
       _hasRenderableRemoteImages = false;
@@ -67,17 +70,48 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
       _preparedHtmlBodyForFallback = '';
       return;
     }
-    _hasRenderableRemoteImages =
-        HtmlContentCodec.containsRenderableRemoteImages(_normalizedHtmlBody);
-    _hasBlockedHtmlContent = HtmlContentCodec.containsBlockedWebViewContent(
+    final cachedDerivation = HtmlContentCodec.cachedEmailDerivations(
       _normalizedHtmlBody,
     );
-    _hasCidHtmlImages = HtmlContentCodec.containsCidImages(_normalizedHtmlBody);
-    _preparedHtmlBodyForFallback =
-        HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-          _normalizedHtmlBody,
-          allowRemoteImages: false,
-        );
+    if (cachedDerivation != null) {
+      _applyDerivation(cachedDerivation);
+      return;
+    }
+    _hasRenderableRemoteImages = false;
+    _hasBlockedHtmlContent = false;
+    _hasCidHtmlImages = false;
+    _preparedHtmlBodyForFallback = '';
+    unawaited(_deriveFromHtmlAsync(requestId, _normalizedHtmlBody));
+  }
+
+  void _applyDerivation(EmailHtmlDerivation derivation) {
+    _hasRenderableRemoteImages = derivation.containsRemoteImages;
+    _hasBlockedHtmlContent = derivation.containsBlockedWebViewContent;
+    _hasCidHtmlImages = derivation.containsCidImages;
+    _preparedHtmlBodyForFallback = derivation.preparedFlutterHtml;
+  }
+
+  Future<void> _deriveFromHtmlAsync(
+    int requestId,
+    String normalizedHtmlBody,
+  ) async {
+    try {
+      await HtmlContentCodec.precacheEmailDerivations([normalizedHtmlBody]);
+    } on Exception {
+      return;
+    }
+    if (!mounted ||
+        requestId != _derivationRequestId ||
+        normalizedHtmlBody != _normalizedHtmlBody) {
+      return;
+    }
+    final cachedDerivation = HtmlContentCodec.cachedEmailDerivations(
+      normalizedHtmlBody,
+    );
+    if (cachedDerivation == null) {
+      return;
+    }
+    setState(() => _applyDerivation(cachedDerivation));
   }
 
   @override

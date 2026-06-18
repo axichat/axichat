@@ -66,6 +66,7 @@ class _InlineExpandedDraftComposerSection extends StatefulWidget {
     required this.hasDraftContent,
     required this.hasTrackedDraft,
     required this.sendBlocker,
+    required this.sending,
     required this.actionsEnabled,
     required this.addingAttachment,
     required this.onTextChanged,
@@ -89,7 +90,7 @@ class _InlineExpandedDraftComposerSection extends StatefulWidget {
   final _InlineComposerController controller;
   final List<ComposerRecipient> recipients;
   final List<chat_models.Chat> availableChats;
-  final Map<String, FanOutRecipientState> latestStatuses;
+  final Map<ComposerRecipientKey, FanOutRecipientState> latestStatuses;
   final String? visibilityLabel;
   final List<PendingAttachment> pendingAttachments;
   final String? selfJid;
@@ -98,6 +99,7 @@ class _InlineExpandedDraftComposerSection extends StatefulWidget {
   final bool hasDraftContent;
   final bool hasTrackedDraft;
   final String? sendBlocker;
+  final bool sending;
   final bool actionsEnabled;
   final bool addingAttachment;
   final ValueChanged<String> onTextChanged;
@@ -259,7 +261,8 @@ class _InlineExpandedDraftComposerSectionState
           pending.status == PendingAttachmentStatus.queued &&
           !pending.isPreparing,
     );
-    final canUseActions = widget.enabled && widget.actionsEnabled;
+    final canUseActions =
+        widget.enabled && widget.actionsEnabled && !widget.sending;
     final readyToSend =
         canUseActions &&
         widget.sendBlocker == null &&
@@ -352,10 +355,12 @@ class _InlineExpandedDraftComposerSectionState
                   },
                   pendingAttachmentMenuBuilder:
                       widget.pendingAttachmentMenuBuilder,
-                  readyToSend: readyToSend,
-                  sending: false,
+                  readyToSend: readyToSend && !widget.sending,
+                  sending: widget.sending,
                   disabledSendReason: widget.sendBlocker,
-                  onSendPressed: readyToSend ? widget.onSend : null,
+                  onSendPressed: readyToSend && !widget.sending
+                      ? widget.onSend
+                      : null,
                   showSendBlockerMessage: false,
                   sendBlockerMessage: widget.sendBlocker,
                   sendErrorMessage: null,
@@ -511,6 +516,7 @@ class _ChatComposerSection extends StatefulWidget {
     required this.composerHasText,
     required this.composerMinLines,
     required this.composerMaxLines,
+    required this.sending,
     required this.selfJid,
     required this.selfIdentity,
     required this.tapRegionGroup,
@@ -544,12 +550,13 @@ class _ChatComposerSection extends StatefulWidget {
   final _InlineComposerController controller;
   final List<ComposerRecipient> recipients;
   final List<chat_models.Chat> availableChats;
-  final Map<String, FanOutRecipientState> latestStatuses;
+  final Map<ComposerRecipientKey, FanOutRecipientState> latestStatuses;
   final String? visibilityLabel;
   final List<PendingAttachment> pendingAttachments;
   final bool composerHasText;
   final int composerMinLines;
   final int composerMaxLines;
+  final bool sending;
   final String? selfJid;
   final SelfAvatar selfIdentity;
   final Object tapRegionGroup;
@@ -569,6 +576,7 @@ class _ChatComposerSection extends StatefulWidget {
   pendingAttachmentMenuBuilder;
   final List<ChatComposerAccessory> Function({
     required bool canSend,
+    required bool sending,
     required TextEditingController textController,
     required FocusNode attachmentButtonFocusNode,
   })
@@ -773,6 +781,7 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
     );
     final sendEnabled =
         widget.enabled &&
+        !widget.sending &&
         !hasPreparingAttachments &&
         widget.recipients.isNotEmpty &&
         (widget.composerHasText ||
@@ -847,6 +856,7 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
                       header: subjectHeader,
                       actions: widget.buildComposerAccessories(
                         canSend: sendEnabled,
+                        sending: widget.sending,
                         textController: _textController,
                         attachmentButtonFocusNode: _attachmentButtonFocusNode,
                       ),
@@ -1405,11 +1415,13 @@ class _AttachmentAccessoryButton extends StatelessWidget {
 class _SendMessageAccessory extends StatelessWidget {
   const _SendMessageAccessory({
     required this.enabled,
+    required this.loading,
     required this.onPressed,
     this.onLongPress,
   });
 
   final bool enabled;
+  final bool loading;
   final VoidCallback onPressed;
   final VoidCallback? onLongPress;
 
@@ -1419,8 +1431,9 @@ class _SendMessageAccessory extends StatelessWidget {
       icon: LucideIcons.send,
       tooltip: context.l10n.chatSendMessageTooltip,
       activeColor: context.colorScheme.primary,
-      onPressed: enabled ? onPressed : null,
-      onLongPress: onLongPress,
+      loading: loading,
+      onPressed: enabled && !loading ? onPressed : null,
+      onLongPress: loading ? null : onLongPress,
     );
   }
 }
@@ -1430,6 +1443,7 @@ class _ChatComposerIconButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     this.activeColor,
+    this.loading = false,
     this.onPressed,
     this.onLongPress,
   });
@@ -1437,6 +1451,7 @@ class _ChatComposerIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final Color? activeColor;
+  final bool loading;
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
 
@@ -1451,6 +1466,7 @@ class _ChatComposerIconButton extends StatelessWidget {
       iconData: icon,
       tooltip: tooltip,
       semanticLabel: tooltip,
+      loading: loading,
       onPressed: onPressed,
       onLongPress: onLongPress,
       color: iconColor,

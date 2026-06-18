@@ -1173,6 +1173,12 @@ abstract class AppLocalizations {
   /// **'Unable to send message. Please try again.'**
   String get chatComposerSendFailed;
 
+  /// No description provided for @chatComposerPartialSendWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Some recipients or parts were not sent. Resending may duplicate content that was already delivered.'**
+  String get chatComposerPartialSendWarning;
+
   /// No description provided for @chatComposerAttachmentBundleFailed.
   ///
   /// In en, this message translates to:
@@ -1662,7 +1668,7 @@ abstract class AppLocalizations {
   /// No description provided for @draftPartialSendNotice.
   ///
   /// In en, this message translates to:
-  /// **'Some recipients were not sent. Sent recipients were removed; retry the remaining recipients.'**
+  /// **'Some recipients or parts were not sent. Resending may duplicate content that was already delivered.'**
   String get draftPartialSendNotice;
 
   /// No description provided for @draftSent.
@@ -6738,6 +6744,78 @@ abstract class AppLocalizations {
   /// **'Drag tasks to reorder'**
   String get calendarCriticalPathDragHint;
 
+  /// No description provided for @calendarTaskDragShowcaseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag tasks'**
+  String get calendarTaskDragShowcaseTitle;
+
+  /// No description provided for @calendarTaskDragShowcaseDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag tasks to the grid to schedule them, to lists to move or reorder them, to screen edges to change pages, or to the bottom bar to switch views.'**
+  String get calendarTaskDragShowcaseDescription;
+
+  /// No description provided for @calendarTaskDragHoldShowcaseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold to drag'**
+  String get calendarTaskDragHoldShowcaseTitle;
+
+  /// No description provided for @calendarTaskDragHoldShowcaseDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold a task to start dragging it.'**
+  String get calendarTaskDragHoldShowcaseDescription;
+
+  /// No description provided for @calendarTaskDragGridDropTipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Schedule task'**
+  String get calendarTaskDragGridDropTipTitle;
+
+  /// No description provided for @calendarTaskDragGridDropTipDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop on the grid to schedule the task.'**
+  String get calendarTaskDragGridDropTipDescription;
+
+  /// No description provided for @calendarTaskDragListDropTipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move task'**
+  String get calendarTaskDragListDropTipTitle;
+
+  /// No description provided for @calendarTaskDragListDropTipDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop on a list to move or reorder the task.'**
+  String get calendarTaskDragListDropTipDescription;
+
+  /// No description provided for @calendarTaskDragPageEdgeTipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change page'**
+  String get calendarTaskDragPageEdgeTipTitle;
+
+  /// No description provided for @calendarTaskDragPageEdgeTipDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to the side of the grid to change pages.'**
+  String get calendarTaskDragPageEdgeTipDescription;
+
+  /// No description provided for @calendarTaskDragBottomBarTipTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch view'**
+  String get calendarTaskDragBottomBarTipTitle;
+
+  /// No description provided for @calendarTaskDragBottomBarTipDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to the bottom bar to switch between schedule and task lists.'**
+  String get calendarTaskDragBottomBarTipDescription;
+
   /// No description provided for @calendarCriticalPathEmptyTasks.
   ///
   /// In en, this message translates to:
@@ -11251,6 +11329,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Occupant ID'**
   String get chatMessageDetailsOccupantIdLabel;
+
+  /// No description provided for @chatMessageDetailsDeltaAccountIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delta account ID'**
+  String get chatMessageDetailsDeltaAccountIdLabel;
 
   /// No description provided for @chatMessageDetailsDeltaIdLabel.
   ///

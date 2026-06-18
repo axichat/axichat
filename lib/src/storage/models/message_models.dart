@@ -65,6 +65,16 @@ final class DeltaAccountDefaults {
   static const int singleContextId = 1;
 }
 
+enum EmailRfc822BodyStatus {
+  unknown,
+  hydrated,
+  unavailable;
+
+  bool get isHydrated => this == hydrated;
+
+  bool get isUnavailable => this == unavailable;
+}
+
 // ENUMS WARNING: New values must only be added to the end of the list.
 // If not, the database will break
 
@@ -352,6 +362,8 @@ abstract class Message with _$Message implements Insertable<Message> {
     String? stickerPackID,
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
+    @Default(EmailRfc822BodyStatus.unknown)
+    EmailRfc822BodyStatus rfc822BodyStatus,
     String? manualSendAgainStanzaID,
     @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
     @Default(DeltaAccountDefaults.legacyId) int deltaAccountId,
@@ -393,6 +405,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     required String? stickerPackID,
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
+    required EmailRfc822BodyStatus rfc822BodyStatus,
     required String? manualSendAgainStanzaID,
     @Default(<ReactionPreview>[]) List<ReactionPreview> reactionsPreview,
     required int deltaAccountId,
@@ -775,6 +788,7 @@ abstract class Message with _$Message implements Insertable<Message> {
         const MapStringDynamicConverter().toSql(pseudoMessageData!),
       );
     }
+    map['rfc822_body_status'] = Variable<int>(rfc822BodyStatus.index);
     if (manualSendAgainStanzaID != null) {
       map['manual_send_again_stanza_i_d'] = Variable<String>(
         manualSendAgainStanzaID,
@@ -819,8 +833,18 @@ extension MessageContent on Message {
   bool get hasGeneratedEmailAttachmentCaption =>
       pseudoMessageData?['emailAttachmentCaption'] == true;
 
-  bool get hasRfc822BodyContent =>
-      pseudoMessageData?['emailRfc822Body'] == true;
+  bool get hasRfc822BodyContent => rfc822BodyStatus.isHydrated;
+
+  bool get rfc822BodyContentUnavailable => rfc822BodyStatus.isUnavailable;
+
+  Map<String, dynamic>? get pseudoMessageDataWithoutRfc822BodyStatus {
+    final data = pseudoMessageData;
+    if (data == null || !data.containsKey('emailRfc822Body')) {
+      return data;
+    }
+    final updated = Map<String, dynamic>.from(data)..remove('emailRfc822Body');
+    return updated.isEmpty ? null : updated;
+  }
 
   bool canSendXmppReaction({required MessageTransport chatDefaultTransport}) =>
       chatDefaultTransport.isXmpp && !isEmailBacked;
@@ -856,7 +880,7 @@ extension MessageContent on Message {
         received: received,
       );
 
-  bool get isFpushMailNotifyMarker {
+  bool get isMailPushNotifyMarker {
     if (isEmailBacked) {
       return false;
     }
@@ -999,11 +1023,25 @@ final class EmailWireMessageReference extends WireMessageReference {
   int get hashCode => Object.hash(EmailWireMessageReference, value);
 }
 
-final class MessageReference {
-  const MessageReference({required this.kind, required this.value});
+final class LocalMessageReference {
+  const LocalMessageReference({required this.kind, required this.value});
 
   final MessageReferenceKind kind;
   final String value;
+}
+
+sealed class FolderMessageReference {
+  const FolderMessageReference(this.value);
+
+  final String value;
+}
+
+final class XmppFolderMessageReference extends FolderMessageReference {
+  const XmppFolderMessageReference(super.value);
+}
+
+final class EmailFolderMessageReference extends FolderMessageReference {
+  const EmailFolderMessageReference(super.value);
 }
 
 final class MucActorIdentity {
@@ -1122,7 +1160,7 @@ extension MessageReferenceIds on Message {
     final hasSubject = subject?.trim().isNotEmpty == true;
     final hasAttachment = fileMetadataID?.trim().isNotEmpty == true;
     final pseudoMessageType = this.pseudoMessageType;
-    if (isHiddenMultiDeviceSyncMessage || isFpushMailNotifyMarker) {
+    if (isHiddenMultiDeviceSyncMessage || isMailPushNotifyMarker) {
       return false;
     }
     if (!(hasBody || hasSubject || hasAttachment)) {
@@ -1165,64 +1203,84 @@ extension MessageReferenceIds on Message {
     ?trimmedMucStanzaId,
   };
 
-  MessageReference? get _stanzaReference {
+  String? pinStanzaId({required bool isGroupChat}) {
+    if (isEmailBacked) {
+      return null;
+    }
+    if (isGroupChat) {
+      return trimmedMucStanzaId;
+    }
+    return trimmedStanzaId;
+  }
+
+  String? quoteStanzaId({required bool isGroupChat}) {
+    if (isEmailBacked) {
+      return null;
+    }
+    if (isGroupChat) {
+      return trimmedMucStanzaId;
+    }
+    return trimmedStanzaId;
+  }
+
+  LocalMessageReference? get _stanzaReference {
     final stanzaId = trimmedStanzaId;
     if (stanzaId == null) {
       return null;
     }
-    return MessageReference(
+    return LocalMessageReference(
       kind: MessageReferenceKind.stanzaId,
       value: stanzaId,
     );
   }
 
-  MessageReference? get _originReference {
+  LocalMessageReference? get _originReference {
     final originId = trimmedOriginId;
     if (originId == null) {
       return null;
     }
-    return MessageReference(
+    return LocalMessageReference(
       kind: MessageReferenceKind.originId,
       value: originId,
     );
   }
 
-  MessageReference? get _mucStanzaReference {
+  LocalMessageReference? get _mucStanzaReference {
     final mucStanzaId = trimmedMucStanzaId;
     if (mucStanzaId == null) {
       return null;
     }
-    return MessageReference(
+    return LocalMessageReference(
       kind: MessageReferenceKind.mucStanzaId,
       value: mucStanzaId,
     );
   }
 
-  MessageReference? markerReference({required bool isGroupChat}) {
+  LocalMessageReference? markerReference({required bool isGroupChat}) {
     if (isGroupChat) {
       return _mucStanzaReference;
     }
     return _stanzaReference;
   }
 
-  MessageReference? receiptReference({required bool isGroupChat}) {
+  LocalMessageReference? receiptReference({required bool isGroupChat}) {
     if (isGroupChat) {
       return null;
     }
     return _stanzaReference;
   }
 
-  MessageReference? replyReference({required bool isGroupChat}) {
+  LocalMessageReference? replyReference({required bool isGroupChat}) {
     if (isEmailBacked) {
-      return _originReference;
+      return null;
     }
     if (isGroupChat) {
       return _mucStanzaReference;
     }
-    return _originReference ?? _stanzaReference;
+    return _stanzaReference;
   }
 
-  MessageReference? reactionReference({required bool isGroupChat}) {
+  LocalMessageReference? reactionReference({required bool isGroupChat}) {
     if (isEmailBacked) {
       return null;
     }
@@ -1232,24 +1290,39 @@ extension MessageReferenceIds on Message {
     return _originReference ?? _stanzaReference;
   }
 
-  MessageReference? collectionReference({required bool isGroupChat}) {
+  FolderMessageReference? collectionReference({required bool isGroupChat}) {
     if (isEmailBacked) {
-      return _originReference;
+      final messageId = genuineEmailMessageId(originID);
+      if (messageId == null || messageId.isEmpty) {
+        return null;
+      }
+      return EmailFolderMessageReference(messageId);
     }
     if (isGroupChat) {
-      return _mucStanzaReference;
+      final mucStanzaId = trimmedMucStanzaId;
+      if (mucStanzaId == null) {
+        return null;
+      }
+      return XmppFolderMessageReference(mucStanzaId);
     }
-    return _originReference ?? _stanzaReference;
+    final stanzaId = trimmedStanzaId;
+    if (stanzaId == null) {
+      return null;
+    }
+    return XmppFolderMessageReference(stanzaId);
   }
 
-  MessageReference? pinReference({required bool isGroupChat}) {
+  LocalMessageReference? pinReference({required bool isGroupChat}) {
+    if (isEmailBacked) {
+      return null;
+    }
     if (isGroupChat) {
       return _mucStanzaReference;
     }
     return _stanzaReference;
   }
 
-  MessageReference? outboundReference({
+  LocalMessageReference? outboundReference({
     required bool isGroupChat,
     DirectMessageReferencePolicy directPolicy =
         DirectMessageReferencePolicy.currentWire,
@@ -1714,6 +1787,10 @@ class _ParsedInvite {
 
 @UseRowClass(Message)
 @TableIndex(
+  name: 'idx_messages_chat_timestamp',
+  columns: {#chatJid, #timestamp},
+)
+@TableIndex(
   name: 'messages_delta_locator',
   columns: {#deltaAccountId, #deltaMsgId},
   unique: true,
@@ -1793,6 +1870,9 @@ class Messages extends Table {
 
   TextColumn get pseudoMessageData =>
       text().nullable().map(const MapStringDynamicConverter())();
+
+  IntColumn get rfc822BodyStatus =>
+      intEnum<EmailRfc822BodyStatus>().withDefault(const Constant(0))();
 
   TextColumn get manualSendAgainStanzaID => text().nullable()();
 

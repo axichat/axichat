@@ -1117,8 +1117,11 @@ double _attachmentImageFallbackAspectRatio() => 4 / 3;
 
 double _attachmentImageAspectRatio(FileMetadataData metadata) {
   if (metadata.width != null && metadata.height != null) {
-    if (metadata.height == 0) return _attachmentImageFallbackAspectRatio();
-    return metadata.width! / metadata.height!;
+    final width = metadata.width!;
+    final height = metadata.height!;
+    if (width > 0 && height > 0) {
+      return width / height;
+    }
   }
   return _attachmentImageFallbackAspectRatio();
 }

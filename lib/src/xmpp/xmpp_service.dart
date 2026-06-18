@@ -46,6 +46,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
 import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/network_safety.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -2265,7 +2266,7 @@ class XmppService extends XmppBase
       if (_consumeSuppressedNotificationForMessage(message) ||
           _consumeForegroundNotificationForMessage(message) ||
           message.displayed ||
-          message.isFpushMailNotifyMarker) {
+          message.isMailPushNotifyMarker) {
         return;
       }
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(

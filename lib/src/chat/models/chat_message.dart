@@ -47,6 +47,7 @@ enum ChatMessageKey {
   settingsSyncFailure,
   chatAttachmentSendFailed,
   chatComposerSendFailed,
+  chatComposerPartialSendWarning,
   chatEmailResendFailedDetails,
   chatDraftSaved,
   chatMembersLoading,
@@ -165,6 +166,8 @@ extension ChatMessageKeyL10n on ChatMessageKey {
     ChatMessageKey.settingsSyncFailure => l10n.settingsSyncFailureMessage,
     ChatMessageKey.chatAttachmentSendFailed => l10n.chatAttachmentSendFailed,
     ChatMessageKey.chatComposerSendFailed => l10n.chatComposerSendFailed,
+    ChatMessageKey.chatComposerPartialSendWarning =>
+      l10n.chatComposerPartialSendWarning,
     ChatMessageKey.chatEmailResendFailedDetails =>
       l10n.chatEmailResendFailedDetails,
     ChatMessageKey.chatDraftSaved => l10n.chatDraftSaved,

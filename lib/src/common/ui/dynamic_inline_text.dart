@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:math';
 
 import 'package:axichat/src/common/ui/squircle_border.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/gestures.dart'
-    show TapGestureRecognizer, kLongPressTimeout, kTouchSlop;
+    show LongPressGestureRecognizer, TapGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -178,7 +177,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   set links(List<DynamicTextLink> value) {
     _cancelLinkLongPress();
-    _linkLongPressTriggered = false;
+    _cancelLinkTap();
     _links = List.unmodifiable(value);
   }
 
@@ -186,6 +185,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   set onLinkTap(LinkTapCallback? value) {
     _onLinkTap = value;
+    if (value == null) {
+      _cancelLinkTap();
+    }
   }
 
   LinkTapCallback? _onLinkLongPress;
@@ -203,6 +205,14 @@ class DynamicInlineTextRenderObject extends RenderBox {
       TapGestureRecognizer(debugOwner: this)
         ..onTap = _handleDetailTap
         ..onTapCancel = _cancelDetailTap;
+  late final TapGestureRecognizer _linkTapGestureRecognizer =
+      TapGestureRecognizer(debugOwner: this)
+        ..onTap = _handleLinkTap
+        ..onTapCancel = _cancelLinkTap;
+  late final LongPressGestureRecognizer _linkLongPressGestureRecognizer =
+      LongPressGestureRecognizer(debugOwner: this)
+        ..onLongPress = _handleLinkLongPress
+        ..onLongPressCancel = _cancelLinkLongPress;
 
   @override
   bool hitTestSelf(Offset position) =>
@@ -233,27 +243,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
     }
     if (_links.isEmpty || _textPainter.text == null) return;
     if (event is PointerDownEvent) {
-      _startLinkLongPress(entry.localPosition, event.pointer);
+      _startLinkGestures(entry.localPosition, event);
       return;
     }
-    if (event is PointerMoveEvent) {
-      _trackLinkLongPress(entry.localPosition, event.pointer);
-      return;
-    }
-    if (event is PointerCancelEvent) {
-      _linkLongPressTriggered = false;
-      _cancelLinkLongPress();
-      return;
-    }
-    if (event is! PointerUpEvent) return;
-    final resolvedLink = _linkAtOffset(entry.localPosition);
-    _cancelLinkLongPress();
-    if (_linkLongPressTriggered) {
-      _linkLongPressTriggered = false;
-      return;
-    }
-    if (_onLinkTap == null || resolvedLink == null) return;
-    _onLinkTap?.call(resolvedLink.url);
   }
 
   @override
@@ -293,10 +285,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
   late List<double> _detailWidths;
   late List<double> _detailHeights;
 
-  Timer? _linkLongPressTimer;
-  Offset? _linkLongPressOrigin;
-  int? _linkLongPressPointer;
-  bool _linkLongPressTriggered = false;
+  DynamicTextLink? _linkTapTarget;
+  DynamicTextLink? _linkLongPressTarget;
   int? _detailTapPointer;
   int? _pressedDetailActionIndex;
 
@@ -333,35 +323,26 @@ class DynamicInlineTextRenderObject extends RenderBox {
     return null;
   }
 
-  void _startLinkLongPress(Offset position, int pointer) {
-    if (_onLinkLongPress == null) return;
+  void _startLinkGestures(Offset position, PointerDownEvent event) {
+    if (_onLinkTap == null && _onLinkLongPress == null) return;
     final target = _linkAtOffset(position);
     if (target == null) return;
-    _cancelLinkLongPress();
-    _linkLongPressOrigin = position;
-    _linkLongPressPointer = pointer;
-    _linkLongPressTriggered = false;
-    _linkLongPressTimer = Timer(kLongPressTimeout, () {
-      _linkLongPressTriggered = true;
-      _onLinkLongPress?.call(target.url);
-    });
+    if (_onLinkTap != null) {
+      _linkTapTarget = target;
+      _linkTapGestureRecognizer.addPointer(event);
+    }
+    if (_onLinkLongPress != null) {
+      _linkLongPressTarget = target;
+      _linkLongPressGestureRecognizer.addPointer(event);
+    }
   }
 
-  void _trackLinkLongPress(Offset position, int pointer) {
-    if (_linkLongPressPointer != pointer || _linkLongPressOrigin == null) {
-      return;
-    }
-    final origin = _linkLongPressOrigin!;
-    if ((position - origin).distance > kTouchSlop) {
-      _cancelLinkLongPress();
-    }
+  void _cancelLinkTap() {
+    _linkTapTarget = null;
   }
 
   void _cancelLinkLongPress() {
-    _linkLongPressTimer?.cancel();
-    _linkLongPressTimer = null;
-    _linkLongPressOrigin = null;
-    _linkLongPressPointer = null;
+    _linkLongPressTarget = null;
   }
 
   void _cancelDetailTap() {
@@ -378,9 +359,28 @@ class DynamicInlineTextRenderObject extends RenderBox {
     callback?.call();
   }
 
+  void _handleLinkTap() {
+    final target = _linkTapTarget;
+    _cancelLinkTap();
+    if (target == null) {
+      return;
+    }
+    _onLinkTap?.call(target.url);
+  }
+
+  void _handleLinkLongPress() {
+    final target = _linkLongPressTarget;
+    _cancelLinkLongPress();
+    if (target == null) {
+      return;
+    }
+    _onLinkLongPress?.call(target.url);
+  }
+
   @override
   void detach() {
     _cancelLinkLongPress();
+    _cancelLinkTap();
     _cancelDetailTap();
     super.detach();
   }
@@ -388,6 +388,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
   @override
   void dispose() {
     _detailTapGestureRecognizer.dispose();
+    _linkTapGestureRecognizer.dispose();
+    _linkLongPressGestureRecognizer.dispose();
     super.dispose();
   }
 

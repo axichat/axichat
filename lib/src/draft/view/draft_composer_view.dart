@@ -89,7 +89,7 @@ class DraftComposerView extends StatelessWidget {
   final List<String> databaseSuggestionAddresses;
   final String? selfJid;
   final SelfAvatar selfIdentity;
-  final Map<String, FanOutRecipientState> latestStatuses;
+  final Map<ComposerRecipientKey, FanOutRecipientState> latestStatuses;
   final bool collapsedRecipientsByDefault;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;

@@ -137,6 +137,35 @@ String? forwardedBodySenderLabel(String? body) {
   return email == null || email.isEmpty ? rawValue : email;
 }
 
+({String? subject, String body}) splitForwardedBodyContent(String body) {
+  final normalizedBody = _normalizedForwardedBody(body);
+  if (normalizedBody == null || normalizedBody.trim().isEmpty) {
+    return splitSyntheticForwardBody(body);
+  }
+  final lines = normalizedBody.split('\n');
+  final headerIndex = _forwardedBodyHeaderIndex(lines);
+  if (headerIndex == null) {
+    return splitSyntheticForwardBody(normalizedBody);
+  }
+  final headerLinesStartIndex = _isForwardedBodyHeaderLine(lines[headerIndex])
+      ? headerIndex + 1
+      : headerIndex;
+  final headerBlockEndIndex = _forwardedBodyHeaderBlockEndIndex(
+    lines,
+    startIndex: headerLinesStartIndex,
+  );
+  if (headerBlockEndIndex == null) {
+    return splitSyntheticForwardBody(normalizedBody);
+  }
+  final subject = _forwardedBodyHeaders(
+    lines.skip(headerLinesStartIndex),
+  )['subject']?.trim();
+  return (
+    subject: subject?.isEmpty == true ? null : subject,
+    body: lines.skip(headerBlockEndIndex + 1).join('\n'),
+  );
+}
+
 String? _normalizedForwardedBody(String? body) {
   final normalizedBody = body?.replaceAll('\r\n', '\n');
   if (normalizedBody == null || normalizedBody.isEmpty) {
@@ -191,6 +220,18 @@ Map<String, String> _forwardedBodyHeaders(Iterable<String> lines) {
   }
   commitCurrentHeader();
   return headers;
+}
+
+int? _forwardedBodyHeaderBlockEndIndex(
+  List<String> lines, {
+  required int startIndex,
+}) {
+  for (var index = startIndex; index < lines.length; index += 1) {
+    if (lines[index].trim().isEmpty) {
+      return index;
+    }
+  }
+  return null;
 }
 
 String _decodeQuotedPrintable(String value) {

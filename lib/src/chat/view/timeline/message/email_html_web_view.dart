@@ -40,7 +40,6 @@ final RegExp _originalPassiveTrackerImagePattern = RegExp(
   r'(?:beacon|pixel|spacer|tracking)',
   caseSensitive: false,
 );
-
 String _prepareEmailHtmlData(Map<String, Object> arguments) {
   final html = arguments['html']! as String;
   final allowRemoteImages = arguments['allowRemoteImages']! as bool;

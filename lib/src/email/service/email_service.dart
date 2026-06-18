@@ -17,6 +17,8 @@ import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -66,6 +68,7 @@ enum _EmailSyncSource {
   connectivityApply,
   connectivityChangedEvent,
   backgroundFetchDone,
+  mailPushHint,
   networkAvailable,
   networkLost,
   reconnectRestart,
@@ -77,6 +80,115 @@ enum _EmailSyncSource {
   bootstrapComplete,
   reconnectCatchUp,
   passwordRefreshPending,
+}
+
+enum _EmailCatchUpReason {
+  mailPushHint,
+  homeUnreadRefresh,
+  homeHistoryRefresh,
+  syncInboxAndSent,
+  periodicIdleTick,
+  backgroundFetchDone,
+  incomingMsgBunch,
+  channelOverflow,
+  reconnectCatchUp,
+}
+
+enum _EmailCatchUpQueue { none, imapSync, channelOverflow, reconnectCatchUp }
+
+enum _EmailCatchUpFetchDecision { none, skippedIoRunning, attempted }
+
+enum _EmailCatchUpProjectDecision {
+  none,
+  skippedFetchFailed,
+  requested,
+  incremental,
+}
+
+final class _EmailCatchUpResult {
+  const _EmailCatchUpResult({
+    required this.fetchDecision,
+    required this.projectDecision,
+    this.fetched = false,
+    this.projected = false,
+    this.projectedMessageCount = 0,
+    this.networkNotified = false,
+  });
+
+  final _EmailCatchUpFetchDecision fetchDecision;
+  final _EmailCatchUpProjectDecision projectDecision;
+  final bool fetched;
+  final bool projected;
+  final int projectedMessageCount;
+  final bool networkNotified;
+
+  static const skipped = _EmailCatchUpResult(
+    fetchDecision: _EmailCatchUpFetchDecision.none,
+    projectDecision: _EmailCatchUpProjectDecision.none,
+  );
+}
+
+enum EmailChatNoticeSyncStatus {
+  freshCleared,
+  alreadyNoFresh,
+  partial,
+  unresolved,
+  failed,
+}
+
+final class EmailChatNoticeSyncResult {
+  const EmailChatNoticeSyncResult({
+    required this.status,
+    this.deltaAccountId,
+    this.chatIds = const <int>[],
+    this.freshBeforeCount = 0,
+    this.freshAfterCount = 0,
+    this.reconciledMessageCount = 0,
+    this.coreNoticeRequested = false,
+    this.coreNoticeAccepted = false,
+  });
+
+  final EmailChatNoticeSyncStatus status;
+  final int? deltaAccountId;
+  final List<int> chatIds;
+  final int freshBeforeCount;
+  final int freshAfterCount;
+  final int reconciledMessageCount;
+  final bool coreNoticeRequested;
+  final bool coreNoticeAccepted;
+
+  bool get terminalSuccess =>
+      status == EmailChatNoticeSyncStatus.freshCleared ||
+      status == EmailChatNoticeSyncStatus.alreadyNoFresh;
+}
+
+enum EmailMessageSeenSyncStatus {
+  verifiedSeen,
+  alreadySeen,
+  notFreshButNotSeen,
+  partial,
+  unresolved,
+  failed,
+}
+
+final class EmailMessageSeenSyncResult {
+  const EmailMessageSeenSyncResult({
+    required this.status,
+    this.submittedCount = 0,
+    this.verifiedSeenCount = 0,
+    this.unresolvedCount = 0,
+    this.transportAcceptedCount = 0,
+  });
+
+  final EmailMessageSeenSyncStatus status;
+  final int submittedCount;
+  final int verifiedSeenCount;
+  final int unresolvedCount;
+  final int transportAcceptedCount;
+
+  bool get terminalSuccess =>
+      status == EmailMessageSeenSyncStatus.verifiedSeen ||
+      status == EmailMessageSeenSyncStatus.alreadySeen;
 }
 
 extension _EmailSyncSourceLabels on _EmailSyncSource {
@@ -562,6 +674,16 @@ final class FanOutInvalidShareTokenException extends FanOutValidationException {
   const FanOutInvalidShareTokenException();
 }
 
+final class _ResolvedFanOutTarget {
+  const _ResolvedFanOutTarget({required this.intent, required this.chat});
+
+  final EmailRecipientIntent intent;
+  final Chat? chat;
+
+  FanOutRecipientTargetSnapshot get requestedTarget =>
+      FanOutRecipientTargetSnapshot.fromIntent(intent);
+}
+
 class EmailService {
   static const int _defaultPageSize = 50;
   static const int _fanOutConcurrentOps = 4;
@@ -579,6 +701,12 @@ class EmailService {
   static const int _connectivityLogIntervalSeconds = 5;
   static const Duration _connectivityLogInterval = Duration(
     seconds: _connectivityLogIntervalSeconds,
+  );
+  static const Duration _connectivityHealthyReadReuseWindow = Duration(
+    seconds: 1,
+  );
+  static const Duration _chatlistRefreshRecentSuppressionWindow = Duration(
+    milliseconds: 500,
   );
   static const int _connectivityDetailLogIntervalSeconds = 60;
   static const Duration _connectivityDetailLogInterval = Duration(
@@ -624,14 +752,13 @@ class EmailService {
   static const String _systemConfigKeysConfigKey = 'sys.config_keys';
   static const String _fetchExistingMsgsConfigKey = 'fetch_existing_msgs';
   static const String _fetchExistingMsgsEnabledValue = '1';
-  static const String _emailProvisioningBuildMarker =
-      'email-prov-20260309-1329';
   static const String _mdnsEnabledConfigKey = 'mdns_enabled';
   static const String _mdnsEnabledValue = '1';
   static const String _mdnsDisabledValue = '0';
   static const String _signUnencryptedConfigKey = 'sign_unencrypted';
   static const String _signUnencryptedDisabledValue = '0';
   static const String _openPgpKeyIdConfigKey = 'key_id';
+  static final RegExp _traceWhitespacePattern = RegExp(r'\s+');
   static const String _privateKeyArmorBegin =
       '-----BEGIN PGP PRIVATE KEY BLOCK-----';
   static const String _publicKeyArmorBegin =
@@ -769,7 +896,7 @@ class EmailService {
     );
     _mailPushHintSubscription = mailPushHints?.listen((_) {
       fireAndForget(
-        handleForegroundResumeNetworkAvailable,
+        _handleMailPushHint,
         operationName: 'EmailService.mailPushHint',
       );
     });
@@ -835,8 +962,11 @@ class EmailService {
   int? _lastConnectivityValue;
   int? _lastLoggedConnectivityValue;
   DateTime? _lastConnectivityLoggedAt;
+  DateTime? _lastHealthyConnectivityReadAt;
   int _consecutiveConnectingSamples = 0;
   DateTime? _lastConnectivityDetailLoggedAt;
+  Future<int?>? _connectivityRefreshTask;
+  int _suppressedConnectivityChangedEvents = 0;
   final EmailAsyncQueue _channelOverflowRecoveryQueue = EmailAsyncQueue();
   EmailImapCapabilities _imapCapabilities = const EmailImapCapabilities(
     idleSupported: false,
@@ -847,6 +977,7 @@ class EmailService {
   bool _imapCapabilitiesResolved = false;
 
   bool _deltaAccountRepairCompleted = false;
+  String? _provisioningBlockedScope;
 
   Future<bool>? _backgroundFetchInFlight;
 
@@ -860,14 +991,594 @@ class EmailService {
   final EmailAsyncQueue _contactsSyncQueue = EmailAsyncQueue();
   final EmailAsyncQueue _chatlistSyncQueue = EmailAsyncQueue();
   Future<void>? _chatlistRefreshTask;
+  DateTime? _lastChatlistRefreshCompletedAt;
+  int? _lastChatlistRefreshCompletedAccountId;
   final EmailAsyncQueue _readStateQueue = EmailAsyncQueue();
+  final Map<String, Future<EmailChatNoticeSyncResult>> _noticeSyncInFlight =
+      <String, Future<EmailChatNoticeSyncResult>>{};
   final EmailAsyncQueue _mdnConfigQueue = EmailAsyncQueue();
   _EmailNetworkTransition? _pendingNetworkTransition;
   _EmailNetworkTransition? _activeNetworkTransition;
   final Set<Future<void>> _activeAppDatabaseOperations = <Future<void>>{};
+  int _profileTraceSequence = 0;
 
   void updateEndpointConfig(EndpointConfig config) {
     _endpointConfig = config;
+  }
+
+  String _nextTraceId(String operation) {
+    _profileTraceSequence += 1;
+    return '$operation#$_profileTraceSequence';
+  }
+
+  void _traceEmailOperation(
+    String operation,
+    String phase, {
+    String? id,
+    Map<String, Object?> fields = const <String, Object?>{},
+  }) {
+    final buffer = StringBuffer('Email trace op=$operation phase=$phase');
+    if (id != null) {
+      buffer.write(' id=$id');
+    }
+    for (final entry in fields.entries) {
+      buffer
+        ..write(' ')
+        ..write(entry.key)
+        ..write('=')
+        ..write(_traceValue(entry.value));
+    }
+    Logger(SafeLogging.profileTraceLoggerName).info(buffer.toString());
+  }
+
+  String _traceValue(Object? value) {
+    if (value == null) {
+      return 'null';
+    }
+    if (value is Duration) {
+      return '${value.inMilliseconds}ms';
+    }
+    final text = value.toString().trim().replaceAll(
+      _traceWhitespacePattern,
+      ' ',
+    );
+    if (text.isEmpty) {
+      return 'empty';
+    }
+    return text.contains(' ') ? '"$text"' : text;
+  }
+
+  String _traceCaller(StackTrace stackTrace) {
+    for (final line in stackTrace.toString().split('\n').skip(1)) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty || trimmed.contains('email_service.dart')) {
+        continue;
+      }
+      return trimmed;
+    }
+    return 'unknown';
+  }
+
+  Future<void> _handleMailPushHint() async {
+    final id = _nextTraceId('email.mailPush');
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.mailPush',
+      'start',
+      id: id,
+      fields: <String, Object?>{
+        'smtpEnabled': _endpointConfig.smtpEnabled,
+        'runtime': _runtimePhase.name,
+        'hasSession': hasActiveSession,
+        'ioRunning': _transport.isIoRunning,
+        'caller': _traceCaller(StackTrace.current),
+      },
+    );
+    if (!_endpointConfig.smtpEnabled) {
+      _traceEmailOperation(
+        'email.mailPush',
+        'skip',
+        id: id,
+        fields: <String, Object?>{
+          'reason': 'smtpDisabled',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return;
+    }
+    try {
+      await _refreshForMailPushHint(id);
+      _traceEmailOperation(
+        'email.mailPush',
+        'end',
+        id: id,
+        fields: <String, Object?>{
+          'result': 'completed',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+    } on Exception catch (error, stackTrace) {
+      _traceEmailOperation(
+        'email.mailPush',
+        'error',
+        id: id,
+        fields: <String, Object?>{
+          'result': error.runtimeType,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      _log.warning('Email mail-push refresh failed.', error, stackTrace);
+    }
+  }
+
+  Future<void> _refreshForMailPushHint(String traceId) async {
+    await _requestEmailCatchUp(
+      _EmailCatchUpReason.mailPushHint,
+      parentTraceId: traceId,
+    );
+  }
+
+  Future<_EmailCatchUpResult> _requestEmailCatchUp(
+    _EmailCatchUpReason reason, {
+    String? parentTraceId,
+    bool Function()? isStillRelevant,
+  }) async {
+    final queue = _catchUpQueueFor(reason);
+    switch (queue) {
+      case _EmailCatchUpQueue.none:
+        return _runEmailCatchUp(
+          reason,
+          parentTraceId: parentTraceId,
+          isStillRelevant: isStillRelevant,
+        );
+      case _EmailCatchUpQueue.imapSync:
+        var result = _EmailCatchUpResult.skipped;
+        await _imapSyncQueue.run(() async {
+          result = await _runEmailCatchUp(
+            reason,
+            parentTraceId: parentTraceId,
+            isStillRelevant: isStillRelevant,
+          );
+        });
+        return result;
+      case _EmailCatchUpQueue.channelOverflow:
+        var result = _EmailCatchUpResult.skipped;
+        await _channelOverflowRecoveryQueue.run(() async {
+          result = await _runEmailCatchUp(
+            reason,
+            parentTraceId: parentTraceId,
+            isStillRelevant: isStillRelevant,
+          );
+        });
+        return result;
+      case _EmailCatchUpQueue.reconnectCatchUp:
+        var result = _EmailCatchUpResult.skipped;
+        await _reconnectCatchUpQueue.run(() async {
+          result = await _runEmailCatchUp(
+            reason,
+            parentTraceId: parentTraceId,
+            isStillRelevant: isStillRelevant,
+          );
+        });
+        return result;
+    }
+  }
+
+  Future<_EmailCatchUpResult> _runEmailCatchUp(
+    _EmailCatchUpReason reason, {
+    String? parentTraceId,
+    bool Function()? isStillRelevant,
+  }) async {
+    final traceId = _nextTraceId('email.catchUp');
+    final stopwatch = Stopwatch()..start();
+    final fetchTimeout = _catchUpFetchTimeout(reason);
+    final shouldFetch = fetchTimeout != null;
+    final ioRunningAtStart = _transport.isIoRunning;
+    final queue = _catchUpQueueFor(reason);
+    _traceEmailOperation(
+      'email.catchUp',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'reason': reason.name,
+        'parent': parentTraceId,
+        'queue': queue.name,
+        'runtime': _runtimePhase.name,
+        'syncStatus': _syncState.status.name,
+        'ioRunning': ioRunningAtStart,
+        'fetchPolicy': shouldFetch ? 'ifIdle' : 'none',
+        'projectPolicy': _catchUpProjectPolicyLabel(reason),
+        'fetchInFlight': _backgroundFetchInFlight != null,
+        'projectionInFlight': _chatlistRefreshTask != null,
+        'connectivityInFlight': _connectivityRefreshTask != null,
+      },
+    );
+    if (!await _ensureBackgroundSyncReady()) {
+      if (reason == _EmailCatchUpReason.incomingMsgBunch) {
+        await _flushQueuedNotifications();
+      }
+      _traceEmailOperation(
+        'email.catchUp',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': reason.name,
+          'result': 'backgroundSyncNotReady',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return _EmailCatchUpResult.skipped;
+    }
+    if (isStillRelevant?.call() == false) {
+      _traceEmailOperation(
+        'email.catchUp',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': reason.name,
+          'result': 'notRelevant',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return _EmailCatchUpResult.skipped;
+    }
+
+    var ioRunningForFetch = _transport.isIoRunning;
+    if (reason == _EmailCatchUpReason.channelOverflow) {
+      _updateSyncState(
+        EmailSyncState.recovering(_l10n.emailSyncMessageRefreshing),
+        source: _EmailSyncSource.channelOverflow,
+      );
+    }
+    if (_shouldRefreshImapCapabilitiesForCatchUp(reason)) {
+      await _refreshImapCapabilities();
+      if (isStillRelevant?.call() == false) {
+        _traceEmailOperation(
+          'email.catchUp',
+          'skip',
+          id: traceId,
+          fields: <String, Object?>{
+            'reason': reason.name,
+            'result': 'notRelevantAfterCapabilities',
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
+        return _EmailCatchUpResult.skipped;
+      }
+      ioRunningForFetch = _transport.isIoRunning;
+    }
+
+    var fetchDecision = _EmailCatchUpFetchDecision.none;
+    var fetched = false;
+    if (shouldFetch) {
+      if (ioRunningForFetch) {
+        fetchDecision = _EmailCatchUpFetchDecision.skippedIoRunning;
+      } else {
+        fetchDecision = _EmailCatchUpFetchDecision.attempted;
+        fetched = await performBackgroundFetch(timeout: fetchTimeout);
+      }
+    }
+    final ioRunningAfterFetch = _transport.isIoRunning;
+    if (isStillRelevant?.call() == false) {
+      _traceEmailOperation(
+        'email.catchUp',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': reason.name,
+          'result': 'notRelevantAfterFetch',
+          'fetchDecision': fetchDecision.name,
+          'fetched': fetched,
+          'ioRunningAfterFetch': ioRunningAfterFetch,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return _EmailCatchUpResult(
+        fetchDecision: fetchDecision,
+        projectDecision: _EmailCatchUpProjectDecision.none,
+        fetched: fetched,
+      );
+    }
+
+    var networkNotified = false;
+    if (_shouldNotifyNetworkForCatchUp(
+      reason: reason,
+      fetched: fetched,
+      ioRunning: ioRunningAfterFetch,
+    )) {
+      await _notifyTransportNetworkAvailable();
+      networkNotified = true;
+    }
+
+    if (!await _ensureBackgroundSyncReady()) {
+      _traceEmailOperation(
+        'email.catchUp',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': reason.name,
+          'result': 'backgroundSyncStoppedAfterFetch',
+          'fetchDecision': fetchDecision.name,
+          'fetched': fetched,
+          'ioRunningAfterFetch': ioRunningAfterFetch,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return _EmailCatchUpResult(
+        fetchDecision: fetchDecision,
+        projectDecision: _EmailCatchUpProjectDecision.none,
+        fetched: fetched,
+        networkNotified: networkNotified,
+      );
+    }
+    final ioRunningForProjection = _transport.isIoRunning;
+
+    final projectDecision = _projectDecisionForCatchUp(
+      reason: reason,
+      fetched: fetched,
+      ioRunning: ioRunningForProjection,
+    );
+    var projected = false;
+    var projectedMessageCount = 0;
+    if (projectDecision == _EmailCatchUpProjectDecision.requested) {
+      await refreshChatlistFromCore(
+        source: reason.name,
+        force: _catchUpBypassesRecentProjectionSuppression(
+          reason: reason,
+          fetched: fetched,
+          ioRunning: ioRunningForProjection,
+        ),
+      );
+      projected = true;
+    } else if (projectDecision == _EmailCatchUpProjectDecision.incremental) {
+      projectedMessageCount = await _syncFreshFromCore(
+        isStillRelevant: isStillRelevant,
+      );
+      projected = true;
+    }
+    if (_shouldFlushNotificationsForCatchUp(reason)) {
+      await _flushQueuedNotifications();
+    }
+    final connectivitySource = _connectivitySourceForCatchUp(reason);
+    if (connectivitySource != null) {
+      await _refreshConnectivityState(
+        source: connectivitySource,
+        recoveryCompleted: _catchUpRecoveryCompleted(
+          reason: reason,
+          fetched: fetched,
+          ioRunning: ioRunningForProjection,
+        ),
+      );
+    }
+
+    final result = _EmailCatchUpResult(
+      fetchDecision: fetchDecision,
+      projectDecision: projectDecision,
+      fetched: fetched,
+      projected: projected,
+      projectedMessageCount: projectedMessageCount,
+      networkNotified: networkNotified,
+    );
+    _traceEmailOperation(
+      'email.catchUp',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'reason': reason.name,
+        'fetchDecision': fetchDecision.name,
+        'fetched': fetched,
+        'ioRunningAtStart': ioRunningAtStart,
+        'ioRunningForFetch': ioRunningForFetch,
+        'ioRunningForProjection': ioRunningForProjection,
+        'projectDecision': projectDecision.name,
+        'projected': projected,
+        'projectedMessageCount': projectedMessageCount,
+        'networkNotified': networkNotified,
+        'syncStatus': _syncState.status.name,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+    return result;
+  }
+
+  _EmailCatchUpQueue _catchUpQueueFor(_EmailCatchUpReason reason) {
+    switch (reason) {
+      case _EmailCatchUpReason.mailPushHint:
+      case _EmailCatchUpReason.periodicIdleTick:
+        return _EmailCatchUpQueue.imapSync;
+      case _EmailCatchUpReason.channelOverflow:
+        return _EmailCatchUpQueue.channelOverflow;
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return _EmailCatchUpQueue.reconnectCatchUp;
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return _EmailCatchUpQueue.none;
+    }
+  }
+
+  Duration? _catchUpFetchTimeout(_EmailCatchUpReason reason) {
+    switch (reason) {
+      case _EmailCatchUpReason.mailPushHint:
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.channelOverflow:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return _foregroundFetchTimeout;
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.periodicIdleTick:
+        return _imapSyncFetchTimeout;
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return null;
+    }
+  }
+
+  String _catchUpProjectPolicyLabel(_EmailCatchUpReason reason) {
+    switch (reason) {
+      case _EmailCatchUpReason.mailPushHint:
+        return 'fetchSuccessOrIoRunning';
+      case _EmailCatchUpReason.periodicIdleTick:
+        return 'fetchSuccessIncremental';
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.incomingMsgBunch:
+      case _EmailCatchUpReason.channelOverflow:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return 'always';
+    }
+  }
+
+  _EmailCatchUpProjectDecision _projectDecisionForCatchUp({
+    required _EmailCatchUpReason reason,
+    required bool fetched,
+    required bool ioRunning,
+  }) {
+    switch (reason) {
+      case _EmailCatchUpReason.mailPushHint:
+        return fetched || ioRunning
+            ? _EmailCatchUpProjectDecision.requested
+            : _EmailCatchUpProjectDecision.skippedFetchFailed;
+      case _EmailCatchUpReason.periodicIdleTick:
+        return fetched
+            ? _EmailCatchUpProjectDecision.incremental
+            : _EmailCatchUpProjectDecision.skippedFetchFailed;
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.incomingMsgBunch:
+      case _EmailCatchUpReason.channelOverflow:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return _EmailCatchUpProjectDecision.requested;
+    }
+  }
+
+  bool _catchUpBypassesRecentProjectionSuppression({
+    required _EmailCatchUpReason reason,
+    required bool fetched,
+    required bool ioRunning,
+  }) {
+    if (fetched) {
+      return true;
+    }
+    switch (reason) {
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.channelOverflow:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return true;
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return false;
+      case _EmailCatchUpReason.mailPushHint:
+        return ioRunning;
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.periodicIdleTick:
+        return false;
+    }
+  }
+
+  bool _shouldNotifyNetworkForCatchUp({
+    required _EmailCatchUpReason reason,
+    required bool fetched,
+    required bool ioRunning,
+  }) {
+    if (fetched) {
+      return false;
+    }
+    switch (reason) {
+      case _EmailCatchUpReason.channelOverflow:
+        return true;
+      case _EmailCatchUpReason.mailPushHint:
+        return !ioRunning;
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.periodicIdleTick:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.incomingMsgBunch:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return false;
+    }
+  }
+
+  bool _shouldRefreshImapCapabilitiesForCatchUp(_EmailCatchUpReason reason) {
+    switch (reason) {
+      case _EmailCatchUpReason.periodicIdleTick:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return true;
+      case _EmailCatchUpReason.mailPushHint:
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.incomingMsgBunch:
+      case _EmailCatchUpReason.channelOverflow:
+        return false;
+    }
+  }
+
+  bool _shouldFlushNotificationsForCatchUp(_EmailCatchUpReason reason) {
+    switch (reason) {
+      case _EmailCatchUpReason.mailPushHint:
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return true;
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.periodicIdleTick:
+      case _EmailCatchUpReason.backgroundFetchDone:
+      case _EmailCatchUpReason.channelOverflow:
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return false;
+    }
+  }
+
+  _EmailSyncSource? _connectivitySourceForCatchUp(_EmailCatchUpReason reason) {
+    switch (reason) {
+      case _EmailCatchUpReason.mailPushHint:
+        return _EmailSyncSource.mailPushHint;
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.backgroundFetchDone:
+        return _EmailSyncSource.backgroundFetchDone;
+      case _EmailCatchUpReason.channelOverflow:
+        return _EmailSyncSource.channelOverflowComplete;
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return _EmailSyncSource.reconnectCatchUp;
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.periodicIdleTick:
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return null;
+    }
+  }
+
+  bool _catchUpRecoveryCompleted({
+    required _EmailCatchUpReason reason,
+    required bool fetched,
+    required bool ioRunning,
+  }) {
+    switch (reason) {
+      case _EmailCatchUpReason.mailPushHint:
+        return fetched || ioRunning;
+      case _EmailCatchUpReason.homeUnreadRefresh:
+      case _EmailCatchUpReason.homeHistoryRefresh:
+      case _EmailCatchUpReason.backgroundFetchDone:
+        return fetched || reason == _EmailCatchUpReason.backgroundFetchDone;
+      case _EmailCatchUpReason.channelOverflow:
+        return false;
+      case _EmailCatchUpReason.reconnectCatchUp:
+        return true;
+      case _EmailCatchUpReason.syncInboxAndSent:
+      case _EmailCatchUpReason.periodicIdleTick:
+      case _EmailCatchUpReason.incomingMsgBunch:
+        return false;
+    }
   }
 
   Future<void> updateEmailReadReceiptsEnabled(bool enabled) async {
@@ -909,6 +1620,10 @@ class EmailService {
   }
 
   Future<void> _recoverAfterRuntimeRestart() async {
+    if (_provisioningBlockedScope != null || !hasActiveSession) {
+      return;
+    }
+    _deltaAccountRepairCompleted = false;
     await _refreshChatlistSnapshotOnMain();
     final accountIds = await _deltaAccountIdsForScope(null);
     for (final accountId in accountIds) {
@@ -1555,10 +2270,12 @@ class EmailService {
 
   bool get isRunning => _acceptsRuntimeWork;
 
-  bool get hasActiveSession => _credentialSession.hasActiveSession;
+  bool get hasActiveSession =>
+      _credentialSession.hasActiveSession && _provisioningBlockedScope == null;
 
   bool get hasInMemoryReconnectContext =>
-      _credentialSession.hasInMemoryReconnectContext;
+      _credentialSession.hasInMemoryReconnectContext &&
+      _provisioningBlockedScope == null;
 
   Stream<DeltaCoreEvent> get events => _transport.events;
 
@@ -1682,19 +2399,110 @@ class EmailService {
     String? addressOverride,
     bool persistCredentials = true,
   }) async {
+    final traceId = _nextTraceId('email.ensureProvisioned');
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.ensureProvisioned',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'jid': jid,
+        'runtime': _runtimePhase.name,
+        'hasSession': hasActiveSession,
+        'activeScope': _activeCredentialScope,
+        'persistCredentials': persistCredentials,
+        'hasPasswordOverride': passwordOverride?.isNotEmpty == true,
+        'hasAddressOverride': addressOverride?.isNotEmpty == true,
+        'pendingCleanup': _pendingNativeCleanup != null,
+        'caller': _traceCaller(StackTrace.current),
+      },
+    );
+    try {
+      final account = await _ensureProvisioned(
+        displayName: displayName,
+        databasePrefix: databasePrefix,
+        databasePassphrase: databasePassphrase,
+        jid: jid,
+        passwordOverride: passwordOverride,
+        addressOverride: addressOverride,
+        persistCredentials: persistCredentials,
+        traceId: traceId,
+        traceStopwatch: stopwatch,
+      );
+      _traceEmailOperation(
+        'email.ensureProvisioned',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'result': 'completed',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+          'activeScope': _activeCredentialScope,
+          'runtime': _runtimePhase.name,
+        },
+      );
+      return account;
+    } on Exception catch (error, stackTrace) {
+      final scope = _scopeForJid(jid);
+      if (_isProvisioningRuntimeFailure(error)) {
+        _recordProvisioningRuntimeFailure(scope);
+      }
+      _traceEmailOperation(
+        'email.ensureProvisioned',
+        'error',
+        id: traceId,
+        fields: <String, Object?>{
+          'result': error.runtimeType,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+          'runtime': _runtimePhase.name,
+        },
+      );
+      _log.warning('Email provisioning failed.', error, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<EmailAccount> _ensureProvisioned({
+    required String displayName,
+    required String databasePrefix,
+    required String databasePassphrase,
+    required String jid,
+    String? passwordOverride,
+    String? addressOverride,
+    bool persistCredentials = true,
+    required String traceId,
+    required Stopwatch traceStopwatch,
+  }) async {
     final pendingCleanup = _pendingNativeCleanup;
     if (pendingCleanup != null) {
+      final cleanupWatch = Stopwatch()..start();
       await pendingCleanup;
+      _traceEmailOperation(
+        'email.ensureProvisioned.pendingCleanup',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'elapsedMs': cleanupWatch.elapsedMilliseconds,
+        },
+      );
     }
-    _log.warning(
-      'Email provisioning marker $_emailProvisioningBuildMarker '
-      'entered ensureProvisioned for $jid',
-    );
     final scope = _scopeForJid(jid);
+    _provisioningBlockedScope = null;
     final needsInit =
         _databasePrefix != databasePrefix ||
         _databasePassphrase != databasePassphrase;
+    _traceEmailOperation(
+      'email.ensureProvisioned.init',
+      'decision',
+      id: traceId,
+      fields: <String, Object?>{
+        'needsInit': needsInit,
+        'scope': scope,
+        'activeScope': _activeCredentialScope,
+        'runtime': _runtimePhase.name,
+      },
+    );
     if (needsInit) {
+      final initWatch = Stopwatch()..start();
       _credentialSession.bindDatabaseRuntime(
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
@@ -1705,13 +2513,20 @@ class EmailService {
         databasePassphrase: databasePassphrase,
       );
       _attachTransportListener();
+      _traceEmailOperation(
+        'email.ensureProvisioned.ensureInitialized',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'elapsedMs': initWatch.elapsedMilliseconds,
+          'listenerAttached': _listenerAttached,
+        },
+      );
     }
 
     if (!_listenerAttached) {
       _attachTransportListener();
     }
-
-    _activeCredentialScope = scope;
 
     final addressKey = _addressKeyForScope(scope);
     final passwordKey = _passwordKeyForScope(scope);
@@ -1853,7 +2668,7 @@ class EmailService {
         stackTrace,
       );
     }
-    _log.warning(
+    _log.fine(
       'Email provisioning decision: '
       'accountId=$deltaAccountId '
       'transportConfigured=$transportConfigured '
@@ -1861,9 +2676,33 @@ class EmailService {
       'needsProvisioning=$needsProvisioning '
       'advertisedConfigKeys=${supportedConfigKeys ?? '<unavailable>'}',
     );
+    _traceEmailOperation(
+      'email.ensureProvisioned',
+      'decision',
+      id: traceId,
+      fields: <String, Object?>{
+        'accountId': deltaAccountId,
+        'storedProvisioned': storedProvisioned,
+        'ephemeralProvisioned': ephemerallyProvisioned,
+        'transportConfigured': transportConfigured,
+        'credentialsMutated': credentialsMutated,
+        'requiresReconfigure': requiresReconfigure,
+        'needsProvisioning': needsProvisioning,
+        'hasPassword': hasPassword,
+        'shouldForceProvisioning': shouldForceProvisioning,
+        'elapsedMs': traceStopwatch.elapsedMilliseconds,
+      },
+    );
     final pausedForProvisioning = needsProvisioning && _acceptsRuntimeWork;
     if (pausedForProvisioning) {
+      final stopWatch = Stopwatch()..start();
       await stop();
+      _traceEmailOperation(
+        'email.ensureProvisioned.stopForProvisioning',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{'elapsedMs': stopWatch.elapsedMilliseconds},
+      );
     }
 
     if (needsProvisioning && !hasPassword) {
@@ -1874,6 +2713,7 @@ class EmailService {
       final provisioningPassword = password!;
       _log.info('Configuring email account credentials');
       try {
+        final configureWatch = Stopwatch()..start();
         final configureOverrides = _buildConfigureAccountOverrides(
           address: address,
           password: provisioningPassword,
@@ -1889,11 +2729,28 @@ class EmailService {
           additional: configureOverrides,
           accountId: deltaAccountId,
         );
+        _traceEmailOperation(
+          'email.ensureProvisioned.configureAccount',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'elapsedMs': configureWatch.elapsedMilliseconds,
+          },
+        );
+        final openPgpWatch = Stopwatch()..start();
         await _applyOpenPgpBaseConfigForAccount(
           _EmailAccountBinding(
             address: address,
             deltaAccountId: deltaAccountId,
           ),
+        );
+        _traceEmailOperation(
+          'email.ensureProvisioned.applyOpenPgpConfig',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'elapsedMs': openPgpWatch.elapsedMilliseconds,
+          },
         );
         _resetImapCapabilities();
         await _markConnectionOverridesApplied(
@@ -1954,35 +2811,82 @@ class EmailService {
       );
     }
 
+    final hydrateWatch = Stopwatch()..start();
     await _hydrateAccountAddress(
       address: address,
       deltaAccountId: deltaAccountId,
     );
-    await start();
-    _log.warning(
-      'Email provisioning marker $_emailProvisioningBuildMarker '
-      'before IMAP capability refresh for $jid',
+    _traceEmailOperation(
+      'email.ensureProvisioned.hydrateAccount',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{'elapsedMs': hydrateWatch.elapsedMilliseconds},
     );
-    await _refreshImapCapabilities(force: true);
-    await _applyPendingPushToken();
-
     final account = EmailAccount(
       address: address,
       password: password ?? _unknownEmailPassword,
     );
-    _activeAccount = account;
+    _credentialSession.activateAccount(scope: scope, account: account);
+    final startWatch = Stopwatch()..start();
+    await start();
+    _traceEmailOperation(
+      'email.ensureProvisioned.startTransport',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'elapsedMs': startWatch.elapsedMilliseconds,
+        'runtime': _runtimePhase.name,
+        'ioRunning': _transport.isIoRunning,
+      },
+    );
+    final capabilitiesWatch = Stopwatch()..start();
+    await _refreshImapCapabilities(force: true);
+    _traceEmailOperation(
+      'email.ensureProvisioned.refreshImapCapabilities',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'elapsedMs': capabilitiesWatch.elapsedMilliseconds,
+      },
+    );
+    final pushWatch = Stopwatch()..start();
+    await _applyPendingPushToken();
+    _traceEmailOperation(
+      'email.ensureProvisioned.applyPendingPushToken',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'elapsedMs': pushWatch.elapsedMilliseconds,
+        'hasToken': _pendingPushToken?.isNotEmpty == true,
+      },
+    );
+
     _credentialSession.markEphemerallyProvisioned(scope);
+    _clearProvisioningRuntimeFailure(scope);
+    final startupSnapshotWatch = Stopwatch()..start();
     await _refreshStartupChatlistSnapshot(accountId: deltaAccountId);
+    _traceEmailOperation(
+      'email.ensureProvisioned.startupChatlistSnapshot',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'elapsedMs': startupSnapshotWatch.elapsedMilliseconds,
+      },
+    );
     return account;
   }
 
   Future<int> _ensureEmailAccountSession({
     required bool createIfMissing,
   }) async {
-    final existingAccountIds = await _transport.accountIds();
+    final existingAccountIds = _usableDeltaAccountIds(
+      await _transport.accountIds(),
+    );
     if (existingAccountIds.isNotEmpty) {
       final preferredAccountId = _transport.activeAccountId;
-      final deltaAccountId = existingAccountIds.contains(preferredAccountId)
+      final deltaAccountId =
+          preferredAccountId != DeltaAccountDefaults.legacyId &&
+              existingAccountIds.contains(preferredAccountId)
           ? preferredAccountId
           : existingAccountIds.first;
       await _transport.ensureAccountSession(deltaAccountId);
@@ -1995,15 +2899,62 @@ class EmailService {
         throw const EmailProvisioningAccountUnavailableException();
       }
       final deltaAccountId = await _transport.createAccount();
+      if (deltaAccountId == DeltaAccountDefaults.legacyId) {
+        throw const EmailProvisioningAccountUnavailableException();
+      }
       await _transport.ensureAccountSession(deltaAccountId);
       _transport.setPrimaryAccountId(deltaAccountId);
       return deltaAccountId;
     }
 
-    const deltaAccountId = DeltaAccountDefaults.legacyId;
-    await _transport.ensureAccountSession(deltaAccountId);
-    _transport.setPrimaryAccountId(deltaAccountId);
-    return deltaAccountId;
+    throw const EmailProvisioningAccountUnavailableException();
+  }
+
+  List<int> _usableDeltaAccountIds(Iterable<int> accountIds) {
+    final seen = <int>{};
+    final ids = <int>[];
+    for (final accountId in accountIds) {
+      if (accountId == DeltaAccountDefaults.legacyId) {
+        continue;
+      }
+      if (seen.add(accountId)) {
+        ids.add(accountId);
+      }
+    }
+    if (ids.isEmpty) {
+      return const <int>[];
+    }
+    final activeAccountId = _transport.activeAccountId;
+    if (ids.contains(activeAccountId)) {
+      return List<int>.unmodifiable(<int>[
+        activeAccountId,
+        ...ids.where((id) => id != activeAccountId),
+      ]);
+    }
+    return List<int>.unmodifiable(ids);
+  }
+
+  bool _isProvisioningRuntimeFailure(Object error) =>
+      error is DeltaAllocationException ||
+      error is EmailProvisioningAccountUnavailableException;
+
+  void _recordProvisioningRuntimeFailure(String scope) {
+    _provisioningBlockedScope = scope;
+    if (_activeCredentialScope == scope) {
+      _activeAccount = null;
+      _activeCredentialScope = null;
+    }
+    _credentialSession.clearEphemeralProvisioning(scope);
+    if (_runtimePhase != _EmailRuntimePhase.disposing &&
+        _runtimePhase != _EmailRuntimePhase.stopping) {
+      _runtimePhase = _EmailRuntimePhase.stopped;
+    }
+  }
+
+  void _clearProvisioningRuntimeFailure(String scope) {
+    if (_provisioningBlockedScope == scope) {
+      _provisioningBlockedScope = null;
+    }
   }
 
   Future<EmailPasswordRefreshResult> updatePassword({
@@ -2104,6 +3055,12 @@ class EmailService {
   }
 
   Future<void> start() async {
+    if (_provisioningBlockedScope != null) {
+      throw const EmailProvisioningAccountUnavailableException();
+    }
+    if (!hasActiveSession) {
+      throw const EmailProvisioningAccountUnavailableException();
+    }
     final pendingCleanup = _pendingNativeCleanup;
     if (pendingCleanup != null) {
       await pendingCleanup;
@@ -2161,10 +3118,13 @@ class EmailService {
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
     _cancelConnectivityDowngrade();
+    _suppressedConnectivityChangedEvents = 0;
     _clearNotificationQueue();
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
     _chatlistRefreshTask = null;
+    _lastChatlistRefreshCompletedAt = null;
+    _lastChatlistRefreshCompletedAccountId = null;
     _readStateQueue.reset();
     _imapSyncQueue.reset();
     _networkSignalQueue.reset();
@@ -2199,6 +3159,9 @@ class EmailService {
 
   Future<void> ensureEventChannelActive() async {
     if (_blocksRuntimeReentry) {
+      return;
+    }
+    if (_provisioningBlockedScope != null || !hasActiveSession) {
       return;
     }
     if (!_listenerAttached) {
@@ -2250,9 +3213,10 @@ class EmailService {
       }
     }
     try {
-      await _transport.dispose();
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to dispose email transport', error, stackTrace);
+      await _boundedNativeCleanupStep(
+        'transport dispose',
+        () => _disposeTransportForCleanup(_transport),
+      );
     } finally {
       _credentialSession.clearRuntime();
       _pendingPushToken = null;
@@ -2286,6 +3250,7 @@ class EmailService {
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
     _cancelConnectivityDowngrade();
+    _suppressedConnectivityChangedEvents = 0;
     _clearNotificationQueue();
     _resetRuntimeQueues();
     _credentialSession.invalidateBootstrapOperations();
@@ -2293,10 +3258,7 @@ class EmailService {
     _resetImapCapabilities();
     _pendingPushToken = null;
 
-    await _drainLogoutRuntimeWork(
-      activeStop: activeOperationBarrier,
-      pendingRuntimeWork: pendingDatabaseRuntimeWork,
-    );
+    await _awaitLogoutRuntimeWork(pendingDatabaseRuntimeWork);
 
     Object? credentialError;
     StackTrace? credentialStackTrace;
@@ -2387,6 +3349,8 @@ class EmailService {
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
     _chatlistRefreshTask = null;
+    _lastChatlistRefreshCompletedAt = null;
+    _lastChatlistRefreshCompletedAccountId = null;
     _readStateQueue.reset();
     _mdnConfigQueue.reset();
   }
@@ -2424,19 +3388,7 @@ class EmailService {
     _pendingNativeCleanup = cleanup;
   }
 
-  Future<void> _drainLogoutRuntimeWork({
-    required Future<void>? activeStop,
-    required Future<void> pendingRuntimeWork,
-  }) async {
-    try {
-      await activeStop;
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Email stop failed during logout cleanup',
-        error,
-        stackTrace,
-      );
-    }
+  Future<void> _awaitLogoutRuntimeWork(Future<void> pendingRuntimeWork) async {
     try {
       await pendingRuntimeWork;
     } on Exception catch (error, stackTrace) {
@@ -2456,29 +3408,54 @@ class EmailService {
     required bool clearTransportCredentials,
   }) async {
     try {
-      await _stopTransportForNativeLogoutCleanup(
-        transport: transport,
-        activeStop: activeStop,
-        matchingStopFuture: matchingStopFuture,
+      await _boundedNativeCleanupStep(
+        'transport stop',
+        () => _stopTransportForNativeLogoutCleanup(
+          transport: transport,
+          activeStop: activeStop,
+          matchingStopFuture: matchingStopFuture,
+        ),
       );
-      await _drainLogoutRuntimeWork(
-        activeStop: null,
-        pendingRuntimeWork: pendingRuntimeWork,
+      await _boundedNativeCleanupStep(
+        'runtime drain',
+        () => _awaitLogoutRuntimeWork(pendingRuntimeWork),
       );
       if (clearTransportCredentials) {
-        await _deconfigureTransportForCredentialClear(
-          transport,
-          requireActiveRuntime: false,
+        await _boundedNativeCleanupStep(
+          'account deconfigure',
+          () => _deconfigureTransportForCredentialClear(
+            transport,
+            requireActiveRuntime: false,
+          ),
         );
       }
-      try {
-        await transport.dispose();
-      } on Exception catch (error, stackTrace) {
-        _log.warning('Failed to dispose email transport', error, stackTrace);
-      }
+      await _boundedNativeCleanupStep(
+        'transport dispose',
+        () => _disposeTransportForCleanup(transport),
+      );
     } finally {
       await _releaseForegroundKeepaliveResources();
     }
+  }
+
+  Future<void> _disposeTransportForCleanup(EmailDeltaRuntime transport) async {
+    try {
+      await transport.dispose();
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to dispose email transport', error, stackTrace);
+    }
+  }
+
+  Future<void> _boundedNativeCleanupStep(
+    String step,
+    Future<void> Function() run,
+  ) {
+    return run().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        _log.warning('Email native cleanup step timed out: $step');
+      },
+    );
   }
 
   Future<void> _deconfigureTransportForCredentialClear(
@@ -2993,7 +3970,7 @@ class EmailService {
   }
 
   Future<FanOutSendReport> fanOutSend({
-    required List<Contact> targets,
+    required List<EmailRecipientIntent> targets,
     String? body,
     String? htmlBody,
     EmailAttachment? attachment,
@@ -3016,15 +3993,10 @@ class EmailService {
         quotedStanzaId: quotedStanzaId,
       );
     }
-    await _ensureReady();
     if (targets.isEmpty) {
       throw const FanOutNoRecipientsException();
     }
-    final targetChatsByJid = await _resolveFanOutTargets(targets);
-    if (targetChatsByJid.isEmpty) {
-      throw const FanOutResolveFailedException();
-    }
-    if (targetChatsByJid.length > composeRecipientLimit) {
+    if (targets.length > composeRecipientLimit) {
       throw const FanOutTooManyRecipientsException(composeRecipientLimit);
     }
     final normalizedSubject = _normalizeSubject(subject);
@@ -3038,6 +4010,24 @@ class EmailService {
     final hasBody = bodyPayload.displayText.isNotEmpty;
     if (!hasBody && !hasAttachment && !hasSubject) {
       throw const FanOutEmptyMessageException();
+    }
+    await _ensureReady();
+    final resolution = await _resolveFanOutTargets(targets);
+    final targetChatsByJid = resolution.chatByJid;
+    if (targetChatsByJid.isEmpty) {
+      return FanOutSendReport(
+        shareId: shareId ?? ShareTokenCodec.generateShareId(),
+        subject: normalizedSubject,
+        statuses: [
+          for (final resolved in resolution.unresolved)
+            FanOutRecipientStatus(
+              recipientKey: resolved.intent.recipientKey,
+              requestedTarget: resolved.requestedTarget,
+              state: FanOutRecipientState.failed,
+              error: const FanOutResolveFailedException(),
+            ),
+        ],
+      );
     }
     final db = await _databaseBuilder();
     final existingShare = shareId == null
@@ -3086,12 +4076,29 @@ class EmailService {
     );
     await db.createMessageShare(share: shareRecord, participants: participants);
 
-    final statuses = <FanOutRecipientStatus>[];
+    final statuses = <FanOutRecipientStatus>[
+      for (final resolved in resolution.unresolved)
+        FanOutRecipientStatus(
+          recipientKey: resolved.intent.recipientKey,
+          requestedTarget: resolved.requestedTarget,
+          state: FanOutRecipientState.failed,
+          error: const FanOutResolveFailedException(),
+        ),
+    ];
     final bool originatorAlreadyCaptured =
         existingShare?.originatorDcMsgId != null;
     int? originatorMsgId;
 
-    Future<(FanOutRecipientStatus, int?)> sendTo(Chat entry) async {
+    Future<
+      ({
+        String chatJid,
+        Chat chat,
+        FanOutRecipientState state,
+        int? msgId,
+        Object? error,
+      })
+    >
+    sendTo(Chat entry) async {
       try {
         final binding = await _bindEmailChat(entry);
         final chatId = binding.deltaChatId;
@@ -3134,12 +4141,11 @@ class EmailService {
           );
         }
         return (
-          FanOutRecipientStatus(
-            chat: binding.chat,
-            state: FanOutRecipientState.sent,
-            deltaMsgId: msgId,
-          ),
-          msgId,
+          chatJid: entry.jid,
+          chat: binding.chat,
+          state: FanOutRecipientState.sent,
+          msgId: msgId,
+          error: null,
         );
       } on Exception catch (error, stackTrace) {
         final targetId = entry.deltaChatId != null
@@ -3151,17 +4157,25 @@ class EmailService {
           stackTrace,
         );
         return (
-          FanOutRecipientStatus(
-            chat: entry,
-            state: FanOutRecipientState.failed,
-            error: error,
-          ),
-          null,
+          chatJid: entry.jid,
+          chat: entry,
+          state: FanOutRecipientState.failed,
+          msgId: null,
+          error: error,
         );
       }
     }
 
-    final results = <(FanOutRecipientStatus, int?)>[];
+    final results =
+        <
+          ({
+            String chatJid,
+            Chat chat,
+            FanOutRecipientState state,
+            int? msgId,
+            Object? error,
+          })
+        >[];
     final targetsToSend = targetChatsByJid.values.toList(growable: false);
     for (
       var index = 0;
@@ -3176,11 +4190,26 @@ class EmailService {
     }
 
     for (final result in results) {
-      statuses.add(result.$1);
+      final resolvedTargets = resolution.targetsByChatJid[result.chatJid];
+      if (resolvedTargets == null) {
+        continue;
+      }
+      for (final resolved in resolvedTargets) {
+        statuses.add(
+          FanOutRecipientStatus(
+            recipientKey: resolved.intent.recipientKey,
+            requestedTarget: resolved.requestedTarget,
+            resolvedChat: result.chat,
+            state: result.state,
+            deltaMsgId: result.msgId,
+            error: result.error,
+          ),
+        );
+      }
       if (!originatorAlreadyCaptured &&
           originatorMsgId == null &&
-          result.$2 != null) {
-        originatorMsgId = result.$2;
+          result.msgId != null) {
+        originatorMsgId = result.msgId;
       }
     }
 
@@ -3206,7 +4235,7 @@ class EmailService {
   }
 
   Future<FanOutSendReport> _fanOutSendDemo({
-    required List<Contact> targets,
+    required List<EmailRecipientIntent> targets,
     String? body,
     String? htmlBody,
     EmailAttachment? attachment,
@@ -3218,15 +4247,33 @@ class EmailService {
     if (targets.isEmpty) {
       throw const FanOutNoRecipientsException();
     }
-    if (targets.map((target) => target.key).toSet().length >
-        composeRecipientLimit) {
+    if (targets.length > composeRecipientLimit) {
       throw const FanOutTooManyRecipientsException(composeRecipientLimit);
     }
+    final normalizedSubject = _normalizeSubject(subject);
+    final bodyPayload = _outgoingTextPayload(
+      body: body,
+      htmlBody: htmlBody,
+      subject: normalizedSubject,
+    );
+    if (bodyPayload.displayText.isEmpty &&
+        attachment == null &&
+        normalizedSubject == null) {
+      throw const FanOutEmptyMessageException();
+    }
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
-    final statuses = <FanOutRecipientStatus>[];
+    final chatsByJid = <String, Chat>{};
+    final targetsByChatJid = <String, List<EmailRecipientIntent>>{};
     for (final target in targets) {
+      final chat = _demoChatForTarget(target);
+      chatsByJid.putIfAbsent(chat.jid, () => chat);
+      targetsByChatJid.putIfAbsent(chat.jid, () => []).add(target);
+    }
+    final statuses = <FanOutRecipientStatus>[];
+    for (final entry in chatsByJid.entries) {
+      final chat = entry.value;
+      final resolvedTargets = targetsByChatJid[entry.key]!;
       try {
-        final chat = _demoChatForTarget(target);
         if (attachment != null) {
           final captionedAttachment = attachment.copyWith(
             caption: htmlCaption ?? body,
@@ -3234,47 +4281,50 @@ class EmailService {
           await _sendDemoEmailAttachment(
             chat: chat,
             attachment: captionedAttachment,
-            subject: subject,
+            subject: normalizedSubject,
             htmlCaption: htmlCaption,
             quotedStanzaId: quotedStanzaId,
           );
           _scheduleDemoCopiedReply(chat);
         } else {
-          final payload = _outgoingTextPayload(
-            body: body,
-            htmlBody: htmlBody,
-            subject: subject,
-          );
           await _sendDemoEmailMessage(
             chat: chat,
-            body: payload.displayText,
-            subject: subject,
-            htmlBody: payload.htmlBody,
+            body: bodyPayload.displayText,
+            subject: normalizedSubject,
+            htmlBody: bodyPayload.htmlBody,
             quotedStanzaId: quotedStanzaId,
           );
         }
-        statuses.add(
-          FanOutRecipientStatus(
-            chat: chat,
-            state: FanOutRecipientState.sent,
-            deltaMsgId: demoNow().millisecondsSinceEpoch,
-          ),
-        );
+        final deltaMsgId = demoNow().millisecondsSinceEpoch;
+        for (final target in resolvedTargets) {
+          statuses.add(
+            FanOutRecipientStatus(
+              recipientKey: target.recipientKey,
+              requestedTarget: FanOutRecipientTargetSnapshot.fromIntent(target),
+              resolvedChat: chat,
+              state: FanOutRecipientState.sent,
+              deltaMsgId: deltaMsgId,
+            ),
+          );
+        }
       } catch (error) {
-        final chat = _demoChatForTarget(target);
-        statuses.add(
-          FanOutRecipientStatus(
-            chat: chat,
-            state: FanOutRecipientState.failed,
-            error: error,
-          ),
-        );
+        for (final target in resolvedTargets) {
+          statuses.add(
+            FanOutRecipientStatus(
+              recipientKey: target.recipientKey,
+              requestedTarget: FanOutRecipientTargetSnapshot.fromIntent(target),
+              resolvedChat: chat,
+              state: FanOutRecipientState.failed,
+              error: error,
+            ),
+          );
+        }
       }
     }
     return FanOutSendReport(
       shareId: effectiveShareId,
       statuses: statuses,
-      subject: subject,
+      subject: normalizedSubject,
     );
   }
 
@@ -3308,14 +4358,10 @@ class EmailService {
     );
   }
 
-  Chat _demoChatForTarget(Contact target) {
-    final address = target.address?.trim();
-    if (target.chat != null) {
-      return target.chat!;
-    }
-    final String selectedAddress = address?.isNotEmpty == true
-        ? address!
-        : kDemoSelfJid;
+  Chat _demoChatForTarget(EmailRecipientIntent target) {
+    final address = target.address.trim();
+    final String selectedAddress =
+        target.sourceChatJid ?? (address.isNotEmpty ? address : kDemoSelfJid);
     final displayName = target.displayName.trim();
     final String resolvedTitle = displayName.isNotEmpty
         ? displayName
@@ -3323,7 +4369,7 @@ class EmailService {
     return Chat.fromJid(selectedAddress).copyWith(
       title: resolvedTitle,
       contactDisplayName: resolvedTitle,
-      emailAddress: selectedAddress,
+      emailAddress: address.isNotEmpty ? address : selectedAddress,
       transport: MessageTransport.email,
       lastChangeTimestamp: demoNow(),
     );
@@ -3503,7 +4549,18 @@ class EmailService {
   Future<ShareContext?> shareContextForMessage(Message message) async {
     final deltaMsgId = message.deltaMsgId;
     if (deltaMsgId == null) return null;
-    await _ensureReady();
+    try {
+      await _ensureReady();
+    } on EmailProvisioningException catch (error, stackTrace) {
+      _log.fine('Email share context unavailable.', error, stackTrace);
+      return null;
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Email share context unavailable.', error, stackTrace);
+      return null;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Email share context unavailable.', error, stackTrace);
+      return null;
+    }
     final db = await _databaseBuilder();
     final shareId = await db.getShareIdForDeltaMessage(
       deltaMsgId,
@@ -3716,21 +4773,104 @@ class EmailService {
   Future<void> _handleNetworkAvailable(
     _EmailReconnectRestartPolicy restartPolicy,
   ) async {
+    final traceId = _nextTraceId('email.networkAvailable');
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.networkAvailable',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'policy': restartPolicy.name,
+        'runtime': _runtimePhase.name,
+        'hasReconnectContext': hasInMemoryReconnectContext,
+        'ioRunning': _transport.isIoRunning,
+      },
+    );
     if (!_canProcessNetworkTransition) {
+      _traceEmailOperation(
+        'email.networkAvailable',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'cannotProcessNetworkTransition',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
+      _traceEmailOperation(
+        'email.networkAvailable',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'missingDatabaseRuntime',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return;
     }
+    final startWatch = Stopwatch()..start();
     await ensureEventChannelActive();
+    _traceEmailOperation(
+      'email.networkAvailable.ensureEventChannelActive',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{'elapsedMs': startWatch.elapsedMilliseconds},
+    );
+    final notifyWatch = Stopwatch()..start();
     await _notifyTransportNetworkAvailable();
+    _traceEmailOperation(
+      'email.networkAvailable.notifyTransport',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{'elapsedMs': notifyWatch.elapsedMilliseconds},
+    );
+    final bootstrapWatch = Stopwatch()..start();
     await _bootstrapActiveAccountIfNeeded();
-    await _runReconnectCatchUp();
+    _traceEmailOperation(
+      'email.networkAvailable.bootstrap',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'elapsedMs': bootstrapWatch.elapsedMilliseconds,
+      },
+    );
+    final catchUpWatch = Stopwatch()..start();
+    await _runReconnectCatchUp(parentTraceId: traceId);
+    _traceEmailOperation(
+      'email.networkAvailable.reconnectCatchUp',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{'elapsedMs': catchUpWatch.elapsedMilliseconds},
+    );
     _startImapSyncLoop();
-    await _refreshConnectivityState(source: _EmailSyncSource.networkAvailable);
-    fireAndForget(
-      () => _scheduleReconnectRestart(restartPolicy),
-      operationName: 'EmailService.reconnectRestart',
+    final connectivityWatch = Stopwatch()..start();
+    final connectivity = await _refreshConnectivityState(
+      source: _EmailSyncSource.networkAvailable,
+    );
+    _traceEmailOperation(
+      'email.networkAvailable.connectivity',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'elapsedMs': connectivityWatch.elapsedMilliseconds,
+      },
+    );
+    if (_shouldScheduleReconnectRestart(
+      connectivity: connectivity,
+      restartPolicy: restartPolicy,
+    )) {
+      fireAndForget(
+        () => _scheduleReconnectRestart(restartPolicy),
+        operationName: 'EmailService.reconnectRestart',
+      );
+    }
+    _traceEmailOperation(
+      'email.networkAvailable',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{'elapsedMs': stopwatch.elapsedMilliseconds},
     );
   }
 
@@ -3751,9 +4891,18 @@ class EmailService {
   }) {
     final active = _backgroundFetchInFlight;
     if (active != null) {
+      _traceEmailOperation(
+        'email.backgroundFetch',
+        'coalesced',
+        fields: <String, Object?>{'timeout': timeout},
+      );
       return active;
     }
-    final task = _performBackgroundFetchExclusive(timeout: timeout);
+    final traceId = _nextTraceId('email.backgroundFetch');
+    final task = _performBackgroundFetchExclusive(
+      timeout: timeout,
+      traceId: traceId,
+    );
     _backgroundFetchInFlight = task;
     return task.whenComplete(() {
       if (identical(_backgroundFetchInFlight, task)) {
@@ -3764,14 +4913,77 @@ class EmailService {
 
   Future<bool> _performBackgroundFetchExclusive({
     required Duration timeout,
+    required String traceId,
   }) async {
-    if (_nativeCleanupPending || _blocksRuntimeReentry) {
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.backgroundFetch',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'timeout': timeout,
+        'runtime': _runtimePhase.name,
+        'ioRunning': _transport.isIoRunning,
+      },
+    );
+    if (_nativeCleanupPending || _blocksRuntimeReentry || !hasActiveSession) {
+      _traceEmailOperation(
+        'email.backgroundFetch',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'runtimeBlocked',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return false;
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
+      _traceEmailOperation(
+        'email.backgroundFetch',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'missingDatabaseRuntime',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return false;
     }
-    return _transport.performBackgroundFetch(timeout);
+    try {
+      final result = await _transport
+          .performBackgroundFetch(timeout)
+          .timeout(
+            timeout + const Duration(seconds: 30),
+            onTimeout: () {
+              _log.warning(
+                'Email background fetch overran its native timeout.',
+              );
+              return false;
+            },
+          );
+      _traceEmailOperation(
+        'email.backgroundFetch',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'result': result,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return result;
+    } on Exception catch (error) {
+      _traceEmailOperation(
+        'email.backgroundFetch',
+        'error',
+        id: traceId,
+        fields: <String, Object?>{
+          'result': error.runtimeType,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      rethrow;
+    }
   }
 
   Future<bool> _performBackgroundFetchIfIdle({
@@ -3848,28 +5060,129 @@ class EmailService {
     });
   }
 
-  Future<void> refreshChatlistFromCore() {
+  Future<void> refreshChatlistFromCore({
+    String source = 'explicit',
+    bool force = false,
+    int? accountId,
+  }) async {
+    final caller = _traceCaller(StackTrace.current);
     final activeRefresh = _chatlistRefreshTask;
     if (activeRefresh != null) {
-      return activeRefresh;
+      _traceEmailOperation(
+        'email.chatlistRefresh',
+        'coalesced',
+        fields: <String, Object?>{
+          'source': source,
+          'accountId': accountId,
+          'caller': caller,
+        },
+      );
+      await activeRefresh;
+      return;
     }
+    final forceProjection = force || source == 'explicit';
+    if (!forceProjection &&
+        _hasRecentChatlistRefreshCovering(accountId: accountId)) {
+      _traceEmailOperation(
+        'email.chatlistRefresh',
+        'skip',
+        fields: <String, Object?>{
+          'source': source,
+          'accountId': accountId,
+          'reason': 'recentSnapshot',
+          'caller': caller,
+        },
+      );
+      return;
+    }
+    final traceId = _nextTraceId('email.chatlistRefresh');
     final task = _chatlistSyncQueue.run(() async {
-      if (!await _ensureBackgroundSyncReady()) {
-        return;
+      final stopwatch = Stopwatch()..start();
+      try {
+        _traceEmailOperation(
+          'email.chatlistRefresh',
+          'start',
+          id: traceId,
+          fields: <String, Object?>{
+            'source': source,
+            'runtime': _runtimePhase.name,
+            'hasSession': hasActiveSession,
+            'force': forceProjection,
+            'accountId': accountId,
+            'caller': caller,
+          },
+        );
+        if (!await _ensureBackgroundSyncReady()) {
+          _traceEmailOperation(
+            'email.chatlistRefresh',
+            'skip',
+            id: traceId,
+            fields: <String, Object?>{
+              'source': source,
+              'accountId': accountId,
+              'reason': 'backgroundSyncNotReady',
+              'elapsedMs': stopwatch.elapsedMilliseconds,
+            },
+          );
+          return;
+        }
+        await _refreshChatlistSnapshotOnMain(accountId: accountId);
+        _traceEmailOperation(
+          'email.chatlistRefresh',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'source': source,
+            'accountId': accountId,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
+      } on Exception catch (error) {
+        _traceEmailOperation(
+          'email.chatlistRefresh',
+          'error',
+          id: traceId,
+          fields: <String, Object?>{
+            'source': source,
+            'result': error.runtimeType,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
+        rethrow;
       }
-      await _refreshChatlistSnapshotOnMain();
     });
     _chatlistRefreshTask = task;
-    return task.whenComplete(() {
+    try {
+      await task;
+    } finally {
       if (identical(_chatlistRefreshTask, task)) {
         _chatlistRefreshTask = null;
       }
-    });
+    }
+  }
+
+  bool _hasRecentChatlistRefreshCovering({required int? accountId}) {
+    final completedAt = _lastChatlistRefreshCompletedAt;
+    if (completedAt == null) {
+      return false;
+    }
+    final completedAccountId = _lastChatlistRefreshCompletedAccountId;
+    if (accountId != null &&
+        completedAccountId != null &&
+        completedAccountId != accountId) {
+      return false;
+    }
+    return DateTime.timestamp().difference(completedAt) <
+        _chatlistRefreshRecentSuppressionWindow;
+  }
+
+  void _recordChatlistRefreshCompleted({required int? accountId}) {
+    _lastChatlistRefreshCompletedAt = DateTime.timestamp();
+    _lastChatlistRefreshCompletedAccountId = accountId;
   }
 
   Future<void> syncInboxAndSent() async {
-    await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
-    await refreshChatlistFromCore();
+    await _requestEmailCatchUp(_EmailCatchUpReason.syncInboxAndSent);
   }
 
   Future<bool> recoverForHomeRefresh() async {
@@ -3897,9 +5210,9 @@ class EmailService {
       return true;
     }
     try {
-      return await _refreshHomeEmailSnapshot();
-    } on Exception {
-      _log.fine('Email unread sync failed.');
+      return await _refreshHomeEmailSnapshot(source: 'homeUnreadRefresh');
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Email unread sync failed.', error, stackTrace);
       return false;
     }
   }
@@ -3909,30 +5222,19 @@ class EmailService {
       return true;
     }
     try {
-      return await _refreshHomeEmailSnapshot();
+      return await _refreshHomeEmailSnapshot(source: 'homeHistoryRefresh');
     } on Exception {
       _log.fine('Email background sync failed.');
       return false;
     }
   }
 
-  Future<bool> _refreshHomeEmailSnapshot() async {
-    if (_transport.isIoRunning) {
-      await refreshChatlistFromCore();
-      return true;
-    }
-    final fetched = await performBackgroundFetch(
-      timeout: _foregroundFetchTimeout,
-    );
-    if (!fetched) {
-      return false;
-    }
-    await refreshChatlistFromCore();
-    await _refreshConnectivityState(
-      source: _EmailSyncSource.backgroundFetchDone,
-      recoveryCompleted: true,
-    );
-    return true;
+  Future<bool> _refreshHomeEmailSnapshot({required String source}) async {
+    final reason = source == 'homeHistoryRefresh'
+        ? _EmailCatchUpReason.homeHistoryRefresh
+        : _EmailCatchUpReason.homeUnreadRefresh;
+    final result = await _requestEmailCatchUp(reason);
+    return result.projected;
   }
 
   Future<bool> syncContactsForHomeRefresh() async {
@@ -4107,9 +5409,6 @@ class EmailService {
     if (desiredWindow < _minimumHistoryWindow) {
       return;
     }
-    if (beforeMessageId == null && beforeTimestamp == null) {
-      return;
-    }
     await _ensureReady();
     final String scope = _requireActiveScope();
     final _EmailAccountBinding account = await _accountBindingForChat(chat);
@@ -4180,7 +5479,7 @@ class EmailService {
       }
       return;
     }
-    if (_databasePrefix == null || _databasePassphrase == null) {
+    if (!hasActiveSession) {
       return;
     }
     final bridge = _foregroundBridge;
@@ -4275,6 +5574,9 @@ class EmailService {
   }
 
   @visibleForTesting
+  EmailDeltaRuntime get debugTransportForTest => _transport;
+
+  @visibleForTesting
   bool get debugImapSyncLoopActive => _imapSyncLoopToken != null;
 
   @visibleForTesting
@@ -4292,7 +5594,6 @@ class EmailService {
     int end = _defaultPageSize,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async* {
-    await _ensureReady();
     final db = await _databaseBuilder();
     final initial = await db.getChatMessages(
       jid,
@@ -4312,7 +5613,6 @@ class EmailService {
     required int limit,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
-    await _ensureReady();
     final db = await _databaseBuilder();
     return db.getChatMessagesBefore(
       jid,
@@ -4373,7 +5673,7 @@ class EmailService {
       return;
     }
     final accountId = _deltaAccountIdForEvent(event);
-    if (accountId == null) {
+    if (accountId == null || accountId == DeltaAccountDefaults.legacyId) {
       _log.fine('Skipping Delta event persistence without account id.');
       return;
     }
@@ -4381,7 +5681,20 @@ class EmailService {
     await consumer.handle(event);
   }
 
-  int? _deltaAccountIdForEvent(DeltaCoreEvent event) => event.accountId;
+  int? _deltaAccountIdForEvent(DeltaCoreEvent event) {
+    final accountId = event.accountId;
+    if (accountId == null) {
+      return null;
+    }
+    if (!_transport.accountsActive) {
+      final activeAccountId = _transport.activeAccountId;
+      if (activeAccountId != DeltaAccountDefaults.legacyId) {
+        return activeAccountId;
+      }
+      return DeltaAccountDefaults.singleContextId;
+    }
+    return accountId;
+  }
 
   DeltaEventConsumer _deltaConsumerForAccount(int accountId) {
     return _deltaEventConsumers.putIfAbsent(
@@ -4407,31 +5720,178 @@ class EmailService {
   }
 
   Future<bool> _bootstrapFromCoreOnMain({bool includeMessages = true}) async {
-    final accountIds = await _transport.accountIds();
+    final traceId = _nextTraceId('email.bootstrapFromCoreOnMain');
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.bootstrapFromCoreOnMain',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{'includeMessages': includeMessages},
+    );
+    final accountIds = _usableDeltaAccountIds(await _transport.accountIds());
+    _traceEmailOperation(
+      'email.bootstrapFromCoreOnMain.accounts',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'accountCount': accountIds.length,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
     var didBootstrap = false;
     for (final accountId in accountIds) {
+      final accountWatch = Stopwatch()..start();
       await _transport.ensureAccountSession(accountId);
       final consumer = _deltaConsumerForAccount(accountId);
       if (await consumer.bootstrapFromCore(includeMessages: includeMessages)) {
         didBootstrap = true;
       }
+      _traceEmailOperation(
+        'email.bootstrapFromCoreOnMain.account',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'accountId': accountId,
+          'elapsedMs': accountWatch.elapsedMilliseconds,
+        },
+      );
     }
+    _traceEmailOperation(
+      'email.bootstrapFromCoreOnMain',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'didBootstrap': didBootstrap,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
     return didBootstrap;
   }
 
   Future<void> _refreshChatlistSnapshotOnMain({int? accountId}) async {
+    final traceId = _nextTraceId('email.chatlistSnapshot');
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.chatlistSnapshot',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{'accountId': accountId},
+    );
     final accountIds = await _deltaAccountIdsForScope(accountId);
+    _traceEmailOperation(
+      'email.chatlistSnapshot.accounts',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'accountCount': accountIds.length,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
     for (final resolvedAccountId in accountIds) {
+      final accountWatch = Stopwatch()..start();
       await _transport.ensureAccountSession(resolvedAccountId);
       await _deltaConsumerForAccount(
         resolvedAccountId,
       ).refreshChatlistSnapshot();
+      _traceEmailOperation(
+        'email.chatlistSnapshot.account',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'accountId': resolvedAccountId,
+          'elapsedMs': accountWatch.elapsedMilliseconds,
+        },
+      );
     }
+    _traceEmailOperation(
+      'email.chatlistSnapshot',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{'elapsedMs': stopwatch.elapsedMilliseconds},
+    );
+    _recordChatlistRefreshCompleted(accountId: accountId);
+  }
+
+  Future<int> _syncFreshFromCore({bool Function()? isStillRelevant}) async {
+    bool cancelled() => isStillRelevant?.call() == false;
+    final traceId = _nextTraceId('email.freshProjection');
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.freshProjection',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'runtime': _runtimePhase.name,
+        'hasSession': hasActiveSession,
+      },
+    );
+    if (!await _ensureBackgroundSyncReady()) {
+      _traceEmailOperation(
+        'email.freshProjection',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'backgroundSyncNotReady',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return 0;
+    }
+
+    var syncedCount = 0;
+    var freshIdCount = 0;
+    final accountIds = await _deltaAccountIdsForScope(null);
+    for (final accountId in accountIds) {
+      if (cancelled()) {
+        break;
+      }
+      final accountWatch = Stopwatch()..start();
+      await _transport.ensureAccountSession(accountId);
+      final freshIds = await _transport.getFreshMessageIds(
+        accountId: accountId,
+      );
+      freshIdCount += freshIds.length;
+      var accountSyncedCount = 0;
+      if (freshIds.isNotEmpty && !cancelled()) {
+        accountSyncedCount = await _deltaConsumerForAccount(
+          accountId,
+        ).syncFreshMessages(freshIds, isCurrent: isStillRelevant);
+        syncedCount += accountSyncedCount;
+      }
+      _traceEmailOperation(
+        'email.freshProjection.account',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'accountId': accountId,
+          'freshIdCount': freshIds.length,
+          'syncedMessageCount': accountSyncedCount,
+          'elapsedMs': accountWatch.elapsedMilliseconds,
+        },
+      );
+    }
+    _traceEmailOperation(
+      'email.freshProjection',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'accountCount': accountIds.length,
+        'freshIdCount': freshIdCount,
+        'syncedMessageCount': syncedCount,
+        'cancelled': cancelled(),
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+    return syncedCount;
   }
 
   Future<void> _refreshStartupChatlistSnapshot({required int accountId}) async {
     try {
-      await _refreshChatlistSnapshotOnMain(accountId: accountId);
+      await refreshChatlistFromCore(
+        source: 'startup',
+        force: true,
+        accountId: accountId,
+      );
     } on Exception catch (error, stackTrace) {
       _log.fine('Email startup chatlist refresh failed.', error, stackTrace);
     }
@@ -4486,16 +5946,36 @@ class EmailService {
   }
 
   Future<List<int>> _deltaAccountIdsForScope(int? accountId) async {
+    final accountIds = _usableDeltaAccountIds(await _transport.accountIds());
     if (accountId != null) {
-      return <int>[accountId];
+      if (accountId == DeltaAccountDefaults.legacyId) {
+        return accountIds;
+      }
+      return accountIds.contains(accountId) ? <int>[accountId] : const <int>[];
     }
-    return _transport.accountIds();
+    return accountIds;
   }
 
   Future<void> _processDeltaEvent(DeltaCoreEvent event) async {
     final eventType = DeltaEventType.fromCode(event.type);
     if (eventType == null) {
       return;
+    }
+    final traceDeltaEvent = _shouldTraceDeltaEvent(eventType);
+    final traceId = traceDeltaEvent ? _nextTraceId('email.deltaEvent') : null;
+    final stopwatch = traceDeltaEvent ? (Stopwatch()..start()) : null;
+    if (traceId != null) {
+      _traceEmailOperation(
+        'email.deltaEvent',
+        'start',
+        id: traceId,
+        fields: <String, Object?>{
+          'type': eventType.name,
+          'accountId': event.accountId,
+          'data1': event.data1,
+          'data2': event.data2,
+        },
+      );
     }
     int? eventAccountId() {
       final accountId = _deltaAccountIdForEvent(event);
@@ -4505,103 +5985,122 @@ class EmailService {
       return accountId;
     }
 
-    switch (eventType) {
-      case DeltaEventType.error:
-        _handleCoreError(event.data2Text);
-        break;
-      case DeltaEventType.errorSelfNotInGroup:
-        _handleSelfNotInGroup(event.data2Text);
-        break;
-      case DeltaEventType.incomingMsg:
-        if (event.data2 > _deltaEventMessageUnset) {
+    try {
+      switch (eventType) {
+        case DeltaEventType.error:
+          _handleCoreError(event.data2Text);
+          break;
+        case DeltaEventType.errorSelfNotInGroup:
+          _handleSelfNotInGroup(event.data2Text);
+          break;
+        case DeltaEventType.incomingMsg:
+          if (event.data2 > _deltaEventMessageUnset) {
+            final accountId = eventAccountId();
+            if (accountId == null) {
+              break;
+            }
+            _queueNotification(
+              chatId: event.data1,
+              msgId: event.data2,
+              accountId: accountId,
+            );
+          }
+          break;
+        case DeltaEventType.incomingMsgBunch:
+          await _requestEmailCatchUp(_EmailCatchUpReason.incomingMsgBunch);
+          break;
+        case DeltaEventType.incomingReaction:
           final accountId = eventAccountId();
           if (accountId == null) {
             break;
           }
-          _queueNotification(
+          await _handleIncomingReaction(
             chatId: event.data1,
             msgId: event.data2,
             accountId: accountId,
+            reaction: event.data2Text,
           );
-        }
-        break;
+          break;
+        case DeltaEventType.incomingWebxdcNotify:
+          final accountId = eventAccountId();
+          if (accountId == null) {
+            break;
+          }
+          await _handleIncomingWebxdcNotify(
+            chatId: event.data1,
+            msgId: event.data2,
+            accountId: accountId,
+            text: event.data2Text,
+          );
+          break;
+        case DeltaEventType.msgRead:
+          final accountId = eventAccountId();
+          if (accountId == null) {
+            break;
+          }
+          await _handleMessageRead(event.data1, accountId: accountId);
+          break;
+        case DeltaEventType.msgsNoticed:
+          final accountId = eventAccountId();
+          if (accountId == null) {
+            break;
+          }
+          await _handleMessagesNoticed(event.data1, accountId: accountId);
+          break;
+        case DeltaEventType.chatModified:
+          break;
+        case DeltaEventType.chatDeleted:
+          final accountId = eventAccountId();
+          if (accountId == null) {
+            break;
+          }
+          await _handleChatDeleted(event.data1, accountId: accountId);
+          break;
+        case DeltaEventType.contactsChanged:
+          _scheduleContactsSyncFromCore();
+          break;
+        case DeltaEventType.accountsBackgroundFetchDone:
+          await _handleBackgroundFetchDone();
+          break;
+        case DeltaEventType.connectivityChanged:
+          await _refreshConnectivityState(
+            source: _EmailSyncSource.connectivityChangedEvent,
+          );
+          break;
+        case DeltaEventType.channelOverflow:
+          await _handleChannelOverflow();
+          break;
+        default:
+          break;
+      }
+    } finally {
+      if (traceId != null && stopwatch != null) {
+        _traceEmailOperation(
+          'email.deltaEvent',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'type': eventType.name,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
+      }
+    }
+  }
+
+  bool _shouldTraceDeltaEvent(DeltaEventType eventType) {
+    switch (eventType) {
+      case DeltaEventType.incomingMsg:
       case DeltaEventType.incomingMsgBunch:
-        await _flushQueuedNotifications();
-        break;
-      case DeltaEventType.incomingReaction:
-        final accountId = eventAccountId();
-        if (accountId == null) {
-          break;
-        }
-        await _handleIncomingReaction(
-          chatId: event.data1,
-          msgId: event.data2,
-          accountId: accountId,
-          reaction: event.data2Text,
-        );
-        break;
-      case DeltaEventType.incomingWebxdcNotify:
-        final accountId = eventAccountId();
-        if (accountId == null) {
-          break;
-        }
-        await _handleIncomingWebxdcNotify(
-          chatId: event.data1,
-          msgId: event.data2,
-          accountId: accountId,
-          text: event.data2Text,
-        );
-        break;
-      case DeltaEventType.msgRead:
-        final accountId = eventAccountId();
-        if (accountId == null) {
-          break;
-        }
-        await _handleMessageRead(event.data1, accountId: accountId);
-        break;
-      case DeltaEventType.msgsNoticed:
-        final accountId = eventAccountId();
-        if (accountId == null) {
-          break;
-        }
-        await _handleMessagesNoticed(event.data1, accountId: accountId);
-        break;
+      case DeltaEventType.msgsChanged:
       case DeltaEventType.chatModified:
-        break;
-      case DeltaEventType.chatDeleted:
-        final accountId = eventAccountId();
-        if (accountId == null) {
-          break;
-        }
-        await _handleChatDeleted(event.data1, accountId: accountId);
-        break;
-      case DeltaEventType.contactsChanged:
-        _scheduleContactsSyncFromCore();
-        break;
       case DeltaEventType.accountsBackgroundFetchDone:
-        await _handleBackgroundFetchDone();
-        await _bootstrapActiveAccountIfNeeded();
-        await refreshChatlistFromCore();
-        await _refreshConnectivityState(
-          source: _EmailSyncSource.backgroundFetchDone,
-          recoveryCompleted: true,
-        );
-        break;
-      case DeltaEventType.connectivityChanged:
-        final connectivity = await _refreshConnectivityState(
-          source: _EmailSyncSource.connectivityChangedEvent,
-        );
-        if (connectivity == null || connectivity < _connectivityWorkingMin) {
-          break;
-        }
-        await _bootstrapActiveAccountIfNeeded();
-        await _runReconnectCatchUp();
-        break;
       case DeltaEventType.channelOverflow:
-        await _handleChannelOverflow();
-        break;
+      case DeltaEventType.error:
+      case DeltaEventType.errorSelfNotInGroup:
+        return true;
       default:
-        break;
+        return false;
     }
   }
 
@@ -4961,6 +6460,9 @@ class EmailService {
         return;
       }
       final target = delivery.target;
+      if (!_canProcessDeltaWork) {
+        return;
+      }
       await notificationService.sendMessageNotification(
         title: target.title,
         body: delivery.body,
@@ -5187,15 +6689,121 @@ class EmailService {
     _EmailSyncSource source = _EmailSyncSource.unknown,
     bool recoveryCompleted = false,
   }) async {
+    final active = _connectivityRefreshTask;
+    if (active != null &&
+        source == _EmailSyncSource.connectivityChangedEvent &&
+        !recoveryCompleted) {
+      return active;
+    }
+    if (_canReuseHealthyConnectivitySample(
+      source: source,
+      recoveryCompleted: recoveryCompleted,
+    )) {
+      return _lastConnectivityValue;
+    }
+    final task = _refreshConnectivityStateExclusive(
+      source: source,
+      recoveryCompleted: recoveryCompleted,
+    );
+    _connectivityRefreshTask = task;
+    try {
+      return await task;
+    } finally {
+      if (identical(_connectivityRefreshTask, task)) {
+        _connectivityRefreshTask = null;
+      }
+    }
+  }
+
+  bool _canReuseHealthyConnectivitySample({
+    required _EmailSyncSource source,
+    required bool recoveryCompleted,
+  }) {
+    if (source != _EmailSyncSource.connectivityChangedEvent ||
+        recoveryCompleted ||
+        _syncState.status != EmailSyncStatus.ready) {
+      return false;
+    }
+    final connectivity = _lastConnectivityValue;
+    final readAt = _lastHealthyConnectivityReadAt;
+    if (connectivity == null ||
+        connectivity < _connectivityWorkingMin ||
+        readAt == null) {
+      return false;
+    }
+    return DateTime.timestamp().difference(readAt) <
+        _connectivityHealthyReadReuseWindow;
+  }
+
+  Future<int?> _refreshConnectivityStateExclusive({
+    _EmailSyncSource source = _EmailSyncSource.unknown,
+    bool recoveryCompleted = false,
+  }) async {
+    final traceId = _nextTraceId('email.connectivity');
+    final stopwatch = Stopwatch()..start();
+    final suppressedEvents = _suppressedConnectivityChangedEvents;
+    _suppressedConnectivityChangedEvents = 0;
+    _traceEmailOperation(
+      'email.connectivity',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'source': source.logLabel,
+        'recoveryCompleted': recoveryCompleted,
+        'runtime': _runtimePhase.name,
+        'suppressedConnectivityEvents': suppressedEvents,
+      },
+    );
     if (!_acceptsRuntimeWork) {
+      _traceEmailOperation(
+        'email.connectivity',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'runtimeNotRunning',
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return null;
     }
     try {
       final connectivity = await _readTransportConnectivity(source: source);
+      _traceEmailOperation(
+        'email.connectivity',
+        'read',
+        id: traceId,
+        fields: <String, Object?>{
+          'source': source.logLabel,
+          'connectivity': connectivity,
+          'syncStatus': _syncState.status.name,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       if (!_acceptsRuntimeWork) {
+        _traceEmailOperation(
+          'email.connectivity',
+          'skip',
+          id: traceId,
+          fields: <String, Object?>{
+            'reason': 'runtimeStoppedAfterRead',
+            'connectivity': connectivity,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
         return null;
       }
-      if (connectivity == null) return null;
+      if (connectivity == null) {
+        _traceEmailOperation(
+          'email.connectivity',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': 'null',
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
+        return null;
+      }
       _recordConnectivitySample(connectivity: connectivity, source: source);
       await _maybeLogConnectingConnectivityDetail(
         connectivity: connectivity,
@@ -5204,36 +6812,119 @@ class EmailService {
       if (recoveryCompleted && connectivity >= _connectivityWorkingMin) {
         _cancelConnectivityDowngrade();
         _updateSyncState(const EmailSyncState.ready(), source: source);
+        _traceEmailOperation(
+          'email.connectivity',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': 'recoveryCompleted',
+            'connectivity': connectivity,
+            'syncStatus': _syncState.status.name,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
         return connectivity;
       }
       if (connectivity >= _connectivityConnectedMin) {
         _cancelConnectivityDowngrade();
         _updateSyncState(const EmailSyncState.ready(), source: source);
+        _traceEmailOperation(
+          'email.connectivity',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': 'connected',
+            'connectivity': connectivity,
+            'syncStatus': _syncState.status.name,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
         return connectivity;
       }
       if (connectivity >= _connectivityWorkingMin) {
         _cancelConnectivityDowngrade();
         if (_syncState.status == EmailSyncStatus.ready) {
+          _traceEmailOperation(
+            'email.connectivity',
+            'end',
+            id: traceId,
+            fields: <String, Object?>{
+              'result': 'workingAlreadyReady',
+              'connectivity': connectivity,
+              'syncStatus': _syncState.status.name,
+              'elapsedMs': stopwatch.elapsedMilliseconds,
+            },
+          );
           return connectivity;
         }
         _updateSyncState(
           EmailSyncState.recovering(_l10n.emailSyncMessageSyncing),
           source: source,
         );
+        _traceEmailOperation(
+          'email.connectivity',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': 'workingRecovering',
+            'connectivity': connectivity,
+            'syncStatus': _syncState.status.name,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
         return connectivity;
       }
       if (_syncState.status == EmailSyncStatus.ready) {
         _scheduleConnectivityDowngrade(connectivity);
+        _traceEmailOperation(
+          'email.connectivity',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': 'downgradeScheduled',
+            'connectivity': connectivity,
+            'syncStatus': _syncState.status.name,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
         return connectivity;
       }
       _applyConnectivityState(
         connectivity,
         source: _EmailSyncSource.connectivityApply,
       );
+      _traceEmailOperation(
+        'email.connectivity',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'connectivity': connectivity,
+          'syncStatus': _syncState.status.name,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return connectivity;
     } on TimeoutException {
+      _traceEmailOperation(
+        'email.connectivity',
+        'timeout',
+        id: traceId,
+        fields: <String, Object?>{
+          'source': source.logLabel,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return null;
     } on Exception catch (error, stackTrace) {
+      _traceEmailOperation(
+        'email.connectivity',
+        'error',
+        id: traceId,
+        fields: <String, Object?>{
+          'result': error.runtimeType,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       _log.fine('Failed to refresh email connectivity', error, stackTrace);
       return null;
     }
@@ -5340,6 +7031,9 @@ class EmailService {
     required _EmailSyncSource source,
   }) {
     _lastConnectivityValue = connectivity;
+    _lastHealthyConnectivityReadAt = connectivity >= _connectivityWorkingMin
+        ? DateTime.timestamp()
+        : null;
     _logConnectivitySample(connectivity: connectivity, source: source);
   }
 
@@ -5391,7 +7085,7 @@ class EmailService {
       final detail = _sanitizeConnectivityDetail(
         await _transport.connectivityDetails(),
       );
-      _log.warning(
+      _log.fine(
         '$_emailConnectivityDetailLogPrefix: '
         '$_emailLogSourceLabel=${source.logLabel}, '
         '$_emailLogValueLabel=$connectivity, '
@@ -5455,47 +7149,26 @@ class EmailService {
   }
 
   Future<void> _handleBackgroundFetchDone() async {
-    if (!_acceptsRuntimeWork) {
-      return;
-    }
-    if (_syncState.status == EmailSyncStatus.ready) {
-      return;
-    }
-    await _refreshConnectivityState(
-      source: _EmailSyncSource.backgroundFetchDone,
-    );
+    await _requestEmailCatchUp(_EmailCatchUpReason.backgroundFetchDone);
   }
 
   Future<void> _handleChannelOverflow() async {
-    await _channelOverflowRecoveryQueue.run(() async {
-      _updateSyncState(
-        EmailSyncState.recovering(_l10n.emailSyncMessageRefreshing),
-        source: _EmailSyncSource.channelOverflow,
+    try {
+      await _requestEmailCatchUp(_EmailCatchUpReason.channelOverflow);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to recover from Delta channel overflow',
+        error,
+        stackTrace,
       );
-      try {
-        final success = await _performBackgroundFetchIfIdle(
-          timeout: _foregroundFetchTimeout,
-        );
-        if (!success) {
-          await _notifyTransportNetworkAvailable();
-        }
-        await refreshChatlistFromCore();
-      } on Exception catch (error, stackTrace) {
-        _log.warning(
-          'Failed to recover from Delta channel overflow',
-          error,
-          stackTrace,
-        );
-        _updateSyncState(
-          EmailSyncState.error(_l10n.emailSyncMessageRefreshFailed),
-          source: _EmailSyncSource.channelOverflowFailure,
-        );
-      } finally {
-        await _refreshConnectivityState(
-          source: _EmailSyncSource.channelOverflowComplete,
-        );
-      }
-    });
+      _updateSyncState(
+        EmailSyncState.error(_l10n.emailSyncMessageRefreshFailed),
+        source: _EmailSyncSource.channelOverflowFailure,
+      );
+      await _refreshConnectivityState(
+        source: _EmailSyncSource.channelOverflowComplete,
+      );
+    }
   }
 
   void _updateSyncState(
@@ -5521,6 +7194,9 @@ class EmailService {
       if (!_canProcessDeltaWork) {
         return;
       }
+      if (_shouldDropConnectivityChangedEvent(event)) {
+        return;
+      }
       final sourcePersistsAppStateInternally =
           target.persistsAppStateInternally;
       _enqueueDeltaOperation(
@@ -5535,6 +7211,22 @@ class EmailService {
     target.addEventListener(listener);
     _listenerTransport = target;
     _listenerCallback = listener;
+  }
+
+  bool _shouldDropConnectivityChangedEvent(DeltaCoreEvent event) {
+    if (DeltaEventType.fromCode(event.type) !=
+        DeltaEventType.connectivityChanged) {
+      return false;
+    }
+    if (_connectivityRefreshTask != null ||
+        _canReuseHealthyConnectivitySample(
+          source: _EmailSyncSource.connectivityChangedEvent,
+          recoveryCompleted: false,
+        )) {
+      _suppressedConnectivityChangedEvents += 1;
+      return true;
+    }
+    return false;
   }
 
   void _detachTransportListener({EmailDeltaRuntime? transport}) {
@@ -5565,18 +7257,50 @@ class EmailService {
   }
 
   Future<void> _bootstrapActiveAccountIfNeeded() async {
+    final traceId = _nextTraceId('email.bootstrapActiveAccount');
+    final stopwatch = Stopwatch()..start();
     if (!_acceptsRuntimeWork) {
+      _traceEmailOperation(
+        'email.bootstrapActiveAccount',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'runtimeNotRunning',
+          'runtime': _runtimePhase.name,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return;
     }
     final scope = _activeCredentialScope;
     final prefix = _databasePrefix;
     if (scope == null || prefix == null) {
+      _traceEmailOperation(
+        'email.bootstrapActiveAccount',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'missingScopeOrPrefix',
+          'hasScope': scope != null,
+          'hasPrefix': prefix != null,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return;
     }
     await _bootstrapFromCoreIfNeeded(
       scope: scope,
       databasePrefix: prefix,
       includeMessages: false,
+    );
+    _traceEmailOperation(
+      'email.bootstrapActiveAccount',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'scope': scope,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
     );
   }
 
@@ -5585,6 +7309,8 @@ class EmailService {
     required String databasePrefix,
     bool includeMessages = true,
   }) async {
+    final traceId = _nextTraceId('email.bootstrapFromCore');
+    final stopwatch = Stopwatch()..start();
     final bootstrapKey = _bootstrapKeyFor(
       scope: scope,
       databasePrefix: databasePrefix,
@@ -5592,10 +7318,31 @@ class EmailService {
     final bootstrapped =
         (await _credentialStore.read(key: bootstrapKey)) == true.toString();
     if (bootstrapped) {
+      _traceEmailOperation(
+        'email.bootstrapFromCore',
+        'skip',
+        id: traceId,
+        fields: <String, Object?>{
+          'reason': 'alreadyBootstrapped',
+          'scope': scope,
+          'includeMessages': includeMessages,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return;
     }
     final existing = _bootstrapFutureForScope(scope);
     if (existing != null) {
+      _traceEmailOperation(
+        'email.bootstrapFromCore',
+        'coalesced',
+        id: traceId,
+        fields: <String, Object?>{
+          'scope': scope,
+          'includeMessages': includeMessages,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       await existing;
       return;
     }
@@ -5609,6 +7356,16 @@ class EmailService {
     _setBootstrapFutureForScope(scope, future);
     try {
       await future;
+      _traceEmailOperation(
+        'email.bootstrapFromCore',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'scope': scope,
+          'includeMessages': includeMessages,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
     } finally {
       if (identical(_bootstrapFutureForScope(scope), future)) {
         _setBootstrapFutureForScope(scope, null);
@@ -5755,13 +7512,10 @@ class EmailService {
       return;
     }
     try {
-      await _enqueueImapSync(token);
-    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
-      if (!_canContinueImapSyncLoop(token)) {
-        _log.fine('Email IMAP sync tick cancelled.', error, stackTrace);
-        return;
-      }
-      _log.warning('Email IMAP sync tick failed.', error, stackTrace);
+      await _requestEmailCatchUp(
+        _EmailCatchUpReason.periodicIdleTick,
+        isStillRelevant: () => _canContinueImapSyncLoop(token),
+      );
     } on DeltaSafeException catch (error, stackTrace) {
       if (!_canContinueImapSyncLoop(token)) {
         _log.fine('Email IMAP sync tick cancelled.', error, stackTrace);
@@ -5776,23 +7530,6 @@ class EmailService {
       _log.warning('Email IMAP sync tick timed out.', error, stackTrace);
     }
     _scheduleNextImapSync(token);
-  }
-
-  Future<void> _enqueueImapSync(Object token) async {
-    await _imapSyncQueue.run(() async {
-      if (!_canContinueImapSyncLoop(token)) {
-        return;
-      }
-      await _refreshImapCapabilities();
-      if (!_canContinueImapSyncLoop(token)) {
-        return;
-      }
-      await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
-      if (!_canContinueImapSyncLoop(token)) {
-        return;
-      }
-      await refreshChatlistFromCore();
-    });
   }
 
   bool _canContinueImapSyncLoop(Object token) =>
@@ -5824,6 +7561,8 @@ class EmailService {
   }
 
   Future<void> _refreshImapCapabilities({bool force = false}) async {
+    final traceId = _nextTraceId('email.imapCapabilities');
+    final stopwatch = Stopwatch()..start();
     final now = DateTime.timestamp();
     final lastChecked = _imapCapabilitiesCheckedAt;
     final shouldReuse =
@@ -5832,11 +7571,43 @@ class EmailService {
         lastChecked != null &&
         now.difference(lastChecked) < _imapCapabilityRefreshInterval;
     if (shouldReuse) {
+      _traceEmailOperation(
+        'email.imapCapabilities',
+        'reuse',
+        id: traceId,
+        fields: <String, Object?>{
+          'force': force,
+          'idleSupported': _imapCapabilities.idleSupported,
+          'connectionLimit': _imapCapabilities.connectionLimit,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
       return;
     }
+    _traceEmailOperation(
+      'email.imapCapabilities',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'force': force,
+        'resolved': _imapCapabilitiesResolved,
+      },
+    );
     _imapCapabilities = await _resolveImapCapabilities();
     _imapCapabilitiesCheckedAt = now;
     _imapCapabilitiesResolved = true;
+    _traceEmailOperation(
+      'email.imapCapabilities',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'force': force,
+        'idleSupported': _imapCapabilities.idleSupported,
+        'connectionLimit': _imapCapabilities.connectionLimit,
+        'idleCutoff': _imapCapabilities.idleCutoff,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
   }
 
   Future<EmailImapCapabilities> _resolveImapCapabilities() async {
@@ -5898,38 +7669,52 @@ class EmailService {
     return value;
   }
 
-  Future<void> _runReconnectCatchUp() async {
-    if (!_acceptsRuntimeWork) {
-      return;
+  Future<void> _runReconnectCatchUp({String? parentTraceId}) async {
+    await _requestEmailCatchUp(
+      _EmailCatchUpReason.reconnectCatchUp,
+      parentTraceId: parentTraceId,
+    );
+  }
+
+  bool _shouldScheduleReconnectRestart({
+    required int? connectivity,
+    required _EmailReconnectRestartPolicy restartPolicy,
+  }) {
+    if (connectivity == null || connectivity >= _connectivityWorkingMin) {
+      return false;
     }
-    await _reconnectCatchUpQueue.run(() async {
-      if (!_acceptsRuntimeWork) {
-        return;
-      }
-      await _refreshImapCapabilities();
-      if (!_acceptsRuntimeWork) {
-        return;
-      }
-      await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
-      if (!_acceptsRuntimeWork) {
-        return;
-      }
-      await refreshChatlistFromCore();
-      if (!_acceptsRuntimeWork) {
-        return;
-      }
-      await _refreshConnectivityState(
-        source: _EmailSyncSource.reconnectCatchUp,
-        recoveryCompleted: true,
-      );
-    });
+    if (restartPolicy == _EmailReconnectRestartPolicy.offlineOnly) {
+      return connectivity < _connectivityConnectingMin;
+    }
+    return true;
   }
 
   Future<void> _scheduleReconnectRestart(
     _EmailReconnectRestartPolicy restartPolicy,
   ) async {
+    final traceId = _nextTraceId('email.reconnectRestart');
+    final stopwatch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.reconnectRestart',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'policy': restartPolicy.name,
+        'runtime': _runtimePhase.name,
+        'ioRunning': _transport.isIoRunning,
+      },
+    );
     await _reconnectRestartQueue.run(() async {
       if (!_acceptsRuntimeWork) {
+        _traceEmailOperation(
+          'email.reconnectRestart',
+          'skip',
+          id: traceId,
+          fields: <String, Object?>{
+            'reason': 'runtimeNotRunning',
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
         return;
       }
       try {
@@ -5945,6 +7730,16 @@ class EmailService {
           restartPolicy: restartPolicy,
         );
         if (restartConnectivity == null) {
+          _traceEmailOperation(
+            'email.reconnectRestart',
+            'skip',
+            id: traceId,
+            fields: <String, Object?>{
+              'reason': 'connectivityRecoveredOrNoRestart',
+              'connectivity': connectivity,
+              'elapsedMs': stopwatch.elapsedMilliseconds,
+            },
+          );
           return;
         }
         _log.warning(
@@ -5956,8 +7751,27 @@ class EmailService {
         await start();
         await _notifyTransportNetworkAvailable();
         await _bootstrapActiveAccountIfNeeded();
-        await _runReconnectCatchUp();
+        await _runReconnectCatchUp(parentTraceId: traceId);
+        _traceEmailOperation(
+          'email.reconnectRestart',
+          'end',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': 'restarted',
+            'connectivity': restartConnectivity,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
       } on Exception catch (error, stackTrace) {
+        _traceEmailOperation(
+          'email.reconnectRestart',
+          'error',
+          id: traceId,
+          fields: <String, Object?>{
+            'result': error.runtimeType,
+            'elapsedMs': stopwatch.elapsedMilliseconds,
+          },
+        );
         _log.warning('Email transport restart failed', error, stackTrace);
       } finally {
         if (_acceptsRuntimeWork) {
@@ -6014,11 +7828,14 @@ class EmailService {
     if (kEnableDemoChats) {
       return;
     }
+    if (_provisioningBlockedScope != null) {
+      throw const EmailProvisioningAccountUnavailableException();
+    }
     if (_nativeCleanupPending) {
       throw const EmailServiceStoppingException();
     }
     if (_databasePrefix == null || _databasePassphrase == null) {
-      throw StateError('Call ensureProvisioned before using EmailService.');
+      throw const EmailProvisioningAccountUnavailableException();
     }
     if (_blocksRuntimeReentry) {
       throw const EmailServiceStoppingException();
@@ -6036,45 +7853,60 @@ class EmailService {
     if (!_acceptsRuntimeWork || _blocksRuntimeReentry) {
       return false;
     }
-    await _repairStoredDeltaAccountIdsOnce();
     return true;
+  }
+
+  Future<void> repairStoredDeltaAccountIdsForMaintenance() async {
+    await _repairStoredDeltaAccountIdsOnce();
   }
 
   Future<void> _repairStoredDeltaAccountIdsOnce() async {
     if (_deltaAccountRepairCompleted) {
       return;
     }
-    _deltaAccountRepairCompleted = true;
-    final accountIds = await _transport.accountIds();
+    final accountIds = _usableDeltaAccountIds(await _transport.accountIds());
     if (accountIds.isEmpty) {
       return;
     }
     final db = await _databaseBuilder();
+    final duplicateRows = await db.collapseLegacyDeltaAccountDuplicates(
+      activeAccountIds: accountIds,
+    );
+    if (duplicateRows > 0) {
+      _log.info('Collapsed $duplicateRows legacy delta account duplicates.');
+    }
     final invalid = await db.getEmailMessagesWithDeltaAccountNotIn(accountIds);
+    var repaired = 0;
     for (final message in invalid) {
-      await _repairStoredDeltaAccountId(db: db, message: message);
+      if (await _repairStoredDeltaAccountId(
+        message: message,
+        activeAccountIds: accountIds,
+      )) {
+        repaired += 1;
+      }
     }
-    if (invalid.isNotEmpty) {
-      _log.info('Repaired ${invalid.length} stored delta account ids.');
+    if (repaired > 0) {
+      _log.info('Repaired $repaired stored delta account ids.');
     }
+    _deltaAccountRepairCompleted = true;
   }
 
-  Future<void> _repairStoredDeltaAccountId({
-    required XmppDatabase db,
+  Future<bool> _repairStoredDeltaAccountId({
     required Message message,
+    required List<int> activeAccountIds,
   }) async {
-    final resolved = await _resolveDeltaAccountIdForStoredMessage(message);
+    final resolved = await _resolveDeltaAccountIdForStoredMessage(
+      message,
+      activeAccountIds: activeAccountIds,
+    );
     if (resolved != null) {
-      await db.repairMessageDeltaAccountIdIfUnclaimed(
-        stanzaID: message.stanzaID,
-        deltaAccountId: resolved,
-      );
-      return;
+      return true;
     }
     _log.fine(
       'Leaving stored Delta locator unchanged for ${message.stanzaID}; '
       'account id could not be proven.',
     );
+    return false;
   }
 
   Future<int> _sendDemoEmailMessage({
@@ -6283,44 +8115,77 @@ class EmailService {
   String? _selfSenderJidForAccount(int accountId) =>
       _transport.selfJidForAccount(accountId);
 
-  Future<Map<String, Chat>> _resolveFanOutTargets(List<Contact> targets) async {
+  Future<
+    ({
+      Map<String, Chat> chatByJid,
+      Map<String, List<_ResolvedFanOutTarget>> targetsByChatJid,
+      List<_ResolvedFanOutTarget> unresolved,
+    })
+  >
+  _resolveFanOutTargets(List<EmailRecipientIntent> targets) async {
     final chatByJid = <String, Chat>{};
-    final pending = <String, Future<Chat>>{};
+    final targetsByChatJid = <String, List<_ResolvedFanOutTarget>>{};
+    final unresolved = <_ResolvedFanOutTarget>[];
+    final pending = <ComposerRecipientKey, Future<Chat?>>{};
     for (final target in targets) {
-      if (target.chat != null) {
-        pending.putIfAbsent(
-          target.key,
-          () => ensureChatForEmailChat(target.chat!),
-        );
-        continue;
-      }
-      final address = target.address;
-      if (address == null || address.isEmpty) {
-        continue;
-      }
       pending.putIfAbsent(
-        target.key,
-        () => ensureChatForAddress(
-          address: address,
-          displayName: target.displayName,
-        ),
+        target.recipientKey,
+        () => _resolveFanOutIntent(target),
       );
     }
     final entries = pending.entries.toList(growable: false);
+    final chatsByKey = <ComposerRecipientKey, Chat?>{};
     for (var index = 0; index < entries.length; index += _fanOutConcurrentOps) {
       final chunk = entries.skip(index).take(_fanOutConcurrentOps).toList();
       final results = await Future.wait(
         chunk.map((entry) async => MapEntry(entry.key, await entry.value)),
       );
       for (final result in results) {
-        final chat = result.value;
-        if (chatByJid.containsKey(chat.jid)) {
-          continue;
-        }
-        chatByJid.putIfAbsent(chat.jid, () => chat);
+        chatsByKey[result.key] = result.value;
       }
     }
-    return chatByJid;
+    for (final target in targets) {
+      final resolved = _ResolvedFanOutTarget(
+        intent: target,
+        chat: chatsByKey[target.recipientKey],
+      );
+      final chat = resolved.chat;
+      if (chat == null) {
+        unresolved.add(resolved);
+        continue;
+      }
+      chatByJid.putIfAbsent(chat.jid, () => chat);
+      targetsByChatJid.putIfAbsent(chat.jid, () => []).add(resolved);
+    }
+    return (
+      chatByJid: chatByJid,
+      targetsByChatJid: targetsByChatJid,
+      unresolved: unresolved,
+    );
+  }
+
+  Future<Chat?> _resolveFanOutIntent(EmailRecipientIntent target) async {
+    final sourceChatJid = target.sourceChatJid;
+    final normalizedTarget = normalizedAddressValue(target.address);
+    if (sourceChatJid != null && sourceChatJid.isNotEmpty) {
+      final db = await _databaseBuilder();
+      final stored = await db.getChat(sourceChatJid);
+      if (stored != null &&
+          (normalizedTarget == null ||
+              stored.normalizedIdentityKeys.contains(normalizedTarget))) {
+        return ensureChatForEmailChat(stored);
+      }
+    }
+    final chat = await ensureChatForAddress(
+      address: target.address,
+      displayName: target.displayName,
+      fromAddress: target.fromAddress,
+    );
+    if (normalizedTarget != null &&
+        !chat.normalizedIdentityKeys.contains(normalizedTarget)) {
+      return null;
+    }
+    return chat;
   }
 
   Future<List<MessageParticipantData>> _shareParticipants({
@@ -6491,8 +8356,18 @@ class EmailService {
     if (!hasActiveSession) {
       return;
     }
-    final resolvedAccountIds =
-        accountIds?.toList(growable: false) ?? await _transport.accountIds();
+    final List<int> resolvedAccountIds;
+    try {
+      resolvedAccountIds = _usableDeltaAccountIds(
+        accountIds ?? await _transport.accountIds(),
+      );
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Email read-receipt config deferred.', error, stackTrace);
+      return;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Email read-receipt config deferred.', error, stackTrace);
+      return;
+    }
     if (resolvedAccountIds.isEmpty) {
       return;
     }
@@ -6510,12 +8385,20 @@ class EmailService {
     if (!hasActiveSession) {
       return;
     }
-    final resolvedAccountIds = await _transport.accountIds();
-    final targetAccountIds = resolvedAccountIds.isEmpty
-        ? <int>[_transport.activeAccountId]
-        : resolvedAccountIds;
+    final List<int> resolvedAccountIds;
+    try {
+      resolvedAccountIds = _usableDeltaAccountIds(
+        await _transport.accountIds(),
+      );
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Email self-sync suppression deferred.', error, stackTrace);
+      return;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Email self-sync suppression deferred.', error, stackTrace);
+      return;
+    }
     final appliedAccountIds = <int>{};
-    for (final accountId in targetAccountIds) {
+    for (final accountId in resolvedAccountIds) {
       if (!appliedAccountIds.add(accountId)) {
         continue;
       }
@@ -6701,7 +8584,7 @@ class EmailService {
     if (scope != null) {
       return scope;
     }
-    throw StateError('Call ensureProvisioned before using EmailService.');
+    throw const EmailProvisioningAccountUnavailableException();
   }
 
   Future<void> _updateChatEmailFromAddress(Chat chat, String? address) async {
@@ -7252,11 +9135,17 @@ class EmailService {
   }
 
   Future<void> _applyOpenPgpBaseConfigForActiveAccounts() async {
-    final accountIds = await _transport.accountIds();
-    final targetAccountIds = accountIds.isEmpty
-        ? <int>[_transport.activeAccountId]
-        : accountIds;
-    for (final accountId in targetAccountIds) {
+    final List<int> accountIds;
+    try {
+      accountIds = _usableDeltaAccountIds(await _transport.accountIds());
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Email OpenPGP base config deferred.', error, stackTrace);
+      return;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Email OpenPGP base config deferred.', error, stackTrace);
+      return;
+    }
+    for (final accountId in accountIds) {
       final address = _transport.selfJidForAccount(accountId);
       final normalizedAddress = normalizedAddressValue(address);
       if (normalizedAddress == null || normalizedAddress.isEmpty) {
@@ -7717,6 +9606,10 @@ class EmailService {
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     await _credentialStore.delete(key: _connectionOverrideKeyForScope(scope));
+    if (!preserveActiveSession ||
+        (_activeCredentialScope == scope && _activeAccount != null)) {
+      _clearProvisioningRuntimeFailure(scope);
+    }
     _credentialSession.clearScope(
       scope,
       preserveActiveSession: preserveActiveSession,
@@ -7727,39 +9620,141 @@ class EmailService {
   /// Marks a chat as noticed, clearing unread badges in core.
   ///
   /// Call this when the user opens a chat.
-  Future<bool> markNoticedChat(Chat chat) async {
-    var noticed = false;
-    await _readStateQueue.run(() async {
-      await _ensureReady();
-      if (_blocksRuntimeReentry) {
-        return;
-      }
-      final account = await _accountBindingForChat(chat);
-      final Chat resolvedChat = await _trackAppDatabaseOperation(
-        () => _storedEmailChatForAccount(
-          chat: chat,
-          deltaAccountId: account.deltaAccountId,
-        ),
-      );
-      if (_blocksRuntimeReentry) {
-        return;
-      }
-      final chatIds = await _deltaChatIdsForReadState(
-        chat: resolvedChat,
-        deltaAccountId: account.deltaAccountId,
-      );
-      if (chatIds.isEmpty) {
-        return;
-      }
-      for (final chatId in chatIds) {
-        final result = await _transport.markNoticedChat(
-          chatId,
-          accountId: account.deltaAccountId,
-        );
-        noticed = noticed || result;
+  Future<bool> markNoticedChat(Chat chat) async =>
+      (await syncChatNoticeState(chat)).terminalSuccess;
+
+  Future<EmailChatNoticeSyncResult> syncChatNoticeState(Chat chat) {
+    final dedupeKey = _chatNoticeSyncKey(chat);
+    final inFlight = _noticeSyncInFlight[dedupeKey];
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final task = _syncChatNoticeState(chat);
+    _noticeSyncInFlight[dedupeKey] = task;
+    return task.whenComplete(() {
+      if (identical(_noticeSyncInFlight[dedupeKey], task)) {
+        _noticeSyncInFlight.remove(dedupeKey);
       }
     });
-    return noticed;
+  }
+
+  String _chatNoticeSyncKey(Chat chat) {
+    return [
+      _activeCredentialScope ?? '',
+      chat.jid.trim(),
+      chat.deltaChatId?.toString() ?? '',
+      chat.emailFromAddress?.trim() ?? '',
+      chat.emailAddress?.trim() ?? '',
+      chat.contactJid?.trim() ?? '',
+    ].join('|');
+  }
+
+  Future<EmailChatNoticeSyncResult> _syncChatNoticeState(Chat chat) async {
+    try {
+      var syncResult = const EmailChatNoticeSyncResult(
+        status: EmailChatNoticeSyncStatus.unresolved,
+      );
+      await _readStateQueue.run(() async {
+        await _ensureReady();
+        if (_blocksRuntimeReentry) {
+          syncResult = const EmailChatNoticeSyncResult(
+            status: EmailChatNoticeSyncStatus.failed,
+          );
+          return;
+        }
+        final account = await _accountBindingForChat(chat);
+        final Chat resolvedChat = await _trackAppDatabaseOperation(
+          () => _storedEmailChatForAccount(
+            chat: chat,
+            deltaAccountId: account.deltaAccountId,
+          ),
+        );
+        if (_blocksRuntimeReentry) {
+          syncResult = const EmailChatNoticeSyncResult(
+            status: EmailChatNoticeSyncStatus.failed,
+          );
+          return;
+        }
+        final chatIds = await _deltaChatIdsForReadState(
+          chat: resolvedChat,
+          deltaAccountId: account.deltaAccountId,
+        );
+        if (chatIds.isEmpty) {
+          syncResult = EmailChatNoticeSyncResult(
+            status: EmailChatNoticeSyncStatus.unresolved,
+            deltaAccountId: account.deltaAccountId,
+          );
+          return;
+        }
+        final freshBeforeByChat = await _freshMessageIdsByChatIds(
+          accountId: account.deltaAccountId,
+          chatIds: chatIds,
+        );
+        final freshBeforeCount = freshBeforeByChat.values.fold<int>(
+          0,
+          (sum, ids) => sum + ids.length,
+        );
+        var reconciledMessageCount = 0;
+        var coreNoticeRequested = false;
+        var coreNoticeAccepted = false;
+        final consumer = _deltaConsumerForAccount(account.deltaAccountId);
+        for (final chatId in chatIds) {
+          final freshIds = freshBeforeByChat[chatId] ?? const <int>[];
+          if (freshIds.isNotEmpty) {
+            await consumer.syncFreshMessages(freshIds);
+            coreNoticeRequested = true;
+            final result = await _transport.markNoticedChat(
+              chatId,
+              accountId: account.deltaAccountId,
+            );
+            coreNoticeAccepted = coreNoticeAccepted || result;
+          }
+          reconciledMessageCount += await consumer
+              .reconcileChatReadStateFromCore(chatId);
+        }
+        final freshAfterByChat = await _freshMessageIdsByChatIds(
+          accountId: account.deltaAccountId,
+          chatIds: chatIds,
+        );
+        final freshAfterCount = freshAfterByChat.values.fold<int>(
+          0,
+          (sum, ids) => sum + ids.length,
+        );
+        final status = freshBeforeCount == 0
+            ? EmailChatNoticeSyncStatus.alreadyNoFresh
+            : freshAfterCount == 0
+            ? EmailChatNoticeSyncStatus.freshCleared
+            : freshAfterCount < freshBeforeCount
+            ? EmailChatNoticeSyncStatus.partial
+            : EmailChatNoticeSyncStatus.failed;
+        syncResult = EmailChatNoticeSyncResult(
+          status: status,
+          deltaAccountId: account.deltaAccountId,
+          chatIds: chatIds,
+          freshBeforeCount: freshBeforeCount,
+          freshAfterCount: freshAfterCount,
+          reconciledMessageCount: reconciledMessageCount,
+          coreNoticeRequested: coreNoticeRequested,
+          coreNoticeAccepted: coreNoticeAccepted,
+        );
+      });
+      return syncResult;
+    } on EmailProvisioningException catch (error, stackTrace) {
+      _log.fine('Email noticed sync failed.', error, stackTrace);
+      return const EmailChatNoticeSyncResult(
+        status: EmailChatNoticeSyncStatus.failed,
+      );
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Email noticed sync failed.', error, stackTrace);
+      return const EmailChatNoticeSyncResult(
+        status: EmailChatNoticeSyncStatus.failed,
+      );
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Email noticed sync failed.', error, stackTrace);
+      return const EmailChatNoticeSyncResult(
+        status: EmailChatNoticeSyncStatus.failed,
+      );
+    }
   }
 
   /// Marks messages as seen, triggering MDN if enabled.
@@ -7768,13 +9763,26 @@ class EmailService {
   Future<bool> markSeenMessages(
     List<Message> messages, {
     required bool sendReadReceipts,
+  }) async => (await syncSeenMessages(
+    messages,
+    sendReadReceipts: sendReadReceipts,
+  )).terminalSuccess;
+
+  Future<EmailMessageSeenSyncResult> syncSeenMessages(
+    List<Message> messages, {
+    required bool sendReadReceipts,
   }) async {
     try {
-      var success = true;
+      var syncResult = const EmailMessageSeenSyncResult(
+        status: EmailMessageSeenSyncStatus.unresolved,
+      );
       await _readStateQueue.run(() async {
         await _mdnConfigQueue.run(() async {
           await _ensureReady();
           if (_blocksRuntimeReentry) {
+            syncResult = const EmailMessageSeenSyncResult(
+              status: EmailMessageSeenSyncStatus.failed,
+            );
             return;
           }
           final candidates = await _trackAppDatabaseOperation(() async {
@@ -7788,8 +9796,12 @@ class EmailService {
             candidates,
           );
           if (idsByAccount.isEmpty) {
+            syncResult = const EmailMessageSeenSyncResult(
+              status: EmailMessageSeenSyncStatus.unresolved,
+            );
             return;
           }
+          var transportAcceptedCount = 0;
           try {
             await _applyEmailReadReceiptPreference(
               accountIds: idsByAccount.keys,
@@ -7800,8 +9812,8 @@ class EmailService {
                 entry.value,
                 accountId: entry.key,
               );
-              if (!result) {
-                success = false;
+              if (result) {
+                transportAcceptedCount += entry.value.length;
               }
             }
           } finally {
@@ -7810,19 +9822,128 @@ class EmailService {
               enabled: _emailReadReceiptsEnabled,
             );
           }
+          syncResult = await _verifySeenMessagesByAccount(
+            idsByAccount,
+            transportAcceptedCount: transportAcceptedCount,
+          );
         });
       });
-      return success;
+      return syncResult;
     } on DeltaChatException catch (error, stackTrace) {
       _log.fine('Email unread sync failed.', error, stackTrace);
-      return false;
+      return const EmailMessageSeenSyncResult(
+        status: EmailMessageSeenSyncStatus.failed,
+      );
+    } on EmailProvisioningException catch (error, stackTrace) {
+      _log.fine('Email unread sync failed.', error, stackTrace);
+      return const EmailMessageSeenSyncResult(
+        status: EmailMessageSeenSyncStatus.failed,
+      );
     } on EmailServiceStoppingException catch (error, stackTrace) {
       _log.fine('Email unread sync failed.', error, stackTrace);
-      return false;
+      return const EmailMessageSeenSyncResult(
+        status: EmailMessageSeenSyncStatus.failed,
+      );
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Email unread sync failed.', error, stackTrace);
+      return const EmailMessageSeenSyncResult(
+        status: EmailMessageSeenSyncStatus.failed,
+      );
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Email unread sync failed.', error, stackTrace);
+      return const EmailMessageSeenSyncResult(
+        status: EmailMessageSeenSyncStatus.failed,
+      );
     } on StateError catch (error, stackTrace) {
       _log.fine('Email unread sync failed.', error, stackTrace);
-      return false;
+      return const EmailMessageSeenSyncResult(
+        status: EmailMessageSeenSyncStatus.failed,
+      );
     }
+  }
+
+  Future<Map<int, List<int>>> _freshMessageIdsByChatIds({
+    required int accountId,
+    required Iterable<int> chatIds,
+  }) async {
+    final chatIdSet = chatIds.where((id) => id > 0).toSet();
+    if (chatIdSet.isEmpty) {
+      return const <int, List<int>>{};
+    }
+    final freshIds = await _transport.getFreshMessageIds(accountId: accountId);
+    if (freshIds.isEmpty) {
+      return const <int, List<int>>{};
+    }
+    final freshIdsByChat = <int, List<int>>{};
+    for (final freshId in freshIds) {
+      if (freshId <= DeltaMessageId.none) {
+        continue;
+      }
+      final message = await _transport.getMessage(
+        freshId,
+        accountId: accountId,
+      );
+      if (message == null || !chatIdSet.contains(message.chatId)) {
+        continue;
+      }
+      freshIdsByChat.putIfAbsent(message.chatId, () => <int>[]).add(freshId);
+    }
+    return {
+      for (final entry in freshIdsByChat.entries)
+        if (entry.value.isNotEmpty)
+          entry.key: List<int>.unmodifiable(entry.value),
+    };
+  }
+
+  Future<EmailMessageSeenSyncResult> _verifySeenMessagesByAccount(
+    Map<int, List<int>> idsByAccount, {
+    required int transportAcceptedCount,
+  }) async {
+    var submittedCount = 0;
+    var verifiedSeenCount = 0;
+    var notFreshButNotSeenCount = 0;
+    var unresolvedCount = 0;
+    for (final entry in idsByAccount.entries) {
+      for (final deltaId in entry.value) {
+        submittedCount += 1;
+        final message = await _transport.getMessage(
+          deltaId,
+          accountId: entry.key,
+        );
+        if (message == null || message.state == null) {
+          unresolvedCount += 1;
+          continue;
+        }
+        if (!message.isOutgoing && message.state == DeltaMessageState.inSeen) {
+          verifiedSeenCount += 1;
+          continue;
+        }
+        if (!message.isOutgoing &&
+            message.state == DeltaMessageState.inNoticed) {
+          notFreshButNotSeenCount += 1;
+        }
+      }
+    }
+    final status = submittedCount == 0
+        ? EmailMessageSeenSyncStatus.unresolved
+        : verifiedSeenCount == submittedCount
+        ? transportAcceptedCount == 0
+              ? EmailMessageSeenSyncStatus.alreadySeen
+              : EmailMessageSeenSyncStatus.verifiedSeen
+        : verifiedSeenCount > 0
+        ? EmailMessageSeenSyncStatus.partial
+        : notFreshButNotSeenCount == submittedCount
+        ? EmailMessageSeenSyncStatus.notFreshButNotSeen
+        : unresolvedCount > 0
+        ? EmailMessageSeenSyncStatus.unresolved
+        : EmailMessageSeenSyncStatus.failed;
+    return EmailMessageSeenSyncResult(
+      status: status,
+      submittedCount: submittedCount,
+      verifiedSeenCount: verifiedSeenCount,
+      unresolvedCount: unresolvedCount,
+      transportAcceptedCount: transportAcceptedCount,
+    );
   }
 
   Future<List<Message>> _seenMessageCandidatesForMessages({
@@ -7852,7 +9973,9 @@ class EmailService {
     if (messages.isEmpty) {
       return const {};
     }
-    final validAccounts = (await _transport.accountIds()).toSet();
+    final validAccounts = _usableDeltaAccountIds(
+      await _transport.accountIds(),
+    ).toSet();
     final idsByAccount = <int, LinkedHashSet<int>>{};
     for (final message in messages) {
       final deltaId = message.deltaMsgId;
@@ -7981,31 +10104,66 @@ class EmailService {
       return false;
     }
     await _ensureReady();
-    final idsByAccount = await _deltaIdsByResolvedAccountForMessages(
-      deltaMessages,
-    );
+    final validAccounts = _usableDeltaAccountIds(
+      await _transport.accountIds(),
+    ).toSet();
+    final idsByAccount = <int, LinkedHashSet<int>>{};
+    final stanzaIdsByAccount = <int, Map<int, String>>{};
+    var unresolved = false;
+    for (final message in deltaMessages) {
+      final deltaId = message.deltaMsgId;
+      if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
+        unresolved = true;
+        continue;
+      }
+      final storedAccountId = message.deltaAccountId;
+      final accountId = validAccounts.contains(storedAccountId)
+          ? storedAccountId
+          : await _resolveDeltaAccountIdForStoredMessage(
+              message,
+              activeAccountIds: validAccounts.toList(growable: false),
+            );
+      if (accountId == null) {
+        unresolved = true;
+        continue;
+      }
+      idsByAccount.putIfAbsent(accountId, LinkedHashSet<int>.new).add(deltaId);
+      final stanzaId = message.stanzaID.trim();
+      if (stanzaId.isNotEmpty) {
+        stanzaIdsByAccount
+            .putIfAbsent(accountId, () => <int, String>{})
+            .putIfAbsent(deltaId, () => stanzaId);
+      }
+    }
     if (idsByAccount.isEmpty) {
       return false;
     }
-    var success = true;
+    var success = !unresolved;
+    final deletedStanzaIds = <String>{};
     for (final entry in idsByAccount.entries) {
+      final messageIds = entry.value.toList(growable: false);
       final result = await _transport.deleteMessages(
-        entry.value,
+        messageIds,
         accountId: entry.key,
       );
       if (!result) {
         success = false;
+        continue;
+      }
+      final stanzaIds = stanzaIdsByAccount[entry.key];
+      if (stanzaIds == null) {
+        continue;
+      }
+      for (final messageId in messageIds) {
+        final stanzaId = stanzaIds[messageId];
+        if (stanzaId != null) {
+          deletedStanzaIds.add(stanzaId);
+        }
       }
     }
-    if (success) {
+    if (deletedStanzaIds.isNotEmpty) {
       final db = await _databaseBuilder();
-      final stanzaIds = deltaMessages
-          .map((message) => message.stanzaID.trim())
-          .where((stanzaId) => stanzaId.isNotEmpty)
-          .toSet();
-      if (stanzaIds.isNotEmpty) {
-        await db.deleteMessagesByStanzaIds(stanzaIds);
-      }
+      await db.deleteMessagesByStanzaIds(deletedStanzaIds);
     }
     return success;
   }
@@ -8260,18 +10418,32 @@ class EmailService {
     return _transport.getMessageFullHtml(deltaId, accountId: accountId);
   }
 
-  Future<int?> _resolveDeltaAccountIdForStoredMessage(Message message) async {
+  Future<int?> _resolveDeltaAccountIdForStoredMessage(
+    Message message, {
+    List<int>? activeAccountIds,
+  }) async {
     final deltaId = message.deltaMsgId;
     if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
       return null;
     }
-    final accountIds = await _transport.accountIds();
+    final accountIds =
+        activeAccountIds ??
+        _usableDeltaAccountIds(await _transport.accountIds());
     final storedAccountId = message.deltaAccountId;
+    final storedOrigin = normalizeEmailMessageId(message.originID);
     if (accountIds.contains(storedAccountId)) {
-      if (!await _deltaMessageMatchesStoredLocator(
+      final candidate = await _loadDeltaMessageForStoredLocator(
         message: message,
         deltaAccountId: storedAccountId,
-      )) {
+      );
+      if (candidate == null) {
+        return null;
+      }
+      if (storedOrigin == null &&
+          !_deltaMessageMatchesStoredChat(
+            message: message,
+            deltaMessage: candidate,
+          )) {
         return null;
       }
       if (await _deltaMessageHasConflictingStoredOrigin(
@@ -8292,20 +10464,22 @@ class EmailService {
       );
       return null;
     }
-    final storedOrigin = normalizeEmailMessageId(message.originID);
-    if (storedOrigin == null) {
-      _log.fine(
-        'Stored message ${message.stanzaID} account id $storedAccountId '
-        'is unavailable without origin proof.',
-      );
-      return null;
-    }
     final matches = <int>[];
     for (final accountId in accountIds) {
-      if (!await _deltaMessageMatchesStoredLocator(
+      final candidate = await _loadDeltaMessageForStoredLocator(
         message: message,
         deltaAccountId: accountId,
-      )) {
+      );
+      if (candidate == null) {
+        continue;
+      }
+      if (storedOrigin == null) {
+        if (_deltaMessageMatchesStoredChat(
+          message: message,
+          deltaMessage: candidate,
+        )) {
+          matches.add(accountId);
+        }
         continue;
       }
       final candidateOrigin = await _resolveDeltaMessageOriginId(
@@ -8352,38 +10526,40 @@ class EmailService {
     return candidateOrigin != null && candidateOrigin != storedOrigin;
   }
 
-  Future<bool> _deltaMessageMatchesStoredLocator({
+  Future<DeltaMessage?> _loadDeltaMessageForStoredLocator({
     required Message message,
     required int deltaAccountId,
   }) async {
     final deltaId = message.deltaMsgId;
     if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
-      return false;
+      return null;
     }
-    DeltaMessage? deltaMessage;
     try {
-      deltaMessage = await _transport.getMessage(
-        deltaId,
-        accountId: deltaAccountId,
-      );
+      return await _transport.getMessage(deltaId, accountId: deltaAccountId);
     } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
       _log.fine('Failed to validate Delta message locator.', error, stackTrace);
-      return false;
+      return null;
     } on DeltaSafeException catch (error, stackTrace) {
       _log.fine('Failed to validate Delta message locator.', error, stackTrace);
-      return false;
+      return null;
     } on TimeoutException catch (error, stackTrace) {
       _log.fine(
         'Timed out validating Delta message locator.',
         error,
         stackTrace,
       );
-      return false;
+      return null;
     }
-    if (deltaMessage == null) {
-      return false;
-    }
-    return true;
+  }
+
+  bool _deltaMessageMatchesStoredChat({
+    required Message message,
+    required DeltaMessage deltaMessage,
+  }) {
+    final deltaChatId = message.deltaChatId;
+    return deltaChatId != null &&
+        deltaChatId > DeltaChatId.lastSpecial &&
+        deltaMessage.chatId == deltaChatId;
   }
 
   Future<String?> _resolveDeltaMessageOriginId({
@@ -8490,6 +10666,137 @@ class EmailService {
       return null;
     }
     return _transport.getMessageRfc822Body(deltaId, accountId: accountId);
+  }
+
+  Future<bool> hydrateStoredRfc822BodyContent(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) return false;
+    if (message.hasRfc822BodyContent) return false;
+    if (message.rfc822BodyContentUnavailable) return false;
+    final traceId = _nextTraceId('email.rfc822BodyHydration');
+    final watch = Stopwatch()..start();
+    _traceEmailOperation(
+      'email.rfc822BodyHydration',
+      'start',
+      id: traceId,
+      fields: <String, Object?>{
+        'deltaMsgId': deltaId,
+        'storedAccountId': message.deltaAccountId,
+      },
+    );
+    await _ensureReady();
+    final accountId = await _resolveDeltaAccountIdForStoredMessage(message);
+    if (accountId == null) {
+      _traceEmailOperation(
+        'email.rfc822BodyHydration',
+        'end',
+        id: traceId,
+        fields: <String, Object?>{
+          'result': 'missingAccount',
+          'elapsedMs': watch.elapsedMilliseconds,
+        },
+      );
+      return false;
+    }
+    final rfc822Body = await _transport.getMessageRfc822Body(
+      deltaId,
+      accountId: accountId,
+    );
+    var result = 'missingStoredMessage';
+    var stored = false;
+    await _trackAppDatabaseOperation(() async {
+      final db = await _databaseBuilder();
+      final current = await db.getMessageByStanzaID(message.stanzaID);
+      if (current == null) {
+        return;
+      }
+      if (current.hasRfc822BodyContent) {
+        result = 'alreadyStored';
+        return;
+      }
+      if (current.rfc822BodyContentUnavailable) {
+        result = 'alreadyUnavailable';
+        return;
+      }
+      final updated = _messageWithRfc822BodyContent(
+        message: current,
+        rfc822Body: rfc822Body,
+      );
+      await db.updateMessage(updated);
+      stored = updated.hasRfc822BodyContent;
+      result = stored ? 'stored' : 'missingBody';
+    });
+    _traceEmailOperation(
+      'email.rfc822BodyHydration',
+      'end',
+      id: traceId,
+      fields: <String, Object?>{
+        'result': result,
+        'accountId': accountId,
+        'hasPlainText': rfc822Body?.plainText?.trim().isNotEmpty == true,
+        'hasHtml': rfc822Body?.htmlBody?.trim().isNotEmpty == true,
+        'elapsedMs': watch.elapsedMilliseconds,
+      },
+    );
+    return stored;
+  }
+
+  Message _messageWithRfc822BodyContent({
+    required Message message,
+    required DeltaMessageRfc822Body? rfc822Body,
+  }) {
+    if (rfc822Body == null || !rfc822Body.hasBody) {
+      return message.copyWith(
+        rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
+        pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
+      );
+    }
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(rfc822Body.htmlBody);
+    final visibleHtmlText = _visibleEmailHtmlText(normalizedHtml);
+    final plainBody = clampMessageText(rfc822Body.plainText)?.trim();
+    final safePlainBody =
+        plainBody?.isNotEmpty == true &&
+            !HtmlContentCodec.looksLikeCssBodyText(plainBody!)
+        ? plainBody
+        : null;
+    final resolvedBody = safePlainBody ?? visibleHtmlText ?? '';
+    if (safePlainBody == null &&
+        normalizedHtml == null &&
+        HtmlContentCodec.normalizeHtml(message.htmlBody) != null) {
+      return message.copyWith(
+        rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
+        pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
+      );
+    }
+    final hasRenderableHtml =
+        normalizedHtml != null &&
+        (visibleHtmlText?.isNotEmpty == true ||
+            HtmlContentCodec.containsRenderableRemoteImages(normalizedHtml));
+    if (resolvedBody.isEmpty && !hasRenderableHtml) {
+      return message.copyWith(
+        rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
+        pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
+      );
+    }
+    return message.copyWith(
+      body: resolvedBody.isEmpty ? null : resolvedBody,
+      htmlBody: hasRenderableHtml ? normalizedHtml : null,
+      rfc822BodyStatus: EmailRfc822BodyStatus.hydrated,
+      pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
+    );
+  }
+
+  String? _visibleEmailHtmlText(String? html) {
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+    if (normalizedHtml == null) {
+      return null;
+    }
+    final preparedHtml = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+      normalizedHtml,
+      allowRemoteImages: false,
+    );
+    final visibleText = HtmlContentCodec.toPlainText(preparedHtml).trim();
+    return visibleText.isEmpty ? null : visibleText;
   }
 
   /// Saves a draft to core.
@@ -8763,11 +11070,15 @@ final class _EmailCredentialRuntimeSession {
   EmailAccount? sessionCredentials;
   String? activeCredentialScope;
 
-  bool get hasActiveSession =>
+  bool get hasRuntimeCredentials =>
       databasePrefix != null && databasePassphrase != null;
 
-  bool get hasInMemoryReconnectContext =>
-      hasActiveSession && activeCredentialScope != null;
+  bool get hasActiveSession =>
+      hasRuntimeCredentials &&
+      activeCredentialScope != null &&
+      activeAccount != null;
+
+  bool get hasInMemoryReconnectContext => hasActiveSession;
 
   _EmailCredentialScopeState scopeState(String scope) {
     return _scopes.putIfAbsent(

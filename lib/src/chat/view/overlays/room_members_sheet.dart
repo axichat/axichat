@@ -1263,7 +1263,8 @@ bool _isMucInviteEligibleChat(
 }
 
 bool _isMucInviteEligibleTarget(Contact target, {required String? domain}) {
-  if (target.usesEmailTransport() || target.isAxichatWelcomeThread) {
+  if ((target.configuredTransport?.isEmail ?? false) ||
+      target.isAxichatWelcomeThread) {
     return false;
   }
   return _isMucInviteEligibleAddress(target.bareRemoteAddress, domain: domain);

@@ -580,6 +580,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatComposerSendFailed => '消息发送失败，请重试。';
 
   @override
+  String get chatComposerPartialSendWarning => '部分收件人或内容未发送。重新发送可能会重复已送达的内容。';
+
+  @override
   String get chatComposerAttachmentBundleFailed => '无法打包附件，请重试。';
 
   @override
@@ -823,7 +826,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftSendFailed => '草稿发送失败。';
 
   @override
-  String get draftPartialSendNotice => '部分收件人未发送成功。已发送的收件人已移除；请重试剩余收件人。';
+  String get draftPartialSendNotice => '部分收件人或内容未发送。重新发送可能会重复已送达的内容。';
 
   @override
   String get draftSent => '已发送';
@@ -3596,6 +3599,43 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarCriticalPathDragHint => '拖动任务以重新排序';
 
   @override
+  String get calendarTaskDragShowcaseTitle => '拖动任务';
+
+  @override
+  String get calendarTaskDragShowcaseDescription =>
+      '将任务拖到网格可安排时间，拖到列表可移动或重新排序，拖到屏幕边缘可切换页面，拖到底部栏可切换视图。';
+
+  @override
+  String get calendarTaskDragHoldShowcaseTitle => '按住以拖动';
+
+  @override
+  String get calendarTaskDragHoldShowcaseDescription => '按住任务即可开始拖动。';
+
+  @override
+  String get calendarTaskDragGridDropTipTitle => '安排任务';
+
+  @override
+  String get calendarTaskDragGridDropTipDescription => '放到网格中即可安排任务时间。';
+
+  @override
+  String get calendarTaskDragListDropTipTitle => '移动任务';
+
+  @override
+  String get calendarTaskDragListDropTipDescription => '放到列表中即可移动或重新排序任务。';
+
+  @override
+  String get calendarTaskDragPageEdgeTipTitle => '切换页面';
+
+  @override
+  String get calendarTaskDragPageEdgeTipDescription => '拖到网格边缘即可切换页面。';
+
+  @override
+  String get calendarTaskDragBottomBarTipTitle => '切换视图';
+
+  @override
+  String get calendarTaskDragBottomBarTipDescription => '拖到底部栏即可在日程和任务列表之间切换。';
+
+  @override
   String get calendarCriticalPathEmptyTasks => '此路径中暂时没有任务';
 
   @override
@@ -6235,6 +6275,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageDetailsOccupantIdLabel => '成员 ID';
 
   @override
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
+
+  @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta 消息 ID';
 
   @override
@@ -7412,6 +7455,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatComposerSendFailed => '無法傳送訊息。請再試一次。';
 
   @override
+  String get chatComposerPartialSendWarning => '部分收件人或內容未傳送。重新傳送可能會重複已送達的內容。';
+
+  @override
   String get chatComposerAttachmentBundleFailed => '無法打包附件，請再試一次。';
 
   @override
@@ -7655,7 +7701,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get draftSendFailed => '無法傳送草稿。';
 
   @override
-  String get draftPartialSendNotice => '部分收件人未成功傳送。已傳送的收件人已移除；請重試剩餘收件人。';
+  String get draftPartialSendNotice => '部分收件人或內容未傳送。重新傳送可能會重複已送達的內容。';
 
   @override
   String get draftSent => '已傳送';
@@ -10429,6 +10475,43 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get calendarCriticalPathDragHint => '拖曳任務以重新排序';
+
+  @override
+  String get calendarTaskDragShowcaseTitle => '拖曳任務';
+
+  @override
+  String get calendarTaskDragShowcaseDescription =>
+      '將任務拖到網格可安排時間，拖到列表可移動或重新排序，拖到螢幕邊緣可切換頁面，拖到底部列可切換檢視。';
+
+  @override
+  String get calendarTaskDragHoldShowcaseTitle => '按住以拖曳';
+
+  @override
+  String get calendarTaskDragHoldShowcaseDescription => '按住任務即可開始拖曳。';
+
+  @override
+  String get calendarTaskDragGridDropTipTitle => '安排任務';
+
+  @override
+  String get calendarTaskDragGridDropTipDescription => '放到網格中即可安排任務時間。';
+
+  @override
+  String get calendarTaskDragListDropTipTitle => '移動任務';
+
+  @override
+  String get calendarTaskDragListDropTipDescription => '放到列表中即可移動或重新排序任務。';
+
+  @override
+  String get calendarTaskDragPageEdgeTipTitle => '切換頁面';
+
+  @override
+  String get calendarTaskDragPageEdgeTipDescription => '拖到網格邊緣即可切換頁面。';
+
+  @override
+  String get calendarTaskDragBottomBarTipTitle => '切換檢視';
+
+  @override
+  String get calendarTaskDragBottomBarTipDescription => '拖到底部列即可在日程和任務列表之間切換。';
 
   @override
   String get calendarCriticalPathEmptyTasks => '此路徑中暫時沒有任務';

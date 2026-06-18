@@ -6,7 +6,7 @@ final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
 );
 const _composerOverlaySpacerMessageId = '__composer_overlay_spacer__';
 const _emptyStateMessageId = '__empty_state__';
-const _unreadDividerMessageId = '__unread_divider__';
+const _unreadDividerMessageId = ChatBloc.unreadDividerScrollTargetMessageId;
 
 class _ChatTopPanelVisibility extends StatelessWidget {
   const _ChatTopPanelVisibility({required this.visible, this.child});
@@ -336,7 +336,7 @@ class _ChatScaffoldBody extends StatelessWidget {
   final bool roomBootstrapInProgress;
   final bool roomJoinFailed;
   final RoomState? roomJoinFailureState;
-  final Map<String, FanOutRecipientState> latestStatuses;
+  final Map<ComposerRecipientKey, FanOutRecipientState> latestStatuses;
   final bool canRenameContact;
   final bool isChatBlocked;
   final BlocklistEntry? chatBlocklistEntry;
@@ -351,6 +351,150 @@ class _ChatScaffoldBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Builder(
       builder: (context) {
+        final loadingMessages = !state.messagesLoaded;
+        final attachmentsByMessageId = loadingMessages
+            ? const <String, List<String>>{}
+            : state.attachmentMetadataIdsByMessageId;
+        final groupLeaderByMessageId = loadingMessages
+            ? const <String, String>{}
+            : state.attachmentGroupLeaderByMessageId;
+        if (!loadingMessages) {
+          owner._ensureMessageCaches(
+            items: state.items,
+            quotedMessagesById: state.quotedMessagesById,
+            searchResults: searchResults ?? const <Message>[],
+            searchFiltering: searchFiltering,
+            attachmentsByMessageId: attachmentsByMessageId,
+            groupLeaderByMessageId: groupLeaderByMessageId,
+            emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+          );
+        }
+        final messageById = loadingMessages
+            ? const <String, Message>{}
+            : owner._cachedMessageById;
+        const emptyAttachments = <String>[];
+
+        String messageKey(Message message) => message.id ?? message.stanzaID;
+
+        List<String> attachmentsForMessage(Message message) {
+          final key = messageKey(message);
+          return attachmentsByMessageId[key] ?? emptyAttachments;
+        }
+
+        final filteredItems = loadingMessages
+            ? const <Message>[]
+            : owner._cachedFilteredItems;
+        final availabilityCoordinator = loadingMessages
+            ? null
+            : _readAvailabilityShareCoordinator(
+                context,
+                calendarAvailable: chatCalendarAvailable,
+              );
+        final availabilityShareOwnersById = <String, String>{};
+        if (!loadingMessages) {
+          for (final item in filteredItems) {
+            final availabilityMessage = item.calendarAvailabilityMessage;
+            if (availabilityMessage == null) {
+              continue;
+            }
+            availabilityMessage.maybeMap(
+              share: (value) {
+                final ownerJid = value.share.overlay.owner;
+                final isValid = item.senderMatchesClaimedJid(ownerJid);
+                if (isValid) {
+                  availabilityShareOwnersById[value.share.id] = ownerJid;
+                }
+              },
+              orElse: () {},
+            );
+          }
+        }
+        final isEmailChat = state.chat?.defaultTransport.isEmail == true;
+        final inviteLifecycle = loadingMessages
+            ? (
+                revokedInviteTokens: const <String>{},
+                acceptedInviteTokens: const <String>{},
+              )
+            : resolveActiveInviteLifecycleTokens(
+                messages: owner._cachedItems ?? const <Message>[],
+                searchResults: searchResults ?? const <Message>[],
+                searchFiltering: searchFiltering,
+              );
+        final xmppCapabilities = state.xmppCapabilities;
+        final supportsMarkers =
+            isEmailChat || xmppCapabilities?.supportsMarkers == true;
+        final supportsReceipts =
+            isEmailChat || xmppCapabilities?.supportsReceipts == true;
+        final timelineItems = loadingMessages
+            ? const <ChatTimelineItem>[]
+            : buildMainChatTimelineItems(
+                messages: filteredItems,
+                loadingMessages: loadingMessages,
+                unreadBoundaryStanzaId: state.unreadBoundaryStanzaId,
+                emptyStateCreatedAt: _selectionSpacerTimestamp,
+                unreadDividerItemId: _unreadDividerMessageId,
+                unreadDividerLabel: context.l10n.chatUnreadDividerLabel,
+                emptyStateItemId: _emptyStateMessageId,
+                emptyStateLabel: searchFiltering
+                    ? context.l10n.chatEmptySearch
+                    : context.l10n.chatEmptyMessages,
+                pendingEmailContentLabel:
+                    context.l10n.accessibilityLoadingLabel,
+                unavailableEmailContentLabel:
+                    context.l10n.messageErrorServiceUnavailable,
+                emailEncryptionStatusLabel:
+                    context.l10n.chatEmailEncryptionStatusLabel,
+                deriveEmailHtmlIfMissing: false,
+                isGroupChat: isGroupChat,
+                isEmailChat: isEmailChat,
+                staleUnackedCutoff: DateTime.timestamp().subtract(
+                  XmppStreamManagementManager.ackTimeoutDuration,
+                ),
+                profileJid: profileJid,
+                resolvedEmailSelfJid: resolvedEmailSelfJid,
+                currentUserId: currentUserId,
+                selfUserId: user.id,
+                selfDisplayName: user.firstName ?? '',
+                selfAvatarPath: selfAvatarPath,
+                myOccupantJid: myOccupantJid,
+                selfNick: selfNick,
+                roomState: state.roomState,
+                roomMemberSections: state.roomMemberSections,
+                chat: state.chat,
+                messageById: messageById,
+                shareContexts: shareContexts,
+                shareReplies: shareReplies,
+                emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+                emailFullHtmlUnavailable: state.emailFullHtmlUnavailable,
+                revokedInviteTokens: inviteLifecycle.revokedInviteTokens,
+                acceptedInviteTokens: inviteLifecycle.acceptedInviteTokens,
+                inviteRoomFallbackLabel:
+                    context.l10n.chatInviteRoomFallbackLabel,
+                inviteBodyLabel: context.l10n.chatInviteBodyLabel,
+                inviteRevokedBodyLabel: context.l10n.chatInviteRevokedLabel,
+                inviteAcceptedBodyLabel: context.l10n.chatInviteAcceptedLabel,
+                unknownAuthorLabel: context.l10n.commonUnknownLabel,
+                inviteActionLabel: context.l10n.chatInviteActionLabel,
+                supportsMarkers: supportsMarkers,
+                supportsReceipts: supportsReceipts,
+                attachmentsForMessage: attachmentsForMessage,
+                reactionPreviewsForMessage: owner._reactionPreviewsForMessage,
+                participantsForBanner: owner._participantsForBanner,
+                avatarPathForBareJid: avatarPathForBareJid,
+                ownerJidForShare: (shareId) =>
+                    availabilityShareOwnersById[shareId] ??
+                    availabilityCoordinator?.ownerJidForShare(shareId),
+                errorLabel: (error) => error.label(context.l10n),
+                errorLabelWithBody: (error, body) => context.l10n
+                    .chatMessageErrorWithBody(error.label(context.l10n), body),
+              );
+        final focusedMessage = state.focused;
+        final focusedTimelineMessageItem = focusedMessage == null
+            ? null
+            : timelineItems
+                  .whereType<ChatTimelineMessageItem>()
+                  .where((item) => item.id == focusedMessage.stanzaID)
+                  .firstOrNull;
         final chatMainBody = Column(
           children: [
             _ChatTopPanelVisibility(
@@ -394,28 +538,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                         ((state.roomState?.myRole.canManagePins ?? false) ||
                             (state.roomState?.myAffiliation.canManagePins ??
                                 false));
-                    final loadingMessages = !state.messagesLoaded;
-                    final attachmentsByMessageId = loadingMessages
-                        ? const <String, List<String>>{}
-                        : state.attachmentMetadataIdsByMessageId;
-                    final groupLeaderByMessageId = loadingMessages
-                        ? const <String, String>{}
-                        : state.attachmentGroupLeaderByMessageId;
-                    if (!loadingMessages) {
-                      owner._ensureMessageCaches(
-                        items: state.items,
-                        quotedMessagesById: state.quotedMessagesById,
-                        searchResults: searchResults ?? const <Message>[],
-                        searchFiltering: searchFiltering,
-                        attachmentsByMessageId: attachmentsByMessageId,
-                        groupLeaderByMessageId: groupLeaderByMessageId,
-                        emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
-                      );
-                    }
-                    final messageById = loadingMessages
-                        ? const <String, Message>{}
-                        : owner._cachedMessageById;
-                    const emptyAttachments = <String>[];
                     final importantMessageIds = loadingMessages
                         ? const <String>{}
                         : context.select<FoldersCubit, Set<String>>((cubit) {
@@ -428,14 +550,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                                 .where((value) => value.isNotEmpty)
                                 .toSet();
                           });
-
-                    String messageKey(Message message) =>
-                        message.id ?? message.stanzaID;
-
-                    List<String> attachmentsForMessage(Message message) {
-                      final key = messageKey(message);
-                      return attachmentsByMessageId[key] ?? emptyAttachments;
-                    }
 
                     bool isPinnedMessage(Message message) {
                       return message.referenceIds.any(
@@ -471,40 +585,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                       );
                     }
 
-                    final filteredItems = loadingMessages
-                        ? const <Message>[]
-                        : owner._cachedFilteredItems;
-                    final availabilityCoordinator = loadingMessages
-                        ? null
-                        : _readAvailabilityShareCoordinator(
-                            context,
-                            calendarAvailable: chatCalendarAvailable,
-                          );
-                    final availabilityShareOwnersById = <String, String>{};
-                    if (!loadingMessages) {
-                      for (final item in filteredItems) {
-                        final availabilityMessage =
-                            item.calendarAvailabilityMessage;
-                        if (availabilityMessage == null) {
-                          continue;
-                        }
-                        availabilityMessage.maybeMap(
-                          share: (value) {
-                            final ownerJid = value.share.overlay.owner;
-                            final isValid = item.senderMatchesClaimedJid(
-                              ownerJid,
-                            );
-                            if (isValid) {
-                              availabilityShareOwnersById[value.share.id] =
-                                  ownerJid;
-                            }
-                          },
-                          orElse: () {},
-                        );
-                      }
-                    }
-                    final isEmailChat =
-                        state.chat?.defaultTransport.isEmail == true;
                     final selectedMessages = loadingMessages
                         ? const <Message>[]
                         : owner._collectSelectedMessages(filteredItems);
@@ -548,102 +628,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                       outboundClampedBubbleWidth + selectionOuterInset,
                     );
                     final messageRowMaxWidth = rawContentWidth;
-                    final inviteLifecycle = loadingMessages
-                        ? (
-                            revokedInviteTokens: const <String>{},
-                            acceptedInviteTokens: const <String>{},
-                          )
-                        : resolveActiveInviteLifecycleTokens(
-                            messages: owner._cachedItems ?? const <Message>[],
-                            searchResults: searchResults ?? const <Message>[],
-                            searchFiltering: searchFiltering,
-                          );
                     const pinnedPreviewMessagePrefix = 'pinned-preview:';
-                    final emptyStateLabel = searchFiltering
-                        ? context.l10n.chatEmptySearch
-                        : context.l10n.chatEmptyMessages;
-                    final xmppCapabilities = state.xmppCapabilities;
-                    final supportsMarkers =
-                        isEmailChat ||
-                        xmppCapabilities?.supportsMarkers == true;
-                    final supportsReceipts =
-                        isEmailChat ||
-                        xmppCapabilities?.supportsReceipts == true;
-                    final timelineItems = loadingMessages
-                        ? const <ChatTimelineItem>[]
-                        : buildMainChatTimelineItems(
-                            messages: filteredItems,
-                            loadingMessages: loadingMessages,
-                            unreadBoundaryStanzaId:
-                                state.unreadBoundaryStanzaId,
-                            emptyStateCreatedAt: _selectionSpacerTimestamp,
-                            unreadDividerItemId: _unreadDividerMessageId,
-                            unreadDividerLabel:
-                                context.l10n.chatUnreadDividerLabel,
-                            emptyStateItemId: _emptyStateMessageId,
-                            emptyStateLabel: emptyStateLabel,
-                            pendingEmailContentLabel:
-                                context.l10n.accessibilityLoadingLabel,
-                            unavailableEmailContentLabel:
-                                context.l10n.messageErrorServiceUnavailable,
-                            emailEncryptionStatusLabel:
-                                context.l10n.chatEmailEncryptionStatusLabel,
-                            isGroupChat: isGroupChat,
-                            isEmailChat: isEmailChat,
-                            staleUnackedCutoff: DateTime.timestamp().subtract(
-                              XmppStreamManagementManager.ackTimeoutDuration,
-                            ),
-                            profileJid: profileJid,
-                            resolvedEmailSelfJid: resolvedEmailSelfJid,
-                            currentUserId: currentUserId,
-                            selfUserId: user.id,
-                            selfDisplayName: user.firstName ?? '',
-                            selfAvatarPath: selfAvatarPath,
-                            myOccupantJid: myOccupantJid,
-                            selfNick: selfNick,
-                            roomState: state.roomState,
-                            roomMemberSections: state.roomMemberSections,
-                            chat: state.chat,
-                            messageById: messageById,
-                            shareContexts: shareContexts,
-                            shareReplies: shareReplies,
-                            emailFullHtmlByDeltaId:
-                                state.emailFullHtmlByDeltaId,
-                            emailFullHtmlUnavailable:
-                                state.emailFullHtmlUnavailable,
-                            revokedInviteTokens:
-                                inviteLifecycle.revokedInviteTokens,
-                            acceptedInviteTokens:
-                                inviteLifecycle.acceptedInviteTokens,
-                            inviteRoomFallbackLabel:
-                                context.l10n.chatInviteRoomFallbackLabel,
-                            inviteBodyLabel: context.l10n.chatInviteBodyLabel,
-                            inviteRevokedBodyLabel:
-                                context.l10n.chatInviteRevokedLabel,
-                            inviteAcceptedBodyLabel:
-                                context.l10n.chatInviteAcceptedLabel,
-                            unknownAuthorLabel: context.l10n.commonUnknownLabel,
-                            inviteActionLabel:
-                                context.l10n.chatInviteActionLabel,
-                            supportsMarkers: supportsMarkers,
-                            supportsReceipts: supportsReceipts,
-                            attachmentsForMessage: attachmentsForMessage,
-                            reactionPreviewsForMessage:
-                                owner._reactionPreviewsForMessage,
-                            participantsForBanner: owner._participantsForBanner,
-                            avatarPathForBareJid: avatarPathForBareJid,
-                            ownerJidForShare: (shareId) =>
-                                availabilityShareOwnersById[shareId] ??
-                                availabilityCoordinator?.ownerJidForShare(
-                                  shareId,
-                                ),
-                            errorLabel: (error) => error.label(context.l10n),
-                            errorLabelWithBody: (error, body) =>
-                                context.l10n.chatMessageErrorWithBody(
-                                  error.label(context.l10n),
-                                  body,
-                                ),
-                          );
                     final mainTimelineItems = loadingMessages
                         ? const <ChatTimelineItem>[]
                         : <ChatTimelineItem>[
@@ -653,6 +638,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                             ),
                             ...timelineItems,
                           ];
+                    owner._syncTimelineItems(mainTimelineItems);
                     final locate = context.read;
                     late final MessageListOptions dashMessageListOptions;
                     dashMessageListOptions = MessageListOptions(
@@ -873,6 +859,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                           ),
                           hasTrackedDraft: owner._inlineComposerDraftId != null,
                           sendBlocker: sendBlocker,
+                          sending: state.composerSendStatus.isLoading,
                           actionsEnabled:
                               !owner._savingInlineDraft &&
                               !owner._discardingInlineDraft,
@@ -942,6 +929,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                           composerHasText: owner._composerHasContent,
                           composerMinLines: 1,
                           composerMaxLines: 6,
+                          sending: state.composerSendStatus.isLoading,
                           selfJid: selfXmppJid,
                           selfIdentity: selfIdentity,
                           composerError: null,
@@ -996,10 +984,12 @@ class _ChatScaffoldBody extends StatelessWidget {
                           buildComposerAccessories:
                               ({
                                 required bool canSend,
+                                required bool sending,
                                 required TextEditingController textController,
                                 required FocusNode attachmentButtonFocusNode,
                               }) => owner._composerAccessories(
                                 canSend: canSend,
+                                sending: sending,
                                 attachmentsEnabled: attachmentsEnabled,
                                 textController: textController,
                                 attachmentButtonFocusNode:
@@ -1088,23 +1078,30 @@ class _ChatScaffoldBody extends StatelessWidget {
                       selectionExtrasPreferredMaxWidth:
                           selectionExtrasPreferredMaxWidth,
                       readOnly: readOnly,
+                      active: owner.widget.active,
                       isWelcomeChat: isWelcomeChat,
                       multiSelectActive: owner._multiSelectActive,
                       selectedMessageId: owner._selectedMessageId,
                       normalizedXmppSelfJid: normalizedXmppSelfJid,
                       normalizedEmailSelfJid: normalizedEmailSelfJid,
+                      renderedTimelineMessageIds:
+                          owner._renderedTimelineMessageIds,
                       messageFontSize: settingsState.messageTextSize.fontSize,
                       loadingMessages: loadingMessages,
+                      hideTimelineUntilInitialReadiness: owner
+                          ._initialTimelineReadinessPending(state),
                       mainTimelineItems: mainTimelineItems,
                       messageListOptions: dashMessageListOptions,
                       onRenderedMessagesChanged: (messages) {
-                        locate<ChatBloc>().add(
-                          ChatRenderedMessagesHydrationRequested(messages),
+                        owner._handleRenderedMessagesChanged(
+                          messages,
+                          locate: locate,
                         );
                       },
                       renderedMessagesHydrationKey: (
                         state.emailServiceAvailable,
                         state.emailSelfJid,
+                        owner._completedUnreadDividerScrollRequestId,
                       ),
                       typingVisible: typingVisible,
                       typingAvatars: typingAvatars,
@@ -1121,6 +1118,12 @@ class _ChatScaffoldBody extends StatelessWidget {
                       shareRequestStatus: owner._shareRequestStatus,
                       bubbleRegionRegistry: owner._bubbleRegionRegistry,
                       selectionTapRegionGroup: owner._selectionTapRegionGroup,
+                      unreadDividerKey: owner._unreadDividerKey,
+                      emailWebViewTipKey: owner._emailWebViewTipKey,
+                      emailWebViewTipScope: owner._emailWebViewTipScope,
+                      onTimelineItemMounted: owner._handleTimelineItemMounted,
+                      onTimelineItemUnmounted:
+                          owner._handleTimelineItemUnmounted,
                       messageKeys: owner._messageKeys,
                       bubbleWidthByMessageId: owner._bubbleWidthByMessageId,
                       shouldAnimateMessage: owner._shouldAnimateMessage,
@@ -1218,6 +1221,7 @@ class _ChatScaffoldBody extends StatelessWidget {
           chatEntity: chatEntity,
           calendarAvailable: chatCalendarAvailable,
           state: state,
+          focusedTimelineMessageItem: focusedTimelineMessageItem,
           canRenameContact: canRenameContact,
           isChatBlocked: isChatBlocked,
           chatBlocklistEntry: chatBlocklistEntry,

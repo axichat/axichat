@@ -344,12 +344,7 @@ class XmppConnection extends mox.XmppConnection {
 }
 
 class XmppConnectionSettings extends mox.ConnectionSettings {
-  XmppConnectionSettings({
-    required super.jid,
-    required super.password,
-    super.host,
-    super.port,
-  });
+  XmppConnectionSettings({required super.jid, required super.password});
 }
 
 enum ReconnectTrigger {
@@ -724,20 +719,18 @@ class IOEndpoint {
 }
 
 class XmppConnectivityManager extends mox.ConnectivityManager {
-  XmppConnectivityManager._(
-    this._endpoints, {
+  XmppConnectivityManager.forXmppConnection({
     required String? Function() domainProvider,
+    required this.shouldContinue,
     Duration? pollInterval,
     Duration? waitTimeout,
     @visibleForTesting
     Future<bool> Function(List<IOEndpoint>)? connectivityProbe,
-    this.shouldContinue,
   }) : _domainProvider = domainProvider,
        _connectivityProbe = connectivityProbe,
        _pollInterval = pollInterval ?? _defaultPollInterval,
        _waitTimeout = waitTimeout ?? const Duration(seconds: 5);
 
-  final List<IOEndpoint> _endpoints;
   final String? Function() _domainProvider;
   final Future<bool> Function(List<IOEndpoint>)? _connectivityProbe;
   final Future<bool> Function()? shouldContinue;
@@ -747,22 +740,6 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
 
   static final _log = Logger('XmppConnectivityManager');
   static const Duration _defaultPollInterval = Duration(seconds: 1);
-
-  XmppConnectivityManager.forXmppConnection({
-    required String? Function() domainProvider,
-    required Future<bool> Function() shouldContinue,
-    Duration? pollInterval,
-    Duration? waitTimeout,
-    @visibleForTesting
-    Future<bool> Function(List<IOEndpoint>)? connectivityProbe,
-  }) : this._(
-         const [],
-         domainProvider: domainProvider,
-         pollInterval: pollInterval,
-         waitTimeout: waitTimeout,
-         connectivityProbe: connectivityProbe,
-         shouldContinue: shouldContinue,
-       );
 
   static const timeoutDuration = Duration(seconds: 2);
   static const _offlineErrnos = <int>{
@@ -816,13 +793,9 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   }
 
   List<IOEndpoint> _resolveEndpoints() {
-    final configuredEndpoints = _endpoints;
-    final rawDomain = _domainProvider();
-    if (rawDomain == null) return configuredEndpoints;
-    final domain = rawDomain.trim().toLowerCase();
-    if (domain.isEmpty) return configuredEndpoints;
-    if (configuredEndpoints.isNotEmpty) {
-      return configuredEndpoints;
+    final domain = _domainProvider()?.trim().toLowerCase();
+    if (domain == null || domain.isEmpty) {
+      return const [];
     }
     return [IOEndpoint(domain, EndpointConfig.defaultXmppPort)];
   }

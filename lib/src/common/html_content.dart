@@ -611,6 +611,10 @@ pre, code {
       preparedFlutterHtml: preparedFlutterHtml,
       visibleBodyText: toPlainText(preparedFlutterHtml).trim(),
       containsRemoteImages: containsRenderableRemoteImages(normalizedHtml),
+      containsBlockedWebViewContent: containsBlockedWebViewContent(
+        normalizedHtml,
+      ),
+      containsCidImages: containsCidImages(normalizedHtml),
     );
     _putEmailDerivation(key, derivation);
     return derivation;
@@ -650,16 +654,23 @@ pre, code {
         final preparedFlutterHtml = item['preparedFlutterHtml'];
         final visibleBodyText = item['visibleBodyText'];
         final containsRemoteImages = item['containsRemoteImages'];
+        final containsBlockedWebViewContent =
+            item['containsBlockedWebViewContent'];
+        final containsCidImages = item['containsCidImages'];
         if (normalizedHtml is! String ||
             preparedFlutterHtml is! String ||
             visibleBodyText is! String ||
-            containsRemoteImages is! bool) {
+            containsRemoteImages is! bool ||
+            containsBlockedWebViewContent is! bool ||
+            containsCidImages is! bool) {
           continue;
         }
         _putEmailDerivation(_emailDerivationCacheKey(normalizedHtml), (
           preparedFlutterHtml: preparedFlutterHtml,
           visibleBodyText: visibleBodyText,
           containsRemoteImages: containsRemoteImages,
+          containsBlockedWebViewContent: containsBlockedWebViewContent,
+          containsCidImages: containsCidImages,
         ));
       }
     } finally {
@@ -714,7 +725,9 @@ pre, code {
       key.length +
       utf8.encode(derivation.preparedFlutterHtml).length +
       utf8.encode(derivation.visibleBodyText).length +
-      (derivation.containsRemoteImages ? 1 : 0);
+      (derivation.containsRemoteImages ? 1 : 0) +
+      (derivation.containsBlockedWebViewContent ? 1 : 0) +
+      (derivation.containsCidImages ? 1 : 0);
 
   @visibleForTesting
   static void resetEmailDerivationCacheForTesting() {
@@ -3700,6 +3713,9 @@ List<Map<String, Object>> _deriveEmailHtmlDerivationsForCache(
       'containsRemoteImages': HtmlContentCodec.containsRenderableRemoteImages(
         normalizedHtml,
       ),
+      'containsBlockedWebViewContent':
+          HtmlContentCodec.containsBlockedWebViewContent(normalizedHtml),
+      'containsCidImages': HtmlContentCodec.containsCidImages(normalizedHtml),
     });
   }
   return derivations;
@@ -3709,4 +3725,6 @@ typedef EmailHtmlDerivation = ({
   String preparedFlutterHtml,
   String visibleBodyText,
   bool containsRemoteImages,
+  bool containsBlockedWebViewContent,
+  bool containsCidImages,
 });
