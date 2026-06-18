@@ -58,6 +58,7 @@ class PubSubManager extends mox.PubSubManager {
   static const String _draftsNode = 'urn:axi:drafts';
   static const String _spamNode = 'urn:axi:spam';
   static const String _addressBlockNode = 'urn:axi:address-blocklist';
+  static const String _calendarSnapshotNode = 'urn:axi:calendar:personal';
   static const String _jidAttr = 'jid';
   static const String _subIdAttr = 'subid';
   static const String _subscriptionAttr = 'subscription';
@@ -133,6 +134,7 @@ class PubSubManager extends mox.PubSubManager {
       _draftsNode => XmppOperationKind.pubSubDrafts,
       _spamNode => XmppOperationKind.pubSubSpam,
       _addressBlockNode => XmppOperationKind.pubSubAddressBlock,
+      _calendarSnapshotNode => XmppOperationKind.pubSubCalendarSnapshot,
       mox.userAvatarMetadataXmlns => XmppOperationKind.pubSubAvatarMetadata,
       mox.userAvatarDataXmlns => XmppOperationKind.pubSubAvatarMetadata,
       _ => XmppOperationKind.pubSubFetch,

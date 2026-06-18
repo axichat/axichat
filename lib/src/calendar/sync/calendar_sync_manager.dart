@@ -54,6 +54,9 @@ class CalendarSyncManager {
     required CalendarModel Function() readModel,
     required Future<void> Function(CalendarModel) applyModel,
     required Future<void> Function(CalendarSyncOutbound) sendCalendarMessage,
+    Future<CalendarSnapshotPublishStatus> Function(CalendarModel model)?
+    publishCalendarSnapshot,
+    Future<bool> Function()? refreshCalendarSnapshot,
     Future<void> Function(ChatPrimaryView primaryView)? applyRoomPrimaryView,
     Future<CalendarSnapshotUploadResult> Function(File file)? sendSnapshotFile,
     CalendarSyncState Function()? readSyncState,
@@ -63,6 +66,8 @@ class CalendarSyncManager {
   }) : _readModel = readModel,
        _applyModel = applyModel,
        _sendCalendarMessage = sendCalendarMessage,
+       _publishCalendarSnapshot = publishCalendarSnapshot,
+       _refreshCalendarSnapshot = refreshCalendarSnapshot,
        _applyRoomPrimaryView = applyRoomPrimaryView,
        _sendSnapshotFile = sendSnapshotFile,
        _readSyncState = readSyncState ?? CalendarSyncState.read,
@@ -72,6 +77,9 @@ class CalendarSyncManager {
   final CalendarModel Function() _readModel;
   final Future<void> Function(CalendarModel) _applyModel;
   final Future<void> Function(CalendarSyncOutbound) _sendCalendarMessage;
+  final Future<CalendarSnapshotPublishStatus> Function(CalendarModel model)?
+  _publishCalendarSnapshot;
+  final Future<bool> Function()? _refreshCalendarSnapshot;
   final Future<void> Function(ChatPrimaryView primaryView)?
   _applyRoomPrimaryView;
   final Future<CalendarSnapshotUploadResult> Function(File file)?
@@ -93,15 +101,20 @@ class CalendarSyncManager {
   Future<bool> onCalendarMessage(CalendarSyncInbound inbound) async {
     final message = inbound.message;
     try {
+      final bool applied;
       switch (message.type) {
         case CalendarSyncType.request:
-          return await _handleRequestMessage(message, inbound: inbound);
+          applied = await _handleRequestMessage(message, inbound: inbound);
+          break;
         case CalendarSyncType.full:
-          return await _handleFullMessage(message, inbound: inbound);
+          applied = await _handleFullMessage(message, inbound: inbound);
+          break;
         case CalendarSyncType.update:
-          return await _handleUpdateMessage(message, inbound: inbound);
+          applied = await _handleUpdateMessage(message, inbound: inbound);
+          break;
         case CalendarSyncType.snapshot:
-          return await _handleSnapshotMessage(message, inbound: inbound);
+          applied = await _handleSnapshotMessage(message, inbound: inbound);
+          break;
         default:
           SafeLogging.debugLog(
             'Unknown calendar sync message type: ${message.type}',
@@ -110,6 +123,11 @@ class CalendarSyncManager {
             'Unknown sync message type: ${message.type}',
           );
       }
+      await _publishCurrentSnapshotAfterLegacyInbound(
+        applied: applied,
+        inbound: inbound,
+      );
+      return applied;
     } catch (e) {
       SafeLogging.debugLog(
         'Error handling calendar message: $e',
@@ -193,7 +211,7 @@ class CalendarSyncManager {
         return true;
       }
 
-      final mergedModel = _normalizeModelForSync(
+      final mergedModel = normalizeCalendarModelForSync(
         localModel.mergeWith(remoteModel),
       );
       await _applyModel(mergedModel);
@@ -239,6 +257,16 @@ class CalendarSyncManager {
     required CalendarSyncInbound inbound,
   }) async {
     try {
+      if (_publishCalendarSnapshot != null) {
+        if (inbound.isFromMam) {
+          await _recordHandledMessage(inbound: inbound);
+          return true;
+        }
+        if (await _publishCurrentSnapshot()) {
+          await _recordHandledMessage(inbound: inbound);
+          return true;
+        }
+      }
       await _flushPendingEnvelopes();
       final sent = await _maybeSendSnapshot();
       await _recordHandledMessage(inbound: inbound);
@@ -286,7 +314,7 @@ class CalendarSyncManager {
       SafeLogging.debugLog(
         'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)',
       );
-      final mergedModel = _normalizeModelForSync(
+      final mergedModel = normalizeCalendarModelForSync(
         localModel.mergeWith(remoteModel),
       );
       await _applyModel(mergedModel);
@@ -501,7 +529,7 @@ class CalendarSyncManager {
 
   /// Sends a snapshot if the calendar has content and snapshot sending is available.
   Future<bool> _maybeSendSnapshot({bool allowPendingRetry = true}) async {
-    final CalendarModel model = _normalizeModelForSync(_readModel());
+    final CalendarModel model = normalizeCalendarModelForSync(_readModel());
     if (!model.hasCalendarData) {
       return false;
     }
@@ -672,6 +700,9 @@ class CalendarSyncManager {
 
   /// Send task update to other devices
   Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
+    if (_publishCalendarSnapshot != null && await _publishCurrentSnapshot()) {
+      return;
+    }
     final CalendarTask normalizedTask = _normalizeTaskForSync(task);
     final result = await _queueUpdate(
       payloadId: normalizedTask.id,
@@ -686,6 +717,9 @@ class CalendarSyncManager {
   }
 
   Future<void> sendDayEventUpdate(DayEvent event, String operation) async {
+    if (_publishCalendarSnapshot != null && await _publishCurrentSnapshot()) {
+      return;
+    }
     final DayEvent normalizedEvent = _normalizeDayEventForSync(event);
     final result = await _queueUpdate(
       payloadId: normalizedEvent.id,
@@ -703,6 +737,9 @@ class CalendarSyncManager {
     CalendarJournal journal,
     String operation,
   ) async {
+    if (_publishCalendarSnapshot != null && await _publishCurrentSnapshot()) {
+      return;
+    }
     final CalendarJournal normalizedJournal = _normalizeJournalForSync(journal);
     final result = await _queueUpdate(
       payloadId: normalizedJournal.id,
@@ -721,6 +758,9 @@ class CalendarSyncManager {
     CalendarCriticalPath path,
     String operation,
   ) async {
+    if (_publishCalendarSnapshot != null && await _publishCurrentSnapshot()) {
+      return;
+    }
     final CalendarCriticalPath normalizedPath = _normalizePathForSync(path);
     final result = await _queueUpdate(
       payloadId: normalizedPath.id,
@@ -736,6 +776,10 @@ class CalendarSyncManager {
 
   /// Request a calendar snapshot from other devices.
   Future<void> requestFullSync() async {
+    final refreshCalendarSnapshot = _refreshCalendarSnapshot;
+    if (refreshCalendarSnapshot != null && await refreshCalendarSnapshot()) {
+      return;
+    }
     await _flushPendingEnvelopes();
     final syncMessage = CalendarSyncMessage.request();
 
@@ -745,16 +789,47 @@ class CalendarSyncManager {
 
   /// Push a calendar snapshot to other devices.
   Future<void> pushFullSync() async {
+    if (_publishCalendarSnapshot != null && await _publishCurrentSnapshot()) {
+      return;
+    }
     await _flushPendingEnvelopes();
     await _maybeSendSnapshot();
   }
 
   Future<void> flushPending() async {
+    final refreshCalendarSnapshot = _refreshCalendarSnapshot;
+    if (refreshCalendarSnapshot != null && await refreshCalendarSnapshot()) {
+      return;
+    }
     await _flushPendingEnvelopes();
     if (_readSyncState().snapshotPublishStatus ==
         CalendarSnapshotPublishStatus.pending) {
       await _maybeSendSnapshot();
     }
+  }
+
+  Future<bool> _publishCurrentSnapshot() async {
+    final publishCalendarSnapshot = _publishCalendarSnapshot;
+    if (publishCalendarSnapshot == null) {
+      return false;
+    }
+    final model = normalizeCalendarModelForSync(_readModel());
+    final status = await publishCalendarSnapshot(model);
+    await _markSnapshotPublishStatus(status);
+    return status == CalendarSnapshotPublishStatus.idle;
+  }
+
+  Future<void> _publishCurrentSnapshotAfterLegacyInbound({
+    required bool applied,
+    required CalendarSyncInbound inbound,
+  }) async {
+    if (!applied ||
+        inbound.isFromMam ||
+        inbound.message.type == CalendarSyncType.request ||
+        _publishCalendarSnapshot == null) {
+      return;
+    }
+    await _publishCurrentSnapshot();
   }
 
   Future<_CalendarOutboundUpdateResult> _queueUpdate({
@@ -1138,7 +1213,7 @@ Map<String, DateTime> _normalizeTimestampMap(Map<String, DateTime> source) {
   return normalized;
 }
 
-CalendarModel _normalizeModelForSync(CalendarModel model) {
+CalendarModel normalizeCalendarModelForSync(CalendarModel model) {
   final Map<String, CalendarTask> normalizedTasks = <String, CalendarTask>{};
   for (final MapEntry<String, CalendarTask> entry in model.tasks.entries) {
     normalizedTasks[entry.key] = _normalizeTaskForSync(entry.value);

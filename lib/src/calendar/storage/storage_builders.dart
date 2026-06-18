@@ -41,6 +41,10 @@ Future<Storage> buildAuthCalendarStorage({
     encryptionKey: encryptionKey,
     storageRootPath: storageRootPath,
   );
+  await _importLegacyAuthCalendarStorageIfNeeded(
+    encryptionKey: encryptionKey,
+    storagePath: storagePath,
+  );
   return CalendarHydratedStorage.open(
     boxName: _authBoxName,
     prefix: _authPrefix,
@@ -92,3 +96,81 @@ Future<String> _authCalendarStoragePath({
   await directory.create(recursive: true);
   return directory.path;
 }
+
+Future<void> _importLegacyAuthCalendarStorageIfNeeded({
+  required List<int> encryptionKey,
+  required String storagePath,
+}) async {
+  final cipher = HiveAesCipher(encryptionKey);
+  if (await _authCalendarBoxHasModel(path: storagePath, cipher: cipher)) {
+    return;
+  }
+  final legacyEntries = await _readLegacyAuthCalendarEntries(cipher);
+  if (legacyEntries.isEmpty) {
+    return;
+  }
+  final currentBox = await Hive.openBox<dynamic>(
+    _authBoxName,
+    encryptionCipher: cipher,
+    path: storagePath,
+  );
+  try {
+    if (currentBox.get(_authCalendarStateStorageKey) != null) {
+      return;
+    }
+    for (final entry in legacyEntries.entries) {
+      if (currentBox.get(entry.key) == null) {
+        await currentBox.put(entry.key, entry.value);
+      }
+    }
+  } finally {
+    await currentBox.close();
+  }
+}
+
+Future<bool> _authCalendarBoxHasModel({
+  required String path,
+  required HiveCipher cipher,
+}) async {
+  final box = await Hive.openBox<dynamic>(
+    _authBoxName,
+    encryptionCipher: cipher,
+    path: path,
+  );
+  try {
+    return box.get(_authCalendarStateStorageKey) != null;
+  } finally {
+    await box.close();
+  }
+}
+
+Future<Map<String, dynamic>> _readLegacyAuthCalendarEntries(
+  HiveCipher cipher,
+) async {
+  if (Hive.isBoxOpen(_authBoxName)) {
+    return const {};
+  }
+  Box<dynamic>? legacyBox;
+  try {
+    legacyBox = await Hive.openBox<dynamic>(
+      _authBoxName,
+      encryptionCipher: cipher,
+    );
+    if (legacyBox.get(_authCalendarStateStorageKey) == null) {
+      return const {};
+    }
+    final entries = <String, dynamic>{};
+    for (final key in legacyBox.keys.whereType<String>()) {
+      if (key.startsWith('${_authPrefix}_')) {
+        entries[key] = legacyBox.get(key);
+      }
+    }
+    return entries;
+  } on Object {
+    return const {};
+  } finally {
+    await legacyBox?.close();
+  }
+}
+
+String get _authCalendarStateStorageKey => '${_authPrefix}_$_authPrefix';

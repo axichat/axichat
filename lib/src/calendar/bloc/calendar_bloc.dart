@@ -37,17 +37,10 @@ import 'calendar_state.dart';
 CalendarSyncManager buildPersonalCalendarSyncManager(CalendarBloc owner) {
   return CalendarSyncManager(
     readModel: () => owner.currentModel,
-    applyModel: (model) async {
-      if (owner.currentModel.checksum == model.checksum) {
-        return;
-      }
-      owner.add(CalendarEvent.remoteModelApplied(model: model));
-      await owner.stream
-          .firstWhere((state) => state.model.checksum == model.checksum)
-          .timeout(const Duration(seconds: 5));
-    },
+    applyModel: owner._applySyncedPersonalCalendarModel,
     sendCalendarMessage: owner.sendPersonalCalendarSync,
-    sendSnapshotFile: owner.uploadCalendarSnapshot,
+    publishCalendarSnapshot: owner.publishPersonalCalendarSnapshot,
+    refreshCalendarSnapshot: owner.syncPersonalCalendarSnapshot,
     onSnapshotPublishStatusChanged: owner._handleSnapshotPublishStatus,
   );
 }
@@ -98,9 +91,12 @@ class CalendarBloc extends BaseCalendarBloc {
   final VoidCallback? _onDispose;
   StreamSubscription<CalendarSyncDispatch>? _calendarSyncSubscription;
   StreamSubscription<ChatCalendarSyncDispatch>? _chatCalendarSyncSubscription;
+  StreamSubscription<PersonalCalendarSnapshotSyncSignal>?
+  _personalCalendarSnapshotSubscription;
   StreamSubscription<CalendarSyncWarning>? _calendarSyncWarningSubscription;
   Future<void> _pendingCalendarDispatch = Future<void>.value();
   Future<void> _pendingChatCalendarDispatch = Future<void>.value();
+  Future<void> _pendingPersonalCalendarSnapshotDispatch = Future<void>.value();
   late final Future<void> Function() _calendarSyncFlushCallback;
 
   void updateEmailService(EmailService? emailService) {
@@ -202,6 +198,51 @@ class CalendarBloc extends BaseCalendarBloc {
     );
   }
 
+  Future<CalendarSnapshotPublishStatus> publishPersonalCalendarSnapshot(
+    CalendarModel model,
+  ) {
+    return _xmppService.publishPersonalCalendarSnapshot(
+      readModel: () =>
+          currentModel.checksum == model.checksum ? model : currentModel,
+      applyModel: _applySyncedPersonalCalendarModel,
+      onSnapshotPublishStatusChanged: _handleSnapshotPublishStatus,
+    );
+  }
+
+  Future<bool> syncPersonalCalendarSnapshot() async {
+    final status = await _syncPersonalCalendarSnapshotStatus();
+    return status == CalendarSnapshotPublishStatus.idle;
+  }
+
+  Future<CalendarSnapshotPublishStatus> _syncPersonalCalendarSnapshotStatus({
+    bool publishIfChanged = true,
+  }) {
+    return _xmppService.syncPersonalCalendarSnapshot(
+      readModel: () => currentModel,
+      applyModel: _applySyncedPersonalCalendarModel,
+      publishIfChanged: publishIfChanged,
+      onSnapshotPublishStatusChanged: _handleSnapshotPublishStatus,
+    );
+  }
+
+  Future<CalendarSnapshotPublishStatus> _bootstrapPersonalCalendarSnapshot() {
+    return _xmppService.bootstrapPersonalCalendarSnapshot(
+      readModel: () => currentModel,
+      applyModel: _applySyncedPersonalCalendarModel,
+      onSnapshotPublishStatusChanged: _handleSnapshotPublishStatus,
+    );
+  }
+
+  Future<void> _applySyncedPersonalCalendarModel(CalendarModel model) async {
+    if (currentModel.checksum == model.checksum) {
+      return;
+    }
+    add(CalendarEvent.remoteModelApplied(model: model));
+    await stream
+        .firstWhere((state) => state.model.checksum == model.checksum)
+        .timeout(const Duration(seconds: 5));
+  }
+
   Future<void> sendAvailabilityMessage({
     required String jid,
     required CalendarAvailabilityMessage message,
@@ -251,6 +292,7 @@ class CalendarBloc extends BaseCalendarBloc {
 
   void _ensureCalendarSyncSubscriptions() {
     if (_calendarSyncSubscription != null &&
+        _personalCalendarSnapshotSubscription != null &&
         _calendarSyncWarningSubscription != null) {
       return;
     }
@@ -267,6 +309,25 @@ class CalendarBloc extends BaseCalendarBloc {
             }
           });
         });
+    _personalCalendarSnapshotSubscription ??= _xmppService
+        .personalCalendarSnapshotStream
+        .listen((signal) {
+          _pendingPersonalCalendarSnapshotDispatch =
+              _pendingPersonalCalendarSnapshotDispatch.then((_) async {
+                try {
+                  final status = await _handlePersonalCalendarSnapshotSignal(
+                    signal,
+                  );
+                  signal.complete(status);
+                } catch (error, stackTrace) {
+                  signal.completeError(error, stackTrace);
+                  SafeLogging.debugLog(
+                    'Failed to sync personal calendar snapshot: $error',
+                    name: 'CalendarBloc',
+                  );
+                }
+              });
+        });
     _calendarSyncWarningSubscription ??= _xmppService.calendarSyncWarningStream
         .listen((warning) {
           add(CalendarEvent.syncWarningRaised(warning: warning));
@@ -275,6 +336,19 @@ class CalendarBloc extends BaseCalendarBloc {
     if (pendingWarning != null) {
       add(CalendarEvent.syncWarningRaised(warning: pendingWarning));
     }
+  }
+
+  Future<CalendarSnapshotPublishStatus> _handlePersonalCalendarSnapshotSignal(
+    PersonalCalendarSnapshotSyncSignal signal,
+  ) {
+    return switch (signal.kind) {
+      PersonalCalendarSnapshotSyncSignalKind.bootstrap =>
+        _bootstrapPersonalCalendarSnapshot(),
+      PersonalCalendarSnapshotSyncSignalKind.refresh =>
+        _syncPersonalCalendarSnapshotStatus(),
+      PersonalCalendarSnapshotSyncSignalKind.publish =>
+        publishPersonalCalendarSnapshot(currentModel),
+    };
   }
 
   void _ensureChatCalendarSyncSubscription() {
@@ -554,9 +628,11 @@ class CalendarBloc extends BaseCalendarBloc {
       );
     } finally {
       await _calendarSyncSubscription?.cancel();
+      await _personalCalendarSnapshotSubscription?.cancel();
       await _chatCalendarSyncSubscription?.cancel();
       await _calendarSyncWarningSubscription?.cancel();
       await _pendingCalendarDispatch;
+      await _pendingPersonalCalendarSnapshotDispatch;
       await _pendingChatCalendarDispatch;
     }
     return super.close();

@@ -6960,6 +6960,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Email blocklist sync failed';
 
   @override
+  String get xmppOperationPubSubCalendarSnapshotStart => 'Syncing calendar...';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotSuccess => 'Calendar synced';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotFailure =>
+      'Calendar sync failed';
+
+  @override
   String get xmppOperationPubSubAvatarMetadataStart =>
       'Syncing avatar details...';
 

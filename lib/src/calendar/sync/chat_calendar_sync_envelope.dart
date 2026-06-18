@@ -20,20 +20,45 @@ class ChatCalendarSyncEnvelope {
   final CalendarSyncInbound inbound;
 }
 
+enum CalendarSyncDispatchOutcome {
+  applied,
+  handledNoChange,
+  unavailable,
+  failed;
+
+  static CalendarSyncDispatchOutcome fromApplied(bool applied) {
+    return applied
+        ? CalendarSyncDispatchOutcome.applied
+        : CalendarSyncDispatchOutcome.handledNoChange;
+  }
+
+  bool get didApply => this == CalendarSyncDispatchOutcome.applied;
+
+  bool get wasHandled =>
+      this == CalendarSyncDispatchOutcome.applied ||
+      this == CalendarSyncDispatchOutcome.handledNoChange;
+}
+
 class CalendarSyncDispatch {
-  CalendarSyncDispatch({required this.inbound, Completer<bool>? completer})
-    : _completer = completer ?? Completer<bool>();
+  CalendarSyncDispatch({
+    required this.inbound,
+    Completer<CalendarSyncDispatchOutcome>? completer,
+  }) : _completer = completer ?? Completer<CalendarSyncDispatchOutcome>();
 
   final CalendarSyncInbound inbound;
-  final Completer<bool> _completer;
+  final Completer<CalendarSyncDispatchOutcome> _completer;
 
-  Future<bool> get result => _completer.future;
+  Future<CalendarSyncDispatchOutcome> get result => _completer.future;
 
   void complete(bool applied) {
+    completeOutcome(CalendarSyncDispatchOutcome.fromApplied(applied));
+  }
+
+  void completeOutcome(CalendarSyncDispatchOutcome outcome) {
     if (_completer.isCompleted) {
       return;
     }
-    _completer.complete(applied);
+    _completer.complete(outcome);
   }
 
   void completeError(Object error, StackTrace stackTrace) {

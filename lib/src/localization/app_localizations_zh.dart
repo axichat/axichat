@@ -6634,6 +6634,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get xmppOperationPubSubEmailBlocklistFailure => '邮箱屏蔽列表同步失败';
 
   @override
+  String get xmppOperationPubSubCalendarSnapshotStart => '正在同步日历...';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotSuccess => '日历已同步';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotFailure => '日历同步失败';
+
+  @override
   String get xmppOperationPubSubAvatarMetadataStart => '正在同步头像详情...';
 
   @override
@@ -13507,6 +13516,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get xmppOperationPubSubEmailBlocklistFailure => '電郵封鎖清單同步失敗';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotStart => '正在同步日曆...';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotSuccess => '日曆已同步';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotFailure => '日曆同步失敗';
 
   @override
   String get xmppOperationPubSubAvatarMetadataStart => '正在同步頭像詳細資料...';

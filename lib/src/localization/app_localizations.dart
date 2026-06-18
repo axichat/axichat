@@ -12020,6 +12020,24 @@ abstract class AppLocalizations {
   /// **'Email blocklist sync failed'**
   String get xmppOperationPubSubEmailBlocklistFailure;
 
+  /// No description provided for @xmppOperationPubSubCalendarSnapshotStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing calendar...'**
+  String get xmppOperationPubSubCalendarSnapshotStart;
+
+  /// No description provided for @xmppOperationPubSubCalendarSnapshotSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar synced'**
+  String get xmppOperationPubSubCalendarSnapshotSuccess;
+
+  /// No description provided for @xmppOperationPubSubCalendarSnapshotFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar sync failed'**
+  String get xmppOperationPubSubCalendarSnapshotFailure;
+
   /// No description provided for @xmppOperationPubSubAvatarMetadataStart.
   ///
   /// In en, this message translates to:

@@ -57,6 +57,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
@@ -68,6 +69,7 @@ import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/pubsub/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/pubsub/calendar_snapshot_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/chat_settings_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
@@ -127,6 +129,8 @@ part 'muc/muc_service.dart';
 part 'muc/muc_join_bootstrap_manager.dart';
 
 part 'message/message_service.dart';
+
+part 'calendar/personal_calendar_pubsub_service.dart';
 
 part 'demo/demo_script_service.dart';
 
@@ -507,6 +511,27 @@ abstract interface class XmppBase {
 
   Future<bool> updateSettingsSyncSnapshot(Map<String, dynamic> settings);
 
+  Stream<PersonalCalendarSnapshotSyncSignal> get personalCalendarSnapshotStream;
+
+  Future<CalendarSnapshotPublishStatus> publishPersonalCalendarSnapshot({
+    required PersonalCalendarModelReader readModel,
+    required PersonalCalendarModelApplier applyModel,
+    PersonalCalendarSnapshotStatusHandler? onSnapshotPublishStatusChanged,
+  });
+
+  Future<CalendarSnapshotPublishStatus> syncPersonalCalendarSnapshot({
+    required PersonalCalendarModelReader readModel,
+    required PersonalCalendarModelApplier applyModel,
+    bool publishIfChanged = false,
+    PersonalCalendarSnapshotStatusHandler? onSnapshotPublishStatusChanged,
+  });
+
+  Future<CalendarSnapshotPublishStatus> bootstrapPersonalCalendarSnapshot({
+    required PersonalCalendarModelReader readModel,
+    required PersonalCalendarModelApplier applyModel,
+    PersonalCalendarSnapshotStatusHandler? onSnapshotPublishStatusChanged,
+  });
+
   bool allowsAutoDownloadMetadata(FileMetadataData metadata);
 
   void scheduleForegroundNotificationSnapshotPublish() {}
@@ -739,6 +764,7 @@ class XmppService extends XmppBase
         SettingsSyncService,
         BlockingService,
         MessageService,
+        PersonalCalendarPubSubService,
         MucService,
         ChatsService,
         DemoScriptService,

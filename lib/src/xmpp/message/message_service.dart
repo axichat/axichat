@@ -248,8 +248,6 @@ const String _httpUploadBootstrapOperationName =
     'MessageService.refreshHttpUploadSupportOnNegotiations';
 const String _mamGlobalBootstrapOperationName =
     'MessageService.bootstrapGlobalMamOnNegotiations';
-const String _mamCalendarBootstrapOperationName =
-    'MessageService.bootstrapCalendarMamOnNegotiations';
 const String _uploadSlotRequestLog = 'Requesting HTTP upload slot.';
 const String _uploadSlotRequestFailedLog = 'Failed to request upload slot.';
 const String _carbonOriginRejectedLog =
@@ -5512,20 +5510,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         operationName: _mamGlobalBootstrapOperationName,
         run: () async {
           await syncGlobalMamCatchUp();
-        },
-      ),
-    );
-    registerBootstrapOperation(
-      XmppBootstrapOperation(
-        key: _mamCalendarBootstrapOperationName,
-        priority: 2,
-        triggers: const <XmppBootstrapTrigger>{
-          XmppBootstrapTrigger.fullNegotiation,
-          XmppBootstrapTrigger.manualRefresh,
-        },
-        operationName: _mamCalendarBootstrapOperationName,
-        run: () async {
-          await rehydrateCalendarFromMam();
         },
       ),
     );
@@ -12617,7 +12601,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         }
         await sendCalendarSyncMessage(jid: jid, outbound: outbound);
       },
-      sendSnapshotFile: uploadCalendarSnapshot,
+      publishCalendarSnapshot: (_) => publishPersonalCalendarSnapshot(
+        readModel: _readDirectPersonalCalendarModel,
+        applyModel: _writeDirectPersonalCalendarModel,
+        onSnapshotPublishStatusChanged: _emitCalendarSnapshotPublishWarning,
+      ),
+      refreshCalendarSnapshot: () async {
+        final status = await syncPersonalCalendarSnapshot(
+          readModel: _readDirectPersonalCalendarModel,
+          applyModel: _writeDirectPersonalCalendarModel,
+          publishIfChanged: true,
+          onSnapshotPublishStatusChanged: _emitCalendarSnapshotPublishWarning,
+        );
+        return status == CalendarSnapshotPublishStatus.idle;
+      },
       onSnapshotPublishStatusChanged: _emitCalendarSnapshotPublishWarning,
     );
   }

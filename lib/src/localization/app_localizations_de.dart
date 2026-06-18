@@ -7082,6 +7082,18 @@ class AppLocalizationsDe extends AppLocalizations {
       'Synchronisierung der E-Mail-Sperrliste fehlgeschlagen';
 
   @override
+  String get xmppOperationPubSubCalendarSnapshotStart =>
+      'Kalender wird synchronisiert...';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotSuccess =>
+      'Kalender synchronisiert';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotFailure =>
+      'Synchronisierung des Kalenders fehlgeschlagen';
+
+  @override
   String get xmppOperationPubSubAvatarMetadataStart =>
       'Avatardetails werden synchronisiert...';
 

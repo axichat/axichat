@@ -35,6 +35,8 @@ class XmppOperation {
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamStart,
       XmppOperationKind.pubSubAddressBlock =>
         XmppOperationLabelKey.pubSubAddressBlockStart,
+      XmppOperationKind.pubSubCalendarSnapshot =>
+        XmppOperationLabelKey.pubSubCalendarSnapshotStart,
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataStart,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchStart,
@@ -56,6 +58,8 @@ class XmppOperation {
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamSuccess,
       XmppOperationKind.pubSubAddressBlock =>
         XmppOperationLabelKey.pubSubAddressBlockSuccess,
+      XmppOperationKind.pubSubCalendarSnapshot =>
+        XmppOperationLabelKey.pubSubCalendarSnapshotSuccess,
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataSuccess,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchSuccess,
@@ -77,6 +81,8 @@ class XmppOperation {
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamFailure,
       XmppOperationKind.pubSubAddressBlock =>
         XmppOperationLabelKey.pubSubAddressBlockFailure,
+      XmppOperationKind.pubSubCalendarSnapshot =>
+        XmppOperationLabelKey.pubSubCalendarSnapshotFailure,
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataFailure,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchFailure,
@@ -117,6 +123,9 @@ enum XmppOperationLabelKey {
   pubSubAddressBlockStart,
   pubSubAddressBlockSuccess,
   pubSubAddressBlockFailure,
+  pubSubCalendarSnapshotStart,
+  pubSubCalendarSnapshotSuccess,
+  pubSubCalendarSnapshotFailure,
   pubSubAvatarMetadataStart,
   pubSubAvatarMetadataSuccess,
   pubSubAvatarMetadataFailure,

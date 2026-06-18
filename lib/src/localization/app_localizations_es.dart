@@ -7069,6 +7069,18 @@ class AppLocalizationsEs extends AppLocalizations {
       'Error al sincronizar la lista de bloqueo de correo';
 
   @override
+  String get xmppOperationPubSubCalendarSnapshotStart =>
+      'Sincronizando calendario...';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotSuccess =>
+      'Calendario sincronizado';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotFailure =>
+      'Error al sincronizar el calendario';
+
+  @override
   String get xmppOperationPubSubAvatarMetadataStart =>
       'Sincronizando detalles del avatar...';
 

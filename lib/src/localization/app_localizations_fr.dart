@@ -7100,6 +7100,18 @@ class AppLocalizationsFr extends AppLocalizations {
       'Échec de la synchronisation de la liste de blocage des e-mails';
 
   @override
+  String get xmppOperationPubSubCalendarSnapshotStart =>
+      'Synchronisation du calendrier...';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotSuccess =>
+      'Calendrier synchronisé';
+
+  @override
+  String get xmppOperationPubSubCalendarSnapshotFailure =>
+      'Échec de la synchronisation du calendrier';
+
+  @override
   String get xmppOperationPubSubAvatarMetadataStart =>
       'Synchronisation des détails de l’avatar...';
 

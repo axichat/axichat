@@ -681,6 +681,12 @@ String _resolveOperationLabel(
       l10n.xmppOperationPubSubEmailBlocklistSuccess,
     XmppOperationLabelKey.pubSubAddressBlockFailure =>
       l10n.xmppOperationPubSubEmailBlocklistFailure,
+    XmppOperationLabelKey.pubSubCalendarSnapshotStart =>
+      l10n.xmppOperationPubSubCalendarSnapshotStart,
+    XmppOperationLabelKey.pubSubCalendarSnapshotSuccess =>
+      l10n.xmppOperationPubSubCalendarSnapshotSuccess,
+    XmppOperationLabelKey.pubSubCalendarSnapshotFailure =>
+      l10n.xmppOperationPubSubCalendarSnapshotFailure,
     XmppOperationLabelKey.pubSubAvatarMetadataStart =>
       l10n.xmppOperationPubSubAvatarMetadataStart,
     XmppOperationLabelKey.pubSubAvatarMetadataSuccess =>
