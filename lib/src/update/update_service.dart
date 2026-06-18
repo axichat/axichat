@@ -50,12 +50,7 @@ typedef PackageInfoLoader = Future<PackageInfo> Function();
 typedef TargetPlatformResolver = TargetPlatform Function();
 typedef FlatpakSandboxDetector = Future<bool> Function();
 typedef UrlLauncher =
-    Future<bool> Function(
-      Uri url, {
-      LaunchMode mode,
-      WebViewConfiguration webViewConfiguration,
-      String? webOnlyWindowName,
-    });
+    Future<bool> Function(Uri url, {required LaunchMode mode});
 
 Future<UpdateChannel> resolveUpdateChannel({
   required TargetPlatform platform,
@@ -155,7 +150,9 @@ final class UpdateService {
            targetPlatformResolver ?? (() => defaultTargetPlatform),
        _flatpakSandboxDetector = flatpakSandboxDetector ?? isFlatpakSandbox,
        _isWeb = isWeb,
-       _launchUrl = launchUrlOverride ?? launchUrl,
+       _launchUrl =
+           launchUrlOverride ??
+           ((url, {required mode}) => launchUrl(url, mode: mode)),
        _log = logger ?? Logger('UpdateService'),
        _playStoreBackend = playStoreBackend ?? const _PlayStoreUpdateBackend(),
        _appStoreBackend =

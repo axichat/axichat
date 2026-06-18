@@ -17,6 +17,7 @@ class UpdateCubit extends Cubit<UpdateState> {
     Duration? dismissSnoozeDuration,
     Duration? flexibleUpdatePollInterval,
     int? flexibleUpdatePollAttempts,
+    Duration? automaticRefreshInterval,
   }) : _updateService = updateService,
        _nowProvider = nowProvider ?? DateTime.now,
        _dismissSnoozeDuration =
@@ -24,6 +25,8 @@ class UpdateCubit extends Cubit<UpdateState> {
        _flexibleUpdatePollInterval =
            flexibleUpdatePollInterval ?? const Duration(seconds: 15),
        _flexibleUpdatePollAttempts = flexibleUpdatePollAttempts ?? 12,
+       _automaticRefreshInterval =
+           automaticRefreshInterval ?? const Duration(minutes: 5),
        super(const UpdateState());
 
   final UpdateService _updateService;
@@ -31,16 +34,40 @@ class UpdateCubit extends Cubit<UpdateState> {
   final Duration _dismissSnoozeDuration;
   final Duration _flexibleUpdatePollInterval;
   final int _flexibleUpdatePollAttempts;
+  final Duration _automaticRefreshInterval;
 
   Timer? _flexibleUpdatePollTimer;
   Future<void>? _ongoingFlexibleUpdatePoll;
+  Future<void>? _refreshInFlight;
+  DateTime? _lastRefreshStartedAt;
 
   Future<void> initialize() => refresh(force: true);
 
   Future<void> refresh({bool force = false}) async {
-    if (!force && state.isChecking) {
-      return;
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      return inFlight;
     }
+    if (!force && _automaticRefreshRecentlyStarted) return;
+    final refresh = _runRefresh();
+    _refreshInFlight = refresh;
+    try {
+      await refresh;
+    } finally {
+      if (identical(_refreshInFlight, refresh)) {
+        _refreshInFlight = null;
+      }
+    }
+  }
+
+  bool get _automaticRefreshRecentlyStarted {
+    final lastStartedAt = _lastRefreshStartedAt;
+    return lastStartedAt != null &&
+        _nowProvider().difference(lastStartedAt) < _automaticRefreshInterval;
+  }
+
+  Future<void> _runRefresh() async {
+    _lastRefreshStartedAt = _nowProvider();
     emit(state.copyWith(isChecking: true, clearActionFailure: true));
     final result = await _updateService.checkForUpdates();
     final currentOffer = result.currentOffer;
@@ -109,6 +136,10 @@ class UpdateCubit extends Cubit<UpdateState> {
     final ongoingFlexibleUpdatePoll = _ongoingFlexibleUpdatePoll;
     if (ongoingFlexibleUpdatePoll != null) {
       await ongoingFlexibleUpdatePoll;
+    }
+    final refreshInFlight = _refreshInFlight;
+    if (refreshInFlight != null) {
+      await refreshInFlight;
     }
     _updateService.dispose();
     return super.close();
