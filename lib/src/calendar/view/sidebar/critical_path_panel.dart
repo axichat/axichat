@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_drag_onboarding.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -321,6 +322,7 @@ class CriticalPathPanel extends StatelessWidget {
                         taskTileBuilder: taskTileBuilder,
                         requiresLongPressForReorder:
                             requiresLongPressForReorder,
+                        showDragTipCandidates: isExpanded,
                         onReorder: (oldIndex, newIndex) =>
                             _handleReorder(reorderTarget, oldIndex, newIndex),
                         onAddTask: onAddTaskToFocusedPath,
@@ -746,6 +748,7 @@ class _FocusedPathTasks extends StatelessWidget {
     required this.animationDuration,
     required this.taskTileBuilder,
     required this.requiresLongPressForReorder,
+    required this.showDragTipCandidates,
     required this.onReorder,
     this.onAddTask,
   });
@@ -760,6 +763,7 @@ class _FocusedPathTasks extends StatelessWidget {
   })
   taskTileBuilder;
   final bool requiresLongPressForReorder;
+  final bool showDragTipCandidates;
   final void Function(int oldIndex, int newIndex) onReorder;
   final VoidCallback? onAddTask;
 
@@ -822,10 +826,15 @@ class _FocusedPathTasks extends StatelessWidget {
               );
               return KeyedSubtree(
                 key: ValueKey(task.id),
-                child: taskTileBuilder(
-                  task,
-                  handle,
-                  requiresLongPress: requiresLongPressForReorder,
+                child: CalendarTaskDragTipCandidate(
+                  source: CalendarTaskDragTipSource.sidebar,
+                  taskId: task.id,
+                  enabled: showDragTipCandidates,
+                  child: taskTileBuilder(
+                    task,
+                    handle,
+                    requiresLongPress: requiresLongPressForReorder,
+                  ),
                 ),
               );
             },

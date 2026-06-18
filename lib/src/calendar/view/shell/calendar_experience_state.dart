@@ -34,6 +34,7 @@ import 'package:axichat/src/calendar/view/shell/calendar_scaffolds.dart';
 import 'package:axichat/src/calendar/view/sidebar/calendar_sidebar_host.dart';
 import 'package:axichat/src/calendar/view/sidebar/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_controller.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_drag_onboarding.dart';
 
 const bool _calendarLoadingOverlayEnabled = false;
 
@@ -288,6 +289,31 @@ abstract class CalendarExperienceState<
             errorBanner,
           ),
         );
+        final String? taskDragTipAccountJid = calendarTaskDragTipAccountJid;
+        final Set<CalendarTaskDragTipSource> taskDragTipSources =
+            usesDesktopLayout
+            ? const <CalendarTaskDragTipSource>{
+                CalendarTaskDragTipSource.grid,
+                CalendarTaskDragTipSource.sidebar,
+              }
+            : _mobileTabController.index == 0
+            ? const <CalendarTaskDragTipSource>{CalendarTaskDragTipSource.grid}
+            : const <CalendarTaskDragTipSource>{
+                CalendarTaskDragTipSource.sidebar,
+              };
+        final Object taskDragTipRescanIdentity =
+            calendarTaskDragTipRescanIdentity(state, taskDragTipSources);
+        final Widget onboardingLayout = CalendarTaskDragTipHost(
+          accountJid: taskDragTipAccountJid,
+          enabled:
+              calendarTaskDragTipActive &&
+              !isMonthView &&
+              taskDragTipAccountJid != null,
+          visibleSources: taskDragTipSources,
+          rescanIdentity: taskDragTipRescanIdentity,
+          dragActive: isAnyDragActive,
+          child: layout,
+        );
         _updateTasksTabPulse(highlightTasksTab);
         final Color surfaceColor = resolveSurfaceColor(context);
         final bool resizeForKeyboard = shouldResizeForKeyboard(
@@ -320,7 +346,7 @@ abstract class CalendarExperienceState<
                         context,
                         state,
                         usesDesktopLayout,
-                        layout,
+                        onboardingLayout,
                       ),
                       if (shouldShowLoadingOverlay(state))
                         buildLoadingOverlay(context),
@@ -332,6 +358,48 @@ abstract class CalendarExperienceState<
           ),
         );
       },
+    );
+  }
+
+  @protected
+  String? get calendarTaskDragTipAccountJid => null;
+
+  @protected
+  bool get calendarTaskDragTipActive => true;
+
+  @protected
+  Object calendarTaskDragTipRescanIdentity(
+    CalendarState state,
+    Set<CalendarTaskDragTipSource> visibleSources,
+  ) {
+    final sourceNames = visibleSources.map((source) => source.name).toList()
+      ..sort();
+    final gridTasks = switch (state.viewMode) {
+      CalendarView.day => state.tasksForDate(
+        DateTime(
+          state.selectedDate.year,
+          state.selectedDate.month,
+          state.selectedDate.day,
+        ),
+      ),
+      CalendarView.week => state.tasksForSelectedWeek,
+      CalendarView.month => const <CalendarTask>[],
+    };
+    final gridTaskIds = gridTasks.map((task) => task.id).toList()..sort();
+    final selectedDate = state.viewMode == CalendarView.week
+        ? state.weekStart
+        : DateTime(
+            state.selectedDate.year,
+            state.selectedDate.month,
+            state.selectedDate.day,
+          );
+    return (
+      viewMode: state.viewMode,
+      selectedDate: selectedDate,
+      selectedDayIndex: state.selectedDayIndex,
+      focusedCriticalPathId: state.focusedCriticalPathId,
+      visibleSources: sourceNames.join('|'),
+      gridTaskIds: gridTaskIds.join('|'),
     );
   }
 

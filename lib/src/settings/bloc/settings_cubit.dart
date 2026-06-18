@@ -77,6 +77,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       CredentialStore.registerKey('account_welcome_shown_by_address_v1');
   final RegisteredCredentialKey _emailWebViewTipShownKey =
       CredentialStore.registerKey('email_webview_tip_shown_by_address_v1');
+  final RegisteredCredentialKey _calendarTaskDragTipShownKey =
+      CredentialStore.registerKey('calendar_task_drag_tip_shown_by_address_v1');
   final RegisteredCredentialKey _recoveryWelcomeDismissedKey =
       CredentialStore.registerKey('recovery_welcome_dismissed_by_address_v1');
   SettingsState _bootstrapState = const SettingsState();
@@ -351,6 +353,27 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       return;
     }
     await _writeEmailWebViewTipShown({...shown, normalized});
+  }
+
+  Future<bool> calendarTaskDragTipShownFor(String? accountJid) async {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null) {
+      return true;
+    }
+    final shown = await _readCalendarTaskDragTipShown();
+    return shown.contains(normalized);
+  }
+
+  Future<void> markCalendarTaskDragTipShownFor(String? accountJid) async {
+    final normalized = _normalizedAccountJid(accountJid);
+    if (normalized == null) {
+      return;
+    }
+    final shown = await _readCalendarTaskDragTipShown();
+    if (shown.contains(normalized)) {
+      return;
+    }
+    await _writeCalendarTaskDragTipShown({...shown, normalized});
   }
 
   bool recoveryAvailableForAccount(String? accountJid) =>
@@ -1079,6 +1102,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     return _readDismissedAccounts(_emailWebViewTipShownKey);
   }
 
+  Future<Set<String>> _readCalendarTaskDragTipShown() async {
+    return _readDismissedAccounts(_calendarTaskDragTipShownKey);
+  }
+
   Future<void> _writeAccountWelcomeShown(Set<String> shownAccounts) async {
     await _writeDismissedAccounts(
       key: _accountWelcomeShownKey,
@@ -1089,6 +1116,13 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   Future<void> _writeEmailWebViewTipShown(Set<String> shownAccounts) async {
     await _writeDismissedAccounts(
       key: _emailWebViewTipShownKey,
+      dismissedAccounts: shownAccounts,
+    );
+  }
+
+  Future<void> _writeCalendarTaskDragTipShown(Set<String> shownAccounts) async {
+    await _writeDismissedAccounts(
+      key: _calendarTaskDragTipShownKey,
       dismissedAccounts: shownAccounts,
     );
   }

@@ -1246,7 +1246,13 @@ class _EmailWebViewTipTargetOverlay extends StatelessWidget {
                 .state
                 .lowMotion,
             disposeOnTap: true,
-            onTargetClick: onTargetTap ?? () {},
+            onBarrierClick: () {
+              AxiShowcaseController.maybeOf(context)?.dismissUser();
+            },
+            onTargetClick: () {
+              AxiShowcaseController.maybeOf(context)?.notifyTargetInteraction();
+              onTargetTap?.call();
+            },
             child: SizedBox(width: constraints.maxWidth, height: targetHeight),
           ),
         );

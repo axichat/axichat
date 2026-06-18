@@ -45,6 +45,7 @@ export 'axi_otp_form_field.dart';
 export 'axi_popover.dart';
 export 'axi_progress_indicator.dart';
 export 'axi_sheet_scaffold.dart';
+export 'axi_showcase_boundary.dart';
 export 'axi_select.dart';
 export 'axi_spell_check.dart';
 export 'axi_surface_scope.dart';

@@ -2123,6 +2123,7 @@ class _HomeContent extends StatelessWidget {
                       pane: pane,
                       settings: settings,
                       emailEnabled: emailEnabled,
+                      active: homeBranchActive && !showChatCalendar,
                       chatCalendarActive: chatCalendarActive,
                     ),
                   );
@@ -2377,12 +2378,14 @@ class _HomeSecondaryChatPane extends StatelessWidget {
     required this.pane,
     required this.settings,
     required this.emailEnabled,
+    required this.active,
     required this.chatCalendarActive,
   });
 
   final HomeSecondaryPane pane;
   final SettingsState settings;
   final bool emailEnabled;
+  final bool active;
   final bool chatCalendarActive;
 
   @override
@@ -2398,6 +2401,7 @@ class _HomeSecondaryChatPane extends StatelessWidget {
       emailService: emailEnabled ? locate<EmailService>() : null,
       locate: locate,
       child: Chat(
+        active: active,
         syncWithOpenChatRoute: pane.syncWithOpenChatRoute,
         calendarSurfaceActive: chatCalendarActive,
       ),

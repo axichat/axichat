@@ -34,6 +34,7 @@ import 'package:axichat/src/calendar/view/grid/calendar_layout.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_task_title_hover_reporter.dart';
 import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_drag_onboarding.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
@@ -5023,6 +5024,8 @@ class _TaskSectionsPanel extends StatelessWidget {
               reorderable: taskListSortMode.allowsManualReorder,
               onReorder: onUnscheduledReorder,
               requiresLongPressForReorder: requiresLongPressForReorder,
+              showDragTipCandidates:
+                  uiState.expandedSection == CalendarSidebarSection.unscheduled,
               taskTileBuilder: taskTileBuilder,
             ),
           ),
@@ -5060,6 +5063,8 @@ class _TaskSectionsPanel extends StatelessWidget {
               reorderable: taskListSortMode.allowsManualReorder,
               onReorder: onReminderReorder,
               requiresLongPressForReorder: requiresLongPressForReorder,
+              showDragTipCandidates:
+                  uiState.expandedSection == CalendarSidebarSection.reminders,
               taskTileBuilder: taskTileBuilder,
             ),
           ),
@@ -5432,6 +5437,7 @@ class _SidebarTaskList extends StatelessWidget {
     this.reorderable = false,
     this.onReorder,
     this.requiresLongPressForReorder = false,
+    required this.showDragTipCandidates,
     required this.taskTileBuilder,
   });
 
@@ -5444,6 +5450,7 @@ class _SidebarTaskList extends StatelessWidget {
   final bool reorderable;
   final void Function(int oldIndex, int newIndex)? onReorder;
   final bool requiresLongPressForReorder;
+  final bool showDragTipCandidates;
   final Widget Function(
     CalendarTask task,
     Widget? trailing, {
@@ -5503,7 +5510,15 @@ class _SidebarTaskList extends StatelessWidget {
                       handle,
                       requiresLongPress: false,
                     );
-                    return KeyedSubtree(key: ValueKey(task.id), child: tile);
+                    return KeyedSubtree(
+                      key: ValueKey(task.id),
+                      child: CalendarTaskDragTipCandidate(
+                        source: CalendarTaskDragTipSource.sidebar,
+                        taskId: task.id,
+                        enabled: showDragTipCandidates,
+                        child: tile,
+                      ),
+                    );
                   },
                 )
               : ListView.builder(
@@ -5521,7 +5536,15 @@ class _SidebarTaskList extends StatelessWidget {
                       null,
                       requiresLongPress: false,
                     );
-                    return KeyedSubtree(key: ValueKey(task.id), child: tile);
+                    return KeyedSubtree(
+                      key: ValueKey(task.id),
+                      child: CalendarTaskDragTipCandidate(
+                        source: CalendarTaskDragTipSource.sidebar,
+                        taskId: task.id,
+                        enabled: showDragTipCandidates,
+                        child: tile,
+                      ),
+                    );
                   },
                 ),
         );

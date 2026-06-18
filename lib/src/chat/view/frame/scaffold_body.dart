@@ -1083,8 +1083,8 @@ class _ChatScaffoldBody extends StatelessWidget {
                       selectedMessageId: owner._selectedMessageId,
                       normalizedXmppSelfJid: normalizedXmppSelfJid,
                       normalizedEmailSelfJid: normalizedEmailSelfJid,
-                      renderedTimelineMessageIds:
-                          owner._renderedTimelineMessageIds,
+                      emailWebViewTipTargetMessageId:
+                          owner._emailWebViewTipTargetMessageId,
                       messageFontSize: settingsState.messageTextSize.fontSize,
                       loadingMessages: loadingMessages,
                       hideTimelineUntilInitialReadiness: owner

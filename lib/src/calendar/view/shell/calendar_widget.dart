@@ -124,6 +124,12 @@ class _CalendarWidgetState
     super.dispose();
   }
 
+  @override
+  String? get calendarTaskDragTipAccountJid => calendarBloc.accountJid;
+
+  @override
+  bool get calendarTaskDragTipActive => widget.active;
+
   void _clearHomeBottomDragState() {
     final notifier = widget.bottomDragSession;
     if (notifier?.value != null) {

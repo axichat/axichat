@@ -359,9 +359,79 @@ String? firstEmailWebViewTipTargetMessageIdForTesting({
   return null;
 }
 
-String? _firstEmailWebViewTipTargetMessageId({
+@visibleForTesting
+bool emailWebViewTipBubbleStartsInViewportForTesting({
+  required Rect bubbleRect,
+  required Rect viewportRect,
+}) {
+  if (bubbleRect.width <= 0 || bubbleRect.height <= 0) {
+    return false;
+  }
+  if (bubbleRect.top < viewportRect.top ||
+      bubbleRect.top >= viewportRect.bottom) {
+    return false;
+  }
+  return math.min(bubbleRect.bottom, viewportRect.bottom) > bubbleRect.top;
+}
+
+@visibleForTesting
+String? firstVisibleEmailWebViewTipTargetMessageIdForTesting({
+  required Iterable<
+    ({
+      String messageId,
+      bool isEmailMessage,
+      String? normalizedHtmlBody,
+      String? renderedText,
+      EmailHtmlDerivation? emailDerivation,
+    })
+  >
+  items,
+  required Set<String> renderedMessageIds,
+  required Map<String, Rect> bubbleRectsByMessageId,
+  required Rect viewportRect,
+  required bool readOnly,
+  required bool multiSelectActive,
+  required String? selectedMessageId,
+}) {
+  if (readOnly ||
+      multiSelectActive ||
+      selectedMessageId != null ||
+      renderedMessageIds.isEmpty) {
+    return null;
+  }
+  for (final item in items) {
+    final messageId = item.messageId.trim();
+    if (messageId.isEmpty || !renderedMessageIds.contains(messageId)) {
+      continue;
+    }
+    final bubbleRect = bubbleRectsByMessageId[messageId];
+    if (bubbleRect == null ||
+        !emailWebViewTipBubbleStartsInViewportForTesting(
+          bubbleRect: bubbleRect,
+          viewportRect: viewportRect,
+        )) {
+      continue;
+    }
+    if (shouldShowEmailWebViewTipForTesting(
+      isEmailMessage: item.isEmailMessage,
+      readOnly: readOnly,
+      multiSelectActive: multiSelectActive,
+      isSingleSelection: false,
+      normalizedHtmlBody: item.normalizedHtmlBody,
+      renderedText: item.renderedText,
+      emailDerivation: item.emailDerivation,
+    )) {
+      return messageId;
+    }
+  }
+  return null;
+}
+
+String? _firstVisibleEmailWebViewTipTargetMessageId({
   required Iterable<ChatTimelineItem> items,
   required Set<String> renderedMessageIds,
+  required Rect viewportRect,
+  required Rect? Function(String messageId) bubbleRectFor,
   required bool readOnly,
   required bool multiSelectActive,
   required String? selectedMessageId,
@@ -378,6 +448,14 @@ String? _firstEmailWebViewTipTargetMessageId({
     }
     final messageId = item.id.trim();
     if (messageId.isEmpty || !renderedMessageIds.contains(messageId)) {
+      continue;
+    }
+    final bubbleRect = bubbleRectFor(messageId);
+    if (bubbleRect == null ||
+        !emailWebViewTipBubbleStartsInViewportForTesting(
+          bubbleRect: bubbleRect,
+          viewportRect: viewportRect,
+        )) {
       continue;
     }
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
@@ -445,11 +523,13 @@ class Chat extends StatefulWidget {
   const Chat({
     super.key,
     this.readOnly = false,
+    this.active = true,
     this.syncWithOpenChatRoute = true,
     this.calendarSurfaceActive = true,
   });
 
   final bool readOnly;
+  final bool active;
   final bool syncWithOpenChatRoute;
   final bool calendarSurfaceActive;
 
@@ -533,6 +613,8 @@ class _ChatState extends State<Chat> {
   List<Message> _cachedFilteredItems = const [];
   List<ChatTimelineItem> _cachedTimelineItems = const [];
   Set<String> _renderedTimelineMessageIds = const <String>{};
+  String? _emailWebViewTipTargetMessageId;
+  bool _emailWebViewTipTargetSyncScheduled = false;
   final _bubbleWidthByMessageId = <String, double>{};
   final _emailWebViewHeightByContentKey =
       <String, ({String messageId, double height})>{};
@@ -869,6 +951,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _bubbleWidthByMessageId[messageId] = width;
     });
+    _scheduleEmailWebViewTipTargetSync();
   }
 
   String _emailWebViewHeightCacheKey({
@@ -906,6 +989,7 @@ class _ChatState extends State<Chat> {
       messageId: messageId,
       height: normalizedHeight,
     );
+    _scheduleEmailWebViewTipTargetSync();
     if (_selectedMessageId == messageId) {
       _scheduleSelectedMessageVisibilityCheck(messageId);
     }
@@ -1571,6 +1655,7 @@ class _ChatState extends State<Chat> {
   void _handleScrollChanged() {
     _persistScrollOffset();
     _scheduleReadThresholdSync();
+    _scheduleEmailWebViewTipTargetSync();
   }
 
   Rect? _messageListViewportRect() {
@@ -1783,14 +1868,52 @@ class _ChatState extends State<Chat> {
     return first.length == second.length && first.containsAll(second);
   }
 
-  String? _emailWebViewTipTargetForRenderedIds(Set<String> renderedIds) {
-    return _firstEmailWebViewTipTargetMessageId(
+  String? _measureEmailWebViewTipTargetMessageId() {
+    final viewportRect = _messageListViewportRect();
+    if (viewportRect == null) {
+      return null;
+    }
+    final messageId = _firstVisibleEmailWebViewTipTargetMessageId(
       items: _cachedTimelineItems,
-      renderedMessageIds: renderedIds,
+      renderedMessageIds: _renderedTimelineMessageIds,
+      viewportRect: viewportRect,
+      bubbleRectFor: _bubbleRegionRegistry.rectFor,
       readOnly: widget.readOnly,
       multiSelectActive: _multiSelectedMessageIds.isNotEmpty,
       selectedMessageId: _selectedMessageId,
     );
+    if (messageId == null) {
+      return null;
+    }
+    return messageId;
+  }
+
+  void _clearEmailWebViewTipSelection() {
+    _emailWebViewTipTargetMessageId = null;
+  }
+
+  void _scheduleEmailWebViewTipTargetSync() {
+    if (_emailWebViewTipTargetSyncScheduled) {
+      return;
+    }
+    _emailWebViewTipTargetSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _emailWebViewTipTargetSyncScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _syncEmailWebViewTipTargetAfterLayout();
+    });
+  }
+
+  void _syncEmailWebViewTipTargetAfterLayout() {
+    final nextMessageId = _measureEmailWebViewTipTargetMessageId();
+    if (_emailWebViewTipTargetMessageId == nextMessageId) {
+      return;
+    }
+    setState(() {
+      _emailWebViewTipTargetMessageId = nextMessageId;
+    });
   }
 
   void _syncRenderedTimelineMessageIds(List<Message> renderedMessages) {
@@ -1798,17 +1921,8 @@ class _ChatState extends State<Chat> {
     if (_sameStringSet(_renderedTimelineMessageIds, nextIds)) {
       return;
     }
-    final previousTarget = _emailWebViewTipTargetForRenderedIds(
-      _renderedTimelineMessageIds,
-    );
-    final nextTarget = _emailWebViewTipTargetForRenderedIds(nextIds);
-    if (previousTarget == nextTarget) {
-      _renderedTimelineMessageIds = nextIds;
-      return;
-    }
-    setState(() {
-      _renderedTimelineMessageIds = nextIds;
-    });
+    _renderedTimelineMessageIds = nextIds;
+    _scheduleEmailWebViewTipTargetSync();
   }
 
   void _handleRenderedMessagesChanged(
@@ -1816,6 +1930,7 @@ class _ChatState extends State<Chat> {
     required T Function<T>() locate,
   }) {
     _syncRenderedTimelineMessageIds(renderedMessages);
+    _scheduleEmailWebViewTipTargetSync();
     if (renderedMessages.isEmpty) {
       return;
     }
@@ -5771,6 +5886,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _selectedMessageId = null;
     });
+    _scheduleEmailWebViewTipTargetSync();
   }
 
   Future<void> _startMultiSelect(Message message) async {
@@ -5789,6 +5905,7 @@ class _ChatState extends State<Chat> {
       _selectedMessageSnapshots
         ..clear()
         ..[messageId] = message;
+      _clearEmailWebViewTipSelection();
     });
   }
 
@@ -5804,7 +5921,9 @@ class _ChatState extends State<Chat> {
         _multiSelectedMessageIds.add(messageId);
         _selectedMessageSnapshots[messageId] = message;
       }
+      _clearEmailWebViewTipSelection();
     });
+    _scheduleEmailWebViewTipTargetSync();
   }
 
   void _syncSelectionCaches(
@@ -5864,6 +5983,7 @@ class _ChatState extends State<Chat> {
       return;
     }
     setState(() {});
+    _scheduleEmailWebViewTipTargetSync();
   }
 
   void _ensureAvatarPathCaches({
@@ -6124,6 +6244,10 @@ class _ChatState extends State<Chat> {
         _renderedTimelineMessageIds.where(availableIds.contains),
       );
     }
+    if (_emailWebViewTipTargetMessageId != null &&
+        !availableIds.contains(_emailWebViewTipTargetMessageId)) {
+      _clearEmailWebViewTipSelection();
+    }
     _cachedTimelineItems = items;
   }
 
@@ -6141,6 +6265,7 @@ class _ChatState extends State<Chat> {
       _multiSelectedMessageIds.clear();
       _selectedMessageSnapshots.clear();
     });
+    _scheduleEmailWebViewTipTargetSync();
   }
 
   List<Message> _collectSelectedMessages(List<Message> orderedMessages) {
@@ -6171,6 +6296,7 @@ class _ChatState extends State<Chat> {
     if (_selectedMessageId == messageId) return;
     setState(() {
       _selectedMessageId = messageId;
+      _clearEmailWebViewTipSelection();
     });
     if (!mounted) return;
     _scheduleSelectedMessageVisibilityCheck(messageId);
@@ -6894,6 +7020,7 @@ class _ChatState extends State<Chat> {
                   _resetInitialTimelineReadiness();
                   _mountedTimelineItemIds.clear();
                   _renderedTimelineMessageIds = const <String>{};
+                  _clearEmailWebViewTipSelection();
                   _cachedTimelineItems = const [];
                   _animatedMessageIds.clear();
                   _hydratedAnimatedMessages = false;

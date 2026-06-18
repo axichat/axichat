@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_exclude.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_drag_onboarding.dart';
 
 class CalendarSidebarDraggable extends StatefulWidget {
   const CalendarSidebarDraggable({
@@ -179,6 +180,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     _dragSessionActive = true;
     _startPointerTracking();
     widget.onDragSessionStarted?.call();
+    notifyCalendarTaskDragTipTaskPickedUp(context);
     final Offset? pointer = _trackedPointer;
     if (pointer != null) {
       widget.onDragGlobalPositionChanged?.call(pointer);
@@ -254,6 +256,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     );
 
     final bool canDrag = !_suppressDrag;
+
     if (widget.requiresLongPress) {
       return LongPressDraggable<CalendarDragPayload>(
         data: _dragPayload(),

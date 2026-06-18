@@ -826,9 +826,12 @@ class RenderCalendarSurface extends RenderBox
           pointerStartGlobalY - dragStartGlobalTop;
       final double pointerTopGlobal =
           pointerCurrentGlobalY - initialPointerOffset;
-      final Offset pointerTopLocalOffset = globalToLocal(
+      final Offset? pointerTopLocalOffset = _globalToLocalIfAttached(
         Offset(pointerCurrentGlobalX, pointerTopGlobal),
       );
+      if (pointerTopLocalOffset == null) {
+        return null;
+      }
       pointerTopLocal = _clampLocalOffset(pointerTopLocalOffset).dy;
     } else {
       pointerTopLocal = pointerLocalDy - pointerOffset;
@@ -1126,10 +1129,13 @@ class RenderCalendarSurface extends RenderBox
     }
     onDragAutoScroll?.call(globalPosition);
     controller.updateDragPointerGlobalPosition(globalPosition);
+    final Offset? localPosition = _globalToLocalIfAttached(globalPosition);
+    if (localPosition == null) {
+      _updateHoverTask(null);
+      return false;
+    }
     return _dispatchDragUpdate(
-      localPosition: _contentClampedDragLocalOffset(
-        globalToLocal(globalPosition),
-      ),
+      localPosition: _contentClampedDragLocalOffset(localPosition),
       globalPosition: globalPosition,
       controller: controller,
       draggingTask: draggingTask,
@@ -1224,9 +1230,11 @@ class RenderCalendarSurface extends RenderBox
       return null;
     }
 
-    final Offset clampedLocal = _clampLocalOffset(
-      globalToLocal(globalPosition),
-    );
+    final Offset? localPosition = _globalToLocalIfAttached(globalPosition);
+    if (localPosition == null) {
+      return null;
+    }
+    final Offset clampedLocal = _clampLocalOffset(localPosition);
     _DayColumnGeometry? columnGeometry;
     if (!_isInTimeColumn(clampedLocal)) {
       columnGeometry = _geometryForOffset(clampedLocal);
@@ -2055,7 +2063,7 @@ class RenderCalendarSurface extends RenderBox
 
   Rect? globalRectForTask(String taskId) {
     final Rect? rect = localRectForTask(taskId);
-    if (rect == null) {
+    if (rect == null || !attached) {
       return null;
     }
     final Matrix4 transform = getTransformTo(null);
@@ -2122,6 +2130,13 @@ class RenderCalendarSurface extends RenderBox
 
   bool _isInTimeColumn(Offset localPosition) =>
       localPosition.dx <= _timeColumnWidth;
+
+  Offset? _globalToLocalIfAttached(Offset globalPosition) {
+    if (!attached || !hasSize) {
+      return null;
+    }
+    return globalToLocal(globalPosition);
+  }
 
   Offset _contentClampedDragLocalOffset(Offset localPosition) {
     final Offset clamped = _clampLocalOffset(localPosition);
@@ -2204,8 +2219,12 @@ class RenderCalendarSurface extends RenderBox
       return null;
     }
 
+    final Offset? rawLocalPosition = _globalToLocalIfAttached(globalPosition);
+    if (rawLocalPosition == null) {
+      return null;
+    }
     final Offset localPosition = _contentClampedDragLocalOffset(
-      globalToLocal(globalPosition),
+      rawLocalPosition,
     );
 
     final _DayColumnGeometry? columnGeometry = _geometryForOffset(

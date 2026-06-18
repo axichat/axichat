@@ -12,6 +12,7 @@ import 'package:flutter/widgets.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_drag_onboarding.dart';
 import 'calendar_task_geometry.dart';
 
 typedef CalendarTaskSnapshotBuilder = CalendarTask Function();
@@ -276,9 +277,38 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       onPointerCancel: _handlePointerCancel,
       child: widget.child,
     );
+    Widget wrapDragTip(Widget child) {
+      return CalendarTaskDragTipCandidate(
+        source: CalendarTaskDragTipSource.grid,
+        taskId: widget.task.id,
+        child: child,
+      );
+    }
 
     if (widget.requiresLongPress) {
-      return _TaskTargetAwareLongPressDraggable<CalendarDragPayload>(
+      return wrapDragTip(
+        _TaskTargetAwareLongPressDraggable<CalendarDragPayload>(
+          interactionController: _controller,
+          taskId: widget.task.id,
+          data: payload,
+          dragAnchorStrategy: _dragAnchorStrategy,
+          maxSimultaneousDrags: canDrag ? 1 : 0,
+          feedback: widget.feedbackBuilder(context, widget.task, _geometry),
+          rootOverlay: true,
+          childWhenDragging:
+              widget.childWhenDragging ?? const SizedBox.expand(),
+          onDragStarted: _handleDragStarted,
+          onDragUpdate: _handleDragUpdate,
+          onDragEnd: (details) => _handleDragFinished(cancelled: false),
+          onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
+          delay: widget.longPressDelay ?? kLongPressTimeout,
+          child: interactiveChild,
+        ),
+      );
+    }
+
+    return wrapDragTip(
+      _TaskTargetAwareDraggable<CalendarDragPayload>(
         interactionController: _controller,
         taskId: widget.task.id,
         data: payload,
@@ -291,25 +321,8 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         onDragUpdate: _handleDragUpdate,
         onDragEnd: (details) => _handleDragFinished(cancelled: false),
         onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
-        delay: widget.longPressDelay ?? kLongPressTimeout,
         child: interactiveChild,
-      );
-    }
-
-    return _TaskTargetAwareDraggable<CalendarDragPayload>(
-      interactionController: _controller,
-      taskId: widget.task.id,
-      data: payload,
-      dragAnchorStrategy: _dragAnchorStrategy,
-      maxSimultaneousDrags: canDrag ? 1 : 0,
-      feedback: widget.feedbackBuilder(context, widget.task, _geometry),
-      rootOverlay: true,
-      childWhenDragging: widget.childWhenDragging ?? const SizedBox.expand(),
-      onDragStarted: _handleDragStarted,
-      onDragUpdate: _handleDragUpdate,
-      onDragEnd: (details) => _handleDragFinished(cancelled: false),
-      onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
-      child: interactiveChild,
+      ),
     );
   }
 
@@ -463,6 +476,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         pointerId: _trackedPointerId,
       );
       widget.onDragStarted();
+      notifyCalendarTaskDragTipTaskPickedUp(context);
     }
   }
 

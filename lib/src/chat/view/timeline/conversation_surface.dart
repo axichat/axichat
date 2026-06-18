@@ -188,12 +188,13 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.messageRowMaxWidth,
     required this.selectionExtrasPreferredMaxWidth,
     required this.readOnly,
+    required this.active,
     required this.isWelcomeChat,
     required this.multiSelectActive,
     required this.selectedMessageId,
     required this.normalizedXmppSelfJid,
     required this.normalizedEmailSelfJid,
-    required this.renderedTimelineMessageIds,
+    required this.emailWebViewTipTargetMessageId,
     required this.messageFontSize,
     required this.loadingMessages,
     required this.hideTimelineUntilInitialReadiness,
@@ -311,12 +312,13 @@ class _ChatMainConversationSection extends StatelessWidget {
   final double messageRowMaxWidth;
   final double selectionExtrasPreferredMaxWidth;
   final bool readOnly;
+  final bool active;
   final bool isWelcomeChat;
   final bool multiSelectActive;
   final String? selectedMessageId;
   final String? normalizedXmppSelfJid;
   final String? normalizedEmailSelfJid;
-  final Set<String> renderedTimelineMessageIds;
+  final String? emailWebViewTipTargetMessageId;
   final double messageFontSize;
   final bool loadingMessages;
   final bool hideTimelineUntilInitialReadiness;
@@ -553,14 +555,9 @@ class _ChatMainConversationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emailWebViewTipTargetMessageId = _firstEmailWebViewTipTargetMessageId(
-      items: mainTimelineItems,
-      renderedMessageIds: renderedTimelineMessageIds,
-      readOnly: readOnly,
-      multiSelectActive: multiSelectActive,
-      selectedMessageId: selectedMessageId,
-    );
     return _EmailWebViewTipShowcaseHost(
+      active: active,
+      identity: chatEntity?.jid ?? '',
       accountJid: profileJid,
       targetMessageId: emailWebViewTipTargetMessageId,
       showcaseKey: emailWebViewTipKey,
@@ -736,6 +733,8 @@ class _ChatMainConversationSection extends StatelessWidget {
 
 class _EmailWebViewTipShowcaseHost extends StatefulWidget {
   const _EmailWebViewTipShowcaseHost({
+    required this.active,
+    required this.identity,
     required this.accountJid,
     required this.targetMessageId,
     required this.showcaseKey,
@@ -744,6 +743,8 @@ class _EmailWebViewTipShowcaseHost extends StatefulWidget {
     required this.builder,
   });
 
+  final bool active;
+  final Object identity;
   final String? accountJid;
   final String? targetMessageId;
   final GlobalKey showcaseKey;
@@ -758,8 +759,8 @@ class _EmailWebViewTipShowcaseHost extends StatefulWidget {
 
 class _EmailWebViewTipShowcaseHostState
     extends State<_EmailWebViewTipShowcaseHost> {
-  late final ShowcaseView _showcaseView;
   bool _tipShown = true;
+  bool _tipDismissedForSession = false;
   bool _startScheduled = false;
   String? _loadedAccountJid;
   String? _startedTargetMessageId;
@@ -767,45 +768,55 @@ class _EmailWebViewTipShowcaseHostState
   @override
   void initState() {
     super.initState();
-    _showcaseView = ShowcaseView.register(
-      scope: widget.showcaseScope,
-      onComplete: _handleShowcaseCompleted,
-      onDismiss: _handleShowcaseDismissed,
-      enableAutoScroll: true,
-      scrollDuration: baseAnimationDuration,
-      disableMovingAnimation: widget.lowMotion,
-      disableScaleAnimation: widget.lowMotion,
-    );
     _loadTipState();
   }
 
   @override
   void didUpdateWidget(covariant _EmailWebViewTipShowcaseHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _showcaseView
-      ..disableMovingAnimation = widget.lowMotion
-      ..disableScaleAnimation = widget.lowMotion;
     if (oldWidget.accountJid != widget.accountJid) {
       _tipShown = true;
+      _tipDismissedForSession = false;
       _loadedAccountJid = null;
       _startedTargetMessageId = null;
       _loadTipState();
       return;
     }
-    if (oldWidget.targetMessageId != widget.targetMessageId) {
-      _scheduleStart();
+    if (oldWidget.active != widget.active ||
+        oldWidget.identity != widget.identity ||
+        oldWidget.targetMessageId != widget.targetMessageId) {
+      _startedTargetMessageId = null;
+    }
+    if ((oldWidget.active != widget.active && widget.active) ||
+        oldWidget.identity != widget.identity) {
+      _tipDismissedForSession = false;
     }
   }
 
   @override
-  void dispose() {
-    _showcaseView.unregister();
-    super.dispose();
+  Widget build(BuildContext context) {
+    final targetMessageId =
+        _tipShown || _tipDismissedForSession || !widget.active
+        ? null
+        : widget.targetMessageId;
+    return AxiShowcaseBoundary(
+      active: targetMessageId != null,
+      identity: '${widget.identity}|${targetMessageId ?? ''}',
+      lowMotion: widget.lowMotion,
+      scope: widget.showcaseScope,
+      onDismiss: _handleShowcaseDismissed,
+      onTargetInteraction: _markTipShown,
+      disableBarrierInteraction: true,
+      child: Builder(
+        builder: (context) {
+          if (targetMessageId != null) {
+            _scheduleStart(context);
+          }
+          return widget.builder(context, targetMessageId);
+        },
+      ),
+    );
   }
-
-  @override
-  Widget build(BuildContext context) =>
-      widget.builder(context, _tipShown ? null : widget.targetMessageId);
 
   void _loadTipState() {
     final accountJid = widget.accountJid;
@@ -818,15 +829,17 @@ class _EmailWebViewTipShowcaseHostState
         }
         setState(() {
           _tipShown = shown;
+          _tipDismissedForSession = false;
         });
-        _scheduleStart();
       }),
     );
   }
 
-  void _scheduleStart() {
+  void _scheduleStart(BuildContext controllerContext) {
     final targetMessageId = widget.targetMessageId;
     if (_tipShown ||
+        _tipDismissedForSession ||
+        !widget.active ||
         targetMessageId == null ||
         _startedTargetMessageId == targetMessageId ||
         _startScheduled) {
@@ -837,26 +850,40 @@ class _EmailWebViewTipShowcaseHostState
       _startScheduled = false;
       if (!mounted ||
           _tipShown ||
+          _tipDismissedForSession ||
+          !widget.active ||
           widget.targetMessageId != targetMessageId ||
-          _startedTargetMessageId == targetMessageId ||
-          !_showcaseView.isTargetRendered(widget.showcaseKey)) {
+          _startedTargetMessageId == targetMessageId) {
         return;
       }
-      _startedTargetMessageId = targetMessageId;
-      _showcaseView.startShowCase([widget.showcaseKey]);
+      final controller = AxiShowcaseController.maybeOf(controllerContext);
+      if (controller == null) {
+        return;
+      }
+      if (controller.start([widget.showcaseKey])) {
+        _startedTargetMessageId = targetMessageId;
+      }
     });
   }
 
-  void _handleShowcaseCompleted(int? showcaseIndex, GlobalKey key) {
-    if (key == widget.showcaseKey) {
-      _markTipShown();
+  void _dismissTipForSession() {
+    if (!mounted || _tipShown || _tipDismissedForSession) {
+      return;
     }
+    setState(() {
+      _tipDismissedForSession = true;
+      _startedTargetMessageId = null;
+    });
   }
 
-  void _handleShowcaseDismissed(GlobalKey? key) {
-    if (key == widget.showcaseKey) {
-      _markTipShown();
+  void _handleShowcaseDismissed(
+    GlobalKey? key,
+    AxiShowcaseDismissReason reason,
+  ) {
+    if (key != widget.showcaseKey || reason != AxiShowcaseDismissReason.user) {
+      return;
     }
+    _dismissTipForSession();
   }
 
   void _markTipShown() {
@@ -865,6 +892,7 @@ class _EmailWebViewTipShowcaseHostState
     }
     setState(() {
       _tipShown = true;
+      _tipDismissedForSession = false;
       _startedTargetMessageId = null;
     });
     unawaited(
