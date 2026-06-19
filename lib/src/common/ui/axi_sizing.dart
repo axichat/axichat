@@ -20,6 +20,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.listButtonHeight,
     required this.chatTileMinHeight,
     required this.attachmentPreviewExtent,
+    required this.attachmentGalleryTileMaxCrossAxisExtent,
+    required this.attachmentGalleryTileAspectRatio,
     required this.appBarHeight,
     required this.appBarElevation,
     required this.appBarScrolledUnderElevation,
@@ -66,6 +68,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double listButtonHeight;
   final double chatTileMinHeight;
   final double attachmentPreviewExtent;
+  final double attachmentGalleryTileMaxCrossAxisExtent;
+  final double attachmentGalleryTileAspectRatio;
   final double appBarHeight;
   final double appBarElevation;
   final double appBarScrolledUnderElevation;
@@ -113,6 +117,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? listButtonHeight,
     double? chatTileMinHeight,
     double? attachmentPreviewExtent,
+    double? attachmentGalleryTileMaxCrossAxisExtent,
+    double? attachmentGalleryTileAspectRatio,
     double? appBarHeight,
     double? appBarElevation,
     double? appBarScrolledUnderElevation,
@@ -160,6 +166,12 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
       chatTileMinHeight: chatTileMinHeight ?? this.chatTileMinHeight,
       attachmentPreviewExtent:
           attachmentPreviewExtent ?? this.attachmentPreviewExtent,
+      attachmentGalleryTileMaxCrossAxisExtent:
+          attachmentGalleryTileMaxCrossAxisExtent ??
+          this.attachmentGalleryTileMaxCrossAxisExtent,
+      attachmentGalleryTileAspectRatio:
+          attachmentGalleryTileAspectRatio ??
+          this.attachmentGalleryTileAspectRatio,
       appBarHeight: appBarHeight ?? this.appBarHeight,
       appBarElevation: appBarElevation ?? this.appBarElevation,
       appBarScrolledUnderElevation:
@@ -233,6 +245,8 @@ const AxiSizing axiSizing = AxiSizing(
   listButtonHeight: 48,
   chatTileMinHeight: 60,
   attachmentPreviewExtent: 72,
+  attachmentGalleryTileMaxCrossAxisExtent: 224,
+  attachmentGalleryTileAspectRatio: 1,
   appBarHeight: 56,
   appBarElevation: 0,
   appBarScrolledUnderElevation: 0,

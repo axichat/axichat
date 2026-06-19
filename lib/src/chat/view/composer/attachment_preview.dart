@@ -196,7 +196,7 @@ final LinkedHashSet<String> _acknowledgedHighRiskAttachmentIds =
 final LinkedHashSet<Object> _allowedImagePreviewValidationKeys =
     LinkedHashSet<Object>();
 
-enum _FileAttachmentAction { save, share, preview }
+enum _FileAttachmentAction { save, share, preview, send }
 
 extension _FileMetadataRiskExtension on FileMetadataData {
   FileTypeReport get declaredTypeReport => buildDeclaredFileTypeReport(
@@ -360,6 +360,7 @@ class ChatAttachmentPreview extends StatefulWidget {
     this.onAllowPressed,
     this.surfaceShape,
     this.maxWidthFraction,
+    this.galleryTapMode = false,
     this.messageDetails = const <InlineSpan>[],
     this.detailOpticalOffsetFactors = const <int, double>{},
   });
@@ -373,6 +374,7 @@ class ChatAttachmentPreview extends StatefulWidget {
   final VoidCallback? onAllowPressed;
   final OutlinedBorder? surfaceShape;
   final double? maxWidthFraction;
+  final bool galleryTapMode;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
 
@@ -505,7 +507,10 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             final metadata = widget.metadata;
             if (metadata == null) {
               if (widget.metadataPending) {
-                return _AttachmentPendingPreviewFrame(color: colors.primary);
+                return _AttachmentPendingPreviewFrame(
+                  color: colors.primary,
+                  galleryTapMode: widget.galleryTapMode,
+                );
               }
               return _AttachmentError(message: l10n.chatAttachmentUnavailable);
             }
@@ -565,6 +570,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                             metadataReloadDelegate:
                                 widget.metadataReloadDelegate,
                             typeReport: resolvedReport,
+                            galleryTapMode: widget.galleryTapMode,
                             messageDetails: widget.messageDetails,
                             detailOpticalOffsetFactors:
                                 widget.detailOpticalOffsetFactors,
@@ -579,6 +585,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                             metadataReloadDelegate:
                                 widget.metadataReloadDelegate,
                             typeReport: resolvedReport,
+                            galleryTapMode: widget.galleryTapMode,
                             messageDetails: widget.messageDetails,
                             detailOpticalOffsetFactors:
                                 widget.detailOpticalOffsetFactors,
@@ -591,6 +598,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                           downloadDelegate: downloadDelegate,
                           metadataReloadDelegate: widget.metadataReloadDelegate,
                           typeReport: resolvedReport,
+                          galleryTapMode: widget.galleryTapMode,
                           messageDetails: widget.messageDetails,
                           detailOpticalOffsetFactors:
                               widget.detailOpticalOffsetFactors,
@@ -601,6 +609,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                   if (!allowed) {
                     return _BlockedAttachment(
                       metadata: metadata,
+                      galleryTapMode: widget.galleryTapMode,
                       onAllowPressed: onAllowPressed,
                       messageDetails: widget.messageDetails,
                       detailOpticalOffsetFactors:
@@ -615,6 +624,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                       downloadDelegate: downloadDelegate,
                       metadataReloadDelegate: widget.metadataReloadDelegate,
                       typeReport: declaredReport,
+                      galleryTapMode: widget.galleryTapMode,
                       messageDetails: widget.messageDetails,
                       detailOpticalOffsetFactors:
                           widget.detailOpticalOffsetFactors,
@@ -628,6 +638,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                       downloadDelegate: downloadDelegate,
                       metadataReloadDelegate: widget.metadataReloadDelegate,
                       typeReport: declaredReport,
+                      galleryTapMode: widget.galleryTapMode,
                       messageDetails: widget.messageDetails,
                       detailOpticalOffsetFactors:
                           widget.detailOpticalOffsetFactors,
@@ -640,6 +651,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     downloadDelegate: downloadDelegate,
                     metadataReloadDelegate: widget.metadataReloadDelegate,
                     typeReport: declaredReport,
+                    galleryTapMode: widget.galleryTapMode,
                     messageDetails: widget.messageDetails,
                     detailOpticalOffsetFactors:
                         widget.detailOpticalOffsetFactors,
@@ -650,6 +662,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
             if (!allowed) {
               return _BlockedAttachment(
                 metadata: metadata,
+                galleryTapMode: widget.galleryTapMode,
                 onAllowPressed: onAllowPressed,
                 messageDetails: widget.messageDetails,
                 detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
@@ -663,6 +676,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                 downloadDelegate: downloadDelegate,
                 metadataReloadDelegate: widget.metadataReloadDelegate,
                 typeReport: declaredReport,
+                galleryTapMode: widget.galleryTapMode,
                 messageDetails: widget.messageDetails,
                 detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
               );
@@ -675,6 +689,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                 downloadDelegate: downloadDelegate,
                 metadataReloadDelegate: widget.metadataReloadDelegate,
                 typeReport: declaredReport,
+                galleryTapMode: widget.galleryTapMode,
                 messageDetails: widget.messageDetails,
                 detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
               );
@@ -686,6 +701,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               downloadDelegate: downloadDelegate,
               metadataReloadDelegate: widget.metadataReloadDelegate,
               typeReport: declaredReport,
+              galleryTapMode: widget.galleryTapMode,
               messageDetails: widget.messageDetails,
               detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
             );
@@ -701,12 +717,14 @@ class _BlockedAttachment extends StatelessWidget {
     required this.metadata,
     required this.messageDetails,
     required this.detailOpticalOffsetFactors,
+    this.galleryTapMode = false,
     this.onAllowPressed,
   });
 
   final FileMetadataData metadata;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
+  final bool galleryTapMode;
   final VoidCallback? onAllowPressed;
 
   @override
@@ -714,7 +732,7 @@ class _BlockedAttachment extends StatelessWidget {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    return _AttachmentSurface(
+    final surface = _AttachmentSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: spacing.s,
@@ -742,29 +760,34 @@ class _BlockedAttachment extends StatelessWidget {
               details: messageDetails,
               detailOpticalOffsetFactors: detailOpticalOffsetFactors,
             ),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              return Align(
-                alignment: Alignment.centerRight,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-                  child: AxiButton(
-                    variant: AxiButtonVariant.secondary,
-                    constrainChild: true,
-                    onPressed: onAllowPressed,
-                    child: Text(
-                      l10n.chatAttachmentLoad,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+          if (!galleryTapMode)
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return Align(
+                  alignment: Alignment.centerRight,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                    child: AxiButton(
+                      variant: AxiButtonVariant.secondary,
+                      constrainChild: true,
+                      onPressed: onAllowPressed,
+                      child: Text(
+                        l10n.chatAttachmentLoad,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
+                );
+              },
+            ),
         ],
       ),
     );
+    if (!galleryTapMode) {
+      return surface;
+    }
+    return _AttachmentGalleryTapTarget(onTap: onAllowPressed, child: surface);
   }
 }
 
@@ -776,6 +799,7 @@ class _ImageAttachment extends StatefulWidget {
     this.downloadDelegate,
     this.metadataReloadDelegate,
     this.typeReport,
+    this.galleryTapMode = false,
     required this.messageDetails,
     required this.detailOpticalOffsetFactors,
   });
@@ -786,6 +810,7 @@ class _ImageAttachment extends StatefulWidget {
   final AttachmentDownloadDelegate? downloadDelegate;
   final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
   final FileTypeReport? typeReport;
+  final bool galleryTapMode;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
 
@@ -833,6 +858,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         return _EncryptedAttachment(
           metadata: metadata,
           downloading: _downloading,
+          galleryTapMode: widget.galleryTapMode,
           messageDetails: widget.messageDetails,
           detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
           onPressed: _downloading
@@ -846,6 +872,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       return _RemoteImageAttachment(
         metadata: metadata,
         downloading: _downloading,
+        galleryTapMode: widget.galleryTapMode,
         messageDetails: widget.messageDetails,
         detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
         onPressed: _downloading
@@ -867,6 +894,7 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         if (snapshot.connectionState != ConnectionState.done) {
           return _ImageAttachmentFrame(
             metadata: metadata,
+            galleryTapMode: widget.galleryTapMode,
             builder: (context, {required aspectRatio, required targetWidth}) =>
                 Center(child: AxiProgressIndicator(color: colors.primary)),
           );
@@ -880,12 +908,22 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
             downloadDelegate: widget.downloadDelegate,
             metadataReloadDelegate: widget.metadataReloadDelegate,
             typeReport: widget.typeReport,
+            galleryTapMode: widget.galleryTapMode,
             messageDetails: widget.messageDetails,
             detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
           );
         }
-        return _ImageAttachmentFrame(
+        Future<void> openPreview() => _openImagePreview(
+          context,
+          file: previewFile,
           metadata: metadata,
+          typeReport: widget.typeReport,
+          messageDetails: widget.messageDetails,
+          detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
+        );
+        final frame = _ImageAttachmentFrame(
+          metadata: metadata,
+          galleryTapMode: widget.galleryTapMode,
           builder: (context, {required aspectRatio, required targetWidth}) {
             final cacheDimensions = _attachmentImageCacheDimensions(
               targetWidth: targetWidth,
@@ -910,24 +948,22 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
                   hasLocalFile: hasLocalFile,
                   details: widget.messageDetails,
                   detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
-                  trailing: AxiIconButton.ghost(
-                    iconData: LucideIcons.eye,
-                    tooltip: context.l10n.chatAttachmentPreview,
-                    onPressed: () => _openImagePreview(
-                      context,
-                      file: previewFile,
-                      metadata: metadata,
-                      typeReport: widget.typeReport,
-                      messageDetails: widget.messageDetails,
-                      detailOpticalOffsetFactors:
-                          widget.detailOpticalOffsetFactors,
-                    ),
-                  ),
+                  trailing: widget.galleryTapMode
+                      ? null
+                      : AxiIconButton.ghost(
+                          iconData: LucideIcons.eye,
+                          tooltip: context.l10n.chatAttachmentPreview,
+                          onPressed: openPreview,
+                        ),
                 ),
               ],
             );
           },
         );
+        if (!widget.galleryTapMode) {
+          return frame;
+        }
+        return _AttachmentGalleryTapTarget(onTap: openPreview, child: frame);
       },
     );
   }
@@ -1027,10 +1063,58 @@ typedef _ImageAttachmentFrameBuilder =
       required double targetWidth,
     });
 
+class _AttachmentGalleryTapTarget extends StatefulWidget {
+  const _AttachmentGalleryTapTarget({required this.onTap, required this.child});
+
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  State<_AttachmentGalleryTapTarget> createState() =>
+      _AttachmentGalleryTapTargetState();
+}
+
+class _AttachmentGalleryTapTargetState
+    extends State<_AttachmentGalleryTapTarget> {
+  final _bounceController = AxiTapBounceController();
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    return ShadFocusable(
+      canRequestFocus: enabled,
+      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+      child: ShadGestureDetector(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        behavior: HitTestBehavior.opaque,
+        hoverStrategies: ShadTheme.of(context).hoverStrategies,
+        onTap: widget.onTap,
+        onTapDown: enabled ? _bounceController.handleTapDown : null,
+        onTapUp: enabled ? _bounceController.handleTapUp : null,
+        onTapCancel: enabled ? _bounceController.handleTapCancel : null,
+        child: AxiTapBounce(
+          controller: _bounceController,
+          enabled: enabled,
+          child: Material(
+            color: Colors.transparent,
+            shape: RoundedSuperellipseBorder(borderRadius: context.radius),
+            clipBehavior: Clip.antiAlias,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AttachmentPendingPreviewFrame extends StatelessWidget {
-  const _AttachmentPendingPreviewFrame({required this.color});
+  const _AttachmentPendingPreviewFrame({
+    required this.color,
+    this.galleryTapMode = false,
+  });
 
   final Color color;
+  final bool galleryTapMode;
 
   @override
   Widget build(BuildContext context) {
@@ -1044,7 +1128,9 @@ class _AttachmentPendingPreviewFrame extends StatelessWidget {
         );
         return _AttachmentMediaFrame(
           targetWidth: targetWidth,
-          aspectRatio: _attachmentImageFallbackAspectRatio(),
+          aspectRatio: galleryTapMode
+              ? context.sizing.attachmentGalleryTileAspectRatio
+              : _attachmentImageFallbackAspectRatio(),
           child: Center(child: AxiProgressIndicator(color: color)),
         );
       },
@@ -1053,9 +1139,14 @@ class _AttachmentPendingPreviewFrame extends StatelessWidget {
 }
 
 class _ImageAttachmentFrame extends StatelessWidget {
-  const _ImageAttachmentFrame({required this.metadata, required this.builder});
+  const _ImageAttachmentFrame({
+    required this.metadata,
+    this.galleryTapMode = false,
+    required this.builder,
+  });
 
   final FileMetadataData metadata;
+  final bool galleryTapMode;
   final _ImageAttachmentFrameBuilder builder;
 
   @override
@@ -1065,10 +1156,12 @@ class _ImageAttachmentFrame extends StatelessWidget {
         final targetWidth = _resolveAttachmentWidth(
           constraints,
           context,
-          intrinsicWidth: metadata.width?.toDouble(),
+          intrinsicWidth: galleryTapMode ? null : metadata.width?.toDouble(),
           minimumWidth: _attachmentMetadataOverlayMinWidth(context),
         );
-        final aspectRatio = _attachmentImageAspectRatio(metadata);
+        final aspectRatio = galleryTapMode
+            ? context.sizing.attachmentGalleryTileAspectRatio
+            : _attachmentImageAspectRatio(metadata);
         return _AttachmentMediaFrame(
           targetWidth: targetWidth,
           aspectRatio: aspectRatio,
@@ -1113,6 +1206,25 @@ class _AttachmentMediaFrame extends StatelessWidget {
   }
 }
 
+class _AttachmentGalleryAspectFrame extends StatelessWidget {
+  const _AttachmentGalleryAspectFrame({
+    required this.galleryTapMode,
+    required this.child,
+  });
+
+  final bool galleryTapMode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!galleryTapMode) return child;
+    return AspectRatio(
+      aspectRatio: context.sizing.attachmentGalleryTileAspectRatio,
+      child: child,
+    );
+  }
+}
+
 double _attachmentImageFallbackAspectRatio() => 4 / 3;
 
 double _attachmentImageAspectRatio(FileMetadataData metadata) {
@@ -1134,6 +1246,7 @@ class _VideoAttachment extends StatefulWidget {
     this.downloadDelegate,
     this.metadataReloadDelegate,
     this.typeReport,
+    this.galleryTapMode = false,
     required this.messageDetails,
     required this.detailOpticalOffsetFactors,
   });
@@ -1144,6 +1257,7 @@ class _VideoAttachment extends StatefulWidget {
   final AttachmentDownloadDelegate? downloadDelegate;
   final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
   final FileTypeReport? typeReport;
+  final bool galleryTapMode;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
 
@@ -1203,6 +1317,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         return _EncryptedAttachment(
           metadata: metadata,
           downloading: _downloading,
+          galleryTapMode: widget.galleryTapMode,
           messageDetails: widget.messageDetails,
           detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
           onPressed: _downloading
@@ -1216,6 +1331,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       return _RemoteVideoAttachment(
         metadata: metadata,
         downloading: _downloading,
+        galleryTapMode: widget.galleryTapMode,
         messageDetails: widget.messageDetails,
         detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
         onPressed: _downloading
@@ -1234,19 +1350,20 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         downloadDelegate: widget.downloadDelegate,
         metadataReloadDelegate: widget.metadataReloadDelegate,
         typeReport: widget.typeReport,
+        galleryTapMode: widget.galleryTapMode,
         messageDetails: widget.messageDetails,
         detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
       );
     }
 
     final colors = context.colorScheme;
+    final sizing = context.sizing;
     final controller = _controller;
     final initialized = controller?.value.isInitialized == true;
     final playing = controller?.value.isPlaying == true;
-    final aspectRatio = _videoAspectRatio(
-      metadata: metadata,
-      controller: controller,
-    );
+    final aspectRatio = widget.galleryTapMode
+        ? sizing.attachmentGalleryTileAspectRatio
+        : _videoAspectRatio(metadata: metadata, controller: controller);
     final actions = localAttachmentPreviewDialogActions(
       ownerContext: context,
       file: localFile,
@@ -1256,30 +1373,36 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       closeBeforeSend: false,
       enabled: !_downloading,
     );
-    final actionButtons = Positioned(
-      top: spacing.s,
-      right: spacing.s,
-      child: AttachmentPreviewActionRow(
-        closeTooltip: context.l10n.commonClose,
-        actions: actions,
-        showClose: false,
-      ),
-    );
+    final actionButtons = widget.galleryTapMode
+        ? null
+        : Positioned(
+            top: spacing.s,
+            right: spacing.s,
+            child: AttachmentPreviewActionRow(
+              closeTooltip: context.l10n.commonClose,
+              actions: actions,
+              showClose: false,
+            ),
+          );
 
-    return LayoutBuilder(
+    final preview = LayoutBuilder(
       builder: (context, constraints) {
         final targetWidth = _resolveAttachmentWidth(
           constraints,
           context,
-          intrinsicWidth: metadata.width?.toDouble(),
+          intrinsicWidth: widget.galleryTapMode
+              ? null
+              : metadata.width?.toDouble(),
           minimumWidth: math.max(
             _attachmentMetadataOverlayMinWidth(context),
-            _attachmentPreviewActionRowMinWidth(
-                  context,
-                  actionCount: actions.length,
-                  showClose: false,
-                ) +
-                (spacing.s * 2),
+            widget.galleryTapMode
+                ? _attachmentMetadataOverlayMinWidth(context)
+                : _attachmentPreviewActionRowMinWidth(
+                        context,
+                        actionCount: actions.length,
+                        showClose: false,
+                      ) +
+                      (spacing.s * 2),
           ),
         );
         return Align(
@@ -1311,14 +1434,19 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                       ),
                     if (initialized && controller != null)
                       Center(
-                        child: AxiIconButton.ghost(
-                          iconData: playing
-                              ? LucideIcons.pause
-                              : LucideIcons.play,
-                          onPressed: _togglePlayback,
-                        ),
+                        child: widget.galleryTapMode
+                            ? Icon(
+                                playing ? LucideIcons.pause : LucideIcons.play,
+                                size: sizing.iconButtonIconSize,
+                              )
+                            : AxiIconButton.ghost(
+                                iconData: playing
+                                    ? LucideIcons.pause
+                                    : LucideIcons.play,
+                                onPressed: _togglePlayback,
+                              ),
                       ),
-                    if (initialized) actionButtons,
+                    if (initialized && actionButtons != null) actionButtons,
                     _AttachmentMetadataVignette(
                       metadata: metadata,
                       hasLocalFile: hasLocalFile,
@@ -1333,6 +1461,14 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
           ),
         );
       },
+    );
+
+    if (!widget.galleryTapMode) {
+      return preview;
+    }
+    return _AttachmentGalleryTapTarget(
+      onTap: initialized ? _togglePlayback : null,
+      child: preview,
     );
   }
 
@@ -1956,6 +2092,7 @@ class _FileAttachment extends StatefulWidget {
     this.downloadDelegate,
     this.metadataReloadDelegate,
     this.typeReport,
+    this.galleryTapMode = false,
     required this.messageDetails,
     required this.detailOpticalOffsetFactors,
   });
@@ -1966,6 +2103,7 @@ class _FileAttachment extends StatefulWidget {
   final AttachmentDownloadDelegate? downloadDelegate;
   final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
   final FileTypeReport? typeReport;
+  final bool galleryTapMode;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
 
@@ -2045,6 +2183,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
         (hasLocalFile || canDownload) &&
         (previewKind == AttachmentPreviewKind.pdf ||
             previewKind == AttachmentPreviewKind.text);
+    final sendEnabled = metadata.id.trim().isNotEmpty;
     final String saveTooltip = hasLocalFile
         ? l10n.chatAttachmentExportConfirm
         : l10n.chatAttachmentDownloadAndSave;
@@ -2077,7 +2216,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
       fontWeight: FontWeight.w600,
     );
     final actionSpacing = spacing.s;
-    final actionButtonCount = previewEnabled ? 3 : 2;
+    final actionButtonCount = previewEnabled ? 4 : 3;
     final actionRowMinWidth =
         (sizing.iconButtonTapTarget * actionButtonCount) +
         (actionSpacing * (actionButtonCount - 1));
@@ -2097,6 +2236,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
           loading: _activeAction == _FileAttachmentAction.share,
           onPressed: shareEnabled && !_busy ? _shareAttachment : null,
         ),
+        SizedBox(width: actionSpacing),
+        AxiIconButton(
+          iconData: LucideIcons.send,
+          tooltip: l10n.commonSend,
+          loading: _activeAction == _FileAttachmentAction.send,
+          onPressed: sendEnabled && !_busy ? _sendAttachment : null,
+        ),
         if (previewEnabled) ...[
           SizedBox(width: actionSpacing),
           AxiIconButton(
@@ -2108,6 +2254,108 @@ class _FileAttachmentState extends State<_FileAttachment> {
         ],
       ],
     );
+    if (widget.galleryTapMode) {
+      final menuButton = AxiPopover(
+        controller: _actionsController,
+        closeOnTapOutside: true,
+        padding: EdgeInsets.zero,
+        decoration: ShadDecoration.none,
+        shadows: const <BoxShadow>[],
+        popover: (context) {
+          return AxiMenu(
+            actions: [
+              AxiMenuAction(
+                icon: LucideIcons.save,
+                label: saveTooltip,
+                onPressed: () {
+                  _actionsController.hide();
+                  _saveAttachment();
+                },
+                enabled: saveEnabled && !_busy,
+              ),
+              AxiMenuAction(
+                icon: LucideIcons.share2,
+                label: shareTooltip,
+                onPressed: () {
+                  _actionsController.hide();
+                  _shareAttachment();
+                },
+                enabled: shareEnabled && !_busy,
+              ),
+              AxiMenuAction(
+                icon: LucideIcons.send,
+                label: l10n.commonSend,
+                onPressed: () {
+                  _actionsController.hide();
+                  _sendAttachment();
+                },
+                enabled: sendEnabled && !_busy,
+              ),
+              if (previewEnabled)
+                AxiMenuAction(
+                  icon: LucideIcons.eye,
+                  label: previewTooltip,
+                  onPressed: () {
+                    _actionsController.hide();
+                    _previewAttachment();
+                  },
+                  enabled: !_busy,
+                ),
+            ],
+          );
+        },
+        child: AxiIconButton.ghost(
+          iconData: Icons.more_horiz,
+          tooltip: l10n.commonMoreOptions,
+          loading: _busy,
+          iconSize: sizing.menuItemIconSize,
+          buttonSize: sizing.menuItemHeight,
+          tapTargetSize: sizing.menuItemHeight,
+          onPressed: _busy ? null : _actionsController.toggle,
+        ),
+      );
+      return _AttachmentGalleryTapTarget(
+        onTap: _busy ? null : _handleGalleryFileTap,
+        child: _AttachmentSurface(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: spacing.s,
+            children: [
+              Row(
+                children: [
+                  attachmentIcon,
+                  SizedBox(width: spacing.s),
+                  Expanded(
+                    child: _AttachmentFileNameText(
+                      filename: metadata.filename,
+                      style: fileNameStyle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(width: spacing.s),
+                  menuButton,
+                ],
+              ),
+              Text(
+                sizeLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.textTheme.small.copyWith(
+                  color: colors.mutedForeground,
+                ),
+              ),
+              if (widget.messageDetails.isNotEmpty)
+                _AttachmentTimelineDetails(
+                  details: widget.messageDetails,
+                  detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     return _AttachmentSurface(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -2160,6 +2408,15 @@ class _FileAttachmentState extends State<_FileAttachment> {
                             _shareAttachment();
                           },
                           enabled: shareEnabled && !_busy,
+                        ),
+                        AxiMenuAction(
+                          icon: LucideIcons.send,
+                          label: l10n.commonSend,
+                          onPressed: () {
+                            _actionsController.hide();
+                            _sendAttachment();
+                          },
+                          enabled: sendEnabled && !_busy,
                         ),
                         if (previewEnabled)
                           AxiMenuAction(
@@ -2258,6 +2515,19 @@ class _FileAttachmentState extends State<_FileAttachment> {
         },
       ),
     );
+  }
+
+  void _sendAttachment() {
+    if (_busy) return;
+    openSingleAttachmentComposeDraft(
+      context: context,
+      metadata: widget.metadata,
+    );
+  }
+
+  void _handleGalleryFileTap() {
+    if (_busy) return;
+    _actionsController.toggle();
   }
 
   Future<void> _saveAttachment() async {
@@ -2550,6 +2820,7 @@ class _EncryptedAttachment extends StatelessWidget {
   const _EncryptedAttachment({
     required this.metadata,
     required this.downloading,
+    this.galleryTapMode = false,
     required this.messageDetails,
     required this.detailOpticalOffsetFactors,
     required this.onPressed,
@@ -2557,6 +2828,7 @@ class _EncryptedAttachment extends StatelessWidget {
 
   final FileMetadataData metadata;
   final bool downloading;
+  final bool galleryTapMode;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
   final VoidCallback? onPressed;
@@ -2574,76 +2846,88 @@ class _EncryptedAttachment extends StatelessWidget {
       hasLocalFile: false,
       l10n: l10n,
     );
-    return LayoutBuilder(
+    final preview = LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final width = availableWidth * sizing.dialogMaxHeightFraction;
+        final width = galleryTapMode
+            ? availableWidth
+            : availableWidth * sizing.dialogMaxHeightFraction;
         return Align(
           alignment: Alignment.centerLeft,
           widthFactor: 1,
           heightFactor: 1,
           child: SizedBox(
             width: width,
-            child: _AttachmentSurface(
-              backgroundColor: colors.card,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: spacing.m,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        LucideIcons.lock,
-                        size: sizing.iconButtonIconSize,
+            child: _AttachmentGalleryAspectFrame(
+              galleryTapMode: galleryTapMode,
+              child: _AttachmentSurface(
+                backgroundColor: colors.card,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: spacing.m,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.lock,
+                          size: sizing.iconButtonIconSize,
+                          color: colors.mutedForeground,
+                        ),
+                        SizedBox(width: spacing.s),
+                        Expanded(
+                          child: _AttachmentFileNameText(
+                            filename: metadata.filename,
+                            style: context.textTheme.small.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      sizeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.small.copyWith(
                         color: colors.mutedForeground,
                       ),
-                      SizedBox(width: spacing.s),
-                      Expanded(
-                        child: _AttachmentFileNameText(
-                          filename: metadata.filename,
-                          style: context.textTheme.small.copyWith(
-                            fontWeight: FontWeight.w600,
+                    ),
+                    if (messageDetails.isNotEmpty)
+                      _AttachmentTimelineDetails(
+                        details: messageDetails,
+                        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+                      ),
+                    if (!galleryTapMode)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: AxiTooltip(
+                          builder: (_) => Text(openTooltip),
+                          child: AxiButton(
+                            variant: AxiButtonVariant.secondary,
+                            loading: downloading,
+                            onPressed: onPressed,
+                            child: Text(
+                              downloading
+                                  ? l10n.chatAttachmentLoading
+                                  : openLabel,
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  Text(
-                    sizeLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.mutedForeground,
-                    ),
-                  ),
-                  if (messageDetails.isNotEmpty)
-                    _AttachmentTimelineDetails(
-                      details: messageDetails,
-                      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-                    ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: AxiTooltip(
-                      builder: (_) => Text(openTooltip),
-                      child: AxiButton(
-                        variant: AxiButtonVariant.secondary,
-                        loading: downloading,
-                        onPressed: onPressed,
-                        child: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
     );
+    if (!galleryTapMode) {
+      return preview;
+    }
+    return _AttachmentGalleryTapTarget(onTap: onPressed, child: preview);
   }
 }
 
@@ -2651,6 +2935,7 @@ class _RemoteImageAttachment extends StatelessWidget {
   const _RemoteImageAttachment({
     required this.metadata,
     required this.downloading,
+    this.galleryTapMode = false,
     required this.messageDetails,
     required this.detailOpticalOffsetFactors,
     required this.onPressed,
@@ -2658,6 +2943,7 @@ class _RemoteImageAttachment extends StatelessWidget {
 
   final FileMetadataData metadata;
   final bool downloading;
+  final bool galleryTapMode;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
   final VoidCallback? onPressed;
@@ -2675,76 +2961,88 @@ class _RemoteImageAttachment extends StatelessWidget {
       hasLocalFile: false,
       l10n: l10n,
     );
-    return LayoutBuilder(
+    final preview = LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final width = availableWidth * sizing.dialogMaxHeightFraction;
+        final width = galleryTapMode
+            ? availableWidth
+            : availableWidth * sizing.dialogMaxHeightFraction;
         return Align(
           alignment: Alignment.centerLeft,
           widthFactor: 1,
           heightFactor: 1,
           child: SizedBox(
             width: width,
-            child: _AttachmentSurface(
-              backgroundColor: colors.card,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: spacing.m,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        LucideIcons.image,
-                        size: sizing.iconButtonIconSize,
+            child: _AttachmentGalleryAspectFrame(
+              galleryTapMode: galleryTapMode,
+              child: _AttachmentSurface(
+                backgroundColor: colors.card,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: spacing.m,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.image,
+                          size: sizing.iconButtonIconSize,
+                          color: colors.mutedForeground,
+                        ),
+                        SizedBox(width: spacing.s),
+                        Expanded(
+                          child: _AttachmentFileNameText(
+                            filename: metadata.filename,
+                            style: context.textTheme.small.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      sizeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.small.copyWith(
                         color: colors.mutedForeground,
                       ),
-                      SizedBox(width: spacing.s),
-                      Expanded(
-                        child: _AttachmentFileNameText(
-                          filename: metadata.filename,
-                          style: context.textTheme.small.copyWith(
-                            fontWeight: FontWeight.w600,
+                    ),
+                    if (messageDetails.isNotEmpty)
+                      _AttachmentTimelineDetails(
+                        details: messageDetails,
+                        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+                      ),
+                    if (!galleryTapMode)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: AxiTooltip(
+                          builder: (_) => Text(openTooltip),
+                          child: AxiButton(
+                            variant: AxiButtonVariant.secondary,
+                            loading: downloading,
+                            onPressed: onPressed,
+                            child: Text(
+                              downloading
+                                  ? l10n.chatAttachmentLoading
+                                  : openLabel,
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  Text(
-                    sizeLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.mutedForeground,
-                    ),
-                  ),
-                  if (messageDetails.isNotEmpty)
-                    _AttachmentTimelineDetails(
-                      details: messageDetails,
-                      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-                    ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: AxiTooltip(
-                      builder: (_) => Text(openTooltip),
-                      child: AxiButton(
-                        variant: AxiButtonVariant.secondary,
-                        loading: downloading,
-                        onPressed: onPressed,
-                        child: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
     );
+    if (!galleryTapMode) {
+      return preview;
+    }
+    return _AttachmentGalleryTapTarget(onTap: onPressed, child: preview);
   }
 }
 
@@ -2752,6 +3050,7 @@ class _RemoteVideoAttachment extends StatelessWidget {
   const _RemoteVideoAttachment({
     required this.metadata,
     required this.downloading,
+    this.galleryTapMode = false,
     required this.messageDetails,
     required this.detailOpticalOffsetFactors,
     required this.onPressed,
@@ -2759,6 +3058,7 @@ class _RemoteVideoAttachment extends StatelessWidget {
 
   final FileMetadataData metadata;
   final bool downloading;
+  final bool galleryTapMode;
   final List<InlineSpan> messageDetails;
   final Map<int, double> detailOpticalOffsetFactors;
   final VoidCallback? onPressed;
@@ -2776,76 +3076,88 @@ class _RemoteVideoAttachment extends StatelessWidget {
       hasLocalFile: false,
       l10n: l10n,
     );
-    return LayoutBuilder(
+    final preview = LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final width = availableWidth * sizing.dialogMaxHeightFraction;
+        final width = galleryTapMode
+            ? availableWidth
+            : availableWidth * sizing.dialogMaxHeightFraction;
         return Align(
           alignment: Alignment.centerLeft,
           widthFactor: 1,
           heightFactor: 1,
           child: SizedBox(
             width: width,
-            child: _AttachmentSurface(
-              backgroundColor: colors.card,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: spacing.m,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        LucideIcons.video,
-                        size: sizing.iconButtonIconSize,
+            child: _AttachmentGalleryAspectFrame(
+              galleryTapMode: galleryTapMode,
+              child: _AttachmentSurface(
+                backgroundColor: colors.card,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: spacing.m,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.video,
+                          size: sizing.iconButtonIconSize,
+                          color: colors.mutedForeground,
+                        ),
+                        SizedBox(width: spacing.s),
+                        Expanded(
+                          child: _AttachmentFileNameText(
+                            filename: metadata.filename,
+                            style: context.textTheme.small.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      sizeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textTheme.small.copyWith(
                         color: colors.mutedForeground,
                       ),
-                      SizedBox(width: spacing.s),
-                      Expanded(
-                        child: _AttachmentFileNameText(
-                          filename: metadata.filename,
-                          style: context.textTheme.small.copyWith(
-                            fontWeight: FontWeight.w600,
+                    ),
+                    if (messageDetails.isNotEmpty)
+                      _AttachmentTimelineDetails(
+                        details: messageDetails,
+                        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+                      ),
+                    if (!galleryTapMode)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: AxiTooltip(
+                          builder: (_) => Text(openTooltip),
+                          child: AxiButton(
+                            variant: AxiButtonVariant.secondary,
+                            loading: downloading,
+                            onPressed: onPressed,
+                            child: Text(
+                              downloading
+                                  ? l10n.chatAttachmentLoading
+                                  : openLabel,
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  Text(
-                    sizeLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.small.copyWith(
-                      color: colors.mutedForeground,
-                    ),
-                  ),
-                  if (messageDetails.isNotEmpty)
-                    _AttachmentTimelineDetails(
-                      details: messageDetails,
-                      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-                    ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: AxiTooltip(
-                      builder: (_) => Text(openTooltip),
-                      child: AxiButton(
-                        variant: AxiButtonVariant.secondary,
-                        loading: downloading,
-                        onPressed: onPressed,
-                        child: Text(
-                          downloading ? l10n.chatAttachmentLoading : openLabel,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         );
       },
     );
+    if (!galleryTapMode) {
+      return preview;
+    }
+    return _AttachmentGalleryTapTarget(onTap: onPressed, child: preview);
   }
 }
 

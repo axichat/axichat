@@ -27,32 +27,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-AttachmentGalleryGridMetrics _resolveGridMetrics({
-  required double maxWidth,
-  required double horizontalPadding,
-  required double minTileWidth,
-  required double gridSpacing,
-  required int minColumns,
-  required int maxColumns,
-  required double minAvailableWidth,
-}) {
-  final resolvedWidth = maxWidth > 0 ? maxWidth : minTileWidth;
-  final availableWidth = (resolvedWidth - horizontalPadding)
-      .clamp(minAvailableWidth, resolvedWidth)
-      .toDouble();
-  final rawCount = (availableWidth / minTileWidth).floor();
-  final crossAxisCount = rawCount.clamp(minColumns, maxColumns).toInt();
-  final totalSpacing = gridSpacing * (crossAxisCount - 1);
-  final tileWidth = math.max(
-    minAvailableWidth,
-    (availableWidth - totalSpacing) / crossAxisCount,
-  );
-  return AttachmentGalleryGridMetrics(
-    crossAxisCount: crossAxisCount,
-    tileWidth: tileWidth,
-  );
-}
-
 String? _resolveMetaText({
   required Chat? chat,
   required bool showChatLabel,
@@ -71,16 +45,6 @@ String? _resolveMetaText({
 
 String _galleryDisplayFilename(String filename) =>
     sanitizeUnicodeControls(filename).value;
-
-class AttachmentGalleryGridMetrics {
-  const AttachmentGalleryGridMetrics({
-    required this.crossAxisCount,
-    required this.tileWidth,
-  });
-
-  final int crossAxisCount;
-  final double tileWidth;
-}
 
 class AttachmentGalleryPanel extends StatelessWidget {
   const AttachmentGalleryPanel({
@@ -145,21 +109,6 @@ class AttachmentGalleryView extends StatefulWidget {
 class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   late final TextEditingController _searchController = TextEditingController()
     ..addListener(_handleSearchChanged);
-  AttachmentGalleryLayout _resolveLayout({
-    required bool hasVisualMedia,
-    required AttachmentGalleryLayout? overrideLayout,
-  }) {
-    final defaultLayout = hasVisualMedia
-        ? AttachmentGalleryLayout.grid
-        : AttachmentGalleryLayout.list;
-    return overrideLayout ?? defaultLayout;
-  }
-
-  void _handleLayoutChanged(AttachmentGalleryLayout nextLayout) {
-    context.read<AttachmentGalleryBloc>().add(
-      AttachmentGalleryLayoutChanged(layout: nextLayout),
-    );
-  }
 
   Future<bool> _approveAttachment({
     required Message message,
@@ -227,10 +176,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   @override
   Widget build(BuildContext context) {
-    const gridMinColumns = 2;
-    const gridMaxColumns = 4;
-    const gridMinAvailableWidth = 0.0;
-    final gridHorizontalPadding = context.spacing.l;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     return BlocListener<SettingsCubit, SettingsState>(
       listenWhen: (previous, current) =>
           previous.endpointConfig != current.endpointConfig,
@@ -269,21 +216,14 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
             );
           }
 
-          final layout = _resolveLayout(
-            hasVisualMedia: state.entries.any(
-              (entry) =>
-                  entry.item.metadata.mediaKind != FileMetadataMediaKind.file,
-            ),
-            overrideLayout: state.layoutOverride,
-          );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                  context.spacing.m,
-                  context.spacing.s,
-                  context.spacing.m,
+                  spacing.m,
+                  spacing.s,
+                  spacing.m,
                   0,
                 ),
                 child: AttachmentGalleryControls(
@@ -306,12 +246,10 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                       AttachmentGallerySourceFilterChanged(sourceFilter: value),
                     );
                   },
-                  layout: layout,
-                  onLayoutChanged: _handleLayoutChanged,
                   onClearSearch: _searchController.clear,
                 ),
               ),
-              SizedBox(height: context.spacing.m),
+              SizedBox(height: spacing.m),
               Expanded(
                 child: state.entries.isEmpty
                     ? Center(
@@ -327,88 +265,29 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                           textAlign: TextAlign.center,
                         ),
                       )
-                    : layout == AttachmentGalleryLayout.list
-                    ? ListView.separated(
+                    : GridView.builder(
                         padding: EdgeInsets.fromLTRB(
-                          context.spacing.m,
+                          spacing.m,
                           0,
-                          context.spacing.m,
-                          context.spacing.m,
+                          spacing.m,
+                          spacing.m,
+                        ),
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent:
+                              sizing.attachmentGalleryTileMaxCrossAxisExtent,
+                          childAspectRatio:
+                              sizing.attachmentGalleryTileAspectRatio,
+                          mainAxisSpacing: spacing.s,
+                          crossAxisSpacing: spacing.s,
                         ),
                         itemCount: state.entries.length,
-                        separatorBuilder: (_, _) =>
-                            SizedBox(height: context.spacing.m),
-                        itemBuilder: (context, index) => AttachmentGalleryEntry(
-                          entry: state.entries[index],
-                          showChatLabel: widget.showChatLabel,
-                          layout: layout,
-                          onApproveAttachment: _approveAttachment,
-                          metaSeparator:
-                              context.l10n.attachmentGalleryMetaSeparator,
-                        ),
-                      )
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final gridMetrics = _resolveGridMetrics(
-                            maxWidth: constraints.maxWidth,
-                            horizontalPadding: gridHorizontalPadding,
-                            minTileWidth: context.sizing.menuItemHeight * 3,
-                            gridSpacing: context.spacing.s,
-                            minColumns: gridMinColumns,
-                            maxColumns: gridMaxColumns,
-                            minAvailableWidth: gridMinAvailableWidth,
-                          );
-                          final rowCount =
-                              (state.entries.length /
-                                      gridMetrics.crossAxisCount)
-                                  .ceil();
-                          return ListView.separated(
-                            padding: EdgeInsets.fromLTRB(
-                              context.spacing.m,
-                              0,
-                              context.spacing.m,
-                              context.spacing.m,
-                            ),
-                            itemCount: rowCount,
-                            separatorBuilder: (_, _) =>
-                                SizedBox(height: context.spacing.s),
-                            itemBuilder: (context, rowIndex) {
-                              final rowStart =
-                                  rowIndex * gridMetrics.crossAxisCount;
-                              final rowEnd = math.min(
-                                rowStart + gridMetrics.crossAxisCount,
-                                state.entries.length,
-                              );
-                              final rowItems = state.entries.sublist(
-                                rowStart,
-                                rowEnd,
-                              );
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  for (
-                                    var index = 0;
-                                    index < rowItems.length;
-                                    index += 1
-                                  ) ...[
-                                    SizedBox(
-                                      width: gridMetrics.tileWidth,
-                                      child: AttachmentGalleryEntry(
-                                        entry: rowItems[index],
-                                        showChatLabel: widget.showChatLabel,
-                                        layout: layout,
-                                        onApproveAttachment: _approveAttachment,
-                                        metaSeparator: context
-                                            .l10n
-                                            .attachmentGalleryMetaSeparator,
-                                      ),
-                                    ),
-                                    if (index < rowItems.length - 1)
-                                      SizedBox(width: context.spacing.s),
-                                  ],
-                                ],
-                              );
-                            },
+                        itemBuilder: (context, index) {
+                          return AttachmentGalleryEntry(
+                            entry: state.entries[index],
+                            showChatLabel: widget.showChatLabel,
+                            onApproveAttachment: _approveAttachment,
+                            metaSeparator:
+                                context.l10n.attachmentGalleryMetaSeparator,
                           );
                         },
                       ),
@@ -431,8 +310,6 @@ class AttachmentGalleryControls extends StatelessWidget {
     required this.onTypeFilterChanged,
     required this.sourceFilter,
     required this.onSourceFilterChanged,
-    required this.layout,
-    required this.onLayoutChanged,
     required this.onClearSearch,
   });
 
@@ -443,8 +320,6 @@ class AttachmentGalleryControls extends StatelessWidget {
   final ValueChanged<AttachmentGalleryTypeFilter> onTypeFilterChanged;
   final AttachmentGallerySourceFilter sourceFilter;
   final ValueChanged<AttachmentGallerySourceFilter> onSourceFilterChanged;
-  final AttachmentGalleryLayout layout;
-  final ValueChanged<AttachmentGalleryLayout> onLayoutChanged;
   final VoidCallback onClearSearch;
 
   @override
@@ -456,8 +331,6 @@ class AttachmentGalleryControls extends StatelessWidget {
         AttachmentGallerySearchRow(
           searchController: searchController,
           onClearSearch: onClearSearch,
-          layout: layout,
-          onLayoutChanged: onLayoutChanged,
         ),
         AttachmentGalleryFilterRow(
           sortOption: sortOption,
@@ -477,14 +350,10 @@ class AttachmentGallerySearchRow extends StatelessWidget {
     super.key,
     required this.searchController,
     required this.onClearSearch,
-    required this.layout,
-    required this.onLayoutChanged,
   });
 
   final TextEditingController searchController;
   final VoidCallback onClearSearch;
-  final AttachmentGalleryLayout layout;
-  final ValueChanged<AttachmentGalleryLayout> onLayoutChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -497,48 +366,6 @@ class AttachmentGallerySearchRow extends StatelessWidget {
             clearTooltip: context.l10n.commonClear,
             onClear: onClearSearch,
           ),
-        ),
-        SizedBox(width: context.spacing.s),
-        AttachmentGalleryLayoutToggle(
-          layout: layout,
-          onChanged: onLayoutChanged,
-        ),
-      ],
-    );
-  }
-}
-
-class AttachmentGalleryLayoutToggle extends StatelessWidget {
-  const AttachmentGalleryLayoutToggle({
-    super.key,
-    required this.layout,
-    required this.onChanged,
-  });
-
-  final AttachmentGalleryLayout layout;
-  final ValueChanged<AttachmentGalleryLayout> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AxiIconButton.ghost(
-          iconData: LucideIcons.layoutGrid,
-          tooltip: context.l10n.attachmentGalleryLayoutGridLabel,
-          selected: layout == AttachmentGalleryLayout.grid,
-          onPressed: layout == AttachmentGalleryLayout.grid
-              ? null
-              : () => onChanged(AttachmentGalleryLayout.grid),
-        ),
-        SizedBox(width: context.spacing.s),
-        AxiIconButton.ghost(
-          iconData: LucideIcons.list,
-          tooltip: context.l10n.attachmentGalleryLayoutListLabel,
-          selected: layout == AttachmentGalleryLayout.list,
-          onPressed: layout == AttachmentGalleryLayout.list
-              ? null
-              : () => onChanged(AttachmentGalleryLayout.list),
         ),
       ],
     );
@@ -652,14 +479,12 @@ class AttachmentGalleryEntry extends StatelessWidget {
     super.key,
     required this.showChatLabel,
     required this.entry,
-    required this.layout,
     required this.onApproveAttachment,
     required this.metaSeparator,
   });
 
   final bool showChatLabel;
   final AttachmentGalleryEntryData entry;
-  final AttachmentGalleryLayout layout;
   final Future<bool> Function({
     required Message message,
     required String senderJid,
@@ -753,82 +578,17 @@ class AttachmentGalleryEntry extends StatelessWidget {
           showChatLabel: showChatLabel,
           separator: metaSeparator,
         );
-        return layout == AttachmentGalleryLayout.list
-            ? AttachmentGalleryListItem(
-                metadata: metadata,
-                metadataPending: metadataPending,
-                stanzaId: message.stanzaID,
-                allowed: allowAttachment,
-                downloadDelegate: downloadDelegate,
-                metadataReloadDelegate: metadataReloadDelegate,
-                onAllowPressed: allowPressed,
-                metaText: metaText,
-              )
-            : AttachmentGalleryTile(
-                metadata: metadata,
-                metadataPending: metadataPending,
-                stanzaId: message.stanzaID,
-                allowed: allowAttachment,
-                downloadDelegate: downloadDelegate,
-                metadataReloadDelegate: metadataReloadDelegate,
-                onAllowPressed: allowPressed,
-                metaText: metaText,
-              );
-      },
-    );
-  }
-}
-
-class AttachmentGalleryListItem extends StatelessWidget {
-  const AttachmentGalleryListItem({
-    super.key,
-    required this.metadata,
-    required this.metadataPending,
-    required this.stanzaId,
-    required this.allowed,
-    required this.downloadDelegate,
-    required this.metadataReloadDelegate,
-    required this.onAllowPressed,
-    required this.metaText,
-  });
-
-  final FileMetadataData? metadata;
-  final bool metadataPending;
-  final String stanzaId;
-  final bool allowed;
-  final AttachmentDownloadDelegate? downloadDelegate;
-  final AttachmentMetadataReloadDelegate metadataReloadDelegate;
-  final VoidCallback? onAllowPressed;
-  final String? metaText;
-
-  @override
-  Widget build(BuildContext context) {
-    const metaMaxLines = 1;
-    const previewMaxWidthFraction = 1.0;
-    final metaLabel = metaText;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (metaLabel != null) ...[
-          Text(
-            metaLabel,
-            style: context.textTheme.muted,
-            maxLines: metaMaxLines,
-            overflow: TextOverflow.ellipsis,
-          ),
-          SizedBox(height: context.spacing.xs),
-        ],
-        ChatAttachmentPreview(
-          stanzaId: stanzaId,
+        return AttachmentGalleryTile(
           metadata: metadata,
           metadataPending: metadataPending,
-          allowed: allowed,
+          stanzaId: message.stanzaID,
+          allowed: allowAttachment,
           downloadDelegate: downloadDelegate,
           metadataReloadDelegate: metadataReloadDelegate,
-          onAllowPressed: onAllowPressed,
-          maxWidthFraction: previewMaxWidthFraction,
-        ),
-      ],
+          onAllowPressed: allowPressed,
+          metaText: metaText,
+        );
+      },
     );
   }
 }
@@ -857,8 +617,6 @@ class AttachmentGalleryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const filenameMaxLines = 2;
-    const metaMaxLines = 1;
     const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
     final metadata = this.metadata;
@@ -873,7 +631,6 @@ class AttachmentGalleryTile extends StatelessWidget {
         metaText: metaLabel,
       );
     }
-    final showFilename = metadata?.mediaKind != FileMetadataMediaKind.file;
     final preview = ChatAttachmentPreview(
       stanzaId: stanzaId,
       metadata: metadata,
@@ -883,32 +640,13 @@ class AttachmentGalleryTile extends StatelessWidget {
       metadataReloadDelegate: metadataReloadDelegate,
       onAllowPressed: onAllowPressed,
       maxWidthFraction: previewMaxWidthFraction,
+      galleryTapMode: true,
+      messageDetails: metaLabel == null
+          ? const <InlineSpan>[]
+          : [TextSpan(text: metaLabel)],
     );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        preview,
-        SizedBox(height: context.spacing.s),
-        if (showFilename)
-          Text(
-            metadata == null
-                ? context.l10n.chatAttachmentFallbackLabel
-                : _galleryDisplayFilename(metadata.filename),
-            style: context.textTheme.small,
-            maxLines: filenameMaxLines,
-            overflow: TextOverflow.ellipsis,
-          ),
-        if (metaLabel != null)
-          Text(
-            metaLabel,
-            style: context.textTheme.muted,
-            maxLines: metaMaxLines,
-            overflow: TextOverflow.ellipsis,
-          ),
-        if (!showFilename && metaLabel == null)
-          SizedBox(height: context.spacing.xs),
-      ],
+    return ClipRect(
+      child: Align(alignment: Alignment.centerLeft, child: preview),
     );
   }
 }
@@ -1003,8 +741,8 @@ class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
         canResolve &&
         (previewKind == AttachmentPreviewKind.pdf ||
             previewKind == AttachmentPreviewKind.text);
-
-    return AxiModalSurface(
+    final sendEnabled = metadata.id.trim().isNotEmpty;
+    final tile = AxiModalSurface(
       padding: EdgeInsets.all(spacing.s),
       backgroundColor: colors.card,
       child: ConstrainedBox(
@@ -1050,6 +788,15 @@ class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
                                   onPressed: () {
                                     _actionsController.hide();
                                     _shareAttachment();
+                                  },
+                                ),
+                                AxiMenuAction(
+                                  icon: LucideIcons.send,
+                                  label: l10n.commonSend,
+                                  enabled: sendEnabled && !_busy,
+                                  onPressed: () {
+                                    _actionsController.hide();
+                                    _sendAttachment();
                                   },
                                 ),
                                 if (previewEnabled)
@@ -1116,6 +863,45 @@ class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
                 ],
               ),
       ),
+    );
+
+    return _AttachmentGalleryTileTapTarget(
+      onTap: widget.metadataPending ? null : _handleTileTap,
+      child: tile,
+    );
+  }
+
+  void _handleTileTap() {
+    if (_busy) return;
+    if (!widget.allowed && _effectiveLocalPath == null) {
+      widget.onAllowPressed?.call();
+      return;
+    }
+    final declaredReport = buildDeclaredFileTypeReport(
+      declaredMimeType: widget.metadata.mimeType,
+      fileName: widget.metadata.filename,
+      path: widget.metadata.path,
+    );
+    final previewKind = resolveAttachmentPreviewKind(
+      report: declaredReport,
+      fileName: widget.metadata.filename,
+      path: widget.metadata.path,
+      declaredMimeType: widget.metadata.mimeType,
+    );
+    if ((_effectiveLocalPath != null || widget.downloadDelegate != null) &&
+        (previewKind == AttachmentPreviewKind.pdf ||
+            previewKind == AttachmentPreviewKind.text)) {
+      _previewAttachment();
+      return;
+    }
+    _actionsController.toggle();
+  }
+
+  void _sendAttachment() {
+    if (_busy) return;
+    openSingleAttachmentComposeDraft(
+      context: context,
+      metadata: widget.metadata,
     );
   }
 
@@ -1324,6 +1110,53 @@ class _AttachmentGalleryFileTileState extends State<AttachmentGalleryFileTile> {
         });
       }
     }
+  }
+}
+
+class _AttachmentGalleryTileTapTarget extends StatefulWidget {
+  const _AttachmentGalleryTileTapTarget({
+    required this.onTap,
+    required this.child,
+  });
+
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  State<_AttachmentGalleryTileTapTarget> createState() =>
+      _AttachmentGalleryTileTapTargetState();
+}
+
+class _AttachmentGalleryTileTapTargetState
+    extends State<_AttachmentGalleryTileTapTarget> {
+  final _bounceController = AxiTapBounceController();
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    return ShadFocusable(
+      canRequestFocus: enabled,
+      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+      child: ShadGestureDetector(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        behavior: HitTestBehavior.opaque,
+        hoverStrategies: ShadTheme.of(context).hoverStrategies,
+        onTap: widget.onTap,
+        onTapDown: enabled ? _bounceController.handleTapDown : null,
+        onTapUp: enabled ? _bounceController.handleTapUp : null,
+        onTapCancel: enabled ? _bounceController.handleTapCancel : null,
+        child: AxiTapBounce(
+          controller: _bounceController,
+          enabled: enabled,
+          child: Material(
+            color: Colors.transparent,
+            shape: RoundedSuperellipseBorder(borderRadius: context.radius),
+            clipBehavior: Clip.antiAlias,
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
   }
 }
 
