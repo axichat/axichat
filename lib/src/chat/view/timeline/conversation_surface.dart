@@ -253,6 +253,7 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.bottomContent,
     required this.shareRequestStatus,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.unreadDividerKey,
     required this.onTimelineItemMounted,
@@ -280,6 +281,7 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.onPointerMove,
     required this.onPointerUp,
     required this.onPointerCancel,
+    required this.onUserScrollIntent,
     required this.onClearQuote,
     required this.onTapOutsideRequested,
     required this.resolveViewData,
@@ -303,6 +305,7 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.onReactionSelectionRequested,
     required this.onRecipientTap,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
     required this.onCopyTaskToPersonalCalendar,
     required this.onCopyCriticalPathToPersonalCalendar,
     required this.profileJid,
@@ -374,6 +377,7 @@ class _ChatMainConversationSection extends StatelessWidget {
   final Widget bottomContent;
   final RequestStatus shareRequestStatus;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final GlobalKey unreadDividerKey;
   final ValueChanged<String> onTimelineItemMounted;
@@ -426,6 +430,7 @@ class _ChatMainConversationSection extends StatelessWidget {
   final PointerMoveEventListener onPointerMove;
   final PointerUpEventListener onPointerUp;
   final PointerCancelEventListener onPointerCancel;
+  final VoidCallback onUserScrollIntent;
   final VoidCallback onClearQuote;
   final TapRegionCallback onTapOutsideRequested;
   final ({
@@ -575,6 +580,7 @@ class _ChatMainConversationSection extends StatelessWidget {
   final Future<void> Function(Message message) onReactionSelectionRequested;
   final void Function(chat_models.Chat chat) onRecipientTap;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
+  final ValueChanged<String> onBubbleLayoutAnimationEnd;
   final Future<String?> Function(CalendarTask task)?
   onCopyTaskToPersonalCalendar;
   final Future<bool> Function(
@@ -699,10 +705,12 @@ class _ChatMainConversationSection extends StatelessWidget {
             overlayAnimationDuration: overlayAnimationDuration,
             shareRequestStatus: shareRequestStatus,
             bubbleRegionRegistry: bubbleRegionRegistry,
+            bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
             selectionTapRegionGroup: selectionTapRegionGroup,
             unreadDividerKey: unreadDividerKey,
             onTimelineItemMounted: onTimelineItemMounted,
             onTimelineItemUnmounted: onTimelineItemUnmounted,
+            onUserScrollIntent: onUserScrollIntent,
             messageKeys: messageKeys,
             bubbleWidthByMessageId: bubbleWidthByMessageId,
             shouldAnimateMessage: shouldAnimateMessage,
@@ -732,6 +740,7 @@ class _ChatMainConversationSection extends StatelessWidget {
             onReactionSelectionRequested: onReactionSelectionRequested,
             onRecipientTap: onRecipientTap,
             onBubbleSizeChanged: onBubbleSizeChanged,
+            onBubbleLayoutAnimationEnd: onBubbleLayoutAnimationEnd,
           ),
           typingVisible: typingVisible,
           typingAvatars: typingAvatars,

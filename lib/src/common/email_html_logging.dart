@@ -8,6 +8,9 @@ import 'package:html/parser.dart' as html_parser;
 const bool emailHtmlLoggingEnabled = bool.fromEnvironment(
   'AXI_EMAIL_HTML_LOGGING',
 );
+const bool emailHtmlTapLoggingEnabled = bool.fromEnvironment(
+  'AXI_EMAIL_HTML_TAP_LOGGING',
+);
 const bool emailPlainTextBubbleExperiment = bool.fromEnvironment(
   'AXI_PLAIN_EMAIL_BUBBLES',
 );

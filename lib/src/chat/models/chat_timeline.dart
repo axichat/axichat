@@ -75,6 +75,7 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
     required this.rowText,
     required this.isSelf,
     required this.isEmailMessage,
+    this.isEmailFullMessageLoading = false,
     required this.canSendAgain,
     required this.error,
     required this.trusted,
@@ -120,6 +121,7 @@ final class ChatTimelineMessageItem extends ChatTimelineItem {
   final String rowText;
   final bool isSelf;
   final bool isEmailMessage;
+  final bool isEmailFullMessageLoading;
   final bool canSendAgain;
   final MessageError error;
   final bool? trusted;

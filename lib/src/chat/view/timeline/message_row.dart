@@ -122,10 +122,12 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
     required this.extrasAligned,
     required this.showExtras,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.animate,
     required this.onBubbleTap,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
     this.onTapOutside,
   });
 
@@ -147,10 +149,12 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
   final Widget extrasAligned;
   final bool showExtras;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final bool animate;
   final VoidCallback? onBubbleTap;
   final ValueChanged<Size> onBubbleSizeChanged;
+  final VoidCallback onBubbleLayoutAnimationEnd;
   final TapRegionCallback? onTapOutside;
 
   @override
@@ -204,12 +208,20 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
       curve: _bubbleFocusCurve,
       alignment: self ? Alignment.topRight : Alignment.topLeft,
       clipBehavior: Clip.none,
+      onEnd: onBubbleLayoutAnimationEnd,
       child: bubbleStackWithReply,
     );
     final stableMessageContent = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: messageColumnAlignment,
-      children: [animatedBubbleStackWithReply, if (showExtras) extrasAligned],
+      children: [
+        _MessageBubbleTopAnchor(
+          messageId: messageId,
+          registry: bubbleTopAnchorRegistry,
+        ),
+        animatedBubbleStackWithReply,
+        if (showExtras) extrasAligned,
+      ],
     );
     final messageBody = Column(
       mainAxisSize: MainAxisSize.min,
@@ -331,10 +343,12 @@ class _ChatTimelineBubbleView extends StatelessWidget {
 
 class _ChatTimelineMessageSelectionExtras extends StatelessWidget {
   const _ChatTimelineMessageSelectionExtras({
+    required this.messageId,
     required this.self,
     required this.isSingleSelection,
     required this.actionBar,
     required this.reactionManager,
+    required this.bubbleTopAnchorRegistry,
     required this.availableWidth,
     required this.selectionExtrasPreferredMaxWidth,
     required this.bubbleMaxWidthForLayout,
@@ -344,10 +358,12 @@ class _ChatTimelineMessageSelectionExtras extends StatelessWidget {
     required this.bubbleBottomCutoutPadding,
   });
 
+  final String messageId;
   final bool self;
   final bool isSingleSelection;
   final Widget actionBar;
   final Widget? reactionManager;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final double availableWidth;
   final double selectionExtrasPreferredMaxWidth;
   final double bubbleMaxWidthForLayout;
@@ -377,6 +393,13 @@ class _ChatTimelineMessageSelectionExtras extends StatelessWidget {
         )
         .clamp(0.0, messageRowMaxWidth)
         .toDouble();
+    const actionWrapRows = 2;
+    final actionWrapSpacing = MediaQuery.of(
+      context,
+    ).textScaler.scale(context.spacing.s);
+    final actionWrapHeight =
+        (actionWrapRows * context.sizing.buttonHeightRegular) +
+        ((actionWrapRows - 1) * actionWrapSpacing);
     final selectionExtrasChild = Align(
       alignment: self ? Alignment.centerRight : Alignment.centerLeft,
       child: SizedBox(
@@ -390,6 +413,11 @@ class _ChatTimelineMessageSelectionExtras extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               actionBar,
+              _MessageActionWrapBottomAnchor(
+                messageId: messageId,
+                registry: bubbleTopAnchorRegistry,
+                actionWrapHeight: actionWrapHeight,
+              ),
               if (reactionManager != null) const SizedBox(height: 20),
               ?reactionManager,
             ],

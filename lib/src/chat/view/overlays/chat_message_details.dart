@@ -6,12 +6,17 @@ class ChatMessageDetails extends StatefulWidget {
     this.onAddRecipient,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
+    required this.originalEmailContentKeys,
+    required this.onOriginalEmailContentRequested,
     required this.focusedTimelineMessageItem,
   });
 
   final bool Function(storage_models.Chat recipient)? onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
+  final Set<String> originalEmailContentKeys;
+  final Future<void> Function(BuildContext context, String contentKey)
+  onOriginalEmailContentRequested;
   final ChatTimelineMessageItem? focusedTimelineMessageItem;
 
   @override
@@ -21,7 +26,6 @@ class ChatMessageDetails extends StatefulWidget {
 class _ChatMessageDetailsState extends State<ChatMessageDetails> {
   Locale? _lastLocale;
   late intl.DateFormat _timestampFormat;
-  String? _unblockedEmailContentKey;
 
   @override
   void didChangeDependencies() {
@@ -42,7 +46,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
         final locate = context.read;
         final message = state.focused;
         if (message == null) return const SizedBox.shrink();
-        final emailContentKey = _emailContentKeyForMessage(message);
+        final emailContentKey = _emailOriginalContentKeyForMessage(message);
         return BlocSelector<ProfileCubit, ProfileState, String?>(
           selector: (profileState) => profileState.jid,
           builder: (context, profileJid) {
@@ -265,9 +269,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                                       messageDatabaseId:
                                           entry.sourceMessageDatabaseId,
                                     ),
-                                originalContentUnblocked:
-                                    _unblockedEmailContentKey ==
-                                    emailContentKey,
+                                originalContentUnblocked: widget
+                                    .originalEmailContentKeys
+                                    .contains(entry.originalContentKey),
                                 baseFontSize: settings.messageTextSize.fontSize,
                                 onRemoteImagesApproved:
                                     entry.sourceMessageDatabaseId == null
@@ -276,9 +280,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                                         entry.sourceMessageDatabaseId!,
                                       ),
                                 onOriginalContentUnblocked: () =>
-                                    _handleOriginalEmailUnblock(
+                                    widget.onOriginalEmailContentRequested(
                                       context,
-                                      emailContentKey,
+                                      entry.originalContentKey,
                                     ),
                                 onLinkTap: (url) =>
                                     _handleLinkTap(context, url),
@@ -291,12 +295,13 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                       AxiEmailHtmlPreview(
                         html: normalizedHtmlBody,
                         shouldLoadSafeRemoteImages: shouldLoadSafeRemoteImages,
-                        originalContentUnblocked:
-                            _unblockedEmailContentKey == emailContentKey,
+                        originalContentUnblocked: widget
+                            .originalEmailContentKeys
+                            .contains(emailContentKey),
                         baseFontSize: settings.messageTextSize.fontSize,
                         onRemoteImagesApproved: onRemoteImagesApproved,
                         onOriginalContentUnblocked: () =>
-                            _handleOriginalEmailUnblock(
+                            widget.onOriginalEmailContentRequested(
                               context,
                               emailContentKey,
                             ),
@@ -504,26 +509,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     );
   }
 
-  String _emailContentKeyForMessage(storage_models.Message message) {
-    final deltaMessageId = message.deltaMsgId;
-    if (deltaMessageId != null) {
-      return 'delta:$deltaMessageId';
-    }
-    final localId = message.id?.trim();
-    if (localId != null && localId.isNotEmpty) {
-      return 'id:$localId';
-    }
-    final stanzaId = message.stanzaID.trim();
-    if (stanzaId.isNotEmpty) {
-      return 'stanza:$stanzaId';
-    }
-    final originId = message.originID?.trim();
-    if (originId != null && originId.isNotEmpty) {
-      return 'origin:$originId';
-    }
-    return 'content:${Object.hash(message.senderJid, message.htmlBody, message.body)}';
-  }
-
   List<storage_models.Chat> _shareParticipants(
     List<storage_models.Chat> participants,
     String? chatJid,
@@ -675,26 +660,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     if (!launched && context.mounted) {
       _showSnackbar(context, l10n.chatUnableToOpenHost(report.displayHost));
     }
-  }
-
-  Future<void> _handleOriginalEmailUnblock(
-    BuildContext context,
-    String emailContentKey,
-  ) async {
-    final l10n = context.l10n;
-    final confirmed = await confirm(
-      context,
-      title: l10n.chatEmailOriginalContentConfirmTitle,
-      message: l10n.chatEmailOriginalContentConfirmMessage,
-      confirmLabel: l10n.chatEmailUnblockInteractiveContentButton,
-      destructiveConfirm: false,
-    );
-    if (!context.mounted || confirmed != true) {
-      return;
-    }
-    setState(() {
-      _unblockedEmailContentKey = emailContentKey;
-    });
   }
 
   void _showSnackbar(BuildContext context, String message) {
@@ -910,16 +875,35 @@ class _MessageStatusIndicator extends StatelessWidget {
   }
 }
 
-List<({String? html, String? sourceMessageDatabaseId, String text})>
+List<
+  ({
+    String? html,
+    String originalContentKey,
+    String? sourceMessageDatabaseId,
+    String text,
+  })
+>
 _emailDetailBodyEntriesForTimelineItem(ChatTimelineMessageItem? item) {
   final blocks = item?.emailBodyBlocks;
   if (blocks == null || blocks.isEmpty) {
     return const <
-      ({String? html, String? sourceMessageDatabaseId, String text})
+      ({
+        String? html,
+        String originalContentKey,
+        String? sourceMessageDatabaseId,
+        String text,
+      })
     >[];
   }
   final entries =
-      <({String? html, String? sourceMessageDatabaseId, String text})>[];
+      <
+        ({
+          String? html,
+          String originalContentKey,
+          String? sourceMessageDatabaseId,
+          String text,
+        })
+      >[];
   for (final block in blocks) {
     final entry = _emailDetailBodyEntryForBlock(block);
     if (entry != null) {
@@ -927,11 +911,21 @@ _emailDetailBodyEntriesForTimelineItem(ChatTimelineMessageItem? item) {
     }
   }
   return List<
-    ({String? html, String? sourceMessageDatabaseId, String text})
+    ({
+      String? html,
+      String originalContentKey,
+      String? sourceMessageDatabaseId,
+      String text,
+    })
   >.unmodifiable(entries);
 }
 
-({String? html, String? sourceMessageDatabaseId, String text})?
+({
+  String? html,
+  String originalContentKey,
+  String? sourceMessageDatabaseId,
+  String text,
+})?
 _emailDetailBodyEntryForBlock(ChatTimelineEmailBodyBlock block) {
   final html = block.resolvedHtmlBody?.trim();
   final text = block.plainText.trim();
@@ -940,6 +934,7 @@ _emailDetailBodyEntryForBlock(ChatTimelineEmailBodyBlock block) {
   }
   return (
     html: html == null || html.isEmpty ? null : html,
+    originalContentKey: _emailOriginalContentKeyForBlock(block),
     sourceMessageDatabaseId: block.sourceMessageDatabaseId,
     text: text,
   );

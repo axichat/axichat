@@ -67,10 +67,12 @@ class _ChatMainTimelineList extends StatelessWidget {
     required this.overlayAnimationDuration,
     required this.shareRequestStatus,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.unreadDividerKey,
     required this.onTimelineItemMounted,
     required this.onTimelineItemUnmounted,
+    required this.onUserScrollIntent,
     required this.messageKeys,
     required this.bubbleWidthByMessageId,
     required this.shouldAnimateMessage,
@@ -100,6 +102,7 @@ class _ChatMainTimelineList extends StatelessWidget {
     required this.onReactionSelectionRequested,
     required this.onRecipientTap,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
   });
 
   final List<ChatTimelineItem> items;
@@ -144,10 +147,12 @@ class _ChatMainTimelineList extends StatelessWidget {
   final Duration overlayAnimationDuration;
   final RequestStatus shareRequestStatus;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final GlobalKey unreadDividerKey;
   final ValueChanged<String> onTimelineItemMounted;
   final ValueChanged<String> onTimelineItemUnmounted;
+  final VoidCallback onUserScrollIntent;
   final Map<String, GlobalKey> messageKeys;
   final Map<String, double> bubbleWidthByMessageId;
   final bool Function(Message message) shouldAnimateMessage;
@@ -303,6 +308,7 @@ class _ChatMainTimelineList extends StatelessWidget {
   final Future<void> Function(Message message) onReactionSelectionRequested;
   final void Function(chat_models.Chat chat) onRecipientTap;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
+  final ValueChanged<String> onBubbleLayoutAnimationEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +323,8 @@ class _ChatMainTimelineList extends StatelessWidget {
         renderedMessagesHydrationKey: renderedMessagesHydrationKey,
         onTimelineItemMounted: onTimelineItemMounted,
         onTimelineItemUnmounted: onTimelineItemUnmounted,
+        onUserScrollIntent: onUserScrollIntent,
+        isLoadingEarlier: state.loadEarlierStatus.isLoading,
         itemBuilder: (currentItem, previous, next, visualOrder) =>
             _ChatTimelineItemView(
               currentItem: currentItem,
@@ -362,6 +370,7 @@ class _ChatMainTimelineList extends StatelessWidget {
               overlayAnimationDuration: overlayAnimationDuration,
               shareRequestStatus: shareRequestStatus,
               bubbleRegionRegistry: bubbleRegionRegistry,
+              bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
               selectionTapRegionGroup: selectionTapRegionGroup,
               unreadDividerKey: unreadDividerKey,
               messageKeys: messageKeys,
@@ -393,6 +402,7 @@ class _ChatMainTimelineList extends StatelessWidget {
               onReactionSelectionRequested: onReactionSelectionRequested,
               onRecipientTap: onRecipientTap,
               onBubbleSizeChanged: onBubbleSizeChanged,
+              onBubbleLayoutAnimationEnd: onBubbleLayoutAnimationEnd,
             ),
         messageListOptions: messageListOptions,
         readOnly: true,

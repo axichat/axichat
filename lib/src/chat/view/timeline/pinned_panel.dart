@@ -725,6 +725,7 @@ class _PinnedMessageTile extends StatelessWidget {
           normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: normalizedHtmlText,
           renderedText: messageText,
+          derivation: emailDerivation,
         );
     final bool shouldRenderInlineEmailHtmlBody =
         isEmailMessage &&

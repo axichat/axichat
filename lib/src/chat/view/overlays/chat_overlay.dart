@@ -99,12 +99,17 @@ class _ChatDetailsOverlay extends StatelessWidget {
     required this.onAddRecipient,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
+    required this.originalEmailContentKeys,
+    required this.onOriginalEmailContentRequested,
     required this.focusedTimelineMessageItem,
   });
 
   final bool Function(chat_models.Chat chat) onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
+  final Set<String> originalEmailContentKeys;
+  final Future<void> Function(BuildContext context, String contentKey)
+  onOriginalEmailContentRequested;
   final ChatTimelineMessageItem? focusedTimelineMessageItem;
 
   @override
@@ -119,6 +124,8 @@ class _ChatDetailsOverlay extends StatelessWidget {
             onAddRecipient: onAddRecipient,
             loadedEmailImageMessageIds: loadedEmailImageMessageIds,
             onEmailImagesApproved: onEmailImagesApproved,
+            originalEmailContentKeys: originalEmailContentKeys,
+            onOriginalEmailContentRequested: onOriginalEmailContentRequested,
             focusedTimelineMessageItem: focusedTimelineMessageItem,
           ),
         ),
@@ -459,6 +466,8 @@ class _ChatRouteOverlayStack extends StatelessWidget {
     required this.blockAddress,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
+    required this.originalEmailContentKeys,
+    required this.onOriginalEmailContentRequested,
     required this.onAddRecipientFromChat,
     required this.onViewFilterChanged,
     required this.onNotificationBehaviorChanged,
@@ -482,6 +491,9 @@ class _ChatRouteOverlayStack extends StatelessWidget {
   final String? blockAddress;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
+  final Set<String> originalEmailContentKeys;
+  final Future<void> Function(BuildContext context, String contentKey)
+  onOriginalEmailContentRequested;
   final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
@@ -519,6 +531,8 @@ class _ChatRouteOverlayStack extends StatelessWidget {
           blockAddress: blockAddress,
           loadedEmailImageMessageIds: loadedEmailImageMessageIds,
           onEmailImagesApproved: onEmailImagesApproved,
+          originalEmailContentKeys: originalEmailContentKeys,
+          onOriginalEmailContentRequested: onOriginalEmailContentRequested,
           onAddRecipientFromChat: onAddRecipientFromChat,
           onViewFilterChanged: onViewFilterChanged,
           onNotificationBehaviorChanged: onNotificationBehaviorChanged,
@@ -565,6 +579,8 @@ class _ChatRouteOverlayChild extends StatelessWidget {
     required this.blockAddress,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
+    required this.originalEmailContentKeys,
+    required this.onOriginalEmailContentRequested,
     required this.onAddRecipientFromChat,
     required this.onViewFilterChanged,
     required this.onNotificationBehaviorChanged,
@@ -583,6 +599,9 @@ class _ChatRouteOverlayChild extends StatelessWidget {
   final String? blockAddress;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
+  final Set<String> originalEmailContentKeys;
+  final Future<void> Function(BuildContext context, String contentKey)
+  onOriginalEmailContentRequested;
   final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
@@ -599,6 +618,8 @@ class _ChatRouteOverlayChild extends StatelessWidget {
         onAddRecipient: onAddRecipientFromChat,
         loadedEmailImageMessageIds: loadedEmailImageMessageIds,
         onEmailImagesApproved: onEmailImagesApproved,
+        originalEmailContentKeys: originalEmailContentKeys,
+        onOriginalEmailContentRequested: onOriginalEmailContentRequested,
         focusedTimelineMessageItem: focusedTimelineMessageItem,
       ),
       ChatRouteIndex.settings => _ChatSettingsOverlay(
@@ -632,6 +653,8 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
     required this.blockAddress,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
+    required this.originalEmailContentKeys,
+    required this.onOriginalEmailContentRequested,
     required this.onAddRecipientFromChat,
     required this.onViewFilterChanged,
     required this.onNotificationBehaviorChanged,
@@ -656,6 +679,9 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
   final String? blockAddress;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
+  final Set<String> originalEmailContentKeys;
+  final Future<void> Function(BuildContext context, String contentKey)
+  onOriginalEmailContentRequested;
   final bool Function(chat_models.Chat chat) onAddRecipientFromChat;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
@@ -700,6 +726,8 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
           blockAddress: blockAddress,
           loadedEmailImageMessageIds: loadedEmailImageMessageIds,
           onEmailImagesApproved: onEmailImagesApproved,
+          originalEmailContentKeys: originalEmailContentKeys,
+          onOriginalEmailContentRequested: onOriginalEmailContentRequested,
           onAddRecipientFromChat: onAddRecipientFromChat,
           onViewFilterChanged: onViewFilterChanged,
           onNotificationBehaviorChanged: onNotificationBehaviorChanged,

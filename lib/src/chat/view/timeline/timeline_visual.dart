@@ -341,9 +341,28 @@ class _MessageExtrasColumn extends StatelessWidget {
 class _BubbleRegionRegistry {
   final regions = <String, RenderBox>{};
 
-  Rect? rectFor(String messageId) {
+  RenderBox? renderBoxFor(String messageId) {
     final renderBox = regions[messageId];
     if (renderBox == null || !renderBox.attached) {
+      return null;
+    }
+    return renderBox;
+  }
+
+  Iterable<({String messageId, Rect rect})> attachedRegions() sync* {
+    for (final entry in regions.entries.toList(growable: false)) {
+      final renderBox = entry.value;
+      if (!renderBox.attached) {
+        continue;
+      }
+      final origin = renderBox.localToGlobal(Offset.zero);
+      yield (messageId: entry.key, rect: origin & renderBox.size);
+    }
+  }
+
+  Rect? rectFor(String messageId) {
+    final renderBox = renderBoxFor(messageId);
+    if (renderBox == null) {
       return null;
     }
     final origin = renderBox.localToGlobal(Offset.zero);
@@ -388,6 +407,61 @@ class _MessageBubbleRegion extends SingleChildRenderObjectWidget {
     renderObject
       ..messageId = messageId
       ..registry = registry;
+  }
+}
+
+class _MessageBubbleTopAnchor extends SingleChildRenderObjectWidget {
+  const _MessageBubbleTopAnchor({
+    required this.messageId,
+    required this.registry,
+  }) : super(child: const SizedBox.shrink());
+
+  final String messageId;
+  final _BubbleRegionRegistry registry;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderMessageBubbleRegion(messageId: messageId, registry: registry);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderMessageBubbleRegion renderObject,
+  ) {
+    renderObject
+      ..messageId = messageId
+      ..registry = registry;
+  }
+}
+
+class _MessageActionWrapBottomAnchor extends SingleChildRenderObjectWidget {
+  const _MessageActionWrapBottomAnchor({
+    required this.messageId,
+    required this.registry,
+    required this.actionWrapHeight,
+  }) : super(child: const SizedBox.shrink());
+
+  final String messageId;
+  final _BubbleRegionRegistry registry;
+  final double actionWrapHeight;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderMessageActionWrapBottomAnchor(
+        messageId: _messageActionWrapBottomAnchorId(messageId),
+        registry: registry,
+        actionWrapHeight: actionWrapHeight,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderMessageActionWrapBottomAnchor renderObject,
+  ) {
+    renderObject
+      ..messageId = _messageActionWrapBottomAnchorId(messageId)
+      ..registry = registry
+      ..actionWrapHeight = actionWrapHeight;
   }
 }
 
@@ -436,6 +510,23 @@ class _RenderMessageBubbleRegion extends RenderProxyBox {
   void performLayout() {
     super.performLayout();
     register();
+  }
+}
+
+class _RenderMessageActionWrapBottomAnchor extends _RenderMessageBubbleRegion {
+  _RenderMessageActionWrapBottomAnchor({
+    required super.messageId,
+    required super.registry,
+    required double actionWrapHeight,
+  }) : actionWrapHeight0 = actionWrapHeight;
+
+  double actionWrapHeight0;
+
+  double get actionWrapHeight => actionWrapHeight0;
+
+  set actionWrapHeight(double value) {
+    if (value == actionWrapHeight0) return;
+    actionWrapHeight0 = value;
   }
 }
 

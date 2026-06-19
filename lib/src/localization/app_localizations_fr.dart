@@ -2701,6 +2701,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatEmailImageFailedLabel => 'Image échouée';
 
   @override
+  String get chatEmailLoadImagesButton => 'Charger les images';
+
+  @override
   String get chatEmailInteractiveContentBlockedLabel =>
       'Contenu interactif bloqué pour votre sécurité';
 
@@ -2708,11 +2711,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatEmailUnblockInteractiveContentButton => 'Débloquer';
 
   @override
+  String get chatEmailViewOriginalButton => 'Voir l’original';
+
+  @override
+  String get chatEmailViewingOriginalButton => 'Original affiché';
+
+  @override
   String get chatEmailOriginalContentConfirmTitle => 'Voir l’e-mail original ?';
 
   @override
   String get chatEmailOriginalContentConfirmMessage =>
-      'Le contenu original de l’e-mail peut contacter des serveurs distants et être dangereux. Continuer ?';
+      'Voir l’e-mail original utilise le HTML brut de l’expéditeur. Axichat continue de bloquer les scripts et les images distantes respectent votre réglage d’images, mais les liens et le contenu distant peuvent exposer du suivi ou des destinations non sûres.';
 
   @override
   String get chatEmailInlineImagesUnsupportedLabel =>

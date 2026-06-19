@@ -386,6 +386,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required this.selectionExtrasPreferredMaxWidth,
     required this.shareRequestStatus,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.showEmailWebViewTip,
     required this.emailWebViewTipOrder,
@@ -418,6 +419,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required this.onReactionSelectionRequested,
     required this.onRecipientTap,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
   });
 
   final ChatTimelineItem currentItem;
@@ -457,6 +459,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   final double selectionExtrasPreferredMaxWidth;
   final RequestStatus shareRequestStatus;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final bool showEmailWebViewTip;
   final int emailWebViewTipOrder;
@@ -615,6 +618,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   final Future<void> Function(Message message) onReactionSelectionRequested;
   final void Function(chat_models.Chat chat) onRecipientTap;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
+  final ValueChanged<String> onBubbleLayoutAnimationEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -747,6 +751,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       shareRequestStatus: shareRequestStatus,
       resendLoading: state.isMessageResendLoading(messageModel.stanzaID),
       bubbleRegionRegistry: bubbleRegionRegistry,
+      bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
       showEmailWebViewTip: showEmailWebViewTip,
       emailWebViewTipOrder: emailWebViewTipOrder,
@@ -811,6 +816,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       onReactionSelectionRequested: onReactionSelectionRequested,
       onRecipientTap: onRecipientTap,
       onBubbleSizeChanged: onBubbleSizeChanged,
+      onBubbleLayoutAnimationEnd: onBubbleLayoutAnimationEnd,
     );
   }
 }
@@ -836,6 +842,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.shareRequestStatus,
     required this.resendLoading,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.showEmailWebViewTip,
     required this.emailWebViewTipOrder,
@@ -869,6 +876,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.onReactionSelectionRequested,
     required this.onRecipientTap,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
   });
 
   final ChatTimelineItem currentItem;
@@ -890,6 +898,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   final RequestStatus shareRequestStatus;
   final bool resendLoading;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final bool showEmailWebViewTip;
   final int emailWebViewTipOrder;
@@ -982,6 +991,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   final Future<void> Function(Message message) onReactionSelectionRequested;
   final void Function(chat_models.Chat chat) onRecipientTap;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
+  final ValueChanged<String> onBubbleLayoutAnimationEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -1111,6 +1121,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       isGroupChat: isGroupChat,
       multiSelectActive: multiSelectActive,
       bubbleRegionRegistry: bubbleRegionRegistry,
+      bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
       rowKey: rowKey,
       measuredBubbleWidth: measuredBubbleWidth,
@@ -1134,6 +1145,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
       onBubbleTap: onBubbleTap,
       onTapOutside: onTapOutside,
       onBubbleSizeChanged: onBubbleSizeChanged,
+      onBubbleLayoutAnimationEnd: onBubbleLayoutAnimationEnd,
     );
   }
 }

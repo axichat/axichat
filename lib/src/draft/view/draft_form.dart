@@ -524,7 +524,7 @@ class DraftFormState extends State<DraftForm> {
       context,
       title: l10n.chatEmailOriginalContentConfirmTitle,
       message: l10n.chatEmailOriginalContentConfirmMessage,
-      confirmLabel: l10n.chatEmailUnblockInteractiveContentButton,
+      confirmLabel: l10n.chatEmailViewOriginalButton,
       destructiveConfirm: false,
     );
     if (!mounted || confirmed != true) {

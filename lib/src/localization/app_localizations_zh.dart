@@ -2535,17 +2535,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatEmailImageFailedLabel => '图片加载失败';
 
   @override
+  String get chatEmailLoadImagesButton => '加载图片';
+
+  @override
   String get chatEmailInteractiveContentBlockedLabel => '为安全起见，互动内容已被屏蔽';
 
   @override
   String get chatEmailUnblockInteractiveContentButton => '解除屏蔽';
 
   @override
+  String get chatEmailViewOriginalButton => '查看原始邮件';
+
+  @override
+  String get chatEmailViewingOriginalButton => '正在查看原始邮件';
+
+  @override
   String get chatEmailOriginalContentConfirmTitle => '查看原始邮件？';
 
   @override
   String get chatEmailOriginalContentConfirmMessage =>
-      '原始邮件内容可能会联系远程服务器，并且可能不安全。继续？';
+      '查看原始邮件会使用发件人的原始 HTML。Axichat 仍会阻止脚本，远程图片仍遵循你的图片设置，但链接和远程内容可能暴露跟踪或不安全目标。';
 
   @override
   String get chatEmailInlineImagesUnsupportedLabel => '部分内嵌邮件图片无法显示。';
@@ -9445,17 +9454,26 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatEmailImageFailedLabel => '圖片載入失敗';
 
   @override
+  String get chatEmailLoadImagesButton => '載入圖片';
+
+  @override
   String get chatEmailInteractiveContentBlockedLabel => '為安全起見，互動內容已被封鎖';
 
   @override
   String get chatEmailUnblockInteractiveContentButton => '解除封鎖';
 
   @override
+  String get chatEmailViewOriginalButton => '查看原始電郵';
+
+  @override
+  String get chatEmailViewingOriginalButton => '正在查看原始電郵';
+
+  @override
   String get chatEmailOriginalContentConfirmTitle => '查看原始電郵？';
 
   @override
   String get chatEmailOriginalContentConfirmMessage =>
-      '原始電郵內容可能會聯絡遠端伺服器，且可能不安全。要繼續嗎？';
+      '查看原始電郵會使用寄件人的原始 HTML。Axichat 仍會封鎖指令碼，遠端圖片仍遵循你的圖片設定，但連結和遠端內容可能暴露追蹤或不安全目的地。';
 
   @override
   String get chatEmailInlineImagesUnsupportedLabel => '部分內嵌電郵圖片無法顯示。';

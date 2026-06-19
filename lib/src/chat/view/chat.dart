@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:async/async.dart';
@@ -77,7 +76,6 @@ import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
-import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -188,6 +186,42 @@ const _bubbleFocusDuration = Duration(milliseconds: 620);
 const _bubbleFocusCurve = Curves.easeOutCubic;
 const _chatScrollStoragePrefix = 'chat-scroll-offset-';
 
+String _emailOriginalContentKeyForMessage(Message message) {
+  final deltaMessageId = message.deltaMsgId;
+  if (deltaMessageId != null) {
+    return 'delta:$deltaMessageId';
+  }
+  final localId = message.id?.trim();
+  if (localId != null && localId.isNotEmpty) {
+    return 'id:$localId';
+  }
+  final stanzaId = message.stanzaID.trim();
+  if (stanzaId.isNotEmpty) {
+    return 'stanza:$stanzaId';
+  }
+  final originId = message.originID?.trim();
+  if (originId != null && originId.isNotEmpty) {
+    return 'origin:$originId';
+  }
+  return 'content:${Object.hash(message.senderJid, message.htmlBody, message.body)}';
+}
+
+String _emailOriginalContentKeyForBlock(ChatTimelineEmailBodyBlock block) {
+  final deltaMessageId = block.sourceDeltaMsgId;
+  if (deltaMessageId != null) {
+    return 'delta:$deltaMessageId';
+  }
+  final localId = block.sourceMessageDatabaseId?.trim();
+  if (localId != null && localId.isNotEmpty) {
+    return 'id:$localId';
+  }
+  final stanzaId = block.sourceStanzaId.trim();
+  if (stanzaId.isNotEmpty) {
+    return 'stanza:$stanzaId';
+  }
+  return 'content:${Object.hash(block.plainText, block.resolvedHtmlBody)}';
+}
+
 List<BoxShadow> _selectedBubbleShadows(Color color) => [
   BoxShadow(
     color: color.withValues(alpha: 0.12),
@@ -237,20 +271,159 @@ bool shouldUseSelectedInlineEmailWebViewForTesting({
 }) => isSingleSelection && shouldRenderHtmlBody;
 
 @visibleForTesting
-bool shouldShowSelectedEmailImageLoadButtonForTesting({
+bool shouldRenderSelectedOriginalEmailHtmlBodyForTesting({
   required bool isSingleSelection,
+  required bool containsBlockedHtmlContent,
+  required bool originalContentApproved,
+  required String? normalizedHtmlBody,
+}) =>
+    isSingleSelection &&
+    containsBlockedHtmlContent &&
+    originalContentApproved &&
+    normalizedHtmlBody?.trim().isNotEmpty == true;
+
+@visibleForTesting
+bool shouldRenderInlineEmailHtmlBodyForTesting({
+  required bool hasEmailHtmlBody,
+  required bool shouldRenderTextContent,
+  required bool showsAttachmentOnlySurface,
+  required bool hasVisibleEmailHtmlContent,
+  required bool defaultShowsInlineEmailHtmlBody,
+  required bool isSingleSelection,
+  required bool shouldRenderSelectedOriginalHtmlBody,
+}) =>
+    hasEmailHtmlBody &&
+    shouldRenderTextContent &&
+    !showsAttachmentOnlySurface &&
+    (isSingleSelection ||
+        (hasVisibleEmailHtmlContent && defaultShowsInlineEmailHtmlBody) ||
+        shouldRenderSelectedOriginalHtmlBody);
+
+@visibleForTesting
+bool shouldShowEmailImageLoadButtonForTesting({
   required bool shouldRenderHtmlBody,
   required bool hasRemoteHtmlImages,
   required bool shouldLoadImages,
   required bool hasLoadCallback,
 }) =>
-    shouldUseSelectedInlineEmailWebViewForTesting(
-      isSingleSelection: isSingleSelection,
-      shouldRenderHtmlBody: shouldRenderHtmlBody,
-    ) &&
+    shouldRenderHtmlBody &&
     hasRemoteHtmlImages &&
     !shouldLoadImages &&
     hasLoadCallback;
+
+@visibleForTesting
+bool shouldShowEmailOriginalViewButtonForTesting({
+  required bool containsBlockedHtmlContent,
+  required bool originalContentApproved,
+}) => containsBlockedHtmlContent && !originalContentApproved;
+
+@visibleForTesting
+EmailOriginalContentAction emailOriginalContentActionForTesting({
+  required bool containsBlockedHtmlContent,
+  required bool originalContentVisible,
+}) {
+  if (!containsBlockedHtmlContent) {
+    return EmailOriginalContentAction.hidden;
+  }
+  if (originalContentVisible) {
+    return EmailOriginalContentAction.active;
+  }
+  return EmailOriginalContentAction.available;
+}
+
+@visibleForTesting
+bool shouldShowAttachmentOnlyEmailSurfaceForTesting({
+  required bool shouldRenderTextContent,
+  required bool isSingleSelection,
+  required String trimmedDisplayMessageText,
+  required bool hasVisibleEmailHtmlContent,
+  required bool shouldRenderSelectedOriginalHtmlBody,
+  required bool hasAttachments,
+}) =>
+    shouldRenderTextContent &&
+    !isSingleSelection &&
+    trimmedDisplayMessageText.isEmpty &&
+    !hasVisibleEmailHtmlContent &&
+    !shouldRenderSelectedOriginalHtmlBody &&
+    hasAttachments;
+
+@visibleForTesting
+bool shouldArmWebViewTransitionAutoScrollForTesting({
+  required bool targetMessageHasWebView,
+  required bool previousMessageHasWebView,
+}) => targetMessageHasWebView || previousMessageHasWebView;
+
+@visibleForTesting
+bool shouldWaitForWebViewTransitionHeightForTesting({
+  required bool targetMessageHasWebView,
+  required bool targetMessageIsSelected,
+}) => targetMessageHasWebView && targetMessageIsSelected;
+
+bool _shouldRunWebViewCloseAutoScrollFallback({
+  required bool closeTransitionPending,
+  required bool targetMounted,
+}) => closeTransitionPending && !targetMounted;
+
+@visibleForTesting
+bool shouldRunWebViewCloseAutoScrollFallbackForTesting({
+  required bool closeTransitionPending,
+  required bool targetMounted,
+}) => _shouldRunWebViewCloseAutoScrollFallback(
+  closeTransitionPending: closeTransitionPending,
+  targetMounted: targetMounted,
+);
+
+bool _shouldSwitchWebViewCloseAutoScrollToFallback({
+  required bool closeTransitionPending,
+  required bool unmountedTarget,
+}) => closeTransitionPending && unmountedTarget;
+
+@visibleForTesting
+bool shouldSwitchWebViewCloseAutoScrollToFallbackForTesting({
+  required bool closeTransitionPending,
+  required bool unmountedTarget,
+}) => _shouldSwitchWebViewCloseAutoScrollToFallback(
+  closeTransitionPending: closeTransitionPending,
+  unmountedTarget: unmountedTarget,
+);
+
+String _messageActionWrapBottomAnchorId(String messageId) {
+  return 'message-action-wrap-bottom:$messageId';
+}
+
+@visibleForTesting
+bool shouldSuppressWebViewOpenAutoScrollForTesting({
+  required bool targetMessageHasWebView,
+  required bool targetMessageIsSelected,
+  required double? actionWrapBottom,
+  required double? actionWrapHeight,
+  required double viewportTop,
+  required double viewportBottom,
+}) {
+  if (!targetMessageHasWebView ||
+      !targetMessageIsSelected ||
+      actionWrapBottom == null ||
+      actionWrapHeight == null ||
+      actionWrapHeight <= 0 ||
+      viewportBottom <= viewportTop) {
+    return false;
+  }
+  final actionWrapTop = actionWrapBottom - actionWrapHeight;
+  return actionWrapTop >= viewportTop && actionWrapBottom <= viewportBottom;
+}
+
+@visibleForTesting
+bool shouldSuppressWebViewTopAnchorAutoScrollForTesting({
+  required double? anchorTop,
+  required double viewportTop,
+  required double viewportBottom,
+}) {
+  if (anchorTop == null || viewportBottom <= viewportTop) {
+    return false;
+  }
+  final viewportMidpoint = (viewportTop + viewportBottom) / 2;
+  return anchorTop >= viewportTop && anchorTop <= viewportMidpoint;
+}
 
 @visibleForTesting
 bool shouldShowEmailWebViewTipForTesting({
@@ -285,6 +458,7 @@ bool shouldShowEmailWebViewTipForTesting({
         normalizedHtmlBody: normalizedHtmlBody,
         normalizedHtmlText: emailDerivation.visibleBodyText,
         renderedText: renderedText ?? _emptyText,
+        derivation: emailDerivation,
       ) ||
       emailDerivation.containsBlockedWebViewContent ||
       emailDerivation.containsCidImages;
@@ -423,6 +597,13 @@ final class _RenderedMessageHydrationSnapshot {
   int get hashCode => Object.hash(stanzaId, deltaMessageId, displayed);
 }
 
+enum _WebViewAutoScrollTransition {
+  interaction,
+  close;
+
+  bool get isClose => this == _WebViewAutoScrollTransition.close;
+}
+
 class _ChatState extends State<Chat> {
   static bool get _debugShowAllComposerBanners => kDebugMode && false;
 
@@ -451,6 +632,7 @@ class _ChatState extends State<Chat> {
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
+  final _originalEmailContentKeys = <String>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   static final Map<String, double> _scrollOffsetCache = {};
@@ -462,7 +644,13 @@ class _ChatState extends State<Chat> {
   bool _chatCalendarCanHandleBack = false;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
-  var _selectedMessageVisibilityRequest = 0;
+  String? _lastTappedMessageId;
+  String? _previousTappedMessageId;
+  String? _pendingWebViewAutoScrollMessageId;
+  _WebViewAutoScrollTransition? _pendingWebViewAutoScrollTransition;
+  int _pendingWebViewAutoScrollRequestId = 0;
+  String? _pendingWebViewCloseFallbackMessageId;
+  int? _pendingWebViewCloseFallbackRequestId;
   final _multiSelectedMessageIds = <String>{};
   final _selectedMessageSnapshots = <String, Message>{};
   final _pendingReactionPreviewsByMessageId =
@@ -477,6 +665,7 @@ class _ChatState extends State<Chat> {
   Set<int> _initialEmailViewportDeltaIds = const <int>{};
   var _initialEmailViewportWarmupRequestId = 0;
   _RenderedHydrationSnapshot? _lastRenderedHydrationSnapshot;
+  _RenderedHydrationSnapshot? _lastRenderedPrewarmSnapshot;
   List<RosterItem>? _cachedRosterItems;
   List<chat_models.Chat>? _cachedChatItems;
   String? _cachedSelfAvatarPath;
@@ -493,11 +682,13 @@ class _ChatState extends State<Chat> {
   Map<int, String>? _cachedEmailFullHtmlByDeltaId;
   Map<String, Message> _cachedMessageById = const {};
   List<Message> _cachedFilteredItems = const [];
+  Map<String, int> _cachedFilteredItemIndexByStanzaId = const {};
   List<ChatTimelineItem> _cachedTimelineItems = const [];
   final _bubbleWidthByMessageId = <String, double>{};
   final _emailWebViewHeightByContentKey =
       <String, ({String messageId, double height})>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
+  final _bubbleTopAnchorRegistry = _BubbleRegionRegistry();
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _messageListKey = GlobalKey();
   Set<String> _reportedReadThresholdMessageIds = const <String>{};
@@ -527,7 +718,7 @@ class _ChatState extends State<Chat> {
   var _pendingAttachmentSeed = 0;
   var _handledPendingOpenMessageRequestId = 0;
 
-  bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
+  bool get _multiSelectActive => false;
 
   ChatSettingsSnapshot _settingsSnapshotFromState(SettingsState settings) =>
       ChatSettingsSnapshot(
@@ -585,7 +776,7 @@ class _ChatState extends State<Chat> {
       return;
     }
     _clearOutsideTapTracking();
-    _clearMessageSelection();
+    unawaited(_clearMessageSelection());
   }
 
   void _handleOutsideTapCancel(PointerCancelEvent event) {
@@ -599,6 +790,46 @@ class _ChatState extends State<Chat> {
     if (!_loadedEmailImageMessageIds.add(messageId)) return;
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  Future<void> _handleOriginalEmailContentRequested(
+    BuildContext context,
+    String contentKey, {
+    String? messageId,
+  }) async {
+    if (_originalEmailContentKeys.contains(contentKey)) {
+      if (messageId != null) {
+        _clearMultiSelection();
+        _recordAndArmWebViewAutoScrollTarget(
+          messageId,
+          previousMessageId: _selectedMessageId,
+        );
+        await _selectMessage(messageId);
+      }
+      return;
+    }
+    final l10n = context.l10n;
+    final confirmed = await confirm(
+      context,
+      title: l10n.chatEmailOriginalContentConfirmTitle,
+      message: l10n.chatEmailOriginalContentConfirmMessage,
+      confirmLabel: l10n.chatEmailViewOriginalButton,
+      destructiveConfirm: false,
+    );
+    if (!mounted || !context.mounted || confirmed != true) {
+      return;
+    }
+    setState(() {
+      _originalEmailContentKeys.add(contentKey);
+    });
+    if (messageId != null) {
+      _clearMultiSelection();
+      _recordAndArmWebViewAutoScrollTarget(
+        messageId,
+        previousMessageId: _selectedMessageId,
+      );
+      await _selectMessage(messageId);
     }
   }
 
@@ -822,6 +1053,9 @@ class _ChatState extends State<Chat> {
     if (!mounted) {
       return;
     }
+    if (_selectedMessageId != messageId) {
+      return;
+    }
     final width = size.width;
     final previous = _bubbleWidthByMessageId[messageId];
     if (previous != null && (previous - width).abs() < 0.5) {
@@ -835,6 +1069,7 @@ class _ChatState extends State<Chat> {
   String _emailWebViewHeightCacheKey({
     required Object bubbleContentKey,
     required String html,
+    required EmailHtmlContentMode contentMode,
     required bool shouldLoadImages,
     required double baseFontSize,
   }) {
@@ -842,6 +1077,7 @@ class _ChatState extends State<Chat> {
       bubbleContentKey,
       html.length,
       html.hashCode,
+      contentMode.name,
       shouldLoadImages,
       baseFontSize.toStringAsFixed(2),
     ].join('\n');
@@ -867,9 +1103,6 @@ class _ChatState extends State<Chat> {
       messageId: messageId,
       height: normalizedHeight,
     );
-    if (_selectedMessageId == messageId) {
-      _scheduleSelectedMessageVisibilityCheck(messageId);
-    }
   }
 
   void _pruneEmailWebViewHeights(Set<String> availableIds) {
@@ -1555,23 +1788,32 @@ class _ChatState extends State<Chat> {
     if (viewportRect == null) {
       return const <String>{};
     }
-    final messageIds = <String>{};
-    for (final message in state.items) {
-      final messageId = message.stanzaID.trim();
+    final thresholdMessages = <({String messageId, int index})>[];
+    for (final region in _bubbleRegionRegistry.attachedRegions()) {
+      final messageId = region.messageId.trim();
       if (messageId.isEmpty) {
         continue;
       }
-      final bubbleRect = _bubbleRegionRegistry.rectFor(messageId);
-      if (bubbleRect == null || bubbleRect.height <= 0) {
+      final index =
+          _cachedFilteredItemIndexByStanzaId[messageId] ??
+          _cachedFilteredItemIndexByStanzaId[region.messageId];
+      if (index == null) {
+        continue;
+      }
+      final bubbleRect = region.rect;
+      if (bubbleRect.height <= 0) {
         continue;
       }
       final thresholdY = bubbleRect.top + (bubbleRect.height * 0.6);
       if (thresholdY < viewportRect.top || thresholdY > viewportRect.bottom) {
         continue;
       }
-      messageIds.add(messageId);
+      thresholdMessages.add((messageId: messageId, index: index));
     }
-    return messageIds;
+    thresholdMessages.sort((left, right) => left.index.compareTo(right.index));
+    return Set<String>.unmodifiable(
+      thresholdMessages.map((entry) => entry.messageId),
+    );
   }
 
   void _syncReadThresholdIds() {
@@ -1593,7 +1835,7 @@ class _ChatState extends State<Chat> {
       return;
     }
     _reportedReadThresholdMessageIds = nextIds;
-    final messageIds = nextIds.toList(growable: false)..sort();
+    final messageIds = nextIds.toList(growable: false);
     context.read<ChatBloc>().add(ChatReadThresholdChanged(messageIds));
   }
 
@@ -1648,6 +1890,7 @@ class _ChatState extends State<Chat> {
         _InitialEmailViewportWarmupStatus.pending;
     _initialEmailViewportDeltaIds = const <int>{};
     _lastRenderedHydrationSnapshot = null;
+    _lastRenderedPrewarmSnapshot = null;
     _initialEmailViewportWarmupRequestId += 1;
   }
 
@@ -1657,14 +1900,10 @@ class _ChatState extends State<Chat> {
     if (_cachedFilteredItems.isEmpty || renderedMessages.isEmpty) {
       return renderedMessages;
     }
-    final indexByStanzaId = <String, int>{
-      for (var index = 0; index < _cachedFilteredItems.length; index += 1)
-        _cachedFilteredItems[index].stanzaID: index,
-    };
     int? minIndex;
     int? maxIndex;
     for (final message in renderedMessages) {
-      final index = indexByStanzaId[message.stanzaID];
+      final index = _cachedFilteredItemIndexByStanzaId[message.stanzaID];
       if (index == null) {
         continue;
       }
@@ -1719,20 +1958,20 @@ class _ChatState extends State<Chat> {
     }
     final chatBloc = locate<ChatBloc>();
     final chatState = chatBloc.state;
-    final warmWindow = _emailWarmWindowForRenderedMessages(renderedMessages);
-    final warmup = _prewarmEmailHtmlDerivationsForMessages(
-      messages: warmWindow,
-      emailFullHtmlByDeltaId: chatState.emailFullHtmlByDeltaId,
-      source:
-          _initialEmailViewportWarmupStatus ==
-              _InitialEmailViewportWarmupStatus.warmed
-          ? 'renderedWindow'
-          : 'initialViewport',
-    );
     final hydrationSnapshot = _renderedHydrationSnapshot(
       renderedMessages,
       chatState,
     );
+    final shouldPrewarm = hydrationSnapshot != _lastRenderedPrewarmSnapshot;
+    final warmup = shouldPrewarm
+        ? _prewarmEmailHtmlDerivationsForMessages(
+            messages: _emailWarmWindowForRenderedMessages(renderedMessages),
+            emailFullHtmlByDeltaId: chatState.emailFullHtmlByDeltaId,
+          )
+        : Future<void>.value();
+    if (shouldPrewarm) {
+      _lastRenderedPrewarmSnapshot = hydrationSnapshot;
+    }
     if (hydrationSnapshot != _lastRenderedHydrationSnapshot) {
       _lastRenderedHydrationSnapshot = hydrationSnapshot;
       chatBloc.add(ChatRenderedMessagesHydrationRequested(renderedMessages));
@@ -1741,13 +1980,22 @@ class _ChatState extends State<Chat> {
       unawaited(warmup);
       return;
     }
+    final visibleEmailDeltaIds = _visibleEmailDeltaIdsForInitialReadiness(
+      renderedMessages,
+    );
+    if (_initialEmailViewportWarmupStatus ==
+            _InitialEmailViewportWarmupStatus.warming &&
+        setEquals(visibleEmailDeltaIds, _initialEmailViewportDeltaIds)) {
+      if (shouldPrewarm) {
+        unawaited(warmup);
+      }
+      return;
+    }
     final requestId = _initialEmailViewportWarmupRequestId + 1;
     _initialEmailViewportWarmupRequestId = requestId;
     _initialEmailViewportWarmupStatus =
         _InitialEmailViewportWarmupStatus.warming;
-    _initialEmailViewportDeltaIds = _visibleEmailDeltaIdsForInitialReadiness(
-      renderedMessages,
-    );
+    _initialEmailViewportDeltaIds = visibleEmailDeltaIds;
     unawaited(_completeInitialEmailViewportWarmup(requestId, warmup));
   }
 
@@ -2193,6 +2441,39 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  EmailActionButtonRow? _emailActionButtonRow({
+    required VoidCallback? onLoadImages,
+    required EmailOriginalContentAction originalContentAction,
+    required Future<void> Function()? onViewOriginal,
+  }) {
+    if (onLoadImages == null && !originalContentAction.isVisible) {
+      return null;
+    }
+    return EmailActionButtonRow(
+      onLoadImages: onLoadImages,
+      originalContentAction: originalContentAction,
+      onViewOriginal: originalContentAction.isAvailable ? onViewOriginal : null,
+    );
+  }
+
+  void _appendEmailActionButtonRow({
+    required List<Widget> bubbleTextChildren,
+    required EdgeInsets padding,
+    required VoidCallback? onLoadImages,
+    required EmailOriginalContentAction originalContentAction,
+    required Future<void> Function()? onViewOriginal,
+  }) {
+    final actionRow = _emailActionButtonRow(
+      onLoadImages: onLoadImages,
+      originalContentAction: originalContentAction,
+      onViewOriginal: onViewOriginal,
+    );
+    if (actionRow == null) {
+      return;
+    }
+    bubbleTextChildren.add(Padding(padding: padding, child: actionRow));
+  }
+
   void _appendCollapsedEmailPreviewBubbleContent({
     required BuildContext context,
     required String collapsedEmailPreviewText,
@@ -2234,6 +2515,7 @@ class _ChatState extends State<Chat> {
     required String preparedHtmlBody,
     required String messageStanzaId,
     required String? messageDatabaseId,
+    required String originalContentKey,
     required Object bubbleContentKey,
     required TextStyle baseTextStyle,
     required TextStyle linkStyle,
@@ -2247,13 +2529,30 @@ class _ChatState extends State<Chat> {
         autoLoadEmailImages ||
         (messageDatabaseId != null &&
             _loadedEmailImageMessageIds.contains(messageDatabaseId));
+    final originalContentApproved = _originalEmailContentKeys.contains(
+      originalContentKey,
+    );
+    final emailHtmlContentMode =
+        emailDerivation.containsBlockedWebViewContent && originalContentApproved
+        ? EmailHtmlContentMode.originalPassive
+        : EmailHtmlContentMode.safe;
     final onLoadRequested = messageDatabaseId == null
         ? null
-        : () => _handleEmailImagesApproved(messageDatabaseId);
+        : () {
+            _clearMultiSelection();
+            _recordAndArmWebViewAutoScrollTarget(
+              messageStanzaId,
+              previousMessageId: _selectedMessageId,
+            );
+            _handleEmailImagesApproved(messageDatabaseId);
+            if (_selectedMessageId != messageStanzaId) {
+              unawaited(_selectMessage(messageStanzaId));
+            }
+          };
     final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
         ? normalizedHtmlText
         : null;
-    final shouldRenderHtmlBody =
+    final shouldRenderPreparedHtmlBody =
         !emailPlainTextBubbleExperiment &&
         preparedHtmlBody.trim().isNotEmpty &&
         _emailHtmlHasVisibleTimelineContent(
@@ -2261,6 +2560,20 @@ class _ChatState extends State<Chat> {
           normalizedHtmlText: normalizedHtmlText,
           derivation: emailDerivation,
         );
+    final shouldRenderOriginalHtmlBody =
+        shouldRenderSelectedOriginalEmailHtmlBodyForTesting(
+          isSingleSelection: isSingleSelection,
+          containsBlockedHtmlContent:
+              emailDerivation.containsBlockedWebViewContent,
+          originalContentApproved: originalContentApproved,
+          normalizedHtmlBody: normalizedHtmlBody,
+        );
+    final shouldRenderSelectedHtmlBody =
+        isSingleSelection && normalizedHtmlBody.trim().isNotEmpty;
+    final shouldRenderHtmlBody =
+        shouldRenderPreparedHtmlBody ||
+        shouldRenderOriginalHtmlBody ||
+        shouldRenderSelectedHtmlBody;
     if (preparedHtmlBody.trim().isNotEmpty) {
       logEmailHtmlStages(
         contentKey: bubbleContentKey,
@@ -2276,15 +2589,25 @@ class _ChatState extends State<Chat> {
           isSingleSelection: isSingleSelection,
           shouldRenderHtmlBody: shouldRenderHtmlBody,
         );
-    final shouldShowLoadImagesButton =
-        shouldShowSelectedEmailImageLoadButtonForTesting(
-          isSingleSelection: isSingleSelection,
-          shouldRenderHtmlBody: shouldRenderHtmlBody,
-          hasRemoteHtmlImages: hasRemoteHtmlImages,
-          shouldLoadImages: shouldLoadImagesInWebView,
-          hasLoadCallback: onLoadRequested != null,
-        );
+    final shouldShowLoadImagesButton = shouldShowEmailImageLoadButtonForTesting(
+      shouldRenderHtmlBody: shouldRenderHtmlBody,
+      hasRemoteHtmlImages: hasRemoteHtmlImages,
+      shouldLoadImages: shouldLoadImagesInWebView,
+      hasLoadCallback: onLoadRequested != null,
+    );
+    final originalContentAction = emailOriginalContentActionForTesting(
+      containsBlockedHtmlContent: emailDerivation.containsBlockedWebViewContent,
+      originalContentVisible: shouldRenderOriginalHtmlBody,
+    );
     final initialChildCount = bubbleTextChildren.length;
+    final onViewOriginal = originalContentAction.isAvailable
+        ? () => _handleOriginalEmailContentRequested(
+            context,
+            originalContentKey,
+            messageId: messageStanzaId,
+          )
+        : null;
+
     if (!shouldRenderHtmlBody &&
         emailFallbackText != null &&
         emailFallbackText.isNotEmpty) {
@@ -2313,17 +2636,17 @@ class _ChatState extends State<Chat> {
       final webViewHeightCacheKey = _emailWebViewHeightCacheKey(
         bubbleContentKey: bubbleContentKey,
         html: normalizedHtmlBody,
+        contentMode: emailHtmlContentMode,
         shouldLoadImages: shouldLoadImagesInWebView,
         baseFontSize: webViewBaseFontSize,
       );
-      if (shouldShowLoadImagesButton) {
-        bubbleTextChildren.add(
-          Padding(
-            padding: EdgeInsets.only(bottom: context.spacing.xs),
-            child: EmailImagePlaceholder(onTap: onLoadRequested),
-          ),
-        );
-      }
+      _appendEmailActionButtonRow(
+        bubbleTextChildren: bubbleTextChildren,
+        padding: EdgeInsets.only(bottom: context.spacing.xs),
+        onLoadImages: shouldShowLoadImagesButton ? onLoadRequested : null,
+        originalContentAction: originalContentAction,
+        onViewOriginal: onViewOriginal,
+      );
       bubbleTextChildren.add(
         shouldUseSelectedInlineEmailWebView
             ? _MessageHtmlWebViewBody(
@@ -2338,6 +2661,7 @@ class _ChatState extends State<Chat> {
                 linkColor: linkColor,
                 baseFontSize: webViewBaseFontSize,
                 shouldLoadImages: shouldLoadImagesInWebView,
+                contentMode: emailHtmlContentMode,
                 initialContentHeight: _emailWebViewHeightFor(
                   webViewHeightCacheKey,
                 ),
@@ -2401,6 +2725,7 @@ class _ChatState extends State<Chat> {
       if (index > 0) {
         bubbleTextChildren.add(SizedBox(height: context.spacing.s));
       }
+      final blockOriginalContentKey = _emailOriginalContentKeyForBlock(block);
       final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
         block.resolvedHtmlBody,
       );
@@ -2418,6 +2743,7 @@ class _ChatState extends State<Chat> {
                 normalizedHtmlBody: normalizedHtmlBody,
                 normalizedHtmlText: normalizedHtmlText,
                 renderedText: renderedText,
+                derivation: emailDerivation,
               ));
       final blockDetails = index == visibleBlocks.length - 1
           ? messageDetails
@@ -2436,6 +2762,7 @@ class _ChatState extends State<Chat> {
           preparedHtmlBody: emailDerivation.preparedFlutterHtml,
           messageStanzaId: messageStanzaId,
           messageDatabaseId: block.sourceMessageDatabaseId,
+          originalContentKey: blockOriginalContentKey,
           bubbleContentKey:
               '${bubbleContentKey}_email_block_${block.sourceStanzaId}',
           baseTextStyle: baseTextStyle,
@@ -2761,6 +3088,12 @@ class _ChatState extends State<Chat> {
               );
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
     final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+    final originalEmailContentKey = isEmailMessage
+        ? _emailOriginalContentKeyForMessage(messageModel)
+        : null;
+    final originalEmailContentApproved =
+        originalEmailContentKey != null &&
+        _originalEmailContentKeys.contains(originalEmailContentKey);
     final visibleSanitizedHtmlText = emailDerivation?.visibleBodyText;
     final normalizedHtmlText = visibleSanitizedHtmlText;
     final hasVisibleEmailHtmlContent =
@@ -2807,11 +3140,24 @@ class _ChatState extends State<Chat> {
     );
     final shouldRenderTextContent =
         !hideFragmentText && !hideAvailabilityText && !hideTaskText;
+    final shouldRenderSelectedOriginalEmailHtmlBody =
+        shouldRenderSelectedOriginalEmailHtmlBodyForTesting(
+          isSingleSelection: isSingleSelection,
+          containsBlockedHtmlContent:
+              emailDerivation?.containsBlockedWebViewContent == true,
+          originalContentApproved: originalEmailContentApproved,
+          normalizedHtmlBody: normalizedHtmlBody,
+        );
     final showsAttachmentOnlySurface =
-        shouldRenderTextContent &&
-        trimmedDisplayMessageText.isEmpty &&
-        !hasVisibleEmailHtmlContent &&
-        attachmentIds.isNotEmpty;
+        shouldShowAttachmentOnlyEmailSurfaceForTesting(
+          shouldRenderTextContent: shouldRenderTextContent,
+          isSingleSelection: isSingleSelection,
+          trimmedDisplayMessageText: trimmedDisplayMessageText,
+          hasVisibleEmailHtmlContent: hasVisibleEmailHtmlContent,
+          shouldRenderSelectedOriginalHtmlBody:
+              shouldRenderSelectedOriginalEmailHtmlBody,
+          hasAttachments: attachmentIds.isNotEmpty,
+        );
     final fullEmailPreviewText = displayMessageText.trim().isNotEmpty
         ? displayMessageText.trim()
         : (visibleSanitizedHtmlText?.trim() ?? _emptyText);
@@ -2832,6 +3178,7 @@ class _ChatState extends State<Chat> {
           normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: normalizedHtmlText,
           renderedText: displayMessageText,
+          derivation: emailDerivation,
         );
     final hasEmailHtmlBody = isEmailMessage && normalizedHtmlBody != null;
     final hasRichEmailHtmlBody =
@@ -2843,11 +3190,16 @@ class _ChatState extends State<Chat> {
         !showsAttachmentOnlySurface &&
         hasRichEmailHtmlBody;
     final shouldRenderInlineEmailHtmlBody =
-        hasEmailHtmlBody &&
-        hasVisibleEmailHtmlContent &&
-        shouldRenderTextContent &&
-        !showsAttachmentOnlySurface &&
-        (defaultShowsInlineEmailHtmlBody || isSingleSelection);
+        shouldRenderInlineEmailHtmlBodyForTesting(
+          hasEmailHtmlBody: hasEmailHtmlBody,
+          shouldRenderTextContent: shouldRenderTextContent,
+          showsAttachmentOnlySurface: showsAttachmentOnlySurface,
+          hasVisibleEmailHtmlContent: hasVisibleEmailHtmlContent,
+          defaultShowsInlineEmailHtmlBody: defaultShowsInlineEmailHtmlBody,
+          isSingleSelection: isSingleSelection,
+          shouldRenderSelectedOriginalHtmlBody:
+              shouldRenderSelectedOriginalEmailHtmlBody,
+        );
     final autoLoadEmailImages =
         state.chat?.emailRemoteImagesEnabled ??
         context.watch<SettingsCubit>().state.autoLoadEmailImages;
@@ -2878,29 +3230,35 @@ class _ChatState extends State<Chat> {
         detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         bubbleTextChildren: bubbleTextChildren,
       );
-    } else if (shouldRenderInlineEmailHtmlBody) {
-      _appendInlineEmailHtmlBubbleContent(
-        context: context,
-        isSelfBubble: isSelfBubble,
-        isSingleSelection: isSingleSelection,
-        autoLoadEmailImages: autoLoadEmailImages,
-        hasRemoteHtmlImages: emailDerivation.containsRemoteImages,
-        rawHtmlBody: resolvedHtmlBody,
-        normalizedHtmlBody: normalizedHtmlBody,
-        normalizedHtmlText: visibleSanitizedHtmlText,
-        emailDerivation: emailDerivation,
-        preparedHtmlBody: emailDerivation.preparedFlutterHtml,
-        messageStanzaId: messageModel.stanzaID,
-        messageDatabaseId: messageModel.id,
-        bubbleContentKey: bubbleContentKey,
-        baseTextStyle: baseTextStyle,
-        linkStyle: linkStyle,
-        bubbleColor: bubbleColor,
-        textColor: textColor,
-        messageDetails: messageDetails,
-        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
-        bubbleTextChildren: bubbleTextChildren,
-      );
+    } else if (shouldRenderInlineEmailHtmlBody &&
+        normalizedHtmlBody != null &&
+        originalEmailContentKey != null) {
+      final inlineEmailDerivation = emailDerivation;
+      if (inlineEmailDerivation != null) {
+        _appendInlineEmailHtmlBubbleContent(
+          context: context,
+          isSelfBubble: isSelfBubble,
+          isSingleSelection: isSingleSelection,
+          autoLoadEmailImages: autoLoadEmailImages,
+          hasRemoteHtmlImages: inlineEmailDerivation.containsRemoteImages,
+          rawHtmlBody: resolvedHtmlBody,
+          normalizedHtmlBody: normalizedHtmlBody,
+          normalizedHtmlText: visibleSanitizedHtmlText,
+          emailDerivation: inlineEmailDerivation,
+          preparedHtmlBody: inlineEmailDerivation.preparedFlutterHtml,
+          messageStanzaId: messageModel.stanzaID,
+          messageDatabaseId: messageModel.id,
+          originalContentKey: originalEmailContentKey,
+          bubbleContentKey: bubbleContentKey,
+          baseTextStyle: baseTextStyle,
+          linkStyle: linkStyle,
+          bubbleColor: bubbleColor,
+          textColor: textColor,
+          messageDetails: messageDetails,
+          detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+          bubbleTextChildren: bubbleTextChildren,
+        );
+      }
     } else if (shouldRenderTextContent && !showsAttachmentOnlySurface) {
       _appendTextBodyBubbleContent(
         context: context,
@@ -2912,6 +3270,18 @@ class _ChatState extends State<Chat> {
         messageDetails: messageDetails,
         detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         bubbleTextChildren: bubbleTextChildren,
+      );
+    }
+    if (!timelineMessageItem.retracted &&
+        timelineMessageItem.isEmailFullMessageLoading) {
+      if (bubbleTextChildren.isNotEmpty) {
+        bubbleTextChildren.add(SizedBox(height: context.spacing.xs));
+      }
+      bubbleTextChildren.add(
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: AxiProgressIndicator(color: textColor),
+        ),
       );
     }
     if (timelineMessageItem.retracted) {
@@ -3475,6 +3845,11 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleTimelineBubbleTap(Message message) {
+    if (widget.readOnly) return;
+    _recordAndArmWebViewAutoScrollTarget(
+      message.stanzaID,
+      previousMessageId: _selectedMessageId,
+    );
     _logTappedMessageHtml(message);
     unawaited(_toggleMessageSelection(message));
   }
@@ -3490,7 +3865,7 @@ class _ChatState extends State<Chat> {
   }
 
   void _logTappedMessageHtml(Message message) {
-    if (!kDebugMode && !emailHtmlLoggingEnabled) {
+    if (!kDebugMode && !emailHtmlTapLoggingEnabled) {
       return;
     }
     final locate = context.read;
@@ -5773,46 +6148,151 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  String? _recordMessageInteraction(
+    String messageId, {
+    String? previousMessageId,
+  }) {
+    final trimmedMessageId = messageId.trim();
+    if (trimmedMessageId.isEmpty) {
+      return null;
+    }
+    final trimmedPreviousMessageId = previousMessageId?.trim();
+    _previousTappedMessageId = trimmedPreviousMessageId?.isNotEmpty == true
+        ? trimmedPreviousMessageId
+        : null;
+    _lastTappedMessageId = trimmedMessageId;
+    return trimmedMessageId;
+  }
+
+  bool _shouldArmWebViewAutoScrollTarget(
+    String targetMessageId, {
+    String? previousMessageId,
+  }) {
+    return shouldArmWebViewTransitionAutoScrollForTesting(
+      targetMessageHasWebView: _messageCanRenderSelectedInlineEmailWebView(
+        targetMessageId,
+      ),
+      previousMessageHasWebView: _messageCanRenderSelectedInlineEmailWebView(
+        previousMessageId,
+      ),
+    );
+  }
+
+  String? _effectivePreviousWebViewAutoScrollMessageId(
+    String? previousMessageId,
+  ) {
+    final trimmedPreviousMessageId = previousMessageId?.trim();
+    if (trimmedPreviousMessageId?.isNotEmpty == true) {
+      return trimmedPreviousMessageId;
+    }
+    final pendingMessageId = _pendingWebViewAutoScrollMessageId?.trim();
+    if (pendingMessageId == null || pendingMessageId.isEmpty) {
+      return null;
+    }
+    if (!_messageCanRenderSelectedInlineEmailWebView(pendingMessageId)) {
+      return null;
+    }
+    return pendingMessageId;
+  }
+
+  void _recordAndArmWebViewAutoScrollTarget(
+    String messageId, {
+    String? previousMessageId,
+    _WebViewAutoScrollTransition transition =
+        _WebViewAutoScrollTransition.interaction,
+  }) {
+    final effectivePreviousMessageId =
+        _effectivePreviousWebViewAutoScrollMessageId(previousMessageId);
+    final targetMessageId = _recordMessageInteraction(
+      messageId,
+      previousMessageId: effectivePreviousMessageId,
+    );
+    if (targetMessageId == null || targetMessageId.isEmpty) {
+      _cancelLastTappedAutoScroll();
+      return;
+    }
+    if (!_shouldArmWebViewAutoScrollTarget(
+      targetMessageId,
+      previousMessageId: effectivePreviousMessageId,
+    )) {
+      _cancelLastTappedAutoScroll();
+      return;
+    }
+    _pendingWebViewAutoScrollMessageId = targetMessageId;
+    _pendingWebViewAutoScrollTransition = transition;
+    _pendingWebViewAutoScrollRequestId += 1;
+    _pendingWebViewCloseFallbackMessageId = null;
+    _pendingWebViewCloseFallbackRequestId = null;
+  }
+
+  void _cancelLastTappedAutoScroll() {
+    if (_pendingWebViewAutoScrollMessageId != null ||
+        _pendingWebViewAutoScrollTransition != null ||
+        _pendingWebViewCloseFallbackMessageId != null ||
+        _pendingWebViewCloseFallbackRequestId != null) {
+      _pendingWebViewAutoScrollRequestId += 1;
+    }
+    _pendingWebViewAutoScrollMessageId = null;
+    _pendingWebViewAutoScrollTransition = null;
+    _pendingWebViewCloseFallbackMessageId = null;
+    _pendingWebViewCloseFallbackRequestId = null;
+  }
+
+  bool _matchesPendingWebViewAutoScroll(String messageId, int requestId) {
+    return _pendingWebViewAutoScrollMessageId == messageId &&
+        _pendingWebViewAutoScrollRequestId == requestId;
+  }
+
+  bool _matchesPendingWebViewCloseAutoScroll(String messageId, int requestId) {
+    return _matchesPendingWebViewAutoScroll(messageId, requestId) &&
+        _pendingWebViewAutoScrollTransition?.isClose == true;
+  }
+
+  void _completePendingWebViewAutoScroll(String messageId, int requestId) {
+    if (!_matchesPendingWebViewAutoScroll(messageId, requestId)) {
+      return;
+    }
+    _pendingWebViewAutoScrollRequestId += 1;
+    _pendingWebViewAutoScrollMessageId = null;
+    _pendingWebViewAutoScrollTransition = null;
+    _pendingWebViewCloseFallbackMessageId = null;
+    _pendingWebViewCloseFallbackRequestId = null;
+  }
+
   Future<void> _clearMessageSelection() async {
-    if (_selectedMessageId == null) return;
-    _selectedMessageVisibilityRequest += 1;
+    final clearedMessageId = _selectedMessageId;
+    if (clearedMessageId == null) return;
+    _recordAndArmWebViewAutoScrollTarget(
+      clearedMessageId,
+      previousMessageId: clearedMessageId,
+      transition: _WebViewAutoScrollTransition.close,
+    );
+    final webViewAutoScrollRequestId = _pendingWebViewAutoScrollRequestId;
+    final needsCloseFallback = _shouldRunWebViewCloseAutoScrollFallback(
+      closeTransitionPending: _matchesPendingWebViewCloseAutoScroll(
+        clearedMessageId,
+        webViewAutoScrollRequestId,
+      ),
+      targetMounted: _isTimelineMessageMounted(clearedMessageId),
+    );
     setState(() {
       _selectedMessageId = null;
     });
+    if (needsCloseFallback) {
+      _schedulePendingWebViewCloseAutoScrollFallback(
+        clearedMessageId,
+        webViewAutoScrollRequestId,
+      );
+    }
   }
 
-  Future<void> _startMultiSelect(Message message) async {
-    final messageId = message.stanzaID;
-    if (widget.readOnly) return;
-    if (_multiSelectedMessageIds.length == 1 &&
-        _multiSelectedMessageIds.contains(messageId) &&
-        _selectedMessageId == null) {
-      return;
-    }
-    await _clearMessageSelection();
-    setState(() {
-      _multiSelectedMessageIds
-        ..clear()
-        ..add(messageId);
-      _selectedMessageSnapshots
-        ..clear()
-        ..[messageId] = message;
-    });
+  Future<void> _startMultiSelect(Message message) {
+    _clearMultiSelection();
+    return Future<void>.value();
   }
 
   void _toggleMultiSelectMessage(Message message) {
-    final messageId = message.stanzaID;
-    if (widget.readOnly) return;
-    final mutated = _multiSelectedMessageIds.contains(messageId);
-    setState(() {
-      if (mutated) {
-        _multiSelectedMessageIds.remove(messageId);
-        _selectedMessageSnapshots.remove(messageId);
-      } else {
-        _multiSelectedMessageIds.add(messageId);
-        _selectedMessageSnapshots[messageId] = message;
-      }
-    });
+    _clearMultiSelection();
   }
 
   void _syncSelectionCaches(
@@ -5847,9 +6327,10 @@ class _ChatState extends State<Chat> {
       didChange = true;
     }
     for (final id in availableIds) {
-      if (_messageKeys.containsKey(id)) continue;
-      _messageKeys[id] = GlobalKey();
-      didChange = true;
+      if (!_messageKeys.containsKey(id)) {
+        _messageKeys[id] = GlobalKey();
+        didChange = true;
+      }
     }
     if (removedSelections.isNotEmpty) {
       _multiSelectedMessageIds.removeAll(removedSelections);
@@ -5967,7 +6448,6 @@ class _ChatState extends State<Chat> {
   Future<void> _prewarmEmailHtmlDerivationsForMessages({
     required List<Message> messages,
     required Map<int, String> emailFullHtmlByDeltaId,
-    required String source,
   }) async {
     final normalizedHtmlBodies = _emailHtmlDerivationPrewarmBodies(
       messages: messages,
@@ -5976,55 +6456,19 @@ class _ChatState extends State<Chat> {
     if (normalizedHtmlBodies.isEmpty) {
       return;
     }
-    SafeLogging.profileTrace(
-      'chat.emailHtmlPrewarm',
-      'requested',
-      fields: <String, Object?>{
-        'source': source,
-        'messageCount': messages.length,
-        'pendingCount': normalizedHtmlBodies.length,
-        'profileHash': SafeLogging.profileFingerprint(
-          jsonEncode(normalizedHtmlBodies),
-        ),
-      },
-    );
-    await _precacheEmailHtmlDerivations(normalizedHtmlBodies, source: source);
+    await _precacheEmailHtmlDerivations(normalizedHtmlBodies);
   }
 
   Future<bool> _precacheEmailHtmlDerivations(
-    List<String> normalizedHtmlBodies, {
-    required String source,
-  }) async {
-    final stopwatch = Stopwatch()..start();
-    final bool cacheUpdated;
+    List<String> normalizedHtmlBodies,
+  ) async {
     try {
-      cacheUpdated = await HtmlContentCodec.precacheEmailDerivations(
+      return await HtmlContentCodec.precacheEmailDerivations(
         normalizedHtmlBodies,
       );
     } on Exception {
-      SafeLogging.profileTrace(
-        'chat.emailHtmlPrewarm',
-        'end',
-        fields: <String, Object?>{
-          'source': source,
-          'pendingCount': normalizedHtmlBodies.length,
-          'result': 'error',
-          'elapsedMs': stopwatch.elapsedMilliseconds,
-        },
-      );
       return false;
     }
-    SafeLogging.profileTrace(
-      'chat.emailHtmlPrewarm',
-      'end',
-      fields: <String, Object?>{
-        'source': source,
-        'pendingCount': normalizedHtmlBodies.length,
-        'cacheUpdated': cacheUpdated,
-        'elapsedMs': stopwatch.elapsedMilliseconds,
-      },
-    );
-    return cacheUpdated;
   }
 
   void _ensureMessageCaches({
@@ -6115,14 +6559,26 @@ class _ChatState extends State<Chat> {
     _cachedEmailFullHtmlByDeltaId = emailFullHtmlByDeltaId;
     _cachedMessageById = messageById;
     _cachedFilteredItems = filteredItems;
+    _cachedFilteredItemIndexByStanzaId = <String, int>{
+      for (var index = 0; index < filteredItems.length; index += 1)
+        filteredItems[index].stanzaID: index,
+    };
   }
 
   void _syncTimelineItems(List<ChatTimelineItem> items) {
     if (identical(items, _cachedTimelineItems)) {
       return;
     }
-    final availableIds = items.map((item) => item.id).toSet();
+    final availableIds = <String>{
+      for (final item in items) item.id,
+      for (final item in items)
+        if (item is ChatTimelineMessageItem) item.messageModel.stanzaID,
+    };
     _mountedTimelineItemIds.removeWhere((id) => !availableIds.contains(id));
+    final pendingMessageId = _pendingWebViewAutoScrollMessageId;
+    if (pendingMessageId != null && !availableIds.contains(pendingMessageId)) {
+      _cancelLastTappedAutoScroll();
+    }
     _cachedTimelineItems = items;
   }
 
@@ -6132,6 +6588,7 @@ class _ChatState extends State<Chat> {
 
   void _handleTimelineItemUnmounted(String itemId) {
     _mountedTimelineItemIds.remove(itemId);
+    _maybeSchedulePendingWebViewCloseFallbackForUnmountedItem(itemId);
   }
 
   void _clearMultiSelection() {
@@ -6167,37 +6624,458 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _selectMessage(String messageId) async {
-    if (_selectedMessageId == messageId) return;
-    setState(() {
-      _selectedMessageId = messageId;
-    });
-    if (!mounted) return;
-    _scheduleSelectedMessageVisibilityCheck(messageId);
+    if (_selectedMessageId != messageId) {
+      setState(() {
+        _selectedMessageId = messageId;
+      });
+    }
   }
 
-  void _scheduleSelectedMessageVisibilityCheck(String messageId) {
-    final request = ++_selectedMessageVisibilityRequest;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          request != _selectedMessageVisibilityRequest ||
-          _selectedMessageId != messageId) {
+  ChatTimelineMessageItem? _timelineMessageItemForId(String? messageId) {
+    final trimmedMessageId = messageId?.trim();
+    if (trimmedMessageId == null || trimmedMessageId.isEmpty) {
+      return null;
+    }
+    for (final item in _cachedTimelineItems) {
+      if (item is! ChatTimelineMessageItem) {
+        continue;
+      }
+      if (item.id == trimmedMessageId ||
+          item.messageModel.stanzaID == trimmedMessageId) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  String? _timelineItemIdForMessageId(String messageId) {
+    return _timelineMessageItemForId(messageId)?.id;
+  }
+
+  bool _timelineItemMatchesMessageId(String itemId, String messageId) {
+    if (itemId == messageId) {
+      return true;
+    }
+    final timelineItem = _timelineMessageItemForId(messageId);
+    if (timelineItem == null) {
+      return false;
+    }
+    return timelineItem.id == itemId ||
+        timelineItem.messageModel.stanzaID == itemId;
+  }
+
+  bool _isTimelineMessageMounted(String messageId) {
+    final timelineItemId = _timelineItemIdForMessageId(messageId);
+    if (timelineItemId != null &&
+        _mountedTimelineItemIds.contains(timelineItemId)) {
+      return true;
+    }
+    return _mountedTimelineItemIds.contains(messageId);
+  }
+
+  void _maybeSchedulePendingWebViewCloseFallbackForUnmountedItem(
+    String itemId,
+  ) {
+    final messageId = _pendingWebViewAutoScrollMessageId;
+    if (messageId == null) {
+      return;
+    }
+    final requestId = _pendingWebViewAutoScrollRequestId;
+    if (!_matchesPendingWebViewCloseAutoScroll(messageId, requestId)) {
+      return;
+    }
+    final unmountedTarget = _timelineItemMatchesMessageId(itemId, messageId);
+    if (!_shouldSwitchWebViewCloseAutoScrollToFallback(
+      closeTransitionPending: true,
+      unmountedTarget: unmountedTarget,
+    )) {
+      return;
+    }
+    _schedulePendingWebViewCloseAutoScrollFallback(messageId, requestId);
+  }
+
+  void _schedulePendingWebViewCloseAutoScrollFallback(
+    String messageId,
+    int requestId,
+  ) {
+    if (!_matchesPendingWebViewCloseAutoScroll(messageId, requestId)) {
+      return;
+    }
+    if (_pendingWebViewCloseFallbackMessageId == messageId &&
+        _pendingWebViewCloseFallbackRequestId == requestId) {
+      return;
+    }
+    _pendingWebViewCloseFallbackMessageId = messageId;
+    _pendingWebViewCloseFallbackRequestId = requestId;
+    unawaited(_runPendingWebViewCloseAutoScrollFallback(messageId, requestId));
+  }
+
+  Future<void> _runPendingWebViewCloseAutoScrollFallback(
+    String messageId,
+    int requestId,
+  ) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        !_matchesPendingWebViewCloseAutoScroll(messageId, requestId)) {
+      return;
+    }
+    final timelineItemId = _timelineItemIdForMessageId(messageId) ?? messageId;
+    final ready = await _prepareTimelineItemContextForScroll(
+      timelineItemId,
+      jumpBeforeWaiting: true,
+    );
+    if (!mounted ||
+        !_matchesPendingWebViewCloseAutoScroll(messageId, requestId)) {
+      return;
+    }
+    if (!ready) {
+      _completePendingWebViewAutoScroll(messageId, requestId);
+      return;
+    }
+    await _scrollPendingWebViewTransitionTarget(
+      messageId,
+      requestId: requestId,
+    );
+  }
+
+  bool _messageCanRenderSelectedInlineEmailWebView(String? messageId) {
+    final timelineItem = _timelineMessageItemForId(messageId);
+    if (timelineItem == null || !timelineItem.isEmailMessage) {
+      return false;
+    }
+    final locate = context.read;
+    final chatState = locate<ChatBloc>().state;
+    if (chatState.chat?.isAxichatWelcomeThread == true) {
+      return false;
+    }
+    for (final block in timelineItem.emailBodyBlocks) {
+      final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
+        block.resolvedHtmlBody,
+      );
+      if (normalizedHtmlBody != null &&
+          emailHtmlDerivationForBody(normalizedHtmlBody) != null) {
+        return true;
+      }
+    }
+    if (timelineItem.emailRfcGroupKey != null &&
+        !timelineItem.isEmailRfcGroupLeader) {
+      return false;
+    }
+    final resolvedHtmlBody =
+        timelineItem.resolvedHtmlBody ??
+        resolvedEmailHtmlBodyForMessage(
+          message: timelineItem.messageModel,
+          emailFullHtmlByDeltaId:
+              _cachedEmailFullHtmlByDeltaId ?? const <int, String>{},
+        );
+    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
+    return normalizedHtmlBody != null &&
+        emailHtmlDerivationForBody(normalizedHtmlBody) != null;
+  }
+
+  List<String> _selectedInlineEmailWebViewHeightCacheKeys(String messageId) {
+    final timelineItem = _timelineMessageItemForId(messageId);
+    if (timelineItem == null || !timelineItem.isEmailMessage) {
+      return const [];
+    }
+    final locate = context.read;
+    final chatState = locate<ChatBloc>().state;
+    if (chatState.chat?.isAxichatWelcomeThread == true) {
+      return const [];
+    }
+    final settings = locate<SettingsCubit>().state;
+    final autoLoadEmailImages =
+        chatState.chat?.emailRemoteImagesEnabled ??
+        settings.autoLoadEmailImages;
+    final webViewBaseFontSize =
+        settings.messageTextSize.fontSize +
+        context.sizing.progressIndicatorStrokeWidth;
+    final contentKeys = <String>[];
+
+    void addContentKey({
+      required Object bubbleContentKey,
+      required String normalizedHtmlBody,
+      required EmailHtmlDerivation emailDerivation,
+      required String originalContentKey,
+      required String? messageDatabaseId,
+    }) {
+      final originalContentApproved = _originalEmailContentKeys.contains(
+        originalContentKey,
+      );
+      final emailHtmlContentMode =
+          emailDerivation.containsBlockedWebViewContent &&
+              originalContentApproved
+          ? EmailHtmlContentMode.originalPassive
+          : EmailHtmlContentMode.safe;
+      final shouldLoadImages =
+          autoLoadEmailImages ||
+          (messageDatabaseId != null &&
+              _loadedEmailImageMessageIds.contains(messageDatabaseId));
+      contentKeys.add(
+        _emailWebViewHeightCacheKey(
+          bubbleContentKey: bubbleContentKey,
+          html: normalizedHtmlBody,
+          contentMode: emailHtmlContentMode,
+          shouldLoadImages: shouldLoadImages,
+          baseFontSize: webViewBaseFontSize,
+        ),
+      );
+    }
+
+    for (final block in timelineItem.emailBodyBlocks) {
+      final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
+        block.resolvedHtmlBody,
+      );
+      final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+      if (normalizedHtmlBody == null || emailDerivation == null) {
+        continue;
+      }
+      addContentKey(
+        bubbleContentKey:
+            '${timelineItem.id}_email_block_${block.sourceStanzaId}',
+        normalizedHtmlBody: normalizedHtmlBody,
+        emailDerivation: emailDerivation,
+        originalContentKey: _emailOriginalContentKeyForBlock(block),
+        messageDatabaseId: block.sourceMessageDatabaseId,
+      );
+    }
+    if (contentKeys.isNotEmpty) {
+      return contentKeys;
+    }
+    if (timelineItem.emailRfcGroupKey != null &&
+        !timelineItem.isEmailRfcGroupLeader) {
+      return const [];
+    }
+    final resolvedHtmlBody =
+        timelineItem.resolvedHtmlBody ??
+        resolvedEmailHtmlBodyForMessage(
+          message: timelineItem.messageModel,
+          emailFullHtmlByDeltaId:
+              _cachedEmailFullHtmlByDeltaId ?? const <int, String>{},
+        );
+    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
+    final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+    if (normalizedHtmlBody == null || emailDerivation == null) {
+      return const [];
+    }
+    addContentKey(
+      bubbleContentKey: timelineItem.id,
+      normalizedHtmlBody: normalizedHtmlBody,
+      emailDerivation: emailDerivation,
+      originalContentKey: _emailOriginalContentKeyForMessage(
+        timelineItem.messageModel,
+      ),
+      messageDatabaseId: timelineItem.messageModel.id,
+    );
+    return contentKeys;
+  }
+
+  bool _selectedInlineEmailWebViewHasMeasuredHeight(String messageId) {
+    final contentKeys = _selectedInlineEmailWebViewHeightCacheKeys(messageId);
+    if (contentKeys.isEmpty) {
+      return false;
+    }
+    for (final contentKey in contentKeys) {
+      final cachedHeight = _emailWebViewHeightByContentKey[contentKey];
+      if (cachedHeight == null ||
+          cachedHeight.messageId != messageId ||
+          cachedHeight.height <= 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _handleBubbleLayoutAnimationEnd(String messageId) {
+    final targetMessageId = _pendingWebViewAutoScrollMessageId;
+    if (targetMessageId == null) {
+      return;
+    }
+    final requestId = _pendingWebViewAutoScrollRequestId;
+    final lastMessageId = _lastTappedMessageId;
+    if (lastMessageId == null || lastMessageId != targetMessageId) {
+      _cancelLastTappedAutoScroll();
+      return;
+    }
+    final previousMessageId = _previousTappedMessageId;
+    final lastMessageHasWebView = _messageCanRenderSelectedInlineEmailWebView(
+      lastMessageId,
+    );
+    final previousMessageHasWebView =
+        _messageCanRenderSelectedInlineEmailWebView(previousMessageId);
+    if (!lastMessageHasWebView && !previousMessageHasWebView) {
+      _cancelLastTappedAutoScroll();
+      return;
+    }
+    if (lastMessageHasWebView && messageId != lastMessageId) {
+      return;
+    }
+    if (shouldWaitForWebViewTransitionHeightForTesting(
+          targetMessageHasWebView: lastMessageHasWebView,
+          targetMessageIsSelected: _selectedMessageId == lastMessageId,
+        ) &&
+        !_selectedInlineEmailWebViewHasMeasuredHeight(lastMessageId)) {
+      return;
+    }
+    if (!lastMessageHasWebView &&
+        previousMessageHasWebView &&
+        messageId != previousMessageId) {
+      return;
+    }
+    unawaited(
+      _scrollPendingWebViewTransitionTarget(
+        targetMessageId,
+        requestId: requestId,
+      ),
+    );
+  }
+
+  void _handleTimelineUserScrollIntent() {
+    _cancelLastTappedAutoScroll();
+  }
+
+  Future<void> _scrollPendingWebViewTransitionTarget(
+    String messageId, {
+    required int requestId,
+  }) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_matchesPendingWebViewAutoScroll(messageId, requestId)) {
+      return;
+    }
+    try {
+      if (_shouldSuppressPendingWebViewOpenAutoScroll(messageId)) {
         return;
       }
-      unawaited(_scrollSelectedMessageIntoView(messageId));
-    });
+      await _scrollMessageTopIntoView(
+        messageId,
+        duration: _bubbleFocusDuration,
+        pendingWebViewAutoScrollMessageId: messageId,
+        pendingWebViewAutoScrollRequestId: requestId,
+        suppressWhenTopAnchorVisibleInUpperViewport: true,
+      );
+    } finally {
+      _completePendingWebViewAutoScroll(messageId, requestId);
+    }
   }
 
-  Future<void> _scrollSelectedMessageIntoView(String messageId) async {
-    final key = _messageKeys[messageId];
-    final context = key?.currentContext;
-    if (context == null) return;
-    await Scrollable.ensureVisible(
-      context,
-      alignment: 0.5,
-      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-      duration: _bubbleFocusDuration,
-      curve: _bubbleFocusCurve,
+  _RenderMessageActionWrapBottomAnchor? _messageActionWrapBottomAnchorFor(
+    String messageId,
+  ) {
+    final renderBox = _bubbleTopAnchorRegistry.renderBoxFor(
+      _messageActionWrapBottomAnchorId(messageId),
     );
+    return renderBox is _RenderMessageActionWrapBottomAnchor ? renderBox : null;
+  }
+
+  ({double top, double bottom})? _timelineViewportVerticalBounds() {
+    final renderObject = _messageListKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.attached) {
+      return null;
+    }
+    final origin = renderObject.localToGlobal(Offset.zero);
+    return (top: origin.dy, bottom: origin.dy + renderObject.size.height);
+  }
+
+  bool _shouldSuppressPendingWebViewOpenAutoScroll(String messageId) {
+    final actionWrapBottomAnchor = _messageActionWrapBottomAnchorFor(messageId);
+    final viewport = _timelineViewportVerticalBounds();
+    if (actionWrapBottomAnchor == null || viewport == null) {
+      return false;
+    }
+    final actionWrapBottom = actionWrapBottomAnchor
+        .localToGlobal(Offset.zero)
+        .dy;
+    return shouldSuppressWebViewOpenAutoScrollForTesting(
+      targetMessageHasWebView: _messageCanRenderSelectedInlineEmailWebView(
+        messageId,
+      ),
+      targetMessageIsSelected: _selectedMessageId == messageId,
+      actionWrapBottom: actionWrapBottom,
+      actionWrapHeight: actionWrapBottomAnchor.actionWrapHeight,
+      viewportTop: viewport.top,
+      viewportBottom: viewport.bottom,
+    );
+  }
+
+  Future<RenderBox?> _waitForBubbleTopAnchor(
+    String messageId, {
+    String? pendingWebViewAutoScrollMessageId,
+    int? pendingWebViewAutoScrollRequestId,
+  }) async {
+    for (var attempt = 0; attempt < 4; attempt += 1) {
+      final renderBox = _bubbleTopAnchorRegistry.renderBoxFor(messageId);
+      if (renderBox != null) {
+        return renderBox;
+      }
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted ||
+          (pendingWebViewAutoScrollMessageId != null &&
+              _pendingWebViewAutoScrollMessageId !=
+                  pendingWebViewAutoScrollMessageId) ||
+          (pendingWebViewAutoScrollRequestId != null &&
+              _pendingWebViewAutoScrollRequestId !=
+                  pendingWebViewAutoScrollRequestId)) {
+        return null;
+      }
+    }
+    return _bubbleTopAnchorRegistry.renderBoxFor(messageId);
+  }
+
+  Future<bool> _scrollMessageTopIntoView(
+    String messageId, {
+    required Duration duration,
+    String? pendingWebViewAutoScrollMessageId,
+    int? pendingWebViewAutoScrollRequestId,
+    bool suppressWhenTopAnchorVisibleInUpperViewport = false,
+  }) async {
+    final renderBox = await _waitForBubbleTopAnchor(
+      messageId,
+      pendingWebViewAutoScrollMessageId: pendingWebViewAutoScrollMessageId,
+      pendingWebViewAutoScrollRequestId: pendingWebViewAutoScrollRequestId,
+    );
+    if (renderBox == null ||
+        !_scrollController.hasClients ||
+        !_scrollController.position.hasPixels ||
+        (pendingWebViewAutoScrollMessageId != null &&
+            _pendingWebViewAutoScrollMessageId !=
+                pendingWebViewAutoScrollMessageId) ||
+        (pendingWebViewAutoScrollRequestId != null &&
+            _pendingWebViewAutoScrollRequestId !=
+                pendingWebViewAutoScrollRequestId)) {
+      return false;
+    }
+    if (suppressWhenTopAnchorVisibleInUpperViewport) {
+      final viewport = _timelineViewportVerticalBounds();
+      final anchorTop = viewport == null
+          ? null
+          : renderBox.localToGlobal(Offset.zero).dy;
+      if (viewport != null &&
+          shouldSuppressWebViewTopAnchorAutoScrollForTesting(
+            anchorTop: anchorTop,
+            viewportTop: viewport.top,
+            viewportBottom: viewport.bottom,
+          )) {
+        return false;
+      }
+    }
+    final position = _scrollController.position;
+    await position.ensureVisible(
+      renderBox,
+      alignment: _visualTopAlignmentForScrollPosition(),
+      duration: duration,
+      curve: _bubbleFocusCurve,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+    );
+    return true;
+  }
+
+  double _visualTopAlignmentForScrollPosition() {
+    final position = _scrollController.position;
+    if (position.axisDirection == AxisDirection.up ||
+        position.axisDirection == AxisDirection.left) {
+      return 1.0;
+    }
+    return 0.0;
   }
 
   BuildContext? get _unreadDividerContext {
@@ -6283,12 +7161,7 @@ class _ChatState extends State<Chat> {
   }
 
   int? _displayedMessageIndex(String messageId) {
-    for (var index = 0; index < _cachedFilteredItems.length; index += 1) {
-      if (_cachedFilteredItems[index].stanzaID == messageId) {
-        return index;
-      }
-    }
-    return null;
+    return _cachedFilteredItemIndexByStanzaId[messageId];
   }
 
   ({int min, int max})? _mountedMessageIndexRange() {
@@ -6520,6 +7393,7 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleScrollTargetRequest(String messageId) async {
+    _recordMessageInteraction(messageId, previousMessageId: _selectedMessageId);
     if (_pinnedPanelVisible) {
       _closePinnedMessages();
       await WidgetsBinding.instance.endOfFrame;
@@ -6529,10 +7403,14 @@ class _ChatState extends State<Chat> {
       return;
     }
     if (_selectedMessageId == messageId) {
-      await _scrollSelectedMessageIntoView(messageId);
+      await _scrollMessageTopIntoView(
+        messageId,
+        duration: _bubbleFocusDuration,
+      );
       return;
     }
     await _selectMessage(messageId);
+    await _scrollMessageTopIntoView(messageId, duration: _bubbleFocusDuration);
   }
 
   @override
@@ -6621,6 +7499,7 @@ class _ChatState extends State<Chat> {
     _scrollController.dispose();
     _emojiPopoverController.dispose();
     _bubbleRegionRegistry.clear();
+    _bubbleTopAnchorRegistry.clear();
     _clearChatRouteHistoryEntry();
     super.dispose();
   }
@@ -6889,6 +7768,7 @@ class _ChatState extends State<Chat> {
                 listener: (_, state) {
                   _activeUnreadDividerScrollRequestId = 0;
                   _completedUnreadDividerScrollRequestId = 0;
+                  _cancelLastTappedAutoScroll();
                   _reportedReadThresholdMessageIds = const <String>{};
                   _resetInitialTimelineReadiness();
                   _mountedTimelineItemIds.clear();

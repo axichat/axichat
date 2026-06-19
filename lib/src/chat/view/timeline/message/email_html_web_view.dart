@@ -464,13 +464,60 @@ _resolveEmailHtmlWebViewLoadingLayout({
         phase == _EmailHtmlWebViewLoadingPhase.preservingFallback,
     paintWebView: hasWebView && !showLoadingOverlay,
     preserveWebView: hasWebView && showLoadingOverlay,
-    useFixedHeight:
-        !hasLoadingFallback ||
-        phase == _EmailHtmlWebViewLoadingPhase.fixedHeight,
+    useFixedHeight: hasContentHeight || !hasLoadingFallback,
     preserveMeasuredHeight:
         hasLoadingFallback && hasContentHeight && showLoadingOverlay,
   );
 }
+
+bool _emailHtmlWebViewShouldPreserveMeasuredHeightForUpdate({
+  required bool hasController,
+  required bool hasMeasuredHeight,
+  required bool htmlChanged,
+  required bool modeChanged,
+  required bool simplifyLayoutChanged,
+  required bool baseFontSizeChanged,
+}) =>
+    hasController &&
+    hasMeasuredHeight &&
+    !htmlChanged &&
+    !modeChanged &&
+    !simplifyLayoutChanged &&
+    !baseFontSizeChanged;
+
+bool _emailHtmlWebViewShouldResetControllerForUpdate({
+  required bool modeChanged,
+  required bool simplifyLayoutChanged,
+  required bool hybridCompositionChanged,
+}) => modeChanged || simplifyLayoutChanged || hybridCompositionChanged;
+
+@visibleForTesting
+bool emailHtmlWebViewShouldPreserveMeasuredHeightForUpdateForTesting({
+  required bool hasController,
+  required bool hasMeasuredHeight,
+  required bool htmlChanged,
+  required bool modeChanged,
+  required bool simplifyLayoutChanged,
+  required bool baseFontSizeChanged,
+}) => _emailHtmlWebViewShouldPreserveMeasuredHeightForUpdate(
+  hasController: hasController,
+  hasMeasuredHeight: hasMeasuredHeight,
+  htmlChanged: htmlChanged,
+  modeChanged: modeChanged,
+  simplifyLayoutChanged: simplifyLayoutChanged,
+  baseFontSizeChanged: baseFontSizeChanged,
+);
+
+@visibleForTesting
+bool emailHtmlWebViewShouldResetControllerForUpdateForTesting({
+  required bool modeChanged,
+  required bool simplifyLayoutChanged,
+  required bool hybridCompositionChanged,
+}) => _emailHtmlWebViewShouldResetControllerForUpdate(
+  modeChanged: modeChanged,
+  simplifyLayoutChanged: simplifyLayoutChanged,
+  hybridCompositionChanged: hybridCompositionChanged,
+);
 
 @visibleForTesting
 ({
@@ -1726,6 +1773,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   Object? _activeWebViewId;
   final Map<Object?, int> _webViewGenerationsById = <Object?, int>{};
   bool _documentHeightObserverInstalled = false;
+  bool _reloadPreparedHtmlWhenControllerReady = false;
   final GlobalKey _platformViewSizeKey = GlobalKey();
   bool _linuxPlatformViewResizeScheduled = false;
   int? _lastLinuxPlatformViewId;
@@ -1899,17 +1947,42 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     _lastProgressLogBucket = null;
     _scheduledMeasurementWebViewGeneration = null;
     _scheduledMeasurementLoadEpoch = null;
+    _reloadPreparedHtmlWhenControllerReady = false;
     super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant EmailHtmlWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.allowRemoteImages != widget.allowRemoteImages ||
-        oldWidget.simplifyLayout != widget.simplifyLayout ||
-        oldWidget._mode != widget._mode ||
-        oldWidget.useHybridComposition != widget.useHybridComposition ||
-        oldWidget.contentMode != widget.contentMode) {
+    final htmlChanged = oldWidget.html != widget.html;
+    final allowRemoteImagesChanged =
+        oldWidget.allowRemoteImages != widget.allowRemoteImages;
+    final simplifyLayoutChanged =
+        oldWidget.simplifyLayout != widget.simplifyLayout;
+    final modeChanged = oldWidget._mode != widget._mode;
+    final hybridCompositionChanged =
+        oldWidget.useHybridComposition != widget.useHybridComposition;
+    final contentModeChanged = oldWidget.contentMode != widget.contentMode;
+    final backgroundColorChanged =
+        oldWidget.backgroundColor != widget.backgroundColor;
+    final textColorChanged = oldWidget.textColor != widget.textColor;
+    final linkColorChanged = oldWidget.linkColor != widget.linkColor;
+    final baseFontSizeChanged = oldWidget.baseFontSize != widget.baseFontSize;
+    final hadController = _controller != null;
+    final preserveMeasuredHeightForRefresh =
+        _emailHtmlWebViewShouldPreserveMeasuredHeightForUpdate(
+          hasController: hadController,
+          hasMeasuredHeight: _contentHeight != null && _contentHeight! > 0,
+          htmlChanged: htmlChanged,
+          modeChanged: modeChanged,
+          simplifyLayoutChanged: simplifyLayoutChanged,
+          baseFontSizeChanged: baseFontSizeChanged,
+        );
+    if (_emailHtmlWebViewShouldResetControllerForUpdate(
+      modeChanged: modeChanged,
+      simplifyLayoutChanged: simplifyLayoutChanged,
+      hybridCompositionChanged: hybridCompositionChanged,
+    )) {
       _traceMeasurement('widget-update-reset-controller');
       _controller = null;
       _activeWebViewId = null;
@@ -1919,38 +1992,43 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _scheduledMeasurementLoadEpoch = null;
     }
     final layoutChanged =
-        oldWidget.html != widget.html ||
-        oldWidget.allowRemoteImages != widget.allowRemoteImages ||
-        oldWidget.simplifyLayout != widget.simplifyLayout ||
-        oldWidget._mode != widget._mode ||
-        oldWidget.contentMode != widget.contentMode ||
-        oldWidget.baseFontSize != widget.baseFontSize;
+        htmlChanged ||
+        allowRemoteImagesChanged ||
+        simplifyLayoutChanged ||
+        modeChanged ||
+        contentModeChanged ||
+        baseFontSizeChanged;
     if (layoutChanged) {
       _traceMeasurement('widget-update-reset-layout');
       _heightMeasurementEpoch++;
-      _contentHeight = _normalizedInitialContentHeight();
+      if (!preserveMeasuredHeightForRefresh) {
+        _contentHeight = _normalizedInitialContentHeight();
+      }
       _documentHeightObserverInstalled = false;
       _linuxFitLockedHeight = null;
       _lastLinuxPlatformViewId = null;
       _lastLinuxPlatformViewSize = null;
       _lastLinuxPlatformViewOffset = null;
     }
-    if (oldWidget.html != widget.html ||
-        oldWidget.allowRemoteImages != widget.allowRemoteImages ||
-        oldWidget.simplifyLayout != widget.simplifyLayout ||
-        oldWidget._mode != widget._mode ||
-        oldWidget.contentMode != widget.contentMode ||
-        oldWidget.backgroundColor != widget.backgroundColor ||
-        oldWidget.textColor != widget.textColor ||
-        oldWidget.linkColor != widget.linkColor ||
-        oldWidget.baseFontSize != widget.baseFontSize) {
+    if (htmlChanged ||
+        allowRemoteImagesChanged ||
+        simplifyLayoutChanged ||
+        modeChanged ||
+        contentModeChanged ||
+        backgroundColorChanged ||
+        textColorChanged ||
+        linkColorChanged ||
+        baseFontSizeChanged) {
       _traceMeasurement('widget-update-refresh-prepared-html');
       _preparedHtmlInputKey = null;
       _documentHeightObserverInstalled = false;
       _linuxFitLockedHeight = null;
+      if (!hadController && _preparedHtmlData != null) {
+        _reloadPreparedHtmlWhenControllerReady = true;
+      }
       _refreshPreparedHtml(
         reload: _controller != null,
-        preserveMeasuredHeight: !layoutChanged,
+        preserveMeasuredHeight: preserveMeasuredHeightForRefresh,
       );
     } else if (oldWidget.initialContentHeight != widget.initialContentHeight &&
         _contentHeight == null) {
@@ -2093,11 +2171,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       preparedHtmlLength: preparedHtmlData.length,
       details: 'reload=$reload',
     );
-    if (reload) {
+    if (reload || _reloadPreparedHtmlWhenControllerReady) {
       if (_controller == null) {
+        _reloadPreparedHtmlWhenControllerReady = true;
         _traceMeasurement('prepare-reload-without-controller');
         setState(() {});
       } else {
+        _reloadPreparedHtmlWhenControllerReady = false;
         _traceMeasurement('prepare-reload-load-html');
         await _loadHtml();
       }
@@ -2147,6 +2227,15 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       webViewGeneration: webViewGeneration,
       preparedHtmlLength: preparedHtmlData.length,
     );
+    await controller.setSettings(settings: _webViewSettings());
+    if (!_canUseController(controller, webViewGeneration)) {
+      _traceMeasurement(
+        'load-html-skip',
+        webViewGeneration: webViewGeneration,
+        details: 'stale-controller-after-settings',
+      );
+      return;
+    }
     _scheduleLoadCompletionFallback(
       controller,
       webViewGeneration: webViewGeneration!,
@@ -3040,8 +3129,6 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       widget._mode.name,
       widget.simplifyLayout,
       widget.useHybridComposition,
-      widget.allowRemoteImages,
-      widget.contentMode.name,
     ].join(':'),
   );
 
@@ -3157,23 +3244,26 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                   },
                 );
               }
-              if (widget.contentMode == EmailHtmlContentMode.originalPassive) {
-                controller.addJavaScriptHandler(
-                  handlerName: _linkHandlerName,
-                  callback: (arguments) {
-                    if (!_canUseController(controller, webViewGeneration)) {
-                      return null;
-                    }
-                    if (arguments.isEmpty) {
-                      return null;
-                    }
-                    final value = arguments.first;
-                    if (value is String) {
-                      _handleOriginalEmailLink(value);
-                    }
+              controller.addJavaScriptHandler(
+                handlerName: _linkHandlerName,
+                callback: (arguments) {
+                  if (!_canUseController(controller, webViewGeneration)) {
                     return null;
-                  },
-                );
+                  }
+                  if (arguments.isEmpty) {
+                    return null;
+                  }
+                  final value = arguments.first;
+                  if (value is String) {
+                    _handleOriginalEmailLink(value);
+                  }
+                  return null;
+                },
+              );
+              if (_reloadPreparedHtmlWhenControllerReady &&
+                  _preparedHtmlData != null) {
+                _reloadPreparedHtmlWhenControllerReady = false;
+                unawaited(_loadHtml());
               }
             },
             onPageCommitVisible: (controller, url) {

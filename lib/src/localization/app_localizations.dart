@@ -4776,6 +4776,12 @@ abstract class AppLocalizations {
   /// **'Image failed'**
   String get chatEmailImageFailedLabel;
 
+  /// No description provided for @chatEmailLoadImagesButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Load images'**
+  String get chatEmailLoadImagesButton;
+
   /// No description provided for @chatEmailInteractiveContentBlockedLabel.
   ///
   /// In en, this message translates to:
@@ -4788,6 +4794,18 @@ abstract class AppLocalizations {
   /// **'Unblock'**
   String get chatEmailUnblockInteractiveContentButton;
 
+  /// No description provided for @chatEmailViewOriginalButton.
+  ///
+  /// In en, this message translates to:
+  /// **'View original'**
+  String get chatEmailViewOriginalButton;
+
+  /// No description provided for @chatEmailViewingOriginalButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing original'**
+  String get chatEmailViewingOriginalButton;
+
   /// No description provided for @chatEmailOriginalContentConfirmTitle.
   ///
   /// In en, this message translates to:
@@ -4797,7 +4815,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatEmailOriginalContentConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'Original email content can contact remote servers and may be unsafe. Continue?'**
+  /// **'Viewing the original email uses the sender’s raw HTML. Axichat keeps scripts blocked and remote images still follow your image setting, but links and remote content can expose tracking or unsafe destinations.'**
   String get chatEmailOriginalContentConfirmMessage;
 
   /// No description provided for @chatEmailInlineImagesUnsupportedLabel.

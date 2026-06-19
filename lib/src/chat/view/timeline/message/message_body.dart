@@ -184,6 +184,7 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
     required this.linkColor,
     required this.baseFontSize,
     required this.shouldLoadImages,
+    required this.contentMode,
     required this.initialContentHeight,
     required this.onLinkTap,
     required this.onContentHeightChanged,
@@ -199,6 +200,7 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
   final Color linkColor;
   final double baseFontSize;
   final bool shouldLoadImages;
+  final EmailHtmlContentMode contentMode;
   final double? initialContentHeight;
   final ValueChanged<String> onLinkTap;
   final ValueChanged<double> onContentHeightChanged;
@@ -219,6 +221,7 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
         textColor: textColor,
         linkColor: linkColor,
         baseFontSize: baseFontSize,
+        contentMode: contentMode,
         initialContentHeight: initialContentHeight,
         onContentHeightChanged: onContentHeightChanged,
         loadingFallback: _MessageHtmlBody(

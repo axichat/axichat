@@ -1114,11 +1114,13 @@ class _ChatScaffoldBody extends StatelessWidget {
                       bottomContent: bottomContent,
                       shareRequestStatus: owner._shareRequestStatus,
                       bubbleRegionRegistry: owner._bubbleRegionRegistry,
+                      bubbleTopAnchorRegistry: owner._bubbleTopAnchorRegistry,
                       selectionTapRegionGroup: owner._selectionTapRegionGroup,
                       unreadDividerKey: owner._unreadDividerKey,
                       onTimelineItemMounted: owner._handleTimelineItemMounted,
                       onTimelineItemUnmounted:
                           owner._handleTimelineItemUnmounted,
+                      onUserScrollIntent: owner._handleTimelineUserScrollIntent,
                       messageKeys: owner._messageKeys,
                       bubbleWidthByMessageId: owner._bubbleWidthByMessageId,
                       shouldAnimateMessage: owner._shouldAnimateMessage,
@@ -1194,6 +1196,8 @@ class _ChatScaffoldBody extends StatelessWidget {
                           owner._handleReactionSelection,
                       onRecipientTap: owner._openChatFromParticipant,
                       onBubbleSizeChanged: owner._updateMessageBubbleWidth,
+                      onBubbleLayoutAnimationEnd:
+                          owner._handleBubbleLayoutAnimationEnd,
                       onCopyTaskToPersonalCalendar: personalCalendarAvailable
                           ? owner._copyTaskToPersonalCalendar
                           : null,
@@ -1223,6 +1227,9 @@ class _ChatScaffoldBody extends StatelessWidget {
           blockAddress: blockAddress,
           loadedEmailImageMessageIds: owner._loadedEmailImageMessageIds,
           onEmailImagesApproved: owner._handleEmailImagesApproved,
+          originalEmailContentKeys: owner._originalEmailContentKeys,
+          onOriginalEmailContentRequested:
+              owner._handleOriginalEmailContentRequested,
           onAddRecipientFromChat: owner._handleRecipientAddedFromChat,
           onViewFilterChanged: owner._setViewFilter,
           onNotificationBehaviorChanged: owner._setNotificationBehavior,

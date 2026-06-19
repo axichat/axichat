@@ -7,7 +7,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/view/timeline/message/email_html_web_view.dart';
 import 'package:axichat/src/chat/view/timeline/message/email_image_extension.dart';
 import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/ui/buttons/axi_button.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' as html_widget;
@@ -77,9 +76,12 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
       _applyDerivation(cachedDerivation);
       return;
     }
-    _hasRenderableRemoteImages = false;
-    _hasBlockedHtmlContent = false;
-    _hasCidHtmlImages = false;
+    _hasRenderableRemoteImages =
+        HtmlContentCodec.containsRenderableRemoteImages(_normalizedHtmlBody);
+    _hasBlockedHtmlContent = HtmlContentCodec.containsBlockedWebViewContent(
+      _normalizedHtmlBody,
+    );
+    _hasCidHtmlImages = HtmlContentCodec.containsCidImages(_normalizedHtmlBody);
     _preparedHtmlBodyForFallback = '';
     unawaited(_deriveFromHtmlAsync(requestId, _normalizedHtmlBody));
   }
@@ -148,16 +150,30 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
             onLinkTap: onLinkTap,
           );
     final spacing = context.spacing;
+    final originalContentAction = hasBlockedHtmlContent
+        ? isOriginalEmailContent
+              ? EmailOriginalContentAction.active
+              : onOriginalContentUnblocked != null
+              ? EmailOriginalContentAction.available
+              : EmailOriginalContentAction.hidden
+        : EmailOriginalContentAction.hidden;
+    final showEmailActionRow =
+        originalContentAction.isVisible ||
+        (hasBlockedRemoteHtmlImages && onRemoteImagesApproved != null);
     return Column(
       spacing: spacing.m,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (hasBlockedHtmlContent && !isOriginalEmailContent)
-          _EmailHtmlSafetyNotice(
-            iconData: LucideIcons.shieldAlert,
-            label: context.l10n.chatEmailInteractiveContentBlockedLabel,
-            onUnblock: onOriginalContentUnblocked,
+        if (showEmailActionRow)
+          EmailActionButtonRow(
+            onLoadImages: hasBlockedRemoteHtmlImages
+                ? onRemoteImagesApproved
+                : null,
+            originalContentAction: originalContentAction,
+            onViewOriginal: hasBlockedHtmlContent && !isOriginalEmailContent
+                ? onOriginalContentUnblocked
+                : null,
           ),
         if (hasCidHtmlImages) const _EmailHtmlCidNotice(),
         DecoratedBox(
@@ -171,14 +187,6 @@ class _AxiEmailHtmlPreviewState extends State<AxiEmailHtmlPreview> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (hasBlockedRemoteHtmlImages && onRemoteImagesApproved != null)
-                Padding(
-                  padding: EdgeInsets.all(spacing.s),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: EmailImagePlaceholder(onTap: onRemoteImagesApproved),
-                  ),
-                ),
               EmailHtmlWebView.embedded(
                 html: normalizedHtmlBody,
                 allowRemoteImages: allowRemoteImagesInWebView,
@@ -240,85 +248,6 @@ class _EmailHtmlFallback extends StatelessWidget {
           },
         ),
       ),
-    );
-  }
-}
-
-class _EmailHtmlSafetyNotice extends StatelessWidget {
-  const _EmailHtmlSafetyNotice({
-    required this.iconData,
-    required this.label,
-    required this.onUnblock,
-  });
-
-  final IconData iconData;
-  final String label;
-  final Future<void> Function()? onUnblock;
-
-  @override
-  Widget build(BuildContext context) {
-    return _EmailHtmlSafetyNoticeContent(
-      iconData: iconData,
-      label: label,
-      onUnblock: onUnblock,
-    );
-  }
-}
-
-class _EmailHtmlSafetyNoticeContent extends StatefulWidget {
-  const _EmailHtmlSafetyNoticeContent({
-    required this.iconData,
-    required this.label,
-    required this.onUnblock,
-  });
-
-  final IconData iconData;
-  final String label;
-  final Future<void> Function()? onUnblock;
-
-  @override
-  State<_EmailHtmlSafetyNoticeContent> createState() =>
-      _EmailHtmlSafetyNoticeContentState();
-}
-
-class _EmailHtmlSafetyNoticeContentState
-    extends State<_EmailHtmlSafetyNoticeContent> {
-  var _unblocking = false;
-
-  Future<void> _handleUnblock() async {
-    final onUnblock = widget.onUnblock;
-    if (_unblocking || onUnblock == null) {
-      return;
-    }
-    setState(() {
-      _unblocking = true;
-    });
-    try {
-      await onUnblock();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _unblocking = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      spacing: context.spacing.xs,
-      children: [
-        _EmailHtmlStatusNotice(iconData: widget.iconData, label: widget.label),
-        AxiButton.outline(
-          size: AxiButtonSize.sm,
-          onPressed: widget.onUnblock == null || _unblocking
-              ? null
-              : () => unawaited(_handleUnblock()),
-          child: Text(context.l10n.chatEmailUnblockInteractiveContentButton),
-        ),
-      ],
     );
   }
 }

@@ -610,6 +610,7 @@ pre, code {
     final derivation = (
       preparedFlutterHtml: preparedFlutterHtml,
       visibleBodyText: toPlainText(preparedFlutterHtml).trim(),
+      isPlainTextHtml: isPlainTextHtml(normalizedHtml),
       containsRemoteImages: containsRenderableRemoteImages(normalizedHtml),
       containsBlockedWebViewContent: containsBlockedWebViewContent(
         normalizedHtml,
@@ -653,6 +654,7 @@ pre, code {
         final normalizedHtml = item['normalizedHtml'];
         final preparedFlutterHtml = item['preparedFlutterHtml'];
         final visibleBodyText = item['visibleBodyText'];
+        final isPlainTextHtml = item['isPlainTextHtml'];
         final containsRemoteImages = item['containsRemoteImages'];
         final containsBlockedWebViewContent =
             item['containsBlockedWebViewContent'];
@@ -660,6 +662,7 @@ pre, code {
         if (normalizedHtml is! String ||
             preparedFlutterHtml is! String ||
             visibleBodyText is! String ||
+            isPlainTextHtml is! bool ||
             containsRemoteImages is! bool ||
             containsBlockedWebViewContent is! bool ||
             containsCidImages is! bool) {
@@ -668,6 +671,7 @@ pre, code {
         _putEmailDerivation(_emailDerivationCacheKey(normalizedHtml), (
           preparedFlutterHtml: preparedFlutterHtml,
           visibleBodyText: visibleBodyText,
+          isPlainTextHtml: isPlainTextHtml,
           containsRemoteImages: containsRemoteImages,
           containsBlockedWebViewContent: containsBlockedWebViewContent,
           containsCidImages: containsCidImages,
@@ -725,6 +729,7 @@ pre, code {
       key.length +
       utf8.encode(derivation.preparedFlutterHtml).length +
       utf8.encode(derivation.visibleBodyText).length +
+      (derivation.isPlainTextHtml ? 1 : 0) +
       (derivation.containsRemoteImages ? 1 : 0) +
       (derivation.containsBlockedWebViewContent ? 1 : 0) +
       (derivation.containsCidImages ? 1 : 0);
@@ -757,11 +762,13 @@ pre, code {
     required String? normalizedHtmlBody,
     required String? normalizedHtmlText,
     required String renderedText,
+    EmailHtmlDerivation? derivation,
   }) {
     if (normalizedHtmlBody == null) {
       return false;
     }
-    if (isPlainTextHtml(normalizedHtmlBody)) {
+    if (derivation?.isPlainTextHtml ??
+        HtmlContentCodec.isPlainTextHtml(normalizedHtmlBody)) {
       return false;
     }
     final comparableRenderedText = _normalizePlainText(renderedText);
@@ -3710,6 +3717,7 @@ List<Map<String, Object>> _deriveEmailHtmlDerivationsForCache(
       'visibleBodyText': HtmlContentCodec.toPlainText(
         preparedFlutterHtml,
       ).trim(),
+      'isPlainTextHtml': HtmlContentCodec.isPlainTextHtml(normalizedHtml),
       'containsRemoteImages': HtmlContentCodec.containsRenderableRemoteImages(
         normalizedHtml,
       ),
@@ -3724,6 +3732,7 @@ List<Map<String, Object>> _deriveEmailHtmlDerivationsForCache(
 typedef EmailHtmlDerivation = ({
   String preparedFlutterHtml,
   String visibleBodyText,
+  bool isPlainTextHtml,
   bool containsRemoteImages,
   bool containsBlockedWebViewContent,
   bool containsCidImages,

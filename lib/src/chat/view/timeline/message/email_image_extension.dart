@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:collection';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -679,6 +680,10 @@ class EmailImagePlaceholder extends StatefulWidget {
 class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
   @override
   Widget build(BuildContext context) {
+    final onTap = widget.onTap;
+    if (onTap != null && !widget.isError) {
+      return EmailLoadImagesButton(onTap: onTap);
+    }
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
@@ -731,5 +736,122 @@ class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
       ),
     );
     return content;
+  }
+}
+
+class EmailLoadImagesButton extends StatelessWidget {
+  const EmailLoadImagesButton({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiButton.secondary(
+      onPressed: onTap,
+      child: Text(context.l10n.chatEmailLoadImagesButton),
+    );
+  }
+}
+
+enum EmailOriginalContentAction {
+  hidden,
+  available,
+  active;
+
+  bool get isVisible => this != hidden;
+
+  bool get isAvailable => this == available;
+
+  bool get isActive => this == active;
+}
+
+class EmailActionButtonRow extends StatelessWidget {
+  const EmailActionButtonRow({
+    super.key,
+    this.onLoadImages,
+    this.originalContentAction = EmailOriginalContentAction.hidden,
+    this.onViewOriginal,
+  });
+
+  final VoidCallback? onLoadImages;
+  final EmailOriginalContentAction originalContentAction;
+  final Future<void> Function()? onViewOriginal;
+
+  @override
+  Widget build(BuildContext context) {
+    final onLoadImages = this.onLoadImages;
+    final spacing = context.spacing;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: spacing.s,
+        runSpacing: spacing.s,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (onLoadImages != null) EmailLoadImagesButton(onTap: onLoadImages),
+          if (originalContentAction.isVisible)
+            EmailOriginalContentButton(
+              action: originalContentAction,
+              onTap: originalContentAction.isAvailable ? onViewOriginal : null,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class EmailOriginalContentButton extends StatefulWidget {
+  const EmailOriginalContentButton({
+    super.key,
+    this.action = EmailOriginalContentAction.available,
+    required this.onTap,
+  });
+
+  final EmailOriginalContentAction action;
+  final Future<void> Function()? onTap;
+
+  @override
+  State<EmailOriginalContentButton> createState() =>
+      _EmailOriginalContentButtonState();
+}
+
+class _EmailOriginalContentButtonState
+    extends State<EmailOriginalContentButton> {
+  var _pending = false;
+
+  Future<void> _handleTap() async {
+    final onTap = widget.onTap;
+    if (_pending || onTap == null) {
+      return;
+    }
+    setState(() {
+      _pending = true;
+    });
+    try {
+      await onTap();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _pending = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.action.isActive) {
+      return AxiButton.secondary(
+        selected: true,
+        onPressed: null,
+        child: Text(context.l10n.chatEmailViewingOriginalButton),
+      );
+    }
+    return AxiButton.secondary(
+      onPressed: widget.onTap == null || _pending
+          ? null
+          : () => unawaited(_handleTap()),
+      child: Text(context.l10n.chatEmailViewOriginalButton),
+    );
   }
 }

@@ -151,6 +151,7 @@ _resolveTimelineMessageRowDecorations({
   required BuildContext context,
   required ChatTimelineItem currentItem,
   required ChatTimelineItem? previous,
+  required String messageId,
   required ChatUser messageUser,
   required bool self,
   required bool isSelected,
@@ -171,6 +172,7 @@ _resolveTimelineMessageRowDecorations({
   required double avatarContentInset,
   required Widget actionBar,
   required Widget? reactionManager,
+  required _BubbleRegionRegistry bubbleTopAnchorRegistry,
   required VoidCallback? onBubbleTap,
 }) {
   final spacing = context.spacing;
@@ -186,10 +188,12 @@ _resolveTimelineMessageRowDecorations({
     right: spacing.m,
   );
   final attachmentsAligned = _ChatTimelineMessageSelectionExtras(
+    messageId: messageId,
     self: self,
     isSingleSelection: isSingleSelection,
     actionBar: actionBar,
     reactionManager: reactionManager,
+    bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
     availableWidth: availableWidth,
     selectionExtrasPreferredMaxWidth: selectionExtrasPreferredMaxWidth,
     bubbleMaxWidthForLayout: bubbleMaxWidthForLayout,
@@ -238,6 +242,7 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
     required this.isGroupChat,
     required this.multiSelectActive,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.rowKey,
     required this.measuredBubbleWidth,
@@ -261,6 +266,7 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
     required this.onBubbleTap,
     required this.onTapOutside,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
   });
 
   final ChatTimelineItem currentItem;
@@ -273,6 +279,7 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
   final bool isGroupChat;
   final bool multiSelectActive;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final Key? rowKey;
   final double? measuredBubbleWidth;
@@ -331,6 +338,7 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
   final VoidCallback? onBubbleTap;
   final TapRegionCallback? onTapOutside;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
+  final ValueChanged<String> onBubbleLayoutAnimationEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -379,12 +387,14 @@ class _ChatTimelineMessageShellView extends StatelessWidget {
       reactionManager: reactionManager,
       bubbleWrapper: bubbleWrapper,
       bubbleRegionRegistry: bubbleRegionRegistry,
+      bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
       rowKey: rowKey,
       animate: animate,
       onBubbleTap: onBubbleTap,
       onTapOutside: onTapOutside,
       onBubbleSizeChanged: onBubbleSizeChanged,
+      onBubbleLayoutAnimationEnd: onBubbleLayoutAnimationEnd,
     );
   }
 }
@@ -415,12 +425,14 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
     required this.reactionManager,
     required this.bubbleWrapper,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.rowKey,
     required this.animate,
     required this.onBubbleTap,
     required this.onTapOutside,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
   });
 
   final ChatTimelineItem currentItem;
@@ -463,12 +475,14 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
   final Widget? reactionManager;
   final Widget Function(Widget child)? bubbleWrapper;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final Key? rowKey;
   final bool animate;
   final VoidCallback? onBubbleTap;
   final TapRegionCallback? onTapOutside;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
+  final ValueChanged<String> onBubbleLayoutAnimationEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -480,6 +494,7 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
       context: context,
       currentItem: currentItem,
       previous: previous,
+      messageId: messageModel.stanzaID,
       messageUser: messageUser,
       self: self,
       isSelected: isSelected,
@@ -500,6 +515,7 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
       avatarContentInset: shellData.avatarContentInset,
       actionBar: actionBar,
       reactionManager: reactionManager,
+      bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
       onBubbleTap: onBubbleTap,
     );
     return _ChatTimelineMessageRowView(
@@ -521,12 +537,15 @@ class _ChatTimelineMessageDecorationsView extends StatelessWidget {
       extrasAligned: extrasAligned,
       showExtras: bubbleContentData.bubbleExtraChildren.isNotEmpty,
       bubbleRegionRegistry: bubbleRegionRegistry,
+      bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
       animate: animate,
       onBubbleTap: onBubbleTap,
       onTapOutside: onTapOutside,
       onBubbleSizeChanged: (size) =>
           onBubbleSizeChanged(messageModel.stanzaID, size),
+      onBubbleLayoutAnimationEnd: () =>
+          onBubbleLayoutAnimationEnd(messageModel.stanzaID),
     );
   }
 }

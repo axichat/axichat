@@ -105,6 +105,7 @@ class _ChatTimelineItemView extends StatelessWidget {
     required this.overlayAnimationDuration,
     required this.shareRequestStatus,
     required this.bubbleRegionRegistry,
+    required this.bubbleTopAnchorRegistry,
     required this.selectionTapRegionGroup,
     required this.unreadDividerKey,
     required this.messageKeys,
@@ -136,6 +137,7 @@ class _ChatTimelineItemView extends StatelessWidget {
     required this.onReactionSelectionRequested,
     required this.onRecipientTap,
     required this.onBubbleSizeChanged,
+    required this.onBubbleLayoutAnimationEnd,
   });
 
   final ChatTimelineItem currentItem;
@@ -180,6 +182,7 @@ class _ChatTimelineItemView extends StatelessWidget {
   final Duration overlayAnimationDuration;
   final RequestStatus shareRequestStatus;
   final _BubbleRegionRegistry bubbleRegionRegistry;
+  final _BubbleRegionRegistry bubbleTopAnchorRegistry;
   final Object selectionTapRegionGroup;
   final GlobalKey unreadDividerKey;
   final Map<String, GlobalKey> messageKeys;
@@ -337,6 +340,7 @@ class _ChatTimelineItemView extends StatelessWidget {
   final Future<void> Function(Message message) onReactionSelectionRequested;
   final void Function(chat_models.Chat chat) onRecipientTap;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
+  final ValueChanged<String> onBubbleLayoutAnimationEnd;
 
   bool _shouldShowEmailWebViewTip({
     required ChatTimelineMessageItem timelineMessageItem,
@@ -408,6 +412,7 @@ class _ChatTimelineItemView extends StatelessWidget {
         selectionExtrasPreferredMaxWidth: selectionExtrasPreferredMaxWidth,
         shareRequestStatus: shareRequestStatus,
         bubbleRegionRegistry: bubbleRegionRegistry,
+        bubbleTopAnchorRegistry: bubbleTopAnchorRegistry,
         selectionTapRegionGroup: selectionTapRegionGroup,
         emailWebViewTipOrder: visualOrder,
         showEmailWebViewTip: _shouldShowEmailWebViewTip(
@@ -442,6 +447,7 @@ class _ChatTimelineItemView extends StatelessWidget {
         onReactionSelectionRequested: onReactionSelectionRequested,
         onRecipientTap: onRecipientTap,
         onBubbleSizeChanged: onBubbleSizeChanged,
+        onBubbleLayoutAnimationEnd: onBubbleLayoutAnimationEnd,
       );
     }
     return const SizedBox.shrink();

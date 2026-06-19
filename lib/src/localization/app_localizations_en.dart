@@ -2642,6 +2642,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatEmailImageFailedLabel => 'Image failed';
 
   @override
+  String get chatEmailLoadImagesButton => 'Load images';
+
+  @override
   String get chatEmailInteractiveContentBlockedLabel =>
       'Interactive content blocked for safety';
 
@@ -2649,11 +2652,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatEmailUnblockInteractiveContentButton => 'Unblock';
 
   @override
+  String get chatEmailViewOriginalButton => 'View original';
+
+  @override
+  String get chatEmailViewingOriginalButton => 'Viewing original';
+
+  @override
   String get chatEmailOriginalContentConfirmTitle => 'View original email?';
 
   @override
   String get chatEmailOriginalContentConfirmMessage =>
-      'Original email content can contact remote servers and may be unsafe. Continue?';
+      'Viewing the original email uses the sender’s raw HTML. Axichat keeps scripts blocked and remote images still follow your image setting, but links and remote content can expose tracking or unsafe destinations.';
 
   @override
   String get chatEmailInlineImagesUnsupportedLabel =>
