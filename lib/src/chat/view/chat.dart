@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:async/async.dart';
@@ -358,6 +359,70 @@ class Chat extends StatefulWidget {
 
 enum _InitialEmailViewportWarmupStatus { pending, warming, warmed }
 
+final class _RenderedHydrationSnapshot {
+  const _RenderedHydrationSnapshot({
+    required this.emailServiceAvailable,
+    required this.emailFullHtmlUnavailableCount,
+    required this.emailQuotedTextUnavailableCount,
+    required this.messages,
+  });
+
+  final bool emailServiceAvailable;
+  final int emailFullHtmlUnavailableCount;
+  final int emailQuotedTextUnavailableCount;
+  final List<_RenderedMessageHydrationSnapshot> messages;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _RenderedHydrationSnapshot &&
+        other.emailServiceAvailable == emailServiceAvailable &&
+        other.emailFullHtmlUnavailableCount == emailFullHtmlUnavailableCount &&
+        other.emailQuotedTextUnavailableCount ==
+            emailQuotedTextUnavailableCount &&
+        // listEquals delegates to each message snapshot's ==, so this is deep equality.
+        listEquals(other.messages, messages);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    emailServiceAvailable,
+    emailFullHtmlUnavailableCount,
+    emailQuotedTextUnavailableCount,
+    Object.hashAll(messages),
+  );
+}
+
+final class _RenderedMessageHydrationSnapshot {
+  const _RenderedMessageHydrationSnapshot({
+    required this.stanzaId,
+    required this.deltaMessageId,
+    required this.displayed,
+  });
+
+  factory _RenderedMessageHydrationSnapshot.fromMessage(Message message) {
+    return _RenderedMessageHydrationSnapshot(
+      stanzaId: message.stanzaID,
+      deltaMessageId: message.deltaMsgId,
+      displayed: message.displayed,
+    );
+  }
+
+  final String stanzaId;
+  final int? deltaMessageId;
+  final bool displayed;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _RenderedMessageHydrationSnapshot &&
+        other.stanzaId == stanzaId &&
+        other.deltaMessageId == deltaMessageId &&
+        other.displayed == displayed;
+  }
+
+  @override
+  int get hashCode => Object.hash(stanzaId, deltaMessageId, displayed);
+}
+
 class _ChatState extends State<Chat> {
   static bool get _debugShowAllComposerBanners => kDebugMode && false;
 
@@ -411,7 +476,7 @@ class _ChatState extends State<Chat> {
       _InitialEmailViewportWarmupStatus.pending;
   Set<int> _initialEmailViewportDeltaIds = const <int>{};
   var _initialEmailViewportWarmupRequestId = 0;
-  String? _lastRenderedHydrationSignature;
+  _RenderedHydrationSnapshot? _lastRenderedHydrationSnapshot;
   List<RosterItem>? _cachedRosterItems;
   List<chat_models.Chat>? _cachedChatItems;
   String? _cachedSelfAvatarPath;
@@ -1482,17 +1547,8 @@ class _ChatState extends State<Chat> {
     return origin & renderObject.size;
   }
 
-  bool _usesBubbleReadThreshold(ChatState state) {
-    if (state.chat?.defaultTransport.isEmail ?? false) {
-      return true;
-    }
-    return state.items.any((message) => message.isEmailBacked);
-  }
-
   Set<String> _readThresholdMessageIds(ChatState state) {
-    if (!state.messagesLoaded ||
-        !_chatRoute.allowsChatInteraction ||
-        !_usesBubbleReadThreshold(state)) {
+    if (!state.messagesLoaded || !_chatRoute.allowsChatInteraction) {
       return const <String>{};
     }
     final viewportRect = _messageListViewportRect();
@@ -1501,9 +1557,6 @@ class _ChatState extends State<Chat> {
     }
     final messageIds = <String>{};
     for (final message in state.items) {
-      if (!message.isEmailBacked) {
-        continue;
-      }
       final messageId = message.stanzaID.trim();
       if (messageId.isEmpty) {
         continue;
@@ -1594,7 +1647,7 @@ class _ChatState extends State<Chat> {
     _initialEmailViewportWarmupStatus =
         _InitialEmailViewportWarmupStatus.pending;
     _initialEmailViewportDeltaIds = const <int>{};
-    _lastRenderedHydrationSignature = null;
+    _lastRenderedHydrationSnapshot = null;
     _initialEmailViewportWarmupRequestId += 1;
   }
 
@@ -1643,28 +1696,18 @@ class _ChatState extends State<Chat> {
     return Set<int>.unmodifiable(ids);
   }
 
-  String _renderedHydrationSignature(
+  _RenderedHydrationSnapshot _renderedHydrationSnapshot(
     List<Message> renderedMessages,
     ChatState state,
   ) {
-    final buffer = StringBuffer();
-    buffer
-      ..write(state.emailServiceAvailable)
-      ..write('|')
-      ..write(state.emailFullHtmlUnavailable.length)
-      ..write('|')
-      ..write(state.emailQuotedTextUnavailable.length)
-      ..write(';');
-    for (final message in renderedMessages) {
-      buffer
-        ..write(message.stanzaID)
-        ..write('|')
-        ..write(message.deltaMsgId ?? '')
-        ..write('|')
-        ..write(message.displayed)
-        ..write(';');
-    }
-    return SafeLogging.profileFingerprint(buffer.toString());
+    return _RenderedHydrationSnapshot(
+      emailServiceAvailable: state.emailServiceAvailable,
+      emailFullHtmlUnavailableCount: state.emailFullHtmlUnavailable.length,
+      emailQuotedTextUnavailableCount: state.emailQuotedTextUnavailable.length,
+      messages: List<_RenderedMessageHydrationSnapshot>.unmodifiable(
+        renderedMessages.map(_RenderedMessageHydrationSnapshot.fromMessage),
+      ),
+    );
   }
 
   void _handleRenderedMessagesChanged(
@@ -1686,12 +1729,12 @@ class _ChatState extends State<Chat> {
           ? 'renderedWindow'
           : 'initialViewport',
     );
-    final hydrationSignature = _renderedHydrationSignature(
+    final hydrationSnapshot = _renderedHydrationSnapshot(
       renderedMessages,
       chatState,
     );
-    if (hydrationSignature != _lastRenderedHydrationSignature) {
-      _lastRenderedHydrationSignature = hydrationSignature;
+    if (hydrationSnapshot != _lastRenderedHydrationSnapshot) {
+      _lastRenderedHydrationSnapshot = hydrationSnapshot;
       chatBloc.add(ChatRenderedMessagesHydrationRequested(renderedMessages));
     }
     if (!_initialEmailViewportWarmupApplies(chatState)) {
@@ -1772,7 +1815,7 @@ class _ChatState extends State<Chat> {
       return;
     }
     _readThresholdSyncScheduled = true;
-    WidgetsBinding.instance.endOfFrame.then((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _readThresholdSyncScheduled = false;
       if (!mounted) {
         return;
@@ -3432,7 +3475,101 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleTimelineBubbleTap(Message message) {
+    _logTappedMessageHtml(message);
     unawaited(_toggleMessageSelection(message));
+  }
+
+  ChatTimelineMessageItem? _timelineItemForMessage(Message message) {
+    for (final item in _cachedTimelineItems) {
+      if (item is ChatTimelineMessageItem &&
+          item.messageModel.stanzaID == message.stanzaID) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  void _logTappedMessageHtml(Message message) {
+    if (!kDebugMode && !emailHtmlLoggingEnabled) {
+      return;
+    }
+    final locate = context.read;
+    final chatState = locate<ChatBloc>().state;
+    final timelineItem = _timelineItemForMessage(message);
+    final stages = <String, String?>{};
+    final baseFontSize =
+        context.textTheme.small.fontSize ?? context.sizing.menuItemIconSize;
+    final themeStyle = buildEmailWebViewThemeStyle(
+      brightness: context.brightness,
+      backgroundColor: context.colorScheme.card,
+      baseFontSize: baseFontSize,
+    );
+
+    void addStages({
+      required String prefix,
+      required String? html,
+      required bool shouldLoadImages,
+    }) {
+      final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+      if (normalizedHtml == null) {
+        return;
+      }
+      final emailDerivation = emailHtmlDerivationForBody(normalizedHtml);
+      stages['$prefix.raw'] = html;
+      stages['$prefix.normalized'] = normalizedHtml;
+      stages['$prefix.prepared-flutter-html'] =
+          emailDerivation?.preparedFlutterHtml;
+      try {
+        stages['$prefix.webview-prepared-shell'] = buildEmailHtmlDataForWebView(
+          html: normalizedHtml,
+          allowRemoteImages: shouldLoadImages,
+          themeStyle: themeStyle,
+          contentMode: EmailHtmlContentMode.safe,
+        );
+      } on Exception catch (error) {
+        stages['$prefix.webview-prepared-shell'] =
+            '<webview-prep-failed type=${error.runtimeType}>';
+      }
+    }
+
+    final resolvedHtmlBody =
+        timelineItem?.resolvedHtmlBody ??
+        resolvedEmailHtmlBodyForMessage(
+          message: message,
+          emailFullHtmlByDeltaId: chatState.emailFullHtmlByDeltaId,
+        );
+    final messageDatabaseId = message.id;
+    addStages(
+      prefix: 'message',
+      html: resolvedHtmlBody,
+      shouldLoadImages:
+          messageDatabaseId != null &&
+          _loadedEmailImageMessageIds.contains(messageDatabaseId),
+    );
+    for (final block in timelineItem?.emailBodyBlocks ?? const []) {
+      final sourceMessageDatabaseId = block.sourceMessageDatabaseId;
+      addStages(
+        prefix: 'email-block-${block.sourceStanzaId}',
+        html: block.resolvedHtmlBody,
+        shouldLoadImages:
+            sourceMessageDatabaseId != null &&
+            _loadedEmailImageMessageIds.contains(sourceMessageDatabaseId),
+      );
+    }
+    if (stages.isEmpty) {
+      return;
+    }
+    logEmailHtmlStages(
+      contentKey: (
+        source: 'bubble-tap',
+        stanzaId: message.stanzaID,
+        messageId: message.id,
+        deltaMsgId: message.deltaMsgId,
+      ),
+      stages: stages,
+      dedupe: false,
+      force: true,
+    );
   }
 
   void _handleMessageResendRequested(
@@ -5846,8 +5983,8 @@ class _ChatState extends State<Chat> {
         'source': source,
         'messageCount': messages.length,
         'pendingCount': normalizedHtmlBodies.length,
-        'signature': SafeLogging.profileFingerprint(
-          normalizedHtmlBodies.join('|'),
+        'profileHash': SafeLogging.profileFingerprint(
+          jsonEncode(normalizedHtmlBodies),
         ),
       },
     );
@@ -5887,10 +6024,6 @@ class _ChatState extends State<Chat> {
         'elapsedMs': stopwatch.elapsedMilliseconds,
       },
     );
-    if (!mounted || !cacheUpdated) {
-      return cacheUpdated;
-    }
-    setState(() {});
     return cacheUpdated;
   }
 

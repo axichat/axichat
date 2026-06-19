@@ -179,6 +179,24 @@ final class _PendingReadMarker {
   final ChatType chatType;
 }
 
+enum XmppReadMarkerSyncStatus { notRequested, skipped, sent, queued }
+
+enum XmppDisplayedMarkerPolicy { defer, localOnly, sendOrQueue }
+
+final class XmppDisplayedThroughResult {
+  const XmppDisplayedThroughResult({
+    required this.anchorId,
+    required this.updatedRows,
+    required this.markerStatus,
+  });
+
+  final String? anchorId;
+  final int updatedRows;
+  final XmppReadMarkerSyncStatus markerStatus;
+
+  bool get advancedLocalState => updatedRows > 0;
+}
+
 final class _PendingInboundAcknowledgement {
   const _PendingInboundAcknowledgement({
     required this.target,
@@ -2739,7 +2757,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) {
     DateTime? previousEmissionAt;
-    String? previousSignature;
     return _localMessageStreamForChat(
           jid: jid,
           start: start,
@@ -2765,7 +2782,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         })
         .map((messages) {
           final now = DateTime.timestamp();
-          final signature = _messageStreamProfileSignature(messages);
           final previousAt = previousEmissionAt;
           SafeLogging.profileTrace(
             'chat.messageStream',
@@ -2775,15 +2791,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
               'count': messages.length,
               'emailBacked': _emailBackedMessageCount(messages),
               'undisplayed': _undisplayedMessageCount(messages),
-              'signature': signature,
-              'changed': previousSignature != signature,
               'sinceLastMs': previousAt == null
                   ? null
                   : now.difference(previousAt).inMilliseconds,
             },
           );
           previousEmissionAt = now;
-          previousSignature = signature;
           return messages;
         });
   }
@@ -2806,24 +2819,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
     }
     return count;
-  }
-
-  String _messageStreamProfileSignature(Iterable<Message> messages) {
-    final buffer = StringBuffer();
-    for (final message in messages) {
-      buffer
-        ..write(message.stanzaID)
-        ..write('|')
-        ..write(message.originID)
-        ..write('|')
-        ..write(message.deltaMsgId ?? '')
-        ..write('|')
-        ..write(message.displayed)
-        ..write('|')
-        ..write(message.timestamp?.millisecondsSinceEpoch ?? '')
-        ..write(';');
-    }
-    return SafeLogging.profileFingerprint(buffer.toString());
   }
 
   Future<List<Message>> loadChatMessagesBefore({
@@ -8025,6 +8020,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String? selfJid,
     String? emailSelfJid,
   }) async {
+    await _markMessagesDisplayedLocallyAndCount(
+      messages: messages,
+      chatJid: chatJid,
+      selfJid: selfJid,
+      emailSelfJid: emailSelfJid,
+    );
+  }
+
+  Future<int> _markMessagesDisplayedLocallyAndCount({
+    required Iterable<Message> messages,
+    required String chatJid,
+    String? selfJid,
+    String? emailSelfJid,
+    bool includeEmailBacked = true,
+  }) async {
     final normalizedChatJid = chatJid.trim();
     if (normalizedChatJid.isEmpty) {
       SafeLogging.profileTrace(
@@ -8032,7 +8042,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         'skip',
         fields: <String, Object?>{'reason': 'emptyChatJid'},
       );
-      return;
+      return 0;
     }
     final messageList = messages.toList(growable: false);
     final stanzaIds = messageList
@@ -8050,7 +8060,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           'reason': 'emptyStanzaIds',
         },
       );
-      return;
+      return 0;
     }
     final stopwatch = Stopwatch()..start();
     var path = 'unknown';
@@ -8061,7 +8071,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         'chatHash': SafeLogging.profileFingerprint(normalizedChatJid),
         'candidateCount': messageList.length,
         'stanzaCount': stanzaIds.length,
-        'candidateHash': SafeLogging.profileFingerprint(stanzaIds.join('|')),
+        'candidateHash': SafeLogging.profileFingerprint(jsonEncode(stanzaIds)),
       },
     );
     var updatedRows = 0;
@@ -8076,6 +8086,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
                 (tbl.stanzaID.isIn(stanzaIds) | tbl.originID.isIn(stanzaIds)) &
                 tbl.displayed.equals(false),
           );
+        if (!includeEmailBacked) {
+          query.where(
+            (tbl) => tbl.deltaChatId.isNull() & tbl.deltaMsgId.isNull(),
+          );
+        }
         updatedRows = await query.write(
           const MessagesCompanion(displayed: Value(true)),
         );
@@ -8106,6 +8121,180 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         'elapsedMs': stopwatch.elapsedMilliseconds,
       },
     );
+    return updatedRows;
+  }
+
+  Future<XmppDisplayedThroughResult> markVisibleXmppMessagesDisplayed({
+    required Iterable<Message> messages,
+    required String chatJid,
+    required ChatType chatType,
+    required XmppDisplayedMarkerPolicy markerPolicy,
+    String? myOccupantJid,
+  }) async {
+    final normalizedChatJid = chatJid.trim();
+    final messageList = messages.toList(growable: false);
+    if (normalizedChatJid.isEmpty) {
+      return const XmppDisplayedThroughResult(
+        anchorId: null,
+        updatedRows: 0,
+        markerStatus: XmppReadMarkerSyncStatus.skipped,
+      );
+    }
+    if (chatType == ChatType.groupChat) {
+      final stopwatch = Stopwatch()..start();
+      final updatedRows = await _markMessagesDisplayedLocallyAndCount(
+        messages: _visibleIncomingXmppMessages(
+          messages: messageList,
+          chatJid: normalizedChatJid,
+          chatType: chatType,
+          myOccupantJid: myOccupantJid,
+        ),
+        chatJid: normalizedChatJid,
+        selfJid: myJid,
+        includeEmailBacked: false,
+      );
+      SafeLogging.profileTrace(
+        'chat.xmppDisplayedThrough',
+        'end',
+        fields: <String, Object?>{
+          'chatHash': SafeLogging.profileFingerprint(normalizedChatJid),
+          'candidateCount': messageList.length,
+          'anchorHash': null,
+          'updatedRows': updatedRows,
+          'markerStatus': XmppReadMarkerSyncStatus.skipped.name,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+      return XmppDisplayedThroughResult(
+        anchorId: null,
+        updatedRows: updatedRows,
+        markerStatus: XmppReadMarkerSyncStatus.skipped,
+      );
+    }
+    final anchor = await _newestVisibleIncomingXmppAnchor(
+      messages: messageList,
+      chatJid: normalizedChatJid,
+      chatType: chatType,
+      myOccupantJid: myOccupantJid,
+    );
+    if (anchor == null) {
+      return const XmppDisplayedThroughResult(
+        anchorId: null,
+        updatedRows: 0,
+        markerStatus: XmppReadMarkerSyncStatus.skipped,
+      );
+    }
+    final anchorId = anchor.stanzaID.trim();
+    if (markerPolicy == XmppDisplayedMarkerPolicy.defer) {
+      SafeLogging.profileTrace(
+        'chat.xmppDisplayedThrough',
+        'end',
+        fields: <String, Object?>{
+          'chatHash': SafeLogging.profileFingerprint(normalizedChatJid),
+          'candidateCount': messageList.length,
+          'anchorHash': SafeLogging.profileFingerprint(anchorId),
+          'updatedRows': 0,
+          'markerStatus': XmppReadMarkerSyncStatus.notRequested.name,
+          'deferred': true,
+          'elapsedMs': 0,
+        },
+      );
+      return XmppDisplayedThroughResult(
+        anchorId: anchorId,
+        updatedRows: 0,
+        markerStatus: XmppReadMarkerSyncStatus.notRequested,
+      );
+    }
+    final stopwatch = Stopwatch()..start();
+    final updatedRows = await _dbOpReturning<XmppDatabase, int>((db) {
+      return db.markMessagesStatusThrough(
+        messageId: anchorId,
+        chatJid: normalizedChatJid,
+        senderJid: anchor.senderJid,
+        acked: true,
+        received: true,
+        displayed: true,
+        includeEmailBacked: false,
+      );
+    });
+    if (updatedRows > 0) {
+      await _updateUnreadCountForChat(normalizedChatJid);
+    }
+    final markerStatus =
+        updatedRows > 0 && markerPolicy == XmppDisplayedMarkerPolicy.sendOrQueue
+        ? await _sendReadMarkerForDisplayedThrough(
+            to: normalizedChatJid,
+            stanzaId: anchorId,
+            chatType: chatType,
+          )
+        : XmppReadMarkerSyncStatus.notRequested;
+    SafeLogging.profileTrace(
+      'chat.xmppDisplayedThrough',
+      'end',
+      fields: <String, Object?>{
+        'chatHash': SafeLogging.profileFingerprint(normalizedChatJid),
+        'candidateCount': messageList.length,
+        'anchorHash': SafeLogging.profileFingerprint(anchorId),
+        'updatedRows': updatedRows,
+        'markerStatus': markerStatus.name,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
+    );
+    return XmppDisplayedThroughResult(
+      anchorId: anchorId,
+      updatedRows: updatedRows,
+      markerStatus: markerStatus,
+    );
+  }
+
+  Future<Message?> _newestVisibleIncomingXmppAnchor({
+    required Iterable<Message> messages,
+    required String chatJid,
+    required ChatType chatType,
+    required String? myOccupantJid,
+  }) async {
+    final candidates = _visibleIncomingXmppMessages(
+      messages: messages,
+      chatJid: chatJid,
+      chatType: chatType,
+      myOccupantJid: myOccupantJid,
+    ).toList(growable: false);
+    if (candidates.isEmpty) {
+      return null;
+    }
+    return _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getNewestChatMessageByReferenceIds(
+        chatJid: chatJid,
+        referenceIds: candidates.expand((message) => message.referenceIds),
+        includeEmailBacked: false,
+      ),
+    );
+  }
+
+  Iterable<Message> _visibleIncomingXmppMessages({
+    required Iterable<Message> messages,
+    required String chatJid,
+    required ChatType chatType,
+    required String? myOccupantJid,
+  }) sync* {
+    final accountJid = myJid;
+    if (accountJid == null || accountJid.trim().isEmpty) {
+      return;
+    }
+    for (final message in messages) {
+      final stanzaId = message.stanzaID.trim();
+      if (stanzaId.isEmpty ||
+          message.isEmailBacked ||
+          !sameNormalizedAddressValue(message.chatJid, chatJid) ||
+          !message.countsTowardUnread(
+            selfJid: accountJid,
+            isGroupChat: chatType == ChatType.groupChat,
+            myOccupantJid: myOccupantJid,
+          )) {
+        continue;
+      }
+      yield message;
+    }
   }
 
   Future<void> markMessageManualSendAgain({
@@ -8190,12 +8379,26 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     String stanzaID, {
     ChatType chatType = ChatType.chat,
   }) async {
+    await _sendReadMarkerForDisplayedThrough(
+      to: to,
+      stanzaId: stanzaID,
+      chatType: chatType,
+    );
+  }
+
+  Future<XmppReadMarkerSyncStatus> _sendReadMarkerForDisplayedThrough({
+    required String to,
+    required String stanzaId,
+    required ChatType chatType,
+  }) async {
     final target = to.trim();
-    if (target.isEmpty) return;
-    if (!await _canSendChatMarkers(to: target, chatType: chatType)) return;
-    final normalizedStanzaId = stanzaID.trim();
+    if (target.isEmpty) return XmppReadMarkerSyncStatus.skipped;
+    if (!await _canSendChatMarkers(to: target, chatType: chatType)) {
+      return XmppReadMarkerSyncStatus.skipped;
+    }
+    final normalizedStanzaId = stanzaId.trim();
     if (normalizedStanzaId.isEmpty) {
-      return;
+      return XmppReadMarkerSyncStatus.skipped;
     }
     final pending = _PendingReadMarker(
       to: target,
@@ -8212,9 +8415,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           identical(_pendingReadMarkersByTarget[targetKey], queuedBeforeSend)) {
         _pendingReadMarkersByTarget.remove(targetKey);
       }
-      return;
+      return XmppReadMarkerSyncStatus.sent;
     }
     _queuePendingReadMarker(pending);
+    return XmppReadMarkerSyncStatus.queued;
   }
 
   Future<bool> _sendReadMarkerNow(_PendingReadMarker pending) async {

@@ -214,6 +214,61 @@ final class EmailMessageSeenSyncResult {
       status == EmailMessageSeenSyncStatus.alreadySeen;
 }
 
+final class _EmailChatNoticeSyncKey {
+  const _EmailChatNoticeSyncKey({
+    required this.credentialScope,
+    required this.chatJid,
+    required this.deltaChatId,
+    required this.emailFromAddress,
+    required this.emailAddress,
+    required this.contactJid,
+  });
+
+  factory _EmailChatNoticeSyncKey.from({
+    required String? credentialScope,
+    required Chat chat,
+  }) {
+    return _EmailChatNoticeSyncKey(
+      credentialScope: credentialScope ?? '',
+      chatJid: chat.jid.trim(),
+      deltaChatId: chat.deltaChatId,
+      emailFromAddress: chat.emailFromAddress?.trim() ?? '',
+      emailAddress: chat.emailAddress?.trim() ?? '',
+      contactJid: chat.contactJid?.trim() ?? '',
+    );
+  }
+
+  final String credentialScope;
+  final String chatJid;
+  final int? deltaChatId;
+  final String emailFromAddress;
+  final String emailAddress;
+  final String contactJid;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _EmailChatNoticeSyncKey &&
+        other.credentialScope == credentialScope &&
+        other.chatJid == chatJid &&
+        other.deltaChatId == deltaChatId &&
+        other.emailFromAddress == emailFromAddress &&
+        other.emailAddress == emailAddress &&
+        other.contactJid == contactJid;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      credentialScope,
+      chatJid,
+      deltaChatId,
+      emailFromAddress,
+      emailAddress,
+      contactJid,
+    );
+  }
+}
+
 extension _EmailSyncSourceLabels on _EmailSyncSource {
   String get logLabel => name;
 }
@@ -1033,8 +1088,9 @@ class EmailService {
   DateTime? _lastChatlistRefreshCompletedAt;
   int? _lastChatlistRefreshCompletedAccountId;
   final EmailAsyncQueue _readStateQueue = EmailAsyncQueue();
-  final Map<String, Future<EmailChatNoticeSyncResult>> _noticeSyncInFlight =
-      <String, Future<EmailChatNoticeSyncResult>>{};
+  final Map<_EmailChatNoticeSyncKey, Future<EmailChatNoticeSyncResult>>
+  _noticeSyncInFlight =
+      <_EmailChatNoticeSyncKey, Future<EmailChatNoticeSyncResult>>{};
   final EmailAsyncQueue _mdnConfigQueue = EmailAsyncQueue();
   _EmailNetworkTransition? _pendingNetworkTransition;
   _EmailNetworkTransition? _activeNetworkTransition;
@@ -5705,7 +5761,19 @@ class EmailService {
       filter: filter,
     );
     yield initial;
-    yield* db.watchChatMessages(jid, start: start, end: end, filter: filter);
+    var previousMessages = List<Message>.unmodifiable(initial);
+    await for (final messages in db.watchChatMessages(
+      jid,
+      start: start,
+      end: end,
+      filter: filter,
+    )) {
+      if (listEquals(previousMessages, messages)) {
+        continue;
+      }
+      previousMessages = List<Message>.unmodifiable(messages);
+      yield messages;
+    }
   }
 
   Future<List<Message>> loadChatMessagesBefore({
@@ -9839,15 +9907,11 @@ class EmailService {
     });
   }
 
-  String _chatNoticeSyncKey(Chat chat) {
-    return [
-      _activeCredentialScope ?? '',
-      chat.jid.trim(),
-      chat.deltaChatId?.toString() ?? '',
-      chat.emailFromAddress?.trim() ?? '',
-      chat.emailAddress?.trim() ?? '',
-      chat.contactJid?.trim() ?? '',
-    ].join('|');
+  _EmailChatNoticeSyncKey _chatNoticeSyncKey(Chat chat) {
+    return _EmailChatNoticeSyncKey.from(
+      credentialScope: _activeCredentialScope,
+      chat: chat,
+    );
   }
 
   Future<EmailChatNoticeSyncResult> _syncChatNoticeState(Chat chat) async {
@@ -9923,8 +9987,8 @@ class EmailService {
         for (final chatId in chatIds) {
           final freshIds = freshBeforeByChat[chatId] ?? const <int>[];
           if (freshIds.isNotEmpty) {
-            await consumer.syncFreshMessages(freshIds);
             coreNoticeRequested = true;
+            await consumer.syncFreshMessages(freshIds);
             final result = await _transport.markNoticedChat(
               chatId,
               accountId: account.deltaAccountId,
@@ -10028,13 +10092,27 @@ class EmailService {
             );
             return;
           }
+          final idsNeedingSeenByAccount = await _deltaIdsNeedingSeenByAccount(
+            idsByAccount,
+          );
+          if (idsNeedingSeenByAccount.isEmpty) {
+            await _reconcileSeenMessageReadState(deltaTargets.byAccountAndChat);
+            final submittedCount = _deltaReadStateTargetCount(idsByAccount);
+            syncResult = EmailMessageSeenSyncResult(
+              status: EmailMessageSeenSyncStatus.alreadySeen,
+              submittedCount: submittedCount,
+              verifiedSeenCount: submittedCount,
+              transportAcceptedCount: 0,
+            );
+            return;
+          }
           var transportAcceptedCount = 0;
           try {
             await _applyEmailReadReceiptPreference(
-              accountIds: idsByAccount.keys,
+              accountIds: idsNeedingSeenByAccount.keys,
               enabled: sendReadReceipts,
             );
-            for (final entry in idsByAccount.entries) {
+            for (final entry in idsNeedingSeenByAccount.entries) {
               final result = await _transport.markSeenMessages(
                 entry.value,
                 accountId: entry.key,
@@ -10045,7 +10123,7 @@ class EmailService {
             }
           } finally {
             await _applyEmailReadReceiptPreference(
-              accountIds: idsByAccount.keys,
+              accountIds: idsNeedingSeenByAccount.keys,
               enabled: _emailReadReceiptsEnabled,
             );
           }
@@ -10088,6 +10166,33 @@ class EmailService {
         status: EmailMessageSeenSyncStatus.failed,
       );
     }
+  }
+
+  Future<Map<int, List<int>>> _deltaIdsNeedingSeenByAccount(
+    Map<int, List<int>> idsByAccount,
+  ) async {
+    final pendingIdsByAccount = <int, List<int>>{};
+    for (final entry in idsByAccount.entries) {
+      final statuses = await _transport.getMessageStatuses(
+        entry.value,
+        accountId: entry.key,
+      );
+      final alreadySeenIds = statuses
+          .where((status) => status.isIncomingSeen)
+          .map((status) => status.id)
+          .toSet();
+      final pendingIds = entry.value
+          .where((id) => !alreadySeenIds.contains(id))
+          .toList(growable: false);
+      if (pendingIds.isNotEmpty) {
+        pendingIdsByAccount[entry.key] = pendingIds;
+      }
+    }
+    return pendingIdsByAccount;
+  }
+
+  int _deltaReadStateTargetCount(Map<int, List<int>> idsByAccount) {
+    return idsByAccount.values.fold<int>(0, (sum, ids) => sum + ids.length);
   }
 
   Future<Map<int, List<int>>> _freshMessageIdsByChatIds({

@@ -210,9 +210,8 @@ class _ChatMessageListState extends State<_ChatMessageList> {
                   final viewportExtent = constraints.hasBoundedHeight
                       ? constraints.maxHeight
                       : MediaQuery.sizeOf(context).height;
-                  final cacheExtent = viewportExtent * 3;
                   return ListView.builder(
-                    cacheExtent: cacheExtent,
+                    cacheExtent: viewportExtent,
                     physics: messageListOptions.scrollPhysics,
                     padding: EdgeInsets.zero,
                     controller: _scrollController,
@@ -320,22 +319,23 @@ class _ChatMessageListState extends State<_ChatMessageList> {
       return;
     }
     _renderedMessagesNotificationScheduled = true;
-    scheduleMicrotask(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       final forced = _renderedMessagesNotificationForced;
       _renderedMessagesNotificationScheduled = false;
       _renderedMessagesNotificationForced = false;
       if (!mounted) {
         return;
       }
-      final messageIds =
-          _renderedMessagesById.entries
-              .map(
-                (entry) =>
-                    '${entry.key}\n${entry.value.deltaMsgId ?? ''}'
-                    '\n${entry.value.hasRfc822BodyContent}',
-              )
-              .toList(growable: false)
-            ..sort();
+      final renderedEntries = _renderedMessagesById.entries.toList(
+        growable: false,
+      )..sort((left, right) => left.key.compareTo(right.key));
+      final messageIds = renderedEntries
+          .map(
+            (entry) =>
+                '${entry.key}\n${entry.value.deltaMsgId ?? ''}'
+                '\n${entry.value.hasRfc822BodyContent}',
+          )
+          .toList(growable: false);
       if (!forced && listEquals(messageIds, _lastRenderedMessageIds)) {
         return;
       }
@@ -346,11 +346,11 @@ class _ChatMessageListState extends State<_ChatMessageList> {
         fields: <String, Object?>{
           'count': _renderedMessagesById.length,
           'forced': forced,
-          'signature': SafeLogging.profileFingerprint(messageIds.join('|')),
+          'profileHash': SafeLogging.profileFingerprint(jsonEncode(messageIds)),
         },
       );
       widget.onRenderedMessagesChanged(
-        List<Message>.unmodifiable(_renderedMessagesById.values),
+        List<Message>.unmodifiable(renderedEntries.map((entry) => entry.value)),
       );
     });
   }

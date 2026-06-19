@@ -66,28 +66,6 @@ final class _ChatPresentationHydrationRequested extends ChatEvent {
   ];
 }
 
-enum _ChatReadStateSyncSendPolicy {
-  whenResumed,
-  allowed;
-
-  bool get allowsSendNow => switch (this) {
-    whenResumed =>
-      SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed,
-    allowed => true,
-  };
-}
-
-final class _ChatReadStateSyncRequested extends ChatEvent {
-  const _ChatReadStateSyncRequested({
-    this.sendPolicy = _ChatReadStateSyncSendPolicy.whenResumed,
-  });
-
-  final _ChatReadStateSyncSendPolicy sendPolicy;
-
-  @override
-  List<Object?> get props => [sendPolicy];
-}
-
 final class ChatRenderedMessagesHydrationRequested extends ChatEvent {
   ChatRenderedMessagesHydrationRequested(
     Iterable<Message> messages, {

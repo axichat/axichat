@@ -180,6 +180,12 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByReferenceId(String messageId, {String? chatJid});
 
+  Future<Message?> getNewestChatMessageByReferenceIds({
+    required String chatJid,
+    required Iterable<String> referenceIds,
+    bool includeEmailBacked = true,
+  });
+
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
@@ -567,6 +573,7 @@ abstract interface class XmppDatabase implements Database {
     bool acked = false,
     bool received = false,
     bool displayed = false,
+    bool includeEmailBacked = true,
   });
 
   Future<void> markOutgoingMessagesDisplayedThrough({
@@ -3795,6 +3802,41 @@ WHERE stanza_i_d = ?
   }
 
   @override
+  Future<Message?> getNewestChatMessageByReferenceIds({
+    required String chatJid,
+    required Iterable<String> referenceIds,
+    bool includeEmailBacked = true,
+  }) {
+    final normalizedChatJid = chatJid.trim();
+    final ids = referenceIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalizedChatJid.isEmpty || ids.isEmpty) {
+      return Future<Message?>.value();
+    }
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.chatJid.equals(normalizedChatJid) &
+            (tbl.stanzaID.isIn(ids) |
+                tbl.originID.isIn(ids) |
+                tbl.mucStanzaId.isIn(ids)),
+      );
+    if (!includeEmailBacked) {
+      query.where((tbl) => tbl.deltaChatId.isNull() & tbl.deltaMsgId.isNull());
+    }
+    query
+      ..orderBy([
+        (tbl) => OrderingTerm.desc(tbl.timestamp),
+        (tbl) => OrderingTerm.desc(tbl.rowId),
+      ])
+      ..limit(1);
+    return query.getSingleOrNull();
+  }
+
+  @override
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
@@ -5437,6 +5479,7 @@ WHERE jid = ?
     bool acked = false,
     bool received = false,
     bool displayed = false,
+    bool includeEmailBacked = true,
   }) async {
     final normalizedMessageId = messageId.trim();
     final normalizedChatJid = chatJid.trim();
@@ -5460,6 +5503,10 @@ SET acked = CASE WHEN ? = 1 THEN 1 ELSE acked END,
 WHERE chat_jid = ?
   AND LOWER(sender_jid) = LOWER(?)
   AND (
+    ? = 1
+    OR (delta_chat_id IS NULL AND delta_msg_id IS NULL)
+  )
+  AND (
     (? = 1 AND acked = 0)
     OR (? = 1 AND received = 0)
     OR (? = 1 AND displayed = 0)
@@ -5472,6 +5519,10 @@ WHERE chat_jid = ?
         target.stanza_i_d = ?
         OR target.origin_i_d = ?
         OR target.muc_stanza_id = ?
+      )
+      AND (
+        ? = 1
+        OR (target.delta_chat_id IS NULL AND target.delta_msg_id IS NULL)
       )
       AND (
         messages.timestamp < target.timestamp
@@ -5488,6 +5539,7 @@ WHERE chat_jid = ?
         Variable<int>(displayedFlag),
         Variable<String>(normalizedChatJid),
         Variable<String>(normalizedSenderJid),
+        Variable<int>(includeEmailBacked ? 1 : 0),
         Variable<int>(ackedFlag),
         Variable<int>(receivedFlag),
         Variable<int>(displayedFlag),
@@ -5495,6 +5547,7 @@ WHERE chat_jid = ?
         Variable<String>(normalizedMessageId),
         Variable<String>(normalizedMessageId),
         Variable<String>(normalizedMessageId),
+        Variable<int>(includeEmailBacked ? 1 : 0),
       ],
       updates: {messages},
     );
@@ -12438,7 +12491,7 @@ ON CONFLICT(address) DO UPDATE SET
   Future<void> _rebuildMessagesTable(Migrator m) async {
     final tableName = messages.actualTableName;
     final tempTableName = '${tableName}_old';
-    const columnNames = <String>[
+    const copiedColumnNames = <String>[
       'id',
       'stanza_i_d',
       'origin_i_d',
@@ -12463,14 +12516,12 @@ ON CONFLICT(address) DO UPDATE SET
       'file_downloading',
       'file_uploading',
       'file_metadata_i_d',
-      'quoting',
       'sticker_pack_i_d',
       'pseudo_message_type',
       'pseudo_message_data',
       'delta_chat_id',
       'delta_msg_id',
     ];
-    final columnList = columnNames.map((c) => '"$c"').join(', ');
     final tableExists = await customSelect(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
       variables: [Variable<String>(tableName)],
@@ -12496,8 +12547,8 @@ ON CONFLICT(address) DO UPDATE SET
       final targetColumnList = targetColumns.join(', ');
       final sourceColumnList = sourceColumns.join(', ');
       await customStatement(
-        'INSERT INTO "$tableName" ($columnList) '
-        'SELECT $columnList FROM "$tempTableName"',
+        'INSERT INTO "$tableName" ($targetColumnList) '
+        'SELECT $sourceColumnList FROM "$tempTableName"',
       );
       if (hasLegacyQuoting) {
         await _resolveRebuiltMessageReplyFieldsFromLegacyQuoting();

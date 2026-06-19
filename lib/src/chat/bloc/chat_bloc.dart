@@ -360,10 +360,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatPresentationHydrationRequested,
       transformer: sequential(),
     );
-    on<_ChatReadStateSyncRequested>(
-      _onChatReadStateSyncRequested,
-      transformer: sequential(),
-    );
     on<ChatRenderedMessagesHydrationRequested>(
       _onChatRenderedMessagesHydrationRequested,
     );
@@ -529,7 +525,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _handleLifecycleResumed();
       },
       onShow: () async {
-        await _handleLifecycleResumed();
+        await _handleLifecycleShown();
       },
     );
   }
@@ -601,15 +597,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _emailHistoryLoading = false;
   final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
+  final Set<String> _prefetchedPeerAvatarJids = <String>{};
   final Set<int> _queuedEmailFullHtmlDeltaIds = <int>{};
   final Set<int> _queuedEmailQuotedTextDeltaIds = <int>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   Map<String, String>? _roomChatsAvatarSnapshot;
   String? _roomSelfAvatarPath;
-  String? _lastReadMarkerStanzaId;
-  String? _pendingReadMarkerStanzaId;
-  String? _lastSeenEmailSyncKey;
   int? _emailUnreadBoundaryDeltaId;
   int? _emailUnreadBoundaryUnreadCount;
   bool _needsUnreadBootstrap = false;
@@ -631,30 +625,48 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return bareAddress(jid);
   }
 
-  Future<void> _markMessagesDisplayedLocally(List<Message> messages) async {
-    if (messages.isEmpty) return;
+  Future<void> _handleLifecycleResumed() async {
+    await _syncEmailChatNoticeForActiveChat();
+    await _syncReadStateForCurrentChat(allowSend: true);
+  }
+
+  Future<void> _handleLifecycleShown() async {
+    await _syncReadStateForCurrentChat(allowSend: true, syncEmailSeen: false);
+  }
+
+  Future<void> _syncEmailChatNoticeForActiveChat() async {
     final chat = state.chat;
-    final chatJid = chat?.jid;
-    if (chatJid == null || chatJid.isEmpty) return;
-    await _messageService.markMessagesDisplayedLocally(
-      messages: messages,
-      chatJid: chatJid,
-      selfJid: _chatsService.myJid,
-      emailSelfJid: state.emailSelfJid,
+    final emailService = _emailService;
+    if (!_chatStarted ||
+        chat == null ||
+        emailService == null ||
+        !emailService.hasInMemoryReconnectContext ||
+        _mustDeferAutomaticReadStateSync ||
+        !_hasEmailReadState(chat, state.items) ||
+        kEnableDemoChats && _messageService.demoOfflineMode) {
+      return;
+    }
+    final stopwatch = Stopwatch()..start();
+    final result = await emailService.syncChatNoticeState(chat);
+    SafeLogging.profileTrace(
+      'chat.emailNoticeReadState',
+      'end',
+      fields: <String, Object?>{
+        'chatHash': SafeLogging.profileFingerprint(chat.jid.trim()),
+        'status': result.status.name,
+        'requested': result.coreNoticeRequested,
+        'accepted': result.coreNoticeAccepted,
+        'freshBeforeCount': result.freshBeforeCount,
+        'freshAfterCount': result.freshAfterCount,
+        'elapsedMs': stopwatch.elapsedMilliseconds,
+      },
     );
   }
 
-  Future<void> _handleLifecycleResumed() {
-    _requestReadStateSyncForActiveChat(
-      sendPolicy: _ChatReadStateSyncSendPolicy.allowed,
-    );
-    return Future<void>.value();
-  }
-
-  void _onChatReadThresholdChanged(
+  Future<void> _onChatReadThresholdChanged(
     ChatReadThresholdChanged event,
     Emitter<ChatState> _,
-  ) {
+  ) async {
     final nextIds = event.messageIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
@@ -664,13 +676,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     _readThresholdMessageIds = nextIds;
-    _requestReadStateSyncForActiveChat();
+    await _syncReadStateForCurrentChat(
+      allowSend:
+          SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed,
+    );
+  }
+
+  Future<void> _syncReadStateForCurrentChat({
+    required bool allowSend,
+    bool syncEmailSeen = true,
+  }) async {
+    final chat = state.chat;
+    if (!_chatStarted || chat == null || _mustDeferAutomaticReadStateSync) {
+      return;
+    }
+    await _syncReadStateForActiveChat(
+      chat: chat,
+      items: state.items,
+      allowSend: allowSend,
+      syncEmailSeen: syncEmailSeen,
+    );
   }
 
   Future<void> _syncReadStateForActiveChat({
     required Chat chat,
     required List<Message> items,
     required bool allowSend,
+    required bool syncEmailSeen,
   }) async {
     final stopwatch = Stopwatch()..start();
     var result = 'completed';
@@ -678,16 +710,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     var unreadCount = 0;
     var thresholdVisibleCount = 0;
     var thresholdUnreadCount = 0;
-    var xmppLocalDisplayedCount = 0;
-    var emailLocalDisplayedCount = 0;
+    var xmppVisibleCount = 0;
+    var xmppUpdatedRows = 0;
+    var xmppMarkerStatus = XmppReadMarkerSyncStatus.notRequested.name;
     var emailUnreadCount = 0;
+    var localEmailDisplayedCandidateCount = 0;
     var seenCandidateCount = 0;
-    var readMarkerSent = false;
-    var noticedRequested = false;
-    var noticeAccepted = false;
     var seenRequested = false;
     var seenSkippedReason = 'none';
-    var noticeSyncStatus = 'notRequested';
     var seenSyncStatus = 'notRequested';
     try {
       final scopedItems = items
@@ -703,6 +733,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             (message) => _readThresholdMessageIds.contains(message.stanzaID),
           )
           .toList(growable: false);
+      final thresholdOrderByMessageId = <String, int>{
+        for (var index = 0; index < _readThresholdMessageIds.length; index += 1)
+          _readThresholdMessageIds.elementAt(index): index,
+      };
       thresholdVisibleCount = thresholdVisibleItems.length;
       final thresholdVisibleUnreadCandidates = unreadCandidates
           .where(
@@ -712,18 +746,47 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       thresholdUnreadCount = thresholdVisibleUnreadCandidates.length;
       final xmppVisibleCandidates = chat.defaultTransport.isEmail
           ? const <Message>[]
-          : unreadCandidates
+          : (thresholdVisibleUnreadCandidates
                 .where((message) => !message.isEmailBacked)
-                .toList(growable: false);
+                .toList(growable: false)
+              ..sort(
+                (left, right) => _compareMessagesByThresholdOrder(
+                  left,
+                  right,
+                  thresholdOrderByMessageId,
+                ),
+              ));
+      final shouldSendChatReadReceipts =
+          chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
       if (_xmppAllowedForChat(chat) && xmppVisibleCandidates.isNotEmpty) {
-        xmppLocalDisplayedCount = xmppVisibleCandidates.length;
-        await _markMessagesDisplayedLocally(xmppVisibleCandidates);
+        xmppVisibleCount = xmppVisibleCandidates.length;
+        final xmppResult = await _messageService
+            .markVisibleXmppMessagesDisplayed(
+              messages: xmppVisibleCandidates,
+              chatJid: chat.jid,
+              chatType: chat.type,
+              markerPolicy: _xmppDisplayedMarkerPolicy(
+                chat: chat,
+                allowSend: allowSend,
+                sendReadReceipts: shouldSendChatReadReceipts,
+              ),
+              myOccupantJid: state.roomState?.myOccupantJid,
+            );
+        xmppUpdatedRows = xmppResult.updatedRows;
+        xmppMarkerStatus = xmppResult.markerStatus.name;
       }
-      final localEmailReadCandidates = await _emailCandidatesWithRfcSiblings(
-        thresholdVisibleUnreadCandidates
-            .where((message) => message.isEmailBacked)
-            .toList(growable: false),
-      );
+      final emailUnreadCandidates = unreadCandidates
+          .where((message) => message.isEmailBacked)
+          .toList(growable: false);
+      emailUnreadCount = emailUnreadCandidates.length;
+      final localEmailDisplayedCandidates =
+          await _emailCandidatesWithRfcSiblings(
+            thresholdVisibleItems
+                .where((message) => message.isEmailBacked)
+                .where(_isUnreadCandidate)
+                .toList(growable: false),
+          );
+      localEmailDisplayedCandidateCount = localEmailDisplayedCandidates.length;
       final emailSeenCandidates = await _emailCandidatesWithRfcSiblings(
         thresholdVisibleItems
             .where((message) => message.isEmailBacked)
@@ -731,42 +794,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             .toList(growable: false),
         includeAlreadyDisplayed: true,
       );
-      if (localEmailReadCandidates.isNotEmpty) {
-        emailLocalDisplayedCount = localEmailReadCandidates.length;
-        await _markMessagesDisplayedLocally(localEmailReadCandidates);
+      final seenCandidates = emailSeenCandidates
+          .where((message) => message.deltaMsgId != null)
+          .where(_countsTowardUnread)
+          .toList(growable: false);
+      seenCandidateCount = seenCandidates.length;
+      Future<void> markLocalEmailDisplayedCandidates() {
+        return _messageService.markMessagesDisplayedLocally(
+          messages: localEmailDisplayedCandidates,
+          chatJid: chat.jid,
+          selfJid: selfJid,
+          emailSelfJid: state.emailSelfJid,
+        );
       }
+
+      if (localEmailDisplayedCandidates.isNotEmpty) {
+        await markLocalEmailDisplayedCandidates();
+      }
+
       if (!allowSend) {
         result = 'localOnly';
         return;
       }
-      final shouldSendChatReadReceipts =
-          chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
-      if (shouldSendChatReadReceipts &&
-          _xmppAllowedForChat(chat) &&
-          chat.type != ChatType.groupChat) {
-        final latestUnread = xmppVisibleCandidates.isEmpty
-            ? null
-            : xmppVisibleCandidates.first;
-        final latestId = latestUnread?.stanzaID;
-        final pendingReadMarkerId = _pendingReadMarkerStanzaId;
-        if (latestId != null &&
-            latestId != _lastReadMarkerStanzaId &&
-            latestId != pendingReadMarkerId) {
-          _pendingReadMarkerStanzaId = latestId;
-          try {
-            await _messageService.sendReadMarker(
-              chat.jid,
-              latestId,
-              chatType: chat.type,
-            );
-            readMarkerSent = true;
-            _lastReadMarkerStanzaId = latestId;
-          } finally {
-            if (_pendingReadMarkerStanzaId == latestId) {
-              _pendingReadMarkerStanzaId = null;
-            }
-          }
-        }
+      if (!syncEmailSeen) {
+        result = 'emailSeenSkipped';
+        return;
       }
       final emailService = _emailService;
       if (emailService == null) {
@@ -777,45 +829,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         result = 'demoOffline';
         return;
       }
-      final emailUnreadCandidates = unreadCandidates
-          .where((message) => message.isEmailBacked)
-          .toList(growable: false);
-      emailUnreadCount = emailUnreadCandidates.length;
-      final emailReadStateRelevant =
-          chat.defaultTransport.isEmail ||
-          scopedItems.any((message) => message.isEmailBacked);
-      if (emailService.hasInMemoryReconnectContext && emailReadStateRelevant) {
-        final noticeResult = await emailService.syncChatNoticeState(chat);
-        noticeSyncStatus = noticeResult.status.name;
-        noticedRequested = noticeResult.coreNoticeRequested;
-        noticeAccepted = noticeResult.coreNoticeAccepted;
-      }
-      final seenCandidates = emailSeenCandidates
-          .where((message) => message.deltaMsgId != null)
-          .where(_countsTowardUnread)
-          .toList(growable: false);
-      seenCandidateCount = seenCandidates.length;
       if (seenCandidates.isEmpty) {
-        _lastSeenEmailSyncKey = null;
         seenSkippedReason = 'empty';
         result = 'noSeenCandidates';
         return;
       }
       if (!emailService.hasInMemoryReconnectContext) {
         seenSkippedReason = 'noReconnectContext';
-        result = 'noReconnectContext';
-        return;
-      }
-      final seenSyncKey = [
-        'seen',
-        ...seenCandidates.map(
-          (message) =>
-              message.deltaMsgId?.toString() ?? message.stanzaID.trim(),
-        ),
-      ].join('|');
-      if (seenSyncKey == _lastSeenEmailSyncKey) {
-        seenSkippedReason = 'alreadySynced';
-        result = 'seenAlreadySynced';
+        result = 'noReconnectContextLocalDisplayed';
         return;
       }
       seenRequested = true;
@@ -826,9 +847,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             _settingsSnapshot.emailReadReceipts,
       );
       seenSyncStatus = seenResult.status.name;
-      if (seenResult.terminalSuccess) {
-        _lastSeenEmailSyncKey = seenSyncKey;
-      }
     } finally {
       SafeLogging.profileTrace(
         'chat.readStateSync',
@@ -841,22 +859,46 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           'unreadCount': unreadCount,
           'thresholdVisibleCount': thresholdVisibleCount,
           'thresholdUnreadCount': thresholdUnreadCount,
-          'xmppLocalDisplayedCount': xmppLocalDisplayedCount,
-          'emailLocalDisplayedCount': emailLocalDisplayedCount,
+          'xmppVisibleCount': xmppVisibleCount,
+          'xmppUpdatedRows': xmppUpdatedRows,
+          'xmppMarkerStatus': xmppMarkerStatus,
           'emailUnreadCount': emailUnreadCount,
+          'localEmailDisplayedCandidateCount':
+              localEmailDisplayedCandidateCount,
           'seenCandidateCount': seenCandidateCount,
           'seenCandidateSource': 'thresholdVisible',
           'seenSkippedReason': seenSkippedReason,
-          'noticeSyncStatus': noticeSyncStatus,
           'seenSyncStatus': seenSyncStatus,
-          'readMarkerSent': readMarkerSent,
-          'noticedRequested': noticedRequested,
-          'noticeAccepted': noticeAccepted,
           'seenRequested': seenRequested,
           'elapsedMs': stopwatch.elapsedMilliseconds,
         },
       );
     }
+  }
+
+  bool _hasEmailReadState(Chat chat, Iterable<Message> messages) {
+    if (chat.defaultTransport.isEmail) {
+      return true;
+    }
+    return messages.any((message) => message.isEmailBacked);
+  }
+
+  int _compareMessagesByThresholdOrder(
+    Message left,
+    Message right,
+    Map<String, int> thresholdOrderByMessageId,
+  ) {
+    final leftOrder = thresholdOrderByMessageId[left.stanzaID];
+    final rightOrder = thresholdOrderByMessageId[right.stanzaID];
+    if (leftOrder != null && rightOrder != null) {
+      final compared = leftOrder.compareTo(rightOrder);
+      if (compared != 0) return compared;
+    } else if (leftOrder == null && rightOrder != null) {
+      return 1;
+    } else if (leftOrder != null) {
+      return -1;
+    }
+    return left.stanzaID.compareTo(right.stanzaID);
   }
 
   Future<List<Message>> _emailCandidatesWithRfcSiblings(
@@ -890,44 +932,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return candidatesByStanzaId.values.toList(growable: false);
   }
 
-  Future<void> _syncReadStateLocallyIfAvailable({
-    required Chat? chat,
-    required List<Message> items,
-  }) async {
-    if (chat == null) return;
-    if (_mustDeferAutomaticReadStateSync) return;
-    await _syncReadStateForActiveChat(
-      chat: chat,
-      items: items,
-      allowSend: false,
-    );
-  }
-
   bool get _mustDeferAutomaticReadStateSync =>
       _needsUnreadBootstrap || _unreadBootstrapRefreshLimit != null;
-
-  void _requestReadStateSyncForActiveChat({
-    _ChatReadStateSyncSendPolicy sendPolicy =
-        _ChatReadStateSyncSendPolicy.whenResumed,
-  }) {
-    if (state.chat == null) return;
-    add(_ChatReadStateSyncRequested(sendPolicy: sendPolicy));
-  }
-
-  Future<void> _onChatReadStateSyncRequested(
-    _ChatReadStateSyncRequested event,
-    Emitter<ChatState> _,
-  ) async {
-    final chat = state.chat;
-    if (chat == null || _mustDeferAutomaticReadStateSync) {
-      return;
-    }
-    await _syncReadStateForActiveChat(
-      chat: chat,
-      items: state.items,
-      allowSend: event.sendPolicy.allowsSendNow,
-    );
-  }
 
   bool _xmppAllowedForChat(Chat chat) {
     if (chat.defaultTransport.isEmail || chat.isAxichatWelcomeThread) {
@@ -935,6 +941,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final candidate = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     return candidate.trim().isNotEmpty;
+  }
+
+  XmppDisplayedMarkerPolicy _xmppDisplayedMarkerPolicy({
+    required Chat chat,
+    required bool allowSend,
+    required bool sendReadReceipts,
+  }) {
+    if (chat.type == ChatType.groupChat || !sendReadReceipts) {
+      return XmppDisplayedMarkerPolicy.localOnly;
+    }
+    return allowSend
+        ? XmppDisplayedMarkerPolicy.sendOrQueue
+        : XmppDisplayedMarkerPolicy.defer;
   }
 
   bool _canPageXmppHistory(Chat chat) {
@@ -1069,7 +1088,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final xmppService = _xmppService;
     if (xmppService == null) return;
     final peerJid = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
-    await xmppService.prefetchAvatarForJid(peerJid);
+    final peerKey = normalizedBareAddressValue(peerJid);
+    if (peerKey == null || !_prefetchedPeerAvatarJids.add(peerKey)) {
+      return;
+    }
+    try {
+      await xmppService.prefetchAvatarForJid(peerJid);
+    } on Exception {
+      _prefetchedPeerAvatarJids.remove(peerKey);
+      rethrow;
+    }
   }
 
   Future<int> _archivedMessageCount(Chat chat) {
@@ -1905,6 +1933,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_pinnedMessagesSourceKey != sourceKey) {
       _clearLastSeenPinnedMessageCache();
     }
+    if (sourceKey != null &&
+        _pinnedMessagesSourceKey == sourceKey &&
+        _pinnedSubscription != null) {
+      return;
+    }
     _pinnedMessagesSourceKey = sourceKey;
     final previousSubscription = _pinnedSubscription;
     _pinnedSubscription = null;
@@ -1935,7 +1968,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             if (identical(_pinnedSubscription, subscription)) {
               _pinnedSubscription = null;
             }
-            add(_PinnedMessagesLoadFailed(sourceKey));
           },
         );
     _pinnedSubscription = subscription;
@@ -1992,6 +2024,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   @override
   Future<void> close() async {
     _isClosing = true;
+    _restageUnresolvedUnreadBoundarySeed();
     _releaseRetainedMucPresence();
     await _detachAndCancelSubscription(_chatSubscription);
     final messageSubscription = _messageSubscription;
@@ -2044,6 +2077,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _lifecycleListener = null;
     _messageService.disposeChatArchiveSession(_chatArchiveSessionId);
     return super.close();
+  }
+
+  void _restageUnresolvedUnreadBoundarySeed() {
+    final pendingUnreadBoundaryCount = _pendingUnreadBoundaryCount;
+    final chatJid = state.chat?.jid ?? _chatLookupJid;
+    if (pendingUnreadBoundaryCount == null ||
+        pendingUnreadBoundaryCount <= _emptyMessageCount ||
+        _sessionUnreadBoundaryResolved ||
+        chatJid == null ||
+        chatJid.isEmpty) {
+      return;
+    }
+    _chatsService.stageOpenChatUnreadBoundarySeed(
+      jid: chatJid,
+      unreadCount: pendingUnreadBoundaryCount,
+    );
   }
 
   Future<void> _onChatUpdated(
@@ -2102,9 +2151,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? _buildRoomMemberSections(nextRoomState)
         : state.roomMemberSections;
     final unreadCount = event.chat.unreadCount;
-    final stagedUnreadCount = _chatsService.consumeOpenChatUnreadBoundarySeed(
-      event.chat.jid,
-    );
+    final stagedUnreadCount = _initialChatSideEffectsStarted
+        ? _chatsService.consumeOpenChatUnreadBoundarySeed(event.chat.jid)
+        : _chatsService.peekOpenChatUnreadBoundarySeed(event.chat.jid);
     final seededUnreadCount =
         _pendingUnreadBoundaryCount ??
         (stagedUnreadCount != null && stagedUnreadCount > _emptyMessageCount
@@ -2229,6 +2278,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         limit: messageBatchSize,
         filter: nextViewFilter,
       );
+      _chatsService.consumeOpenChatUnreadBoundarySeed(chat.jid);
       _initialChatSideEffectsStarted = true;
       if (_isClosing || emit.isDone) return;
       await _prefetchPeerAvatar(chat);
@@ -2313,9 +2363,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (_isClosing || emit.isDone) return;
     if (chat.type == ChatType.groupChat) {
-      _roomSubscription = _mucService.roomStateStream(chat.jid).listen((room) {
-        add(_RoomStateUpdated(room));
-      });
       final shouldPrimeRoomState =
           runFirstChatSideEffects || state.roomState == null;
       if (shouldPrimeRoomState) {
@@ -2327,6 +2374,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (runFirstChatSideEffects) {
         await _mucService.refreshRoomAvatar(chat.jid);
       }
+      if (_isClosing || emit.isDone) return;
+      _roomSubscription = _mucService.roomStateStream(chat.jid).listen((room) {
+        add(_RoomStateUpdated(room));
+      });
+      if (_isClosing || emit.isDone) {
+        final roomSubscription = _roomSubscription;
+        _roomSubscription = null;
+        await _detachAndCancelSubscription(roomSubscription);
+        return;
+      }
+    }
+    if (runFirstChatSideEffects) {
+      await _syncEmailChatNoticeForActiveChat();
     }
   }
 
@@ -2632,7 +2692,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     var metadataCount = 0;
     var emittedState = false;
     var hydrationQueued = false;
-    var readSyncQueued = false;
     void traceEnd() {
       SafeLogging.profileTrace(
         'chat.messagesUpdated',
@@ -2648,13 +2707,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           'metadataCount': metadataCount,
           'emittedState': emittedState,
           'hydrationQueued': hydrationQueued,
-          'readSyncQueued': readSyncQueued,
-          'signature': _messagesProfileSignature(event.items),
           'elapsedMs': stopwatch.elapsedMilliseconds,
         },
       );
     }
 
+    final readStateWasDeferred = _mustDeferAutomaticReadStateSync;
     SafeLogging.profileTrace(
       'chat.messagesUpdated',
       'start',
@@ -2665,7 +2723,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         'inputCount': event.items.length,
         'emailBacked': _emailBackedMessageCount(event.items),
         'undisplayed': _undisplayedMessageCount(event.items),
-        'signature': _messagesProfileSignature(event.items),
       },
     );
     _unreadBootstrapRefreshLimit = null;
@@ -2710,10 +2767,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (emit.isDone) {
         result = 'emitDoneAfterStaleRefresh';
         traceEnd();
-        return _syncReadStateLocallyIfAvailable(
-          chat: chat,
-          items: filteredItems,
-        );
+        return;
       }
     }
     final referencedQuotes = <String, Message>{};
@@ -2771,7 +2825,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (emit.isDone) {
       result = 'emitDoneBeforeState';
       traceEnd();
-      return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
+      return;
     }
     final nextFileMetadataById = _pruneFileMetadataById(
       metadataIds: nextMetadataIds,
@@ -2815,7 +2869,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (emit.isDone) {
       result = 'emitDoneAfterState';
       traceEnd();
-      return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
+      return;
     }
     _requestPresentationHydrationForMessages(
       filteredItems,
@@ -2831,13 +2885,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .where((message) => message.pseudoMessageType != null)
           .length,
     );
+    if (readStateWasDeferred && !_mustDeferAutomaticReadStateSync) {
+      await _syncEmailChatNoticeForActiveChat();
+    }
     if (emit.isDone) {
       result = 'emitDoneAfterBootstrap';
       traceEnd();
-      return _syncReadStateLocallyIfAvailable(chat: chat, items: filteredItems);
+      return;
     }
-    _requestReadStateSyncForActiveChat();
-    readSyncQueued = true;
     traceEnd();
   }
 
@@ -2859,24 +2914,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return count;
-  }
-
-  String _messagesProfileSignature(Iterable<Message> messages) {
-    final buffer = StringBuffer();
-    for (final message in messages) {
-      buffer
-        ..write(message.stanzaID)
-        ..write('|')
-        ..write(message.originID)
-        ..write('|')
-        ..write(message.deltaMsgId ?? '')
-        ..write('|')
-        ..write(message.displayed)
-        ..write('|')
-        ..write(message.timestamp?.millisecondsSinceEpoch ?? '')
-        ..write(';');
-    }
-    return SafeLogging.profileFingerprint(buffer.toString());
   }
 
   Set<String> _quotedReferenceIdsForMessages(Iterable<Message> messages) {
@@ -2993,7 +3030,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         'renderedCount': event.messages.length,
         'expandedCount': messages.length,
         'allowOffWindow': event.allowOffWindowEmailContentHydration,
-        'signature': _messagesProfileSignature(messages),
       },
     );
     final emailFullHtmlQueued = _maybeRequestVisibleEmailFullHtml(
@@ -3015,7 +3051,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         'emailFullHtmlQueued': emailFullHtmlQueued,
         'emailQuotedTextQueued': emailQuotedTextQueued,
         'allowOffWindow': event.allowOffWindowEmailContentHydration,
-        'signature': _messagesProfileSignature(messages),
       },
     );
   }

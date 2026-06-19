@@ -19,6 +19,10 @@ class ShareTokenHtmlCodec {
       '<$_tokenTagName\\b[^>]*$_tokenDataAttribute="[^"]+"[^>]*>.*?</$_tokenTagName>';
   static const String _tokenFooterSeparatorPatternSuffix = r'\s*$';
 
+  static final RegExp _tokenAttributePattern = RegExp(
+    '''$_tokenDataAttribute\\s*=\\s*["']([^"']+)["']''',
+    caseSensitive: false,
+  );
   static final RegExp _tokenElementPattern = RegExp(
     _tokenElementPatternSource,
     caseSensitive: false,
@@ -26,6 +30,10 @@ class ShareTokenHtmlCodec {
   );
   static final RegExp _tokenFooterSeparatorPattern = RegExp(
     '${RegExp.escape(_tokenFooterSeparator)}$_tokenFooterSeparatorPatternSuffix',
+    caseSensitive: false,
+  );
+  static final RegExp _visibleTokenHintPattern = RegExp(
+    r'\[s:[A-Z0-9]{16,64}\]',
     caseSensitive: false,
   );
 
@@ -84,8 +92,36 @@ class ShareTokenHtmlCodec {
     }
     final normalized = HtmlContentCodec.normalizeHtml(html);
     if (normalized == null) return null;
+    final attributeMatch = _tokenAttributePattern.firstMatch(normalized);
+    if (attributeMatch != null) {
+      final token = _validatedToken(attributeMatch.group(1));
+      if (token == null) {
+        return null;
+      }
+      final cleanedBody = plainText?.trim();
+      if (cleanedBody != null) {
+        return ShareTokenParseResult(token: token, cleanedBody: cleanedBody);
+      }
+      final plain = HtmlContentCodec.toPlainText(
+        stripInjectedToken(normalized) ?? normalized,
+      );
+      return ShareTokenParseResult(token: token, cleanedBody: plain.trim());
+    }
+    if (!_visibleTokenHintPattern.hasMatch(normalized)) {
+      return null;
+    }
     final plain = HtmlContentCodec.toPlainText(normalized);
     return ShareTokenCodec.stripToken(plain);
+  }
+
+  static String? _validatedToken(String? token) {
+    final normalized = token?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return ShareTokenCodec.stripToken(
+      ShareTokenCodec.decorateToken(normalized),
+    )?.token;
   }
 
   static String _buildTokenElement({

@@ -55,8 +55,7 @@ String _prepareEmailHtmlData(Map<String, Object> arguments) {
   );
 }
 
-@visibleForTesting
-String prepareEmailHtmlDataForWebView({
+String buildEmailHtmlDataForWebView({
   required String html,
   required bool allowRemoteImages,
   required String themeStyle,
@@ -77,6 +76,19 @@ String prepareEmailHtmlDataForWebView({
     _injectEmailThemeStyle(preparedHtml, themeStyle),
   );
 }
+
+@visibleForTesting
+String prepareEmailHtmlDataForWebView({
+  required String html,
+  required bool allowRemoteImages,
+  required String themeStyle,
+  required EmailHtmlContentMode contentMode,
+}) => buildEmailHtmlDataForWebView(
+  html: html,
+  allowRemoteImages: allowRemoteImages,
+  themeStyle: themeStyle,
+  contentMode: contentMode,
+);
 
 String _injectEmailThemeStyle(String html, String themeStyle) {
   final headClose = RegExp(
@@ -1481,12 +1493,22 @@ $layoutStyle
 ''';
 }
 
+String buildEmailWebViewThemeStyle({
+  required Brightness brightness,
+  required Color backgroundColor,
+  required double baseFontSize,
+}) => _buildEmailWebViewThemeStyle(
+  brightness: brightness,
+  backgroundColor: backgroundColor,
+  baseFontSize: baseFontSize,
+);
+
 @visibleForTesting
 String buildEmailWebViewThemeStyleForTesting({
   required Brightness brightness,
   required Color backgroundColor,
   required double baseFontSize,
-}) => _buildEmailWebViewThemeStyle(
+}) => buildEmailWebViewThemeStyle(
   brightness: brightness,
   backgroundColor: backgroundColor,
   baseFontSize: baseFontSize,
@@ -1633,6 +1655,55 @@ class EmailHtmlWebView extends StatefulWidget {
   State<EmailHtmlWebView> createState() => _EmailHtmlWebViewState();
 }
 
+final class _PreparedEmailHtmlInput {
+  const _PreparedEmailHtmlInput({
+    required this.html,
+    required this.allowRemoteImages,
+    required this.mode,
+    required this.contentMode,
+    required this.simplifyLayout,
+    required this.brightness,
+    required this.backgroundColor,
+    required this.baseFontSize,
+  });
+
+  final String html;
+  final bool allowRemoteImages;
+  final _EmailHtmlWebViewMode mode;
+  final EmailHtmlContentMode contentMode;
+  final bool simplifyLayout;
+  final Brightness brightness;
+  final Color backgroundColor;
+  final double baseFontSize;
+
+  int get profileHash => Object.hash(
+    html,
+    allowRemoteImages,
+    mode,
+    contentMode,
+    simplifyLayout,
+    brightness,
+    backgroundColor.toARGB32(),
+    baseFontSize,
+  );
+
+  @override
+  bool operator ==(Object other) {
+    return other is _PreparedEmailHtmlInput &&
+        other.html == html &&
+        other.allowRemoteImages == allowRemoteImages &&
+        other.mode == mode &&
+        other.contentMode == contentMode &&
+        other.simplifyLayout == simplifyLayout &&
+        other.brightness == brightness &&
+        other.backgroundColor == backgroundColor &&
+        other.baseFontSize == baseFontSize;
+  }
+
+  @override
+  int get hashCode => profileHash;
+}
+
 class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   static const _emailWebViewBaseUrl = 'https://axichat.invalid/';
   static const _heightHandlerName = 'axichatEmailHeight';
@@ -1647,7 +1718,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
   String? _preparedHtmlData;
-  String? _preparedHtmlInputKey;
+  _PreparedEmailHtmlInput? _preparedHtmlInputKey;
   double? _contentHeight;
   int _webViewGeneration = 0;
   int _loadEpoch = 0;
@@ -1892,20 +1963,20 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     bool preserveMeasuredHeight = false,
   }) {
     final brightness = context.brightness;
-    final inputKey = [
-      widget.html.hashCode,
-      widget.allowRemoteImages,
-      widget._mode.name,
-      widget.contentMode.name,
-      widget.simplifyLayout,
-      brightness.name,
-      widget.backgroundColor.toARGB32(),
-      widget.baseFontSize,
-    ].join(':');
+    final inputKey = _PreparedEmailHtmlInput(
+      html: widget.html,
+      allowRemoteImages: widget.allowRemoteImages,
+      mode: widget._mode,
+      contentMode: widget.contentMode,
+      simplifyLayout: widget.simplifyLayout,
+      brightness: brightness,
+      backgroundColor: widget.backgroundColor,
+      baseFontSize: widget.baseFontSize,
+    );
     if (_preparedHtmlInputKey == inputKey) {
       _traceMeasurement(
         'prepare-skip-same-input',
-        inputKeyHash: inputKey.hashCode,
+        inputKeyHash: inputKey.profileHash,
         htmlLength: widget.html.length,
       );
       return;
@@ -1913,7 +1984,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     _preparedHtmlInputKey = inputKey;
     _traceMeasurement(
       'prepare-queued',
-      inputKeyHash: inputKey.hashCode,
+      inputKeyHash: inputKey.profileHash,
       htmlLength: widget.html.length,
       details:
           'reload=$reload preserveMeasuredHeight=$preserveMeasuredHeight '
@@ -1930,7 +2001,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   }
 
   Future<void> _prepareHtmlData({
-    required String inputKey,
+    required _PreparedEmailHtmlInput inputKey,
     required bool reload,
     required Brightness brightness,
     required bool preserveMeasuredHeight,
@@ -1953,7 +2024,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     final prepareTimer = Stopwatch()..start();
     _traceMeasurement(
       'prepare-start',
-      inputKeyHash: inputKey.hashCode,
+      inputKeyHash: inputKey.profileHash,
       htmlLength: widget.html.length,
       details:
           'reload=$reload preserveMeasuredHeight=$preserveMeasuredHeight '
@@ -1970,14 +2041,14 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _traceMeasurement(
         'prepare-complete',
         elapsedMs: prepareTimer.elapsedMilliseconds,
-        inputKeyHash: inputKey.hashCode,
+        inputKeyHash: inputKey.profileHash,
         preparedHtmlLength: preparedHtmlData.length,
       );
     } on Exception catch (error) {
       _traceMeasurement(
         'prepare-compute-exception',
         elapsedMs: prepareTimer.elapsedMilliseconds,
-        inputKeyHash: inputKey.hashCode,
+        inputKeyHash: inputKey.profileHash,
         details: error.runtimeType.toString(),
       );
       if (widget.contentMode == EmailHtmlContentMode.originalPassive) {
@@ -1998,7 +2069,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _traceMeasurement(
         'prepare-fallback-complete',
         elapsedMs: prepareTimer.elapsedMilliseconds,
-        inputKeyHash: inputKey.hashCode,
+        inputKeyHash: inputKey.profileHash,
         preparedHtmlLength: preparedHtmlData.length,
       );
     }
@@ -2006,10 +2077,10 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _traceMeasurement(
         'prepare-discarded',
         elapsedMs: prepareTimer.elapsedMilliseconds,
-        inputKeyHash: inputKey.hashCode,
+        inputKeyHash: inputKey.profileHash,
         details:
             'mounted=$mounted activeInputKeyHash='
-            '${_preparedHtmlInputKey?.hashCode}',
+            '${_preparedHtmlInputKey?.profileHash}',
       );
       return;
     }
@@ -2018,7 +2089,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     _traceMeasurement(
       'prepare-applied',
       elapsedMs: prepareTimer.elapsedMilliseconds,
-      inputKeyHash: inputKey.hashCode,
+      inputKeyHash: inputKey.profileHash,
       preparedHtmlLength: preparedHtmlData.length,
       details: 'reload=$reload',
     );
