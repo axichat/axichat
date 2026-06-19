@@ -39,9 +39,9 @@ Future<bool?> showNotificationDialog(
                   onPressed: state.isRequestingPermissions
                       ? null
                       : () async {
-                          final granted = await notificationCubit
+                          final permissionResult = await notificationCubit
                               .requestPermissions();
-                          if (granted && context.mounted) {
+                          if (permissionResult.isGranted && context.mounted) {
                             context.pop(true);
                           }
                         },

@@ -26,7 +26,7 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   final NotificationService _notificationService;
   final ForegroundRuntimeController _foregroundRuntimeController;
   CancelableOperation<bool>? _refreshPermissionsOperation;
-  CancelableOperation<bool>? _requestPermissionsOperation;
+  Future<NotificationPermissionRequestResult>? _requestPermissionsFuture;
   CancelableOperation<ForegroundActivationResult>? _enableForegroundOperation;
   CancelableOperation<bool>? _disableForegroundOperation;
 
@@ -53,28 +53,68 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
     }
   }
 
-  Future<bool> requestPermissions() async {
-    _requestPermissionsOperation?.cancel();
-    emit(state.copyWith(isRequestingPermissions: true));
-    final operation = CancelableOperation<bool>.fromFuture(
-      _notificationService.requestAllNotificationPermissions(),
+  Future<NotificationPermissionRequestResult> requestPermissions() async {
+    final existing = _requestPermissionsFuture;
+    if (existing != null) {
+      return existing;
+    }
+    _refreshPermissionsOperation?.cancel();
+    _refreshPermissionsOperation = null;
+    emit(
+      state.copyWith(
+        isCheckingPermissions: false,
+        isRequestingPermissions: true,
+      ),
     );
-    _requestPermissionsOperation = operation;
-    bool? hasPermissions;
+    NotificationPermissionRequestResult? requestResult;
+    final requestFuture = _notificationService
+        .requestAllNotificationPermissions();
+    _requestPermissionsFuture = requestFuture;
     try {
-      hasPermissions = await operation.valueOrCancellation();
+      requestResult = await requestFuture;
     } finally {
-      if (_requestPermissionsOperation == operation) {
-        _requestPermissionsOperation = null;
+      if (_requestPermissionsFuture == requestFuture) {
+        _requestPermissionsFuture = null;
         emit(
           state.copyWith(
-            hasPermissions: hasPermissions ?? state.hasPermissions,
+            hasPermissions: switch (requestResult) {
+              NotificationPermissionRequestResult.granted => true,
+              NotificationPermissionRequestResult.denied => false,
+              NotificationPermissionRequestResult
+                  .awaitingNotificationSettings ||
+              NotificationPermissionRequestResult
+                  .awaitingBatteryOptimizationSettings => state.hasPermissions,
+              null => state.hasPermissions,
+            },
             isRequestingPermissions: false,
           ),
         );
       }
     }
-    return hasPermissions ?? state.hasPermissions ?? false;
+    return requestResult;
+  }
+
+  Future<bool> hasPermissionResolvedFor(
+    NotificationPermissionRequestResult result,
+  ) async {
+    return _waitForPermissionCheck(
+      () => _notificationService.hasPermissionResolvedFor(result),
+    );
+  }
+
+  Future<bool> _waitForPermissionCheck(Future<bool> Function() check) async {
+    if (await check()) {
+      return true;
+    }
+    const settleDelay = Duration(milliseconds: 250);
+    const settleAttempts = 16;
+    for (var attempt = 0; attempt < settleAttempts; attempt += 1) {
+      await Future<void>.delayed(settleDelay);
+      if (await check()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<ForegroundActivationResult> enableForegroundService({
@@ -161,12 +201,11 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
     foregroundServiceActive.removeListener(_handleForegroundServiceChanged);
     final operations = <CancelableOperation<Object?>?>[
       _refreshPermissionsOperation,
-      _requestPermissionsOperation,
       _enableForegroundOperation,
       _disableForegroundOperation,
     ];
     _refreshPermissionsOperation = null;
-    _requestPermissionsOperation = null;
+    _requestPermissionsFuture = null;
     _enableForegroundOperation = null;
     _disableForegroundOperation = null;
     await Future.wait(

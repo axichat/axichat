@@ -99,7 +99,7 @@ class ForegroundRuntimeController {
     }
     _setForegroundIntent(true);
     initForegroundService();
-    if (await refreshActualState(fallback: foregroundServiceActive.value)) {
+    if (await refreshActualState(fallback: false)) {
       return await _refreshActiveRuntime(
             allowCurrentSessionMigration: allowCurrentSessionMigration,
           )
@@ -116,11 +116,13 @@ class ForegroundRuntimeController {
             ? ForegroundActivationResult.active
             : ForegroundActivationResult.failed;
       }
-      await _xmppService.ensureForegroundSocketIfActive();
+      final foregroundSocketActive = await _xmppService
+          .ensureForegroundSocketIfActive();
       await _setEmailKeepaliveStopped();
-      if (await _isRuntimeReadyForCurrentTransport(
-        requireNotificationSnapshot: true,
-      )) {
+      if (foregroundSocketActive &&
+          await _isRuntimeReadyForCurrentTransport(
+            requireNotificationSnapshot: true,
+          )) {
         return ForegroundActivationResult.active;
       }
       _log.warning(
@@ -243,17 +245,25 @@ class ForegroundRuntimeController {
     required bool allowCurrentSessionMigration,
   }) async {
     try {
-      if (!_xmppService.connected ||
-          _xmppService.usingForegroundSocket ||
-          allowCurrentSessionMigration) {
-        await _xmppService.ensureForegroundSocketIfActive();
-      }
-      await _setEmailKeepaliveStopped();
-      if (await _isRuntimeReadyForCurrentTransport(
-        allowPendingSocketStart: !_xmppService.connected,
-        requireNotificationSnapshot: _xmppService.connected,
-      )) {
-        return true;
+      if (_xmppService.connected) {
+        if (_xmppService.usingForegroundSocket ||
+            allowCurrentSessionMigration) {
+          if (await _xmppService.ensureForegroundSocketIfActive()) {
+            await _setEmailKeepaliveStopped();
+            if (await _isRuntimeReadyForCurrentTransport(
+              requireNotificationSnapshot: true,
+            )) {
+              return true;
+            }
+          }
+        }
+      } else {
+        await _setEmailKeepaliveStopped();
+        if (await _isRuntimeReadyForCurrentTransport(
+          allowPendingSocketStart: true,
+        )) {
+          return true;
+        }
       }
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to refresh foreground runtime.', error, stackTrace);
@@ -266,9 +276,7 @@ class ForegroundRuntimeController {
     bool allowPendingSocketStart = false,
     bool requireNotificationSnapshot = false,
   }) async {
-    final running = await refreshActualState(
-      fallback: foregroundServiceActive.value,
-    );
+    final running = await refreshActualState(fallback: false);
     if (!_xmppService.connected) {
       return allowPendingSocketStart || running;
     }
@@ -300,7 +308,7 @@ class ForegroundRuntimeController {
         stackTrace,
       );
     }
-    await refreshActualState(fallback: foregroundServiceActive.value);
+    await refreshActualState(fallback: false);
     _setForegroundIntent(false);
   }
 

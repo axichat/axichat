@@ -45,6 +45,15 @@ enum ReminderSchedulingPermissionRequestResult {
   failed,
 }
 
+enum NotificationPermissionRequestResult {
+  granted,
+  denied,
+  awaitingNotificationSettings,
+  awaitingBatteryOptimizationSettings;
+
+  bool get isGranted => this == NotificationPermissionRequestResult.granted;
+}
+
 class PendingNotificationReference {
   const PendingNotificationReference({
     required this.id,
@@ -352,34 +361,85 @@ class NotificationService {
     }
   }
 
-  Future<bool> requestAllNotificationPermissions() async {
-    if (!needsPermissions) return true;
+  Future<NotificationPermissionRequestResult>
+  requestAllNotificationPermissions() async {
+    if (!needsPermissions) return NotificationPermissionRequestResult.granted;
 
     try {
-      if (!await Permission.notification.request().isGranted) {
-        await AppSettings.openAppSettings(
-          type: AppSettingsType.notification,
-          asAnotherTask: true,
-        );
-        if (!await Permission.notification.isGranted) return false;
+      await Permission.notification.request();
+      if (!await _permissionStatusSettled(
+        () => Permission.notification.isGranted,
+      )) {
+        await AppSettings.openAppSettings(type: AppSettingsType.notification);
+        if (!await Permission.notification.isGranted) {
+          return NotificationPermissionRequestResult
+              .awaitingNotificationSettings;
+        }
       }
 
       if (Platform.isAndroid) {
-        if (!await Permission.ignoreBatteryOptimizations.request().isGranted) {
+        await Permission.ignoreBatteryOptimizations.request();
+        if (!await _permissionStatusSettled(
+          () => Permission.ignoreBatteryOptimizations.isGranted,
+        )) {
           await AppSettings.openAppSettings(
             type: AppSettingsType.batteryOptimization,
-            asAnotherTask: true,
           );
           if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-            return false;
+            return NotificationPermissionRequestResult
+                .awaitingBatteryOptimizationSettings;
           }
         }
       }
 
-      return true;
+      return NotificationPermissionRequestResult.granted;
     } on MissingPluginException catch (error, stackTrace) {
       _log.warning(
         'Permission plugin unavailable while requesting permissions.',
+        error,
+        stackTrace,
+      );
+      mute = true;
+      return NotificationPermissionRequestResult.denied;
+    }
+  }
+
+  Future<bool> _permissionStatusSettled(Future<bool> Function() check) async {
+    if (await check()) {
+      return true;
+    }
+    const settleDelay = Duration(milliseconds: 250);
+    const settleAttempts = 16;
+    for (var attempt = 0; attempt < settleAttempts; attempt += 1) {
+      await Future<void>.delayed(settleDelay);
+      if (await check()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> hasPermissionResolvedFor(
+    NotificationPermissionRequestResult result,
+  ) async {
+    if (!needsPermissions) return true;
+
+    try {
+      switch (result) {
+        case NotificationPermissionRequestResult.granted:
+          return true;
+        case NotificationPermissionRequestResult.denied:
+          return false;
+        case NotificationPermissionRequestResult.awaitingNotificationSettings:
+          return await Permission.notification.isGranted;
+        case NotificationPermissionRequestResult
+            .awaitingBatteryOptimizationSettings:
+          if (!Platform.isAndroid) return true;
+          return await Permission.ignoreBatteryOptimizations.isGranted;
+      }
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Permission plugin unavailable while checking requested permission.',
         error,
         stackTrace,
       );

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -27,21 +29,42 @@ enum NotificationRequestDisplayMode {
   }
 }
 
+enum _BackgroundMessagingTogglePhase {
+  idle,
+  requestingPermissions,
+  awaitingNotificationSettingsResume,
+  awaitingBatteryOptimizationSettingsResume,
+  activatingForeground,
+  disablingForeground,
+  persistingPreference;
+
+  bool get isBusy => this != _BackgroundMessagingTogglePhase.idle;
+
+  NotificationPermissionRequestResult? get awaitedPermissionResult {
+    switch (this) {
+      case _BackgroundMessagingTogglePhase.awaitingNotificationSettingsResume:
+        return NotificationPermissionRequestResult.awaitingNotificationSettings;
+      case _BackgroundMessagingTogglePhase
+          .awaitingBatteryOptimizationSettingsResume:
+        return NotificationPermissionRequestResult
+            .awaitingBatteryOptimizationSettings;
+      case _BackgroundMessagingTogglePhase.idle:
+      case _BackgroundMessagingTogglePhase.requestingPermissions:
+      case _BackgroundMessagingTogglePhase.activatingForeground:
+      case _BackgroundMessagingTogglePhase.disablingForeground:
+      case _BackgroundMessagingTogglePhase.persistingPreference:
+        return null;
+    }
+  }
+}
+
 class NotificationRequest extends StatelessWidget {
   const NotificationRequest({
     super.key,
     this.displayMode = NotificationRequestDisplayMode.platformOnly,
-    this.allowCurrentSessionMigration = true,
-    this.onForegroundActivationStarted,
-    this.onForegroundActivationFinished,
-    this.onForegroundActivated,
   });
 
   final NotificationRequestDisplayMode displayMode;
-  final bool allowCurrentSessionMigration;
-  final void Function()? onForegroundActivationStarted;
-  final void Function()? onForegroundActivationFinished;
-  final Future<void> Function()? onForegroundActivated;
 
   @override
   Widget build(BuildContext context) {
@@ -54,10 +77,6 @@ class NotificationRequest extends StatelessWidget {
       child: _NotificationRequestBody(
         capability: context.watch<Capability>(),
         displayMode: displayMode,
-        allowCurrentSessionMigration: allowCurrentSessionMigration,
-        onForegroundActivationStarted: onForegroundActivationStarted,
-        onForegroundActivationFinished: onForegroundActivationFinished,
-        onForegroundActivated: onForegroundActivated,
       ),
     );
   }
@@ -67,28 +86,42 @@ class _NotificationRequestBody extends StatefulWidget {
   const _NotificationRequestBody({
     required this.capability,
     required this.displayMode,
-    required this.allowCurrentSessionMigration,
-    required this.onForegroundActivationStarted,
-    required this.onForegroundActivationFinished,
-    required this.onForegroundActivated,
   });
 
   final Capability capability;
   final NotificationRequestDisplayMode displayMode;
-  final bool allowCurrentSessionMigration;
-  final void Function()? onForegroundActivationStarted;
-  final void Function()? onForegroundActivationFinished;
-  final Future<void> Function()? onForegroundActivated;
 
   @override
   State<_NotificationRequestBody> createState() =>
       _NotificationRequestBodyState();
 }
 
-class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
-  bool _backgroundMessagingToggleInFlight = false;
-  bool? _pendingBackgroundMessagingEnabled;
+class _NotificationRequestBodyState extends State<_NotificationRequestBody>
+    with WidgetsBindingObserver {
+  _BackgroundMessagingTogglePhase _togglePhase =
+      _BackgroundMessagingTogglePhase.idle;
   bool _foregroundActivationDeferredUntilRestart = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final awaitedPermissionResult = _togglePhase.awaitedPermissionResult;
+    if (state != AppLifecycleState.resumed || awaitedPermissionResult == null) {
+      return;
+    }
+    unawaited(_resumeBackgroundMessagingEnable(awaitedPermissionResult));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,31 +135,28 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
             !widget.displayMode.shouldShowFor(widget.capability)) {
           return const SizedBox.shrink();
         }
-        final switchValue =
-            _pendingBackgroundMessagingEnabled ?? backgroundMessagingEnabled;
-        final switchBusy = state.isBusy || _backgroundMessagingToggleInFlight;
-        final foregroundActivationInFlight =
-            _backgroundMessagingToggleInFlight &&
-            widget.allowCurrentSessionMigration;
+        final switchBusy = state.isBusy || _togglePhase.isBusy;
         final String? statusSublabel;
-        if (switchValue &&
-            state.hasPermissions == true &&
-            (_foregroundActivationDeferredUntilRestart ||
-                (!state.foregroundServiceActive &&
-                    !foregroundActivationInFlight &&
-                    !widget.allowCurrentSessionMigration))) {
-          statusSublabel = l10n.notificationsRestartTitle;
-        } else if (switchValue &&
-            state.hasPermissions == true &&
-            (state.foregroundServiceActive || foregroundActivationInFlight)) {
+        if (_togglePhase ==
+                _BackgroundMessagingTogglePhase.activatingForeground ||
+            _togglePhase ==
+                _BackgroundMessagingTogglePhase.disablingForeground) {
           statusSublabel = null;
-        } else {
+        } else if (!backgroundMessagingEnabled) {
           statusSublabel = l10n.notificationsRequiresRestart;
+        } else if (state.hasPermissions != true) {
+          statusSublabel = null;
+        } else if (_foregroundActivationDeferredUntilRestart &&
+            !state.foregroundServiceActive) {
+          statusSublabel = l10n.notificationsRestartTitle;
+        } else {
+          statusSublabel = null;
         }
         return ShadSwitch(
+          enabled: !switchBusy,
           label: Text(l10n.notificationsMessageToggle),
           sublabel: statusSublabel == null ? null : Text(statusSublabel),
-          value: switchValue,
+          value: backgroundMessagingEnabled,
           onChanged: switchBusy
               ? null
               : (enabled) =>
@@ -140,66 +170,140 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
     BuildContext context,
     bool enabled,
   ) async {
+    if (_togglePhase.isBusy) {
+      return;
+    }
+    if (enabled) {
+      await _enableBackgroundMessaging(context);
+      return;
+    }
+    await _disableBackgroundMessaging(context);
+  }
+
+  Future<void> _disableBackgroundMessaging(BuildContext context) async {
     final locate = context.read;
     final notificationCubit = locate<NotificationRequestCubit>();
     final settingsCubit = locate<SettingsCubit>();
     final xmppService = locate<XmppService>();
-    final hasPermissions = notificationCubit.state.hasPermissions == true;
-    var foregroundActivationStarted = false;
     setState(() {
-      _backgroundMessagingToggleInFlight = true;
-      if (!enabled) {
-        _pendingBackgroundMessagingEnabled = false;
-      } else if (hasPermissions) {
-        _pendingBackgroundMessagingEnabled = true;
-      }
+      _togglePhase = _BackgroundMessagingTogglePhase.disablingForeground;
     });
     try {
-      if (!enabled) {
-        final foregroundDisabled = await notificationCubit
-            .disableForegroundService();
-        if (!context.mounted || !foregroundDisabled) {
-          return;
-        }
-        _foregroundActivationDeferredUntilRestart = false;
-        await settingsCubit.toggleBackgroundMessaging(
-          false,
-          accountJid: xmppService.myJid,
-        );
-        return;
-      }
-      if (!hasPermissions) {
-        final confirmed = await showNotificationDialog(context, locate);
-        if (!context.mounted || confirmed != true) {
-          return;
-        }
-        if (!widget.displayMode.shouldShowFor(widget.capability)) {
-          return;
-        }
-        if (!widget.capability.canForegroundService) {
-          return;
-        }
-        setState(() {
-          _pendingBackgroundMessagingEnabled = true;
-        });
-      }
-      if (widget.allowCurrentSessionMigration) {
-        widget.onForegroundActivationStarted?.call();
-        foregroundActivationStarted = true;
-      }
-      final foregroundResult = await notificationCubit.enableForegroundService(
-        allowCurrentSessionMigration: widget.allowCurrentSessionMigration,
-      );
-      if (!context.mounted) {
+      final foregroundDisabled = await notificationCubit
+          .disableForegroundService();
+      if (!context.mounted || !foregroundDisabled) {
         return;
       }
       setState(() {
+        _togglePhase = _BackgroundMessagingTogglePhase.persistingPreference;
+        _foregroundActivationDeferredUntilRestart = false;
+      });
+      await settingsCubit.toggleBackgroundMessaging(
+        false,
+        accountJid: xmppService.myJid,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _togglePhase = _BackgroundMessagingTogglePhase.idle;
+        });
+      }
+    }
+  }
+
+  Future<void> _enableBackgroundMessaging(BuildContext context) async {
+    final notificationCubit = context.read<NotificationRequestCubit>();
+    if (notificationCubit.state.hasPermissions == true) {
+      await _activateForegroundAndPersist(context);
+      return;
+    }
+    await _requestPermissionsAndEnable(context);
+  }
+
+  Future<void> _requestPermissionsAndEnable(BuildContext context) async {
+    final notificationCubit = context.read<NotificationRequestCubit>();
+    setState(() {
+      _togglePhase = _BackgroundMessagingTogglePhase.requestingPermissions;
+    });
+    final permissionResult = await notificationCubit.requestPermissions();
+    if (!context.mounted) {
+      return;
+    }
+    await _handlePermissionResult(context, permissionResult);
+  }
+
+  Future<void> _resumeBackgroundMessagingEnable(
+    NotificationPermissionRequestResult awaitedPermissionResult,
+  ) async {
+    final notificationCubit = context.read<NotificationRequestCubit>();
+    setState(() {
+      _togglePhase = _BackgroundMessagingTogglePhase.requestingPermissions;
+    });
+    final resolved = await notificationCubit.hasPermissionResolvedFor(
+      awaitedPermissionResult,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!resolved) {
+      setState(() {
+        _togglePhase = _BackgroundMessagingTogglePhase.idle;
+      });
+      return;
+    }
+    await _requestPermissionsAndEnable(context);
+  }
+
+  Future<void> _handlePermissionResult(
+    BuildContext context,
+    NotificationPermissionRequestResult permissionResult,
+  ) async {
+    switch (permissionResult) {
+      case NotificationPermissionRequestResult.granted:
+        await _activateForegroundAndPersist(context);
+        return;
+      case NotificationPermissionRequestResult.awaitingNotificationSettings:
+        setState(() {
+          _togglePhase = _BackgroundMessagingTogglePhase
+              .awaitingNotificationSettingsResume;
+        });
+        return;
+      case NotificationPermissionRequestResult
+          .awaitingBatteryOptimizationSettings:
+        setState(() {
+          _togglePhase = _BackgroundMessagingTogglePhase
+              .awaitingBatteryOptimizationSettingsResume;
+        });
+        return;
+      case NotificationPermissionRequestResult.denied:
+        setState(() {
+          _togglePhase = _BackgroundMessagingTogglePhase.idle;
+        });
+        return;
+    }
+  }
+
+  Future<void> _activateForegroundAndPersist(BuildContext context) async {
+    final locate = context.read;
+    final notificationCubit = locate<NotificationRequestCubit>();
+    final settingsCubit = locate<SettingsCubit>();
+    final xmppService = locate<XmppService>();
+    try {
+      setState(() {
+        _togglePhase = _BackgroundMessagingTogglePhase.activatingForeground;
+        _foregroundActivationDeferredUntilRestart = false;
+      });
+      final foregroundResult = await notificationCubit.enableForegroundService(
+        allowCurrentSessionMigration: true,
+      );
+      if (!context.mounted || !foregroundResult.shouldPersistPreference) {
+        return;
+      }
+      setState(() {
+        _togglePhase = _BackgroundMessagingTogglePhase.persistingPreference;
         _foregroundActivationDeferredUntilRestart =
             foregroundResult == ForegroundActivationResult.deferredUntilRestart;
       });
-      if (!foregroundResult.shouldPersistPreference) {
-        return;
-      }
       await settingsCubit.toggleBackgroundMessaging(
         true,
         accountJid: xmppService.myJid,
@@ -209,21 +313,17 @@ class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
       }
       switch (foregroundResult) {
         case ForegroundActivationResult.active:
-          await widget.onForegroundActivated?.call();
-        case ForegroundActivationResult.deferredUntilRestart:
-          await showNotificationRestartDialog(context);
         case ForegroundActivationResult.unavailable:
         case ForegroundActivationResult.failed:
-          break;
+          return;
+        case ForegroundActivationResult.deferredUntilRestart:
+          await showNotificationRestartDialog(context);
+          return;
       }
     } finally {
-      if (foregroundActivationStarted) {
-        widget.onForegroundActivationFinished?.call();
-      }
       if (mounted) {
         setState(() {
-          _backgroundMessagingToggleInFlight = false;
-          _pendingBackgroundMessagingEnabled = null;
+          _togglePhase = _BackgroundMessagingTogglePhase.idle;
         });
       }
     }
