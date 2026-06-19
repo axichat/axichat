@@ -3,8 +3,6 @@
 
 import 'package:drift/drift.dart';
 
-import 'package:axichat/src/storage/models/message_models.dart';
-
 @DataClassName('PinnedMessageEntry')
 @TableIndex(
   name: 'idx_pinned_messages_chat_pinned',
@@ -26,7 +24,7 @@ class PinnedMessages extends Table {
 @DataClassName('PinEntry')
 @TableIndex(
   name: 'idx_message_pins_chat_reference',
-  columns: {#chatJid, #messageReferenceKind, #messageReferenceId},
+  columns: {#chatJid, #messageReferenceId},
 )
 @TableIndex(
   name: 'idx_message_pins_chat_active_pinned',
@@ -35,9 +33,13 @@ class PinnedMessages extends Table {
 class MessagePins extends Table {
   TextColumn get chatJid => text()();
 
-  IntColumn get messageReferenceKind => integer()();
-
   TextColumn get messageReferenceId => text()();
+
+  TextColumn get messageStanzaId => text().nullable()();
+
+  TextColumn get messageOriginId => text().nullable()();
+
+  TextColumn get messageMucStanzaId => text().nullable()();
 
   TextColumn get pinnerJid => text()();
 
@@ -51,7 +53,6 @@ class MessagePins extends Table {
   @override
   Set<Column<Object>>? get primaryKey => {
     chatJid,
-    messageReferenceKind,
     messageReferenceId,
     pinnerJid,
   };
@@ -60,16 +61,20 @@ class MessagePins extends Table {
 final class PinnedMessageAggregate {
   const PinnedMessageAggregate({
     required this.chatJid,
-    required this.messageReferenceKind,
     required this.messageReferenceId,
+    this.messageStanzaId,
+    this.messageOriginId,
+    this.messageMucStanzaId,
     required this.pinnedAt,
     required this.pinCount,
     required this.pinnedBySelf,
   });
 
   final String chatJid;
-  final MessageReferenceKind messageReferenceKind;
   final String messageReferenceId;
+  final String? messageStanzaId;
+  final String? messageOriginId;
+  final String? messageMucStanzaId;
   final DateTime pinnedAt;
   final int pinCount;
   final bool pinnedBySelf;

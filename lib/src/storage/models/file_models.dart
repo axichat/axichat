@@ -142,31 +142,75 @@ final class DraftSyncMetadata {
 }
 
 final class DraftQuoteTarget {
-  const DraftQuoteTarget({required this.stanzaId});
+  const DraftQuoteTarget({this.stanzaId, this.originId, this.mucStanzaId});
 
-  final String stanzaId;
+  final String? stanzaId;
+  final String? originId;
+  final String? mucStanzaId;
+
+  String? get referenceId {
+    final muc = mucStanzaId?.trim();
+    if (muc != null && muc.isNotEmpty) {
+      return muc;
+    }
+    final origin = originId?.trim();
+    if (origin != null && origin.isNotEmpty) {
+      return origin;
+    }
+    final stanza = stanzaId?.trim();
+    if (stanza != null && stanza.isNotEmpty) {
+      return stanza;
+    }
+    return null;
+  }
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DraftQuoteTarget && other.stanzaId == stanzaId;
+      other is DraftQuoteTarget &&
+          other.stanzaId == stanzaId &&
+          other.originId == originId &&
+          other.mucStanzaId == mucStanzaId;
 
   @override
-  int get hashCode => stanzaId.hashCode;
+  int get hashCode => Object.hash(stanzaId, originId, mucStanzaId);
 
   static DraftQuoteTarget? fromDraft({
     required String? stanzaId,
-    required MessageReferenceKind? referenceKind,
+    required String? originId,
+    required String? mucStanzaId,
   }) {
     final normalizedStanzaId = stanzaId?.trim();
-    if (normalizedStanzaId == null || normalizedStanzaId.isEmpty) {
+    final normalizedOriginId = originId?.trim();
+    final normalizedMucStanzaId = mucStanzaId?.trim();
+    final resolvedStanzaId =
+        normalizedStanzaId == null ||
+            normalizedStanzaId.isEmpty ||
+            isLegacyWireMessageReferenceValue(normalizedStanzaId)
+        ? null
+        : normalizedStanzaId;
+    final resolvedOriginId =
+        normalizedOriginId == null ||
+            normalizedOriginId.isEmpty ||
+            isLegacyWireMessageReferenceValue(normalizedOriginId)
+        ? null
+        : normalizedOriginId;
+    final resolvedMucStanzaId =
+        normalizedMucStanzaId == null ||
+            normalizedMucStanzaId.isEmpty ||
+            isLegacyWireMessageReferenceValue(normalizedMucStanzaId)
+        ? null
+        : normalizedMucStanzaId;
+    if (resolvedStanzaId == null &&
+        resolvedOriginId == null &&
+        resolvedMucStanzaId == null) {
       return null;
     }
-    if (referenceKind == MessageReferenceKind.originId ||
-        isLegacyWireMessageReferenceValue(normalizedStanzaId)) {
-      return null;
-    }
-    return DraftQuoteTarget(stanzaId: normalizedStanzaId);
+    return DraftQuoteTarget(
+      stanzaId: resolvedStanzaId,
+      originId: resolvedOriginId,
+      mucStanzaId: resolvedMucStanzaId,
+    );
   }
 }
 
@@ -737,7 +781,8 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
     String? body,
     String? subject,
     String? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
+    String? quotingOriginId,
+    String? quotingMucStanzaId,
     @Default(<String>[]) List<String> attachmentMetadataIds,
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     @Default(<DraftForwardedBlock>[]) List<DraftForwardedBlock> forwardedBlocks,
@@ -760,7 +805,8 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
 
   DraftQuoteTarget? get quoteTarget => DraftQuoteTarget.fromDraft(
     stanzaId: quotingStanzaId,
-    referenceKind: quotingReferenceKind,
+    originId: quotingOriginId,
+    mucStanzaId: quotingMucStanzaId,
   );
 
   bool get hasSyncIdentity => syncMetadata.normalizedId.isNotEmpty;
@@ -801,7 +847,8 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
   Draft copyWithQuoteTarget(DraftQuoteTarget? target) {
     return copyWith(
       quotingStanzaId: target?.stanzaId,
-      quotingReferenceKind: null,
+      quotingOriginId: target?.originId,
+      quotingMucStanzaId: target?.mucStanzaId,
     );
   }
 
@@ -824,7 +871,8 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
       body: nullableValue(body),
       subject: nullableValue(subject),
       quotingStanzaId: nullableValue(quotingStanzaId),
-      quotingReferenceKind: nullableValue(quotingReferenceKind),
+      quotingOriginId: nullableValue(quotingOriginId),
+      quotingMucStanzaId: nullableValue(quotingMucStanzaId),
       attachmentMetadataIds: Value(attachmentMetadataIds),
       calendarTaskIcsMessage: nullableValue(calendarTaskIcsMessage),
       forwardedBlocks: Value(forwardedBlocks),
@@ -857,8 +905,9 @@ class Drafts extends Table {
 
   TextColumn get quotingStanzaId => text().nullable()();
 
-  IntColumn get quotingReferenceKind =>
-      intEnum<MessageReferenceKind>().nullable()();
+  TextColumn get quotingOriginId => text().nullable()();
+
+  TextColumn get quotingMucStanzaId => text().nullable()();
 
   TextColumn get attachmentMetadataIds =>
       text().map(ListConverter<String>()).withDefault(const Constant('[]'))();

@@ -126,7 +126,9 @@ enum MessageDiffField {
   fileDownloading,
   fileUploading,
   fileMetadataId,
-  quoting,
+  replyStanzaId,
+  replyOriginId,
+  replyMucStanzaId,
   stickerPackId,
   pseudoMessageType,
   pseudoMessageData,
@@ -512,7 +514,12 @@ extension MessageDiffX on Message {
       fileMetadataID != other.fileMetadataID,
       MessageDiffField.fileMetadataId,
     );
-    addIf(quoting != other.quoting, MessageDiffField.quoting);
+    addIf(replyStanzaId != other.replyStanzaId, MessageDiffField.replyStanzaId);
+    addIf(replyOriginId != other.replyOriginId, MessageDiffField.replyOriginId);
+    addIf(
+      replyMucStanzaId != other.replyMucStanzaId,
+      MessageDiffField.replyMucStanzaId,
+    );
     addIf(stickerPackID != other.stickerPackID, MessageDiffField.stickerPackId);
     addIf(
       pseudoMessageType != other.pseudoMessageType,
@@ -1770,7 +1777,17 @@ class DeltaEventConsumer {
       return;
     }
     final result = await _hydrateMessageStatus(chatId, msgId);
-    if (result == null || result.status.isOutgoing) {
+    if (result == null) {
+      final hydrationResult = await _hydrateMessage(chatId, msgId);
+      if (hydrationResult == null || hydrationResult.message.isOutgoing) {
+        return;
+      }
+      if (!hydrationResult.unreadStateResolved) {
+        await _updateUnreadCount(chatId);
+      }
+      return;
+    }
+    if (result.status.isOutgoing) {
       return;
     }
     if (!result.unreadStateResolved) {
@@ -3216,9 +3233,6 @@ class DeltaEventConsumer {
     if (updatedFields.contains(MessageDiffField.encryptionProtocol)) {
       await _ensureEmailEncryptionStatusMarkerForMessage(db: db, message: next);
     }
-    if (_messageUpdateAffectsChatSummary(updatedFields)) {
-      await _refreshStoredChatSummary(chatJid: next.chatJid, db: db);
-    }
     return (repairedUnread: repairedUnread, updatedFields: updatedFields);
   }
 
@@ -3852,7 +3866,9 @@ class DeltaEventConsumer {
     required int deltaAccountId,
     required int chatId,
   }) async {
-    if (message.quoting != null) {
+    if (message.replyStanzaId != null ||
+        message.replyOriginId != null ||
+        message.replyMucStanzaId != null) {
       return message;
     }
     final DeltaQuotedMessage? quoted;
@@ -3873,7 +3889,7 @@ class DeltaEventConsumer {
     if (quotedRow == null) {
       return message;
     }
-    return message.copyWith(quoting: quotedRow.stanzaID);
+    return message.copyWith(replyStanzaId: quotedRow.stanzaID);
   }
 
   Future<String?> _resolveNativeOriginId(DeltaMessage msg) async {

@@ -821,9 +821,8 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
     message: message,
     isEmailChat: isEmailChat,
   );
-  final quotedMessage = message.quoting == null
-      ? null
-      : messageById[message.quoting!];
+  final replyId = message.storedReplyId;
+  final quotedMessage = replyId == null ? null : messageById[replyId];
   final shareContext = shareContexts[message.stanzaID];
   final bannerParticipants = List<chat_models.Chat>.of(
     participantsForBanner(shareContext, chat?.jid, currentUserId),

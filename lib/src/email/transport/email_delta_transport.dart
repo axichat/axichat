@@ -1432,62 +1432,15 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       );
     }
     final context = session.context;
-    final exportedPaths = <String>[];
-    final completer = Completer<EmailDeltaImexResult>();
-    final subscription = context.events().listen(
-      (event) {
-        if (!_imexEventBelongsToAccount(event, resolvedAccountId)) {
-          return;
-        }
-        final eventType = DeltaEventType.fromCode(event.type);
-        switch (eventType) {
-          case DeltaEventType.imexFileWritten:
-            final path = event.data2Text?.trim();
-            if (path != null && path.isNotEmpty) {
-              exportedPaths.add(path);
-            }
-          case DeltaEventType.imexProgress:
-            if (event.data1 == 1000) {
-              if (!completer.isCompleted) {
-                completer.complete(
-                  EmailDeltaImexResult(
-                    accountId: resolvedAccountId,
-                    exportedPaths: List<String>.unmodifiable(exportedPaths),
-                  ),
-                );
-              }
-            } else if (event.data1 == 0 && !completer.isCompleted) {
-              completer.completeError(
-                EmailDeltaImexException(
-                  event.data2Text ??
-                      event.data1Text ??
-                      'Delta import/export failed.',
-                ),
-              );
-            }
-          default:
-            break;
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!completer.isCompleted) {
-          completer.completeError(
-            const EmailDeltaImexException(
-              'Delta import/export event stream failed.',
-            ),
-            stackTrace,
-          );
-        }
-      },
-    );
     try {
-      await context.startImex(mode: mode, path: path);
-      return await completer.future.timeout(timeout);
-    } on TimeoutException {
-      await context.stopOngoingProcess();
-      throw const EmailDeltaImexTimeoutException();
+      return await _runImexForContext(
+        context: context,
+        accountId: resolvedAccountId,
+        mode: mode,
+        path: path,
+        timeout: timeout,
+      );
     } finally {
-      await subscription.cancel();
       _activeImexAccountIds.remove(resolvedAccountId);
     }
   }
@@ -1947,6 +1900,13 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   Future<void> _openSingleContext(String prefix, String passphrase) async {
     final databaseFile = await _deltaDatabaseFile(prefix);
     try {
+      if (_context == null && !await databaseFile.exists()) {
+        await _migrateLegacyAccountsStorageIfNeeded(
+          prefix: prefix,
+          passphrase: passphrase,
+          databaseFile: databaseFile,
+        );
+      }
       _context ??= await _delta.createContext(
         databasePath: databaseFile.path,
         osName: Platform.operatingSystem,
@@ -1971,6 +1931,306 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       _contextOpened = false;
       await _clearSessions();
       rethrow;
+    }
+  }
+
+  Future<void> _migrateLegacyAccountsStorageIfNeeded({
+    required String prefix,
+    required String passphrase,
+    required File databaseFile,
+  }) async {
+    final accountsDirectory = await _accountsDirectory(prefix);
+    if (!await _legacyAccountsDirectoryHasEntries(accountsDirectory)) {
+      return;
+    }
+
+    DeltaAccountsHandle? accounts;
+    DeltaContextHandle? sourceContext;
+    DeltaContextHandle? targetContext;
+    Directory? exportDirectory;
+    var targetCreated = false;
+    var migrated = false;
+    try {
+      accounts = await _delta.createAccounts(directory: accountsDirectory.path);
+      final selected = await _selectLegacyAccountForSingleContextMigration(
+        accounts: accounts,
+        passphrase: passphrase,
+      );
+      if (selected == null) {
+        throw const DeltaOperationException(
+          'Legacy Delta accounts storage contains files but no accounts.',
+        );
+      }
+
+      sourceContext = accounts.contextFor(selected.accountId);
+      await sourceContext.open(passphrase: passphrase);
+      exportDirectory = await _createLegacyMigrationExportDirectory(
+        databaseFile,
+      );
+      final exportResult = await _runImexForContext(
+        context: sourceContext,
+        accountId: selected.accountId,
+        mode: DeltaImexMode.exportBackup,
+        path: exportDirectory.path,
+        timeout: const Duration(minutes: 5),
+      );
+      final backupPath = await _legacyMigrationBackupPath(
+        exportDirectory: exportDirectory,
+        exportResult: exportResult,
+      );
+
+      targetContext = await _delta.createContext(
+        databasePath: databaseFile.path,
+        osName: Platform.operatingSystem,
+      );
+      targetCreated = true;
+      await targetContext.open(passphrase: passphrase);
+      await _runImexForContext(
+        context: targetContext,
+        accountId: DeltaAccountDefaults.singleContextId,
+        mode: DeltaImexMode.importBackup,
+        path: backupPath,
+        timeout: const Duration(minutes: 5),
+      );
+      migrated = true;
+      _log.info(
+        'Migrated legacy Delta account ${selected.accountId} to direct '
+        'single-context storage.',
+      );
+    } on EmailDeltaImexException catch (error) {
+      throw DeltaOperationException(
+        'Failed to migrate legacy Delta accounts storage: ${error.message}',
+      );
+    } finally {
+      await targetContext?.close();
+      await sourceContext?.close();
+      await accounts?.dispose();
+      await _deleteLegacyMigrationExportDirectory(exportDirectory);
+      if (targetCreated && !migrated) {
+        await _deleteDatabaseArtifacts(databaseFile);
+      }
+    }
+  }
+
+  Future<bool> _legacyAccountsDirectoryHasEntries(Directory directory) async {
+    if (!await directory.exists()) {
+      return false;
+    }
+    await for (final _ in directory.list(followLinks: false)) {
+      return true;
+    }
+    return false;
+  }
+
+  Future<({int accountId, String? address})?>
+  _selectLegacyAccountForSingleContextMigration({
+    required DeltaAccountsHandle accounts,
+    required String passphrase,
+  }) async {
+    final accountIds = <int>[];
+    final seen = <int>{};
+    for (final accountId in await accounts.accountIds()) {
+      if (seen.add(accountId)) {
+        accountIds.add(accountId);
+      }
+    }
+    if (accountIds.isEmpty) {
+      return null;
+    }
+
+    final candidates = <({int accountId, String? address})>[];
+    for (final accountId in accountIds) {
+      final context = accounts.contextFor(accountId);
+      await context.open(passphrase: passphrase);
+      candidates.add((
+        accountId: accountId,
+        address: await _configuredAddressForContext(context),
+      ));
+    }
+
+    final expectedAddress = _singleContextMigrationAddress();
+    if (expectedAddress != null) {
+      final matching = candidates
+          .where((candidate) => candidate.address == expectedAddress)
+          .toList(growable: false);
+      if (matching.length == 1) {
+        return matching.single;
+      }
+      if (matching.length > 1) {
+        throw DeltaOperationException(
+          'Legacy Delta accounts storage has multiple accounts for '
+          '$expectedAddress.',
+        );
+      }
+    }
+
+    if (candidates.length == 1) {
+      final only = candidates.single;
+      if (expectedAddress == null || only.address == null) {
+        return only;
+      }
+    }
+
+    final descriptions = candidates
+        .map(
+          (candidate) =>
+              '${candidate.accountId}:${candidate.address ?? '<unknown>'}',
+        )
+        .join(',');
+    throw DeltaOperationException(
+      'Legacy Delta accounts storage is ambiguous for direct single-context '
+      'migration. expectedAddress=${expectedAddress ?? '<unknown>'} '
+      'candidates=$descriptions',
+    );
+  }
+
+  Future<String?> _configuredAddressForContext(
+    DeltaContextHandle context,
+  ) async {
+    final rawAddress = await context.getConfig(_deltaConfigKeyAddress);
+    final normalized = normalizedAddressValue(rawAddress);
+    if (normalized == null || normalized.isDeltaPlaceholderJid) {
+      return null;
+    }
+    return normalized;
+  }
+
+  String? _singleContextMigrationAddress() {
+    final primary = _accountAddresses[DeltaAccountDefaults.singleContextId];
+    final normalizedPrimary = normalizedAddressValue(primary);
+    if (normalizedPrimary != null && !normalizedPrimary.isDeltaPlaceholderJid) {
+      return normalizedPrimary;
+    }
+    for (final address in _accountAddresses.values) {
+      final normalized = normalizedAddressValue(address);
+      if (normalized != null && !normalized.isDeltaPlaceholderJid) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  Future<Directory> _createLegacyMigrationExportDirectory(
+    File databaseFile,
+  ) async {
+    final parent = databaseFile.parent;
+    await parent.create(recursive: true);
+    return parent.createTemp('${p.basename(databaseFile.path)}_migration_');
+  }
+
+  Future<String> _legacyMigrationBackupPath({
+    required Directory exportDirectory,
+    required EmailDeltaImexResult exportResult,
+  }) async {
+    for (final path in exportResult.exportedPaths) {
+      if (await File(path).exists()) {
+        return path;
+      }
+    }
+    final files = <File>[];
+    await for (final entity in exportDirectory.list(followLinks: false)) {
+      if (entity is File) {
+        files.add(entity);
+      }
+    }
+    if (files.isEmpty) {
+      throw const EmailDeltaImexException(
+        'Delta backup export did not produce a backup file.',
+      );
+    }
+    files.sort((a, b) => a.path.compareTo(b.path));
+    return files.first.path;
+  }
+
+  Future<void> _deleteLegacyMigrationExportDirectory(
+    Directory? directory,
+  ) async {
+    if (directory == null) {
+      return;
+    }
+    try {
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: directory.path,
+      );
+      if (!deleted) {
+        _log.warning(
+          'Skipped legacy Delta migration cleanup for unexpected path '
+          '${directory.path}',
+        );
+      }
+    } on IOException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to clean up legacy Delta migration directory ${directory.path}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<EmailDeltaImexResult> _runImexForContext({
+    required DeltaContextHandle context,
+    required int accountId,
+    required int mode,
+    required String path,
+    required Duration timeout,
+  }) async {
+    final exportedPaths = <String>[];
+    final completer = Completer<EmailDeltaImexResult>();
+    final subscription = context.events().listen(
+      (event) {
+        if (!_imexEventBelongsToAccount(event, accountId)) {
+          return;
+        }
+        final eventType = DeltaEventType.fromCode(event.type);
+        switch (eventType) {
+          case DeltaEventType.imexFileWritten:
+            final path = event.data2Text?.trim();
+            if (path != null && path.isNotEmpty) {
+              exportedPaths.add(path);
+            }
+          case DeltaEventType.imexProgress:
+            if (event.data1 == 1000) {
+              if (!completer.isCompleted) {
+                completer.complete(
+                  EmailDeltaImexResult(
+                    accountId: accountId,
+                    exportedPaths: List<String>.unmodifiable(exportedPaths),
+                  ),
+                );
+              }
+            } else if (event.data1 == 0 && !completer.isCompleted) {
+              completer.completeError(
+                EmailDeltaImexException(
+                  event.data2Text ??
+                      event.data1Text ??
+                      'Delta import/export failed.',
+                ),
+              );
+            }
+          default:
+            break;
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            const EmailDeltaImexException(
+              'Delta import/export event stream failed.',
+            ),
+            stackTrace,
+          );
+        }
+      },
+    );
+    try {
+      await context.startImex(mode: mode, path: path);
+      return await completer.future.timeout(timeout);
+    } on TimeoutException {
+      await context.stopOngoingProcess();
+      throw const EmailDeltaImexTimeoutException();
+    } finally {
+      await subscription.cancel();
     }
   }
 
@@ -2364,10 +2624,10 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     required String quotingStanzaId,
   }) async {
     final row = await db.getMessageByDeltaId(msgId, deltaAccountId: accountId);
-    if (row == null || row.quoting != null) {
+    if (row == null || row.replyStanzaId != null) {
       return;
     }
-    await db.updateMessage(row.copyWith(quoting: quotingStanzaId));
+    await db.updateMessage(row.copyWith(replyStanzaId: quotingStanzaId));
   }
 
   Future<void> _recordFailedOutgoing({
@@ -2396,7 +2656,7 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
         body: trimmedBody?.isNotEmpty == true ? trimmedBody : null,
         htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
         subject: subject,
-        quoting: quotingStanzaId,
+        replyStanzaId: quotingStanzaId,
         error: MessageError.emailSendFailure,
         deltaChatId: chatId,
         deltaAccountId: accountId,

@@ -2649,6 +2649,10 @@ class EmailService {
         await _credentialStore.write(key: addressKey, value: address);
       }
     }
+    _transport.hydrateAccountAddress(
+      address: selectedAddress,
+      accountId: DeltaAccountDefaults.singleContextId,
+    );
 
     final connectionOverrides = _buildConnectionConfig(selectedAddress);
 
@@ -3791,10 +3795,10 @@ class EmailService {
     required String quotingStanzaId,
   }) async {
     final row = await db.getMessageByDeltaId(msgId, deltaAccountId: accountId);
-    if (row == null || row.quoting != null) {
+    if (row == null || row.replyStanzaId != null) {
       return;
     }
-    await db.updateMessage(row.copyWith(quoting: quotingStanzaId));
+    await db.updateMessage(row.copyWith(replyStanzaId: quotingStanzaId));
   }
 
   Future<void> _recordFailedOutgoingEmail({
@@ -3823,7 +3827,7 @@ class EmailService {
         body: trimmedBody?.isNotEmpty == true ? trimmedBody : null,
         htmlBody: HtmlContentCodec.normalizeHtml(htmlBody),
         subject: subject,
-        quoting: quotingStanzaId,
+        replyStanzaId: quotingStanzaId,
         error: MessageError.emailSendFailure,
         deltaChatId: chatId,
         deltaAccountId: accountId,
@@ -8140,7 +8144,7 @@ class EmailService {
       body: payload.displayText,
       htmlBody: payload.htmlBody,
       subject: normalizedSubject,
-      quoting: quotedStanzaId,
+      replyStanzaId: quotedStanzaId,
       timestamp: timestamp,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
@@ -8213,7 +8217,7 @@ class EmailService {
       body: payload.transmitText,
       htmlBody: payload.htmlBody,
       subject: normalizedSubject,
-      quoting: quotedStanzaId,
+      replyStanzaId: quotedStanzaId,
       timestamp: timestamp,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,

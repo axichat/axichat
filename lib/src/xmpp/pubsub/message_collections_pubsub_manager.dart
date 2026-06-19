@@ -8,6 +8,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/xml_safety.dart';
+import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
@@ -65,10 +66,10 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   @override
   final String collectionId;
   final String chatJid;
-  final WireMessageReference messageReferenceId;
-  final XmppWireMessageReference? messageStanzaId;
-  final WireMessageReference? messageOriginId;
-  final XmppWireMessageReference? messageMucStanzaId;
+  final String messageReferenceId;
+  final String? messageStanzaId;
+  final String? messageOriginId;
+  final String? messageMucStanzaId;
   @override
   final DateTime updatedAt;
   @override
@@ -79,14 +80,14 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
   String get itemId => itemIdFor(
     collectionId: collectionId,
     chatJid: chatJid,
-    messageReferenceId: messageReferenceId.value,
+    messageReferenceId: messageReferenceId,
   );
 
   Set<String> get aliases => <String>{
-    messageReferenceId.value,
-    ?messageStanzaId?.value,
-    ?messageOriginId?.value,
-    ?messageMucStanzaId?.value,
+    messageReferenceId,
+    ?messageStanzaId,
+    ?messageOriginId,
+    ?messageMucStanzaId,
   };
 
   static String itemIdFor({
@@ -122,14 +123,8 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
         ?.toString();
     final rawMessageMucStanzaId = node.attributes[_messageMucStanzaIdAttr]
         ?.toString();
-    final messageStanzaId = _parseXmppReference(
-      kind: MessageReferenceKind.stanzaId,
-      value: rawMessageStanzaId,
-    );
-    final messageMucStanzaId = _parseXmppReference(
-      kind: MessageReferenceKind.mucStanzaId,
-      value: rawMessageMucStanzaId,
-    );
+    final messageStanzaId = _parseXmppReference(rawMessageStanzaId);
+    final messageMucStanzaId = _parseXmppReference(rawMessageMucStanzaId);
     final messageOriginId = _parseOriginReference(
       rawMessageOriginId,
       hasXmppAlias: messageStanzaId != null || messageMucStanzaId != null,
@@ -173,11 +168,11 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
     return payload;
   }
 
-  static WireMessageReference? _parseCanonicalReference({
+  static String? _parseCanonicalReference({
     required String? value,
-    required XmppWireMessageReference? messageStanzaId,
-    required WireMessageReference? messageOriginId,
-    required XmppWireMessageReference? messageMucStanzaId,
+    required String? messageStanzaId,
+    required String? messageOriginId,
+    required String? messageMucStanzaId,
   }) {
     final normalized = value?.trim();
     if (normalized == null ||
@@ -185,30 +180,25 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
         _isLegacyReferenceValue(normalized)) {
       return null;
     }
-    if (messageMucStanzaId?.value == normalized) {
+    if (messageMucStanzaId == normalized) {
       return messageMucStanzaId;
     }
-    if (messageStanzaId?.value == normalized) {
+    if (messageStanzaId == normalized) {
       return messageStanzaId;
     }
-    if (messageOriginId?.value == normalized) {
+    if (messageOriginId == normalized) {
       return messageOriginId;
     }
     if (messageStanzaId == null && messageMucStanzaId == null) {
-      final emailReference = WireMessageReference.tryParseEmailMessageId(
-        normalized,
-      );
+      final emailReference = _parseEmailMessageReference(normalized);
       if (emailReference != null) {
         return emailReference;
       }
     }
-    return WireMessageReference.tryParseXmpp(
-      kind: MessageReferenceKind.stanzaId,
-      value: normalized,
-    );
+    return _parseXmppReference(normalized);
   }
 
-  static WireMessageReference? _parseOriginReference(
+  static String? _parseOriginReference(
     String? value, {
     required bool hasXmppAlias,
   }) {
@@ -219,48 +209,56 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
       return null;
     }
     if (!hasXmppAlias) {
-      final emailReference = WireMessageReference.tryParseEmailMessageId(
-        normalized,
-      );
+      final emailReference = _parseEmailMessageReference(normalized);
       if (emailReference != null) {
         return emailReference;
       }
     }
-    return null;
+    return _parseXmppReference(normalized);
   }
 
-  static XmppWireMessageReference? _parseXmppReference({
-    required MessageReferenceKind kind,
-    required String? value,
-  }) {
-    final normalized = value?.trim();
+  static String? _parseXmppReference(String? value) {
+    final normalized = normalizeWireMessageReferenceValue(value);
+    if (normalized == null || _isLegacyReferenceValue(normalized)) {
+      return null;
+    }
+    return normalized;
+  }
+
+  static String? _parseEmailMessageReference(String? value) {
+    final genuine = genuineEmailMessageId(value);
+    final normalized = normalizeWireMessageReferenceValue(genuine);
     if (normalized == null ||
-        normalized.isEmpty ||
+        !normalized.contains('@') ||
         _isLegacyReferenceValue(normalized)) {
       return null;
     }
-    return WireMessageReference.tryParseXmpp(kind: kind, value: normalized);
+    return normalized;
   }
 
   static bool _isLegacyReferenceValue(String? value) =>
       isLegacyWireMessageReferenceValue(value);
 
   mox.XMLNode toXml() {
+    final stanzaId = _parseXmppReference(messageStanzaId);
+    final mucStanzaId = _parseXmppReference(messageMucStanzaId);
+    final originId = _parseOriginReference(
+      messageOriginId,
+      hasXmppAlias: stanzaId != null || mucStanzaId != null,
+    );
     return mox.XMLNode.xmlns(
       tag: _entryTag,
       xmlns: messageCollectionsPubSubNode,
       attributes: {
         _collectionIdAttr: escapeXmlAttribute(collectionId),
         _chatJidAttr: escapeXmlAttribute(chatJid),
-        _messageReferenceIdAttr: escapeXmlAttribute(messageReferenceId.value),
+        _messageReferenceIdAttr: escapeXmlAttribute(messageReferenceId),
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
         _activeAttr: active ? '1' : '0',
         _sourceIdAttr: escapeXmlAttribute(sourceId),
-        _messageStanzaIdAttr: ?escapeXmlAttributeOrNull(messageStanzaId?.value),
-        _messageOriginIdAttr: ?escapeXmlAttributeOrNull(messageOriginId?.value),
-        _messageMucStanzaIdAttr: ?escapeXmlAttributeOrNull(
-          messageMucStanzaId?.value,
-        ),
+        _messageStanzaIdAttr: ?escapeXmlAttributeOrNull(stanzaId),
+        _messageOriginIdAttr: ?escapeXmlAttributeOrNull(originId),
+        _messageMucStanzaIdAttr: ?escapeXmlAttributeOrNull(mucStanzaId),
       },
     );
   }

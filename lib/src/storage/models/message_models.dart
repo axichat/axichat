@@ -360,8 +360,9 @@ abstract class Message with _$Message implements Insertable<Message> {
     @Default(false) bool fileDownloading,
     @Default(false) bool fileUploading,
     String? fileMetadataID,
-    String? quoting,
-    MessageReferenceKind? quotingReferenceKind,
+    String? replyStanzaId,
+    String? replyOriginId,
+    String? replyMucStanzaId,
     String? stickerPackID,
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
@@ -403,8 +404,9 @@ abstract class Message with _$Message implements Insertable<Message> {
     required bool fileDownloading,
     required bool fileUploading,
     required String? fileMetadataID,
-    required String? quoting,
-    required MessageReferenceKind? quotingReferenceKind,
+    required String? replyStanzaId,
+    required String? replyOriginId,
+    required String? replyMucStanzaId,
     required String? stickerPackID,
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
@@ -490,6 +492,7 @@ abstract class Message with _$Message implements Insertable<Message> {
         : rawOccupantId;
     final normalizedSenderRealJid = bareAddress(senderRealJid)?.trim();
 
+    final replyId = get<mox.ReplyData>()?.id;
     return Message(
       stanzaID: event.id ?? uuid.v4(),
       senderJid: senderJid,
@@ -507,10 +510,9 @@ abstract class Message with _$Message implements Insertable<Message> {
             mox.MessageProcessingHint.noStore,
           ) ??
           false,
-      quoting: get<mox.ReplyData>()?.id,
-      quotingReferenceKind: isGroupChat
-          ? MessageReferenceKind.mucStanzaId
-          : null,
+      replyStanzaId: isGroupChat ? null : replyId,
+      replyOriginId: null,
+      replyMucStanzaId: isGroupChat ? replyId : null,
       originID: stableIdData?.originId,
       mucStanzaId: mucStanzaId == null || mucStanzaId.isEmpty
           ? null
@@ -641,6 +643,7 @@ abstract class Message with _$Message implements Insertable<Message> {
       pseudoMessageType != null && pseudoMessageData != null;
 
   mox.MessageEvent toMox({
+    String? replyId,
     String? quotedBody,
     mox.JID? quotedJid,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
@@ -658,17 +661,13 @@ abstract class Message with _$Message implements Insertable<Message> {
 
     var outgoingBody = plainText;
     mox.ReplyData? replyData;
-    if (quoting != null) {
+    if (replyId != null) {
       if (quotedBody != null) {
         final quote = mox.QuoteData.fromBodies(quotedBody, outgoingBody);
         outgoingBody = quote.body;
-        replyData = mox.ReplyData.fromQuoteData(
-          quoting!,
-          quote,
-          jid: quotedJid,
-        );
+        replyData = mox.ReplyData.fromQuoteData(replyId, quote, jid: quotedJid);
       } else {
-        replyData = mox.ReplyData(quoting!, jid: quotedJid);
+        replyData = mox.ReplyData(replyId, jid: quotedJid);
       }
     }
 
@@ -772,13 +771,14 @@ abstract class Message with _$Message implements Insertable<Message> {
     if (deviceID != null) {
       map['device_i_d'] = Variable<int>(deviceID);
     }
-    if (quoting != null) {
-      map['quoting'] = Variable<String>(quoting);
+    if (replyStanzaId != null) {
+      map['reply_stanza_id'] = Variable<String>(replyStanzaId);
     }
-    if (quotingReferenceKind != null) {
-      map['quoting_reference_kind'] = Variable<int>(
-        quotingReferenceKind!.index,
-      );
+    if (replyOriginId != null) {
+      map['reply_origin_id'] = Variable<String>(replyOriginId);
+    }
+    if (replyMucStanzaId != null) {
+      map['reply_muc_stanza_id'] = Variable<String>(replyMucStanzaId);
     }
     if (stickerPackID != null) {
       map['sticker_pack_i_d'] = Variable<String>(stickerPackID);
@@ -908,46 +908,9 @@ extension MessageContent on Message {
   }
 }
 
-enum MessageReferenceKind {
-  stanzaId,
-  originId,
-  mucStanzaId;
-
-  int get storageValue => switch (this) {
-    MessageReferenceKind.stanzaId => 0,
-    MessageReferenceKind.originId => 1,
-    MessageReferenceKind.mucStanzaId => 2,
-  };
-
-  String get wireValue => switch (this) {
-    MessageReferenceKind.stanzaId => 'stanza-id',
-    MessageReferenceKind.originId => 'origin-id',
-    MessageReferenceKind.mucStanzaId => 'muc-stanza-id',
-  };
-
-  static MessageReferenceKind? fromStorageValue(int? value) => switch (value) {
-    0 => MessageReferenceKind.stanzaId,
-    1 => MessageReferenceKind.originId,
-    2 => MessageReferenceKind.mucStanzaId,
-    _ => null,
-  };
-
-  static MessageReferenceKind? fromWireValue(String? value) {
-    final normalized = value?.trim();
-    return switch (normalized) {
-      'stanza-id' => MessageReferenceKind.stanzaId,
-      'origin-id' => MessageReferenceKind.originId,
-      'muc-stanza-id' => MessageReferenceKind.mucStanzaId,
-      _ => null,
-    };
-  }
-}
-
-enum DirectMessageReferencePolicy { currentWire, preferOriginId }
-
 const int wireMessageReferenceMaxBytes = 1024;
 
-String? _normalizeWireMessageReferenceValue(String? raw) {
+String? normalizeWireMessageReferenceValue(String? raw) {
   final trimmed = raw?.trim();
   if (trimmed == null || trimmed.isEmpty) {
     return null;
@@ -967,70 +930,6 @@ bool isLegacyWireMessageReferenceValue(String? raw) {
   return isDeviceLocalDeltaStanzaId(normalized) ||
       isDeltaGeneratedMessageId(normalized) ||
       isDerivedEmailMessageKey(normalized);
-}
-
-sealed class WireMessageReference {
-  const WireMessageReference._(this.value);
-
-  final String value;
-
-  static XmppWireMessageReference? tryParseXmpp({
-    required MessageReferenceKind kind,
-    required String? value,
-  }) {
-    final normalized = _normalizeWireMessageReferenceValue(value);
-    if (normalized == null || isLegacyWireMessageReferenceValue(normalized)) {
-      return null;
-    }
-    return XmppWireMessageReference._(kind: kind, value: normalized);
-  }
-
-  static EmailWireMessageReference? tryParseEmailMessageId(String? value) {
-    final genuine = genuineEmailMessageId(value);
-    final normalized = _normalizeWireMessageReferenceValue(genuine);
-    if (normalized == null ||
-        !normalized.contains('@') ||
-        isLegacyWireMessageReferenceValue(normalized)) {
-      return null;
-    }
-    return EmailWireMessageReference._(normalized);
-  }
-}
-
-final class XmppWireMessageReference extends WireMessageReference {
-  const XmppWireMessageReference._({required this.kind, required String value})
-    : super._(value);
-
-  final MessageReferenceKind kind;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is XmppWireMessageReference &&
-          other.kind == kind &&
-          other.value == value;
-
-  @override
-  int get hashCode => Object.hash(XmppWireMessageReference, kind, value);
-}
-
-final class EmailWireMessageReference extends WireMessageReference {
-  const EmailWireMessageReference._(super.value) : super._();
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is EmailWireMessageReference && other.value == value;
-
-  @override
-  int get hashCode => Object.hash(EmailWireMessageReference, value);
-}
-
-final class LocalMessageReference {
-  const LocalMessageReference({required this.kind, required this.value});
-
-  final MessageReferenceKind kind;
-  final String value;
 }
 
 sealed class FolderMessageReference {
@@ -1206,91 +1105,73 @@ extension MessageReferenceIds on Message {
     ?trimmedMucStanzaId,
   };
 
-  String? pinStanzaId({required bool isGroupChat}) {
-    if (isEmailBacked) {
-      return null;
-    }
+  String? markerId({required bool isGroupChat}) {
     if (isGroupChat) {
       return trimmedMucStanzaId;
     }
     return trimmedStanzaId;
   }
 
-  String? quoteStanzaId({required bool isGroupChat}) {
+  String? receiptId({required bool isGroupChat}) {
+    if (isGroupChat) {
+      return null;
+    }
+    return trimmedStanzaId;
+  }
+
+  String? replyId({required bool isGroupChat}) {
     if (isEmailBacked) {
       return null;
     }
     if (isGroupChat) {
       return trimmedMucStanzaId;
     }
-    return trimmedStanzaId;
-  }
-
-  LocalMessageReference? get _stanzaReference {
-    final stanzaId = trimmedStanzaId;
-    if (stanzaId == null) {
-      return null;
-    }
-    return LocalMessageReference(
-      kind: MessageReferenceKind.stanzaId,
-      value: stanzaId,
-    );
-  }
-
-  LocalMessageReference? get _originReference {
     final originId = trimmedOriginId;
-    if (originId == null) {
-      return null;
+    if (originId != null) {
+      return originId;
     }
-    return LocalMessageReference(
-      kind: MessageReferenceKind.originId,
-      value: originId,
-    );
+    return trimmedStanzaId;
   }
 
-  LocalMessageReference? get _mucStanzaReference {
-    final mucStanzaId = trimmedMucStanzaId;
-    if (mucStanzaId == null) {
-      return null;
-    }
-    return LocalMessageReference(
-      kind: MessageReferenceKind.mucStanzaId,
-      value: mucStanzaId,
-    );
-  }
-
-  LocalMessageReference? markerReference({required bool isGroupChat}) {
-    if (isGroupChat) {
-      return _mucStanzaReference;
-    }
-    return _stanzaReference;
-  }
-
-  LocalMessageReference? receiptReference({required bool isGroupChat}) {
-    if (isGroupChat) {
-      return null;
-    }
-    return _stanzaReference;
-  }
-
-  LocalMessageReference? replyReference({required bool isGroupChat}) {
+  String? reactionId({required bool isGroupChat}) {
     if (isEmailBacked) {
       return null;
     }
     if (isGroupChat) {
-      return _mucStanzaReference;
+      return trimmedMucStanzaId;
     }
-    return _stanzaReference;
+    final originId = trimmedOriginId;
+    if (originId != null) {
+      return originId;
+    }
+    return trimmedStanzaId;
   }
 
-  LocalMessageReference? reactionReference({required bool isGroupChat}) {
+  String? pinId({required bool isGroupChat}) {
     if (isEmailBacked) {
       return null;
     }
     if (isGroupChat) {
-      return _mucStanzaReference;
+      return trimmedMucStanzaId;
     }
-    return _originReference ?? _stanzaReference;
+    return trimmedStanzaId;
+  }
+
+  String? retractionId({
+    required bool isGroupChat,
+    required bool mucSupportsStableIds,
+  }) {
+    if (!isGroupChat) {
+      return trimmedStanzaId;
+    }
+    if (mucSupportsStableIds) {
+      return trimmedMucStanzaId;
+    }
+    final originId = trimmedOriginId;
+    if (originId != null) {
+      return originId;
+    }
+    return null;
   }
 
   FolderMessageReference? collectionReference({required bool isGroupChat}) {
@@ -1315,38 +1196,21 @@ extension MessageReferenceIds on Message {
     return XmppFolderMessageReference(stanzaId);
   }
 
-  LocalMessageReference? pinReference({required bool isGroupChat}) {
-    if (isEmailBacked) {
-      return null;
+  String? get storedReplyId {
+    final mucReplyId = replyMucStanzaId?.trim();
+    if (mucReplyId != null && mucReplyId.isNotEmpty) {
+      return mucReplyId;
     }
-    if (isGroupChat) {
-      return _mucStanzaReference;
+    final originReplyId = replyOriginId?.trim();
+    if (originReplyId != null && originReplyId.isNotEmpty) {
+      return originReplyId;
     }
-    return _stanzaReference;
+    final stanzaReplyId = replyStanzaId?.trim();
+    if (stanzaReplyId != null && stanzaReplyId.isNotEmpty) {
+      return stanzaReplyId;
+    }
+    return null;
   }
-
-  LocalMessageReference? outboundReference({
-    required bool isGroupChat,
-    DirectMessageReferencePolicy directPolicy =
-        DirectMessageReferencePolicy.currentWire,
-  }) {
-    if (isGroupChat) {
-      return _mucStanzaReference;
-    }
-    if (directPolicy == DirectMessageReferencePolicy.preferOriginId) {
-      return _originReference ?? _stanzaReference;
-    }
-    return _stanzaReference;
-  }
-
-  String? outboundReferenceId({
-    required bool isGroupChat,
-    DirectMessageReferencePolicy directPolicy =
-        DirectMessageReferencePolicy.currentWire,
-  }) => outboundReference(
-    isGroupChat: isGroupChat,
-    directPolicy: directPolicy,
-  )?.value;
 }
 
 extension MessageForwardingX on Message {
@@ -1862,10 +1726,11 @@ class Messages extends Table {
 
   TextColumn get fileMetadataID => text().nullable()();
 
-  TextColumn get quoting => text().nullable()();
+  TextColumn get replyStanzaId => text().nullable()();
 
-  IntColumn get quotingReferenceKind =>
-      intEnum<MessageReferenceKind>().nullable()();
+  TextColumn get replyOriginId => text().nullable()();
+
+  TextColumn get replyMucStanzaId => text().nullable()();
 
   TextColumn get stickerPackID => text().nullable()();
 
@@ -1903,9 +1768,6 @@ class MessageAttachments extends Table {
   TextColumn get transportGroupId => text().nullable()();
 
   TextColumn get groupQuotedReference => text().nullable()();
-
-  IntColumn get groupQuotedReferenceKind =>
-      intEnum<MessageReferenceKind>().nullable()();
 
   @override
   List<String> get customConstraints => const [

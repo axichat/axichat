@@ -24,7 +24,6 @@ const _pinMutationTag = 'pin';
 const _pinMutationVersionAttr = 'version';
 const _pinMutationVersionValue = '2';
 const _pinMutationMessageIdAttr = 'message-id';
-const _pinMutationReferenceKindAttr = 'reference-kind';
 const _pinMutationPinnedAttr = 'pinned';
 const _pinMutationScopeAttr = 'scope';
 const _pinMutationTimestampAttr = 'timestamp';
@@ -71,6 +70,10 @@ const String _errorConditionNotAcceptable = 'not-acceptable';
 const String _errorConditionResourceConstraint = 'resource-constraint';
 const String _errorConditionServiceUnavailable = 'service-unavailable';
 const String _messageTag = 'message';
+const String _messageRepliesManagerId = 'org.moxxmpp.messagerepliesmanager';
+const String _replyXmlns = 'urn:xmpp:reply:0';
+const String _fallbackXmlns = 'urn:xmpp:fallback:0';
+const String _legacyFallbackXmlns = 'urn:xmpp:feature-fallback:0';
 const int _outgoingMessageHandlerPriority = 120;
 
 int _utf8ByteLength(String value) => utf8.encode(value).length;
@@ -144,6 +147,101 @@ final class DirectMucInviteData implements mox.StanzaHandlerExtension {
       password: password,
       continueFlag: continueFlag,
     );
+  }
+}
+
+final class AxiMessageRepliesManager extends mox.XmppManagerBase {
+  AxiMessageRepliesManager() : super(_messageRepliesManagerId);
+
+  @override
+  List<String> getDiscoFeatures() => const [_replyXmlns];
+
+  @override
+  List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
+    mox.StanzaHandler(
+      stanzaTag: _messageTag,
+      tagName: 'reply',
+      tagXmlns: _replyXmlns,
+      callback: _onMessage,
+      priority: -99,
+    ),
+  ];
+
+  @override
+  Future<bool> isSupported() async => true;
+
+  @visibleForTesting
+  List<mox.XMLNode> messageSendingCallback(
+    mox.TypedMap<mox.StanzaHandlerExtension> extensions,
+  ) {
+    final data = extensions.get<mox.ReplyData>();
+    if (data == null) {
+      return const [];
+    }
+    return [
+      mox.XMLNode.xmlns(
+        tag: 'reply',
+        xmlns: _replyXmlns,
+        attributes: {
+          if (data.jid != null) 'to': data.jid!.toString(),
+          'id': data.id,
+        },
+      ),
+      if (data.body != null) mox.XMLNode(tag: 'body', text: data.body),
+      if (data.body != null && data.start != null && data.end != null)
+        mox.XMLNode.xmlns(
+          tag: 'fallback',
+          xmlns: _fallbackXmlns,
+          attributes: {'for': _replyXmlns},
+          children: [
+            mox.XMLNode(
+              tag: 'body',
+              attributes: {
+                'start': data.start!.toString(),
+                'end': data.end!.toString(),
+              },
+            ),
+          ],
+        ),
+    ];
+  }
+
+  Future<mox.StanzaHandlerData> _onMessage(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    final reply = stanza.firstTag('reply', xmlns: _replyXmlns);
+    final id = reply?.attributes['id']?.toString().trim();
+    if (id == null || id.isEmpty) {
+      return state;
+    }
+    final to = reply?.attributes['to']?.toString().trim();
+    final fallback =
+        stanza.firstTag('fallback', xmlns: _fallbackXmlns) ??
+        stanza.firstTag('fallback', xmlns: _legacyFallbackXmlns);
+    final fallbackBody = fallback?.firstTag('body');
+    final start = int.tryParse(
+      fallbackBody?.attributes['start']?.toString() ?? '',
+    );
+    final end = int.tryParse(fallbackBody?.attributes['end']?.toString() ?? '');
+    return state
+      ..extensions.set(
+        mox.ReplyData(
+          id,
+          jid: to == null || to.isEmpty ? null : mox.JID.fromString(to),
+          start: start,
+          end: end,
+          body: stanza.firstTag('body')?.innerText(),
+        ),
+      );
+  }
+
+  @override
+  Future<void> postRegisterCallback() async {
+    await super.postRegisterCallback();
+    getAttributes()
+        .getManagerById<mox.MessageManager>(mox.messageManager)
+        ?.registerMessageSendingCallback(messageSendingCallback);
   }
 }
 
@@ -557,26 +655,16 @@ enum PinMessageMutationScope {
 
 final class PinMessageMutationData implements mox.StanzaHandlerExtension {
   PinMessageMutationData({
-    String? messageId,
-    LocalMessageReference? reference,
-    MessageReferenceKind? messageReferenceKind,
+    required this.messageId,
     required this.pinned,
     required this.timestamp,
     this.scope = PinMessageMutationScope.own,
-  }) : assert(reference != null || messageId != null),
-       reference =
-           reference ??
-           LocalMessageReference(
-             kind: messageReferenceKind ?? MessageReferenceKind.stanzaId,
-             value: messageId ?? '',
-           );
+  });
 
-  final LocalMessageReference reference;
+  final String messageId;
   final bool pinned;
   final DateTime timestamp;
   final PinMessageMutationScope scope;
-
-  String get messageId => reference.value;
 
   mox.XMLNode toXml() {
     return mox.XMLNode.xmlns(
@@ -584,7 +672,7 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       xmlns: _pinMutationXmlns,
       attributes: {
         _pinMutationVersionAttr: _pinMutationVersionValue,
-        _pinMutationMessageIdAttr: escapeXmlAttribute(reference.value),
+        _pinMutationMessageIdAttr: escapeXmlAttribute(messageId),
         _pinMutationPinnedAttr: pinned.toString(),
         _pinMutationScopeAttr: scope.wireValue,
         _pinMutationTimestampAttr: timestamp.toUtc().toIso8601String(),
@@ -610,16 +698,6 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
     if (pinned == null) {
       return null;
     }
-    final referenceKind =
-        MessageReferenceKind.fromWireValue(
-          node.attributes[_pinMutationReferenceKindAttr]?.toString(),
-        ) ??
-        (stanza.type == _messageTypeGroupchat
-            ? MessageReferenceKind.mucStanzaId
-            : MessageReferenceKind.stanzaId);
-    if (referenceKind == MessageReferenceKind.originId) {
-      return null;
-    }
     final scope = PinMessageMutationScope.fromWireValue(
       node.attributes[_pinMutationScopeAttr]?.toString(),
     );
@@ -636,7 +714,7 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       return null;
     }
     return PinMessageMutationData(
-      reference: LocalMessageReference(kind: referenceKind, value: messageId),
+      messageId: messageId,
       pinned: pinned,
       scope: scope,
       timestamp: timestamp.toUtc(),

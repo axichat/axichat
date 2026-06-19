@@ -576,7 +576,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       body: body,
       subject: subject,
       quotingStanzaId: quoteTarget?.stanzaId,
-      quotingReferenceKind: null,
+      quotingOriginId: quoteTarget?.originId,
+      quotingMucStanzaId: quoteTarget?.mucStanzaId,
       attachments: attachments,
       calendarTaskIcsMessage: calendarTaskIcsMessage,
       forwardedBlocks: forwardedBlocks,
@@ -695,6 +696,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final includeSignatureToken =
         shareTokenSignatureEnabled &&
         targets.every((target) => target.shareSignatureEnabled);
+    final quotedReferenceId = quoteTarget?.referenceId;
     final shareId = ShareTokenCodec.generateShareId();
     var activeTargets = targets.toList(growable: false);
     final completedRecipientKeys = <ComposerRecipientKey>{};
@@ -717,7 +719,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         attachment: attachment,
         htmlCaption: htmlCaption,
         subject: subject,
-        quotedStanzaId: quoteTarget?.stanzaId,
+        quotedStanzaId: quotedReferenceId,
         shareId: shareId,
         useSubjectToken: includeSignatureToken,
         tokenAsSignature: includeSignatureToken,
@@ -819,12 +821,13 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (targets.isEmpty) {
       throw const DraftSendNoRecipientsException();
     }
+    final quotedReferenceId = quoteTarget?.referenceId;
     final attachmentGroupId = hasAttachments && attachments.length > 1
         ? uuid.v4()
         : null;
     final groupQuotedStanzaId = attachmentGroupId == null || hasCalendarTask
         ? null
-        : quoteTarget?.stanzaId;
+        : quotedReferenceId;
     final uploads = List<XmppAttachmentUpload?>.filled(
       attachments.length,
       null,
@@ -843,7 +846,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           text: trimmedBody,
           htmlBody: htmlBody,
           encryptionProtocol: encryption,
-          quotedStanzaId: quoteTarget?.stanzaId,
+          quotedStanzaId: quotedReferenceId,
           chatType: chatType,
           calendarTaskIcs: calendarTaskIcsMessage?.task,
           calendarTaskIcsReadOnly: CalendarTaskIcsMessage.defaultReadOnly,
@@ -856,7 +859,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         final attachment = attachments[index];
         final shouldApplyCaption = hasBody && !hasCalendarTask && index == 0;
         final quotedStanzaId = !hasCalendarTask && index == 0
-            ? quoteTarget?.stanzaId
+            ? quotedReferenceId
             : null;
         final resolvedAttachment = shouldApplyCaption
             ? attachment.copyWith(caption: trimmedBody)

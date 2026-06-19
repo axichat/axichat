@@ -90,7 +90,7 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
   void initState() {
     super.initState();
     _recipientAddresses = _normalizeRecipientAddresses(widget.seed.jids);
-    _quotedMessageLookupId = _effectiveQuoteTarget?.stanzaId.trim();
+    _quotedMessageLookupId = _effectiveQuoteTarget?.referenceId;
     final lookupId = _quotedMessageLookupId;
     if (lookupId != null && lookupId.isNotEmpty) {
       unawaited(_loadQuotedMessage(lookupId));
@@ -187,7 +187,7 @@ class _ComposeDraftFormContentState extends State<_ComposeDraftFormContent> {
   }
 
   void _syncQuotedMessagePreview() {
-    final lookupId = _effectiveQuoteTarget?.stanzaId.trim();
+    final lookupId = _effectiveQuoteTarget?.referenceId;
     if (_quotedMessageLookupId == lookupId) {
       return;
     }

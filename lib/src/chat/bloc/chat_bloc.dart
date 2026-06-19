@@ -1195,25 +1195,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  String? _quotedMessageStanzaId({
-    required Message quotedMessage,
-    required Chat? chat,
-  }) => quotedMessage.quoteStanzaId(
-    isGroupChat: chat?.type == ChatType.groupChat,
-  );
-
-  String? _storedQuotedStanzaId(Message message) {
-    final value = message.quoting?.trim();
-    final kind = message.quotingReferenceKind;
-    if (value == null ||
-        value.isEmpty ||
-        isLegacyWireMessageReferenceValue(value)) {
-      return null;
-    }
-    if (kind == MessageReferenceKind.originId) {
+  String? _storedReplyId(Message message) {
+    final value = message.storedReplyId;
+    if (value == null || isLegacyWireMessageReferenceValue(value)) {
       return null;
     }
     return value;
+  }
+
+  ({String? stanzaId, String? originId, String? mucStanzaId})
+  _replyIdsForDraft({required Message quotedMessage, required Chat? chat}) {
+    if (chat?.type == ChatType.groupChat) {
+      return (
+        stanzaId: null,
+        originId: null,
+        mucStanzaId: quotedMessage.trimmedMucStanzaId,
+      );
+    }
+    final originId = quotedMessage.trimmedOriginId;
+    if (originId != null) {
+      return (stanzaId: null, originId: originId, mucStanzaId: null);
+    }
+    return (
+      stanzaId: quotedMessage.trimmedStanzaId,
+      originId: null,
+      mucStanzaId: null,
+    );
   }
 
   void _emitScrollTargetRequest(Emitter<ChatState> emit, String messageId) {
@@ -2814,7 +2821,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Set<String> _quotedReferenceIdsForMessages(Iterable<Message> messages) {
     final ids = <String>{};
     for (final message in messages) {
-      final quotedId = message.quoting?.trim();
+      final quotedId = message.storedReplyId;
       if (quotedId == null || quotedId.isEmpty) {
         continue;
       }
@@ -3968,13 +3975,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   bool _isPinnedMessageInChat({
     required Chat chat,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
   }) {
     final sourceKey = _resolvePinnedMessagesChatJid(chat);
     if (sourceKey == null) {
       return false;
     }
-    final messageId = reference.value.trim();
+    final messageId = messageReferenceId.trim();
     if (messageId.isEmpty) {
       return false;
     }
@@ -6818,7 +6825,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    final pinReference = event.message.pinReference(
+    final pinReference = event.message.pinId(
       isGroupChat: chat.type == ChatType.groupChat,
     );
     if (pinReference == null) {
@@ -6877,7 +6884,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     if (event.pin &&
-        _isPinnedMessageInChat(chat: chat, reference: pinReference)) {
+        _isPinnedMessageInChat(chat: chat, messageReferenceId: pinReference)) {
       emit(
         _attachToast(
           state,
@@ -6943,7 +6950,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final messageReference = event.message.collectionReference(
       isGroupChat: event.chat.type == ChatType.groupChat,
     );
-    final messageReferenceId = messageReference?.value.trim() ?? '';
+    final messageReferenceId = messageReference == null
+        ? ''
+        : messageReference.value.trim();
     if (event.message.awaitsMucReference(
           isGroupChat: event.chat.type == ChatType.groupChat,
           isEmailBacked:
@@ -7217,7 +7226,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   DraftForwardedQuoteContext? _forwardedQuoteContext(Message message) {
-    final quotedReference = message.quoting?.trim();
+    final quotedReference = message.storedReplyId;
     if (quotedReference == null || quotedReference.isEmpty) {
       return null;
     }
@@ -7420,7 +7429,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       final attachments = await _attachmentsForMessage(message);
       if (attachments.isNotEmpty) {
-        final storedQuotedStanzaId = _storedQuotedStanzaId(message);
+        final storedQuotedStanzaId = _storedReplyId(message);
         Message? quoted;
         if (storedQuotedStanzaId != null) {
           quoted = await _messageService.loadMessageByReferenceId(
@@ -7433,7 +7442,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final attachmentGroupId = attachments.length > 1 ? uuid.v4() : null;
         final resolvedQuotedStanzaId = quoted == null
             ? storedQuotedStanzaId
-            : quoted.quoteStanzaId(isGroupChat: chatType == ChatType.groupChat);
+            : quoted.replyId(isGroupChat: chatType == ChatType.groupChat);
         final groupQuotedStanzaId =
             attachmentGroupId == null || resolvedQuotedStanzaId == null
             ? null
@@ -7499,9 +7508,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final CalendarAvailabilityMessage? availabilityMessage =
             message.calendarAvailabilityMessage;
         Message? quoted;
-        if (message.quoting != null) {
+        final storedReplyId = _storedReplyId(message);
+        if (storedReplyId != null) {
           quoted = await _messageService.loadMessageByReferenceId(
-            message.quoting!,
+            storedReplyId,
             chatJid: message.chatJid,
           );
         }
@@ -8612,7 +8622,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
         final quotedStanzaId =
             quotedDraft != null && quotedDraft.chatJid == targetJid
-            ? quotedDraft.quoteStanzaId(
+            ? quotedDraft.replyId(
                 isGroupChat: target.chatType == ChatType.groupChat,
               )
             : null;
@@ -9265,22 +9275,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) {
     for (final attachment in attachments) {
       final value = attachment.groupQuotedReference?.trim();
-      final kind = attachment.groupQuotedReferenceKind;
       if (value != null &&
           value.isNotEmpty &&
-          !isLegacyWireMessageReferenceValue(value) &&
-          kind != MessageReferenceKind.originId) {
+          !isLegacyWireMessageReferenceValue(value)) {
         return value;
       }
     }
     for (final attachment in attachments) {
       final message = messageById[attachment.messageId];
-      final value = message?.quoting?.trim();
-      final kind = message?.quotingReferenceKind;
+      final value = message?.storedReplyId;
       if (value != null &&
           value.isNotEmpty &&
-          !isLegacyWireMessageReferenceValue(value) &&
-          kind != MessageReferenceKind.originId) {
+          !isLegacyWireMessageReferenceValue(value)) {
         return value;
       }
     }
@@ -9297,7 +9303,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     var changed = false;
     final updated = messages
         .map((message) {
-          if (message.quoting?.trim().isNotEmpty == true) {
+          if (message.storedReplyId?.trim().isNotEmpty == true) {
             return message;
           }
           final messageId = message.id;
@@ -9309,10 +9315,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             return message;
           }
           changed = true;
-          return message.copyWith(
-            quoting: reference,
-            quotingReferenceKind: null,
-          );
+          return message.copyWith(replyStanzaId: reference);
         })
         .toList(growable: false);
     return changed ? updated : messages;
@@ -10028,17 +10031,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final attachmentPayload = attachments
         .map((pending) => pending.attachment)
         .toList();
-    final quotedStanzaId = quotedDraft == null
-        ? null
-        : _quotedMessageStanzaId(quotedMessage: quotedDraft, chat: chat);
+    final quoteIds = quotedDraft == null
+        ? (
+            stanzaId: null as String?,
+            originId: null as String?,
+            mucStanzaId: null as String?,
+          )
+        : _replyIdsForDraft(quotedMessage: quotedDraft, chat: chat);
     try {
       await _messageService.saveDraft(
         id: null,
         jids: resolvedRecipients,
         body: trimmedBody,
         subject: subject,
-        quotingStanzaId: quotedStanzaId,
-        quotingReferenceKind: null,
+        quotingStanzaId: quoteIds.stanzaId,
+        quotingOriginId: quoteIds.originId,
+        quotingMucStanzaId: quoteIds.mucStanzaId,
         attachments: attachmentPayload,
         calendarTaskIcsMessage: calendarTaskIcsMessage,
       );

@@ -257,6 +257,8 @@ abstract interface class XmppDatabase implements Database {
     required List<int> activeAccountIds,
   });
 
+  Future<int> normalizeDeltaAccountsForSingleContext();
+
   Future<List<Message>> getMessagesByReferenceIds(
     Iterable<String> messageIds, {
     String? chatJid,
@@ -491,13 +493,13 @@ abstract interface class XmppDatabase implements Database {
 
   Future<PinEntry?> getMessagePin({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required String pinnerJid,
   });
 
   Future<DateTime?> getPinnedMessageClearAllTimestamp({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
   });
 
   Future<PinnedMessageEntry?> getPinnedMessage({
@@ -516,7 +518,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> applyMessagePinMutation({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
+    String? messageStanzaId,
+    String? messageOriginId,
+    String? messageMucStanzaId,
     required String pinnerJid,
     required DateTime pinnedAt,
     required bool active,
@@ -525,7 +530,7 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> clearMessagePins({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required DateTime pinnedAt,
   });
 
@@ -654,7 +659,8 @@ abstract interface class XmppDatabase implements Database {
     required List<DraftRecipientData> draftRecipients,
     String? subject,
     String? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
+    String? quotingOriginId,
+    String? quotingMucStanzaId,
     List<String> attachmentMetadataIds = const [],
     List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
@@ -683,7 +689,8 @@ abstract interface class XmppDatabase implements Database {
     String? body,
     String? subject,
     String? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
+    String? quotingOriginId,
+    String? quotingMucStanzaId,
     List<String> attachmentMetadataIds = const [],
     List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
@@ -2173,7 +2180,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 67;
+  int get schemaVersion => 71;
 
   @override
   MigrationStrategy get migration {
@@ -2418,6 +2425,7 @@ WHERE transport IS NULL
           await m.addColumn(pinnedMessages, pinnedMessages.active);
         }
         if (from < 57) {
+          await _dropLegacyMessagePinIndexes();
           await _migrateMessagePinsTable(m);
         }
         if (from < 32 &&
@@ -2600,15 +2608,6 @@ WHERE transport IS NULL
               messageAttachments.groupQuotedReference,
             );
           }
-          if (!await _tableHasColumn(
-            messageAttachments.actualTableName,
-            'group_quoted_reference_kind',
-          )) {
-            await m.addColumn(
-              messageAttachments,
-              messageAttachments.groupQuotedReferenceKind,
-            );
-          }
         }
         if (from < 53) {
           await m.createTable(emailTrustedContactKeys);
@@ -2671,6 +2670,66 @@ WHERE transport IS NULL
         if (from < 67) {
           await _createCurrentSchemaIndexes();
         }
+        if (from < 69) {
+          if (!await _tableHasColumn(
+            messages.actualTableName,
+            'reply_stanza_id',
+          )) {
+            await m.addColumn(messages, messages.replyStanzaId);
+          }
+          if (!await _tableHasColumn(
+            messages.actualTableName,
+            'reply_origin_id',
+          )) {
+            await m.addColumn(messages, messages.replyOriginId);
+          }
+          if (!await _tableHasColumn(
+            messages.actualTableName,
+            'reply_muc_stanza_id',
+          )) {
+            await m.addColumn(messages, messages.replyMucStanzaId);
+          }
+          if (!await _tableHasColumn(
+            drafts.actualTableName,
+            'quoting_origin_id',
+          )) {
+            await m.addColumn(drafts, drafts.quotingOriginId);
+          }
+          if (!await _tableHasColumn(
+            drafts.actualTableName,
+            'quoting_muc_stanza_id',
+          )) {
+            await m.addColumn(drafts, drafts.quotingMucStanzaId);
+          }
+          await _migrateMessageReplyFieldsFromLegacyQuoting();
+          await _migrateDraftQuoteFieldsFromLegacyQuoting();
+          await _dropLegacyMessagePinIndexes();
+          if (await _tableExists(messagePins.actualTableName)) {
+            if (await _tableHasColumn(
+              messagePins.actualTableName,
+              'message_reference_kind',
+            )) {
+              await _migrateMessagePinsReferenceKindColumn(m);
+            } else {
+              await _ensureMessagePinReferenceColumns(m);
+            }
+          } else {
+            await m.createTable(messagePins);
+          }
+          await _createCurrentSchemaIndexes();
+        }
+        if (from < 70) {
+          final normalized = await normalizeDeltaAccountsForSingleContext();
+          if (normalized > 0) {
+            _log.info('Re-normalized $normalized single-context Delta rows.');
+          }
+        }
+        if (from < 71) {
+          final repaired = await normalizeDeltaAccountsForSingleContext();
+          if (repaired > 0) {
+            _log.info('Repaired $repaired legacy Delta stanza duplicate rows.');
+          }
+        }
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -2678,6 +2737,194 @@ WHERE transport IS NULL
         await repairMixedChatTransports();
       },
     );
+  }
+
+  Future<void> _migrateMessageReplyFieldsFromLegacyQuoting() async {
+    if (!await _tableHasColumn(messages.actualTableName, 'quoting')) {
+      return;
+    }
+    final hasLegacyTypeColumn = await _tableHasColumn(
+      messages.actualTableName,
+      'quoting_reference_kind',
+    );
+    final legacyTypeSelection = hasLegacyTypeColumn
+        ? 'quoting_reference_kind'
+        : 'NULL AS quoting_reference_kind';
+    final rows = await customSelect(
+      '''
+SELECT stanza_i_d, chat_jid, quoting, $legacyTypeSelection
+FROM messages
+WHERE quoting IS NOT NULL AND trim(quoting) != ''
+''',
+      readsFrom: {messages},
+    ).get();
+    if (rows.isEmpty) {
+      return;
+    }
+    for (final row in rows) {
+      final stanzaId = row.read<String>('stanza_i_d');
+      final chatJid = row.read<String>('chat_jid');
+      final resolved = await _replyFieldsForLegacyQuoting(
+        legacyValue: row.read<String>('quoting'),
+        chatJid: chatJid,
+        legacyType: row.read<int?>('quoting_reference_kind'),
+      );
+      if (resolved == null) {
+        continue;
+      }
+      await _updateMessageReplyFields(stanzaId, resolved);
+    }
+  }
+
+  Future<({String? stanzaId, String? originId, String? mucStanzaId})?>
+  _replyFieldsForLegacyQuoting({
+    required String legacyValue,
+    required String chatJid,
+    int? legacyType,
+  }) async {
+    final value = legacyValue.trim();
+    if (value.isEmpty) {
+      return null;
+    }
+    if (isLegacyWireMessageReferenceValue(value)) {
+      return _stableReplyFieldsForLegacyWireReference(
+        await _messageForLegacyWireReference(value, chatJid: chatJid),
+      );
+    }
+    final referencedMessage = await getMessageByReferenceId(
+      value,
+      chatJid: chatJid,
+    );
+    if (referencedMessage?.trimmedMucStanzaId == value) {
+      return (stanzaId: null, originId: null, mucStanzaId: value);
+    }
+    if (referencedMessage?.trimmedOriginId == value) {
+      return (stanzaId: null, originId: value, mucStanzaId: null);
+    }
+    if (referencedMessage?.trimmedStanzaId == value) {
+      return (stanzaId: value, originId: null, mucStanzaId: null);
+    }
+    const legacyOriginIdType = 1;
+    const legacyMucStanzaIdType = 2;
+    if (legacyType == legacyOriginIdType) {
+      return (stanzaId: null, originId: value, mucStanzaId: null);
+    }
+    if (legacyType == legacyMucStanzaIdType) {
+      return (stanzaId: null, originId: null, mucStanzaId: value);
+    }
+    return (stanzaId: value, originId: null, mucStanzaId: null);
+  }
+
+  Future<void> _updateMessageReplyFields(
+    String stanzaId,
+    ({String? stanzaId, String? originId, String? mucStanzaId})? fields,
+  ) => (update(messages)..where((tbl) => tbl.stanzaID.equals(stanzaId))).write(
+    MessagesCompanion(
+      replyStanzaId: Value(fields?.stanzaId),
+      replyOriginId: Value(fields?.originId),
+      replyMucStanzaId: Value(fields?.mucStanzaId),
+    ),
+  );
+
+  Future<Message?> _messageForLegacyWireReference(
+    String value, {
+    required String chatJid,
+  }) async {
+    final deltaMsgId = deltaMsgIdFromDeviceLocalStanzaId(value);
+    if (deltaMsgId != null) {
+      final rows =
+          await (select(messages)
+                ..where(
+                  (tbl) =>
+                      tbl.chatJid.equals(chatJid) &
+                      tbl.deltaMsgId.equals(deltaMsgId),
+                )
+                ..orderBy([
+                  (tbl) => OrderingTerm.asc(tbl.timestamp),
+                  (tbl) => OrderingTerm.asc(tbl.stanzaID),
+                ]))
+              .get();
+      if (rows.length == 1) {
+        return rows.single;
+      }
+      if (rows.length > 1) {
+        return await _preferredSingleContextDeltaMessage(rows);
+      }
+    }
+    return getMessageByReferenceId(value, chatJid: chatJid);
+  }
+
+  ({String? stanzaId, String? originId, String? mucStanzaId})?
+  _stableReplyFieldsForLegacyWireReference(Message? message) {
+    if (message == null) {
+      return null;
+    }
+    final originId = genuineEmailMessageId(message.originID);
+    if (originId != null) {
+      return (stanzaId: null, originId: originId, mucStanzaId: null);
+    }
+    final mucStanzaId = message.trimmedMucStanzaId;
+    if (mucStanzaId != null &&
+        !isLegacyWireMessageReferenceValue(mucStanzaId)) {
+      return (stanzaId: null, originId: null, mucStanzaId: mucStanzaId);
+    }
+    final stanzaId = message.trimmedStanzaId;
+    if (stanzaId != null && !isLegacyWireMessageReferenceValue(stanzaId)) {
+      return (stanzaId: stanzaId, originId: null, mucStanzaId: null);
+    }
+    return null;
+  }
+
+  Future<void> _migrateDraftQuoteFieldsFromLegacyQuoting() async {
+    if (!await _tableHasColumn(drafts.actualTableName, 'quoting_stanza_id')) {
+      return;
+    }
+    final hasLegacyTypeColumn = await _tableHasColumn(
+      drafts.actualTableName,
+      'quoting_reference_kind',
+    );
+    final legacyTypeSelection = hasLegacyTypeColumn
+        ? 'quoting_reference_kind'
+        : 'NULL AS quoting_reference_kind';
+    final rows = await customSelect(
+      '''
+SELECT id, quoting_stanza_id, $legacyTypeSelection
+FROM drafts
+WHERE quoting_stanza_id IS NOT NULL AND trim(quoting_stanza_id) != ''
+''',
+      readsFrom: {drafts},
+    ).get();
+    if (rows.isEmpty) {
+      return;
+    }
+    const legacyOriginIdType = 1;
+    const legacyMucStanzaIdType = 2;
+    for (final row in rows) {
+      final id = row.read<int>('id');
+      final legacyValue = row.read<String>('quoting_stanza_id').trim();
+      if (legacyValue.isEmpty ||
+          isLegacyWireMessageReferenceValue(legacyValue)) {
+        continue;
+      }
+      String? quotingStanzaId = legacyValue;
+      String? quotingOriginId;
+      String? quotingMucStanzaId;
+      final legacyType = row.read<int?>('quoting_reference_kind');
+      if (legacyType == legacyOriginIdType) {
+        quotingStanzaId = null;
+        quotingOriginId = legacyValue;
+      } else if (legacyType == legacyMucStanzaIdType) {
+        quotingStanzaId = null;
+        quotingMucStanzaId = legacyValue;
+      }
+      await (update(drafts)..where((tbl) => tbl.id.equals(id))).write(
+        DraftsCompanion(
+          quotingStanzaId: Value(quotingStanzaId),
+          quotingOriginId: Value(quotingOriginId),
+          quotingMucStanzaId: Value(quotingMucStanzaId),
+        ),
+      );
+    }
   }
 
   Future<void> _migrateEmailRfc822BodyStatusFromPseudoData() async {
@@ -3008,10 +3255,6 @@ WHERE stanza_i_d = ?
     if (message.isHiddenMultiDeviceSyncMessage) {
       return false;
     }
-    if ((message.deltaChatId != null || message.deltaMsgId != null) &&
-        message.deltaAccountId == DeltaAccountDefaults.legacyId) {
-      return false;
-    }
     return true;
   }
 
@@ -3051,13 +3294,45 @@ WHERE stanza_i_d = ?
     required int limit,
     required int offset,
   }) {
-    final query = _chatMessagesJoin(jid: jid, filter: filter)
-      ..orderBy([
-        OrderingTerm(expression: messages.timestamp, mode: OrderingMode.desc),
-        OrderingTerm(expression: messages.rowId, mode: OrderingMode.desc),
-      ])
-      ..limit(limit, offset: offset);
-    return query.map((row) => row.readTable(messages));
+    final query = customSelect(
+      '''
+      SELECT m.*
+      FROM messages m
+      LEFT JOIN message_copies mc
+        ON mc.dc_msg_id = m.delta_msg_id
+       AND mc.dc_account_id = m.delta_account_id
+      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+      LEFT JOIN message_participants mp
+        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+      WHERE m.chat_jid = ?
+        AND ${_visibleMessageSqlPredicate('m')}
+        AND (
+          CASE WHEN ? = 0 THEN
+            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+          ELSE
+            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+          END
+        )
+      ORDER BY m.timestamp DESC, m.rowid DESC
+      LIMIT ?
+      OFFSET ?
+      ''',
+      variables: [
+        Variable<String>(jid),
+        Variable<String>(jid),
+        Variable<int>(filter.index),
+        Variable<int>(limit),
+        Variable<int>(offset),
+      ],
+      readsFrom: {
+        messages,
+        messageCopies,
+        messageShares,
+        messageParticipants,
+        messageAttachments,
+      },
+    );
+    return query.map((row) => messages.map(row.data));
   }
 
   JoinedSelectStatement<HasResultSet, dynamic> _chatMessagesCountJoin({
@@ -3130,12 +3405,7 @@ WHERE stanza_i_d = ?
   Expression<bool> _timelineDisplayableMessageExpression(
     $MessagesTable messageTable,
   ) {
-    return _timelineVisibleSyncMessageExpression(messageTable) &
-        ((messageTable.deltaMsgId.isNull() &
-                messageTable.deltaChatId.isNull()) |
-            messageTable.deltaAccountId.isBiggerThanValue(
-              DeltaAccountDefaults.legacyId,
-            ));
+    return _timelineVisibleSyncMessageExpression(messageTable);
   }
 
   Expression<bool> _timelineVisibleSyncMessageExpression(
@@ -3818,7 +4088,7 @@ WHERE stanza_i_d = ?
                       tbl.deltaMsgId.equals(deltaMsgId) &
                       tbl.deltaChatId.equals(deltaChatId) &
                       tbl.chatJid.equals(chatJid) &
-                      tbl.deltaAccountId.equals(DeltaAccountDefaults.legacyId),
+                      tbl.deltaAccountId.isNotValue(deltaAccountId),
                 )
                 ..orderBy([
                   (tbl) => OrderingTerm.asc(tbl.timestamp),
@@ -3877,7 +4147,6 @@ WHERE stanza_i_d = ?
       await (delete(messagePins)..where(
             (tbl) =>
                 tbl.chatJid.equals(fromChatJid) &
-                tbl.messageReferenceKind.equals(row.messageReferenceKind) &
                 tbl.messageReferenceId.equals(row.messageReferenceId) &
                 tbl.pinnerJid.equals(row.pinnerJid),
           ))
@@ -3927,7 +4196,6 @@ WHERE stanza_i_d = ?
       await (delete(messagePins)..where(
             (tbl) =>
                 tbl.chatJid.equals(extra.chatJid) &
-                tbl.messageReferenceKind.equals(row.messageReferenceKind) &
                 tbl.messageReferenceId.equals(row.messageReferenceId) &
                 tbl.pinnerJid.equals(row.pinnerJid),
           ))
@@ -3939,8 +4207,88 @@ WHERE stanza_i_d = ?
         row.copyWith(
           chatJid: keeper.chatJid,
           messageReferenceId: mappedReference,
+          messageStanzaId: Value(keeper.stanzaID),
+          messageOriginId: Value(keeper.originID),
+          messageMucStanzaId: Value(keeper.mucStanzaId),
         ),
         mode: InsertMode.insertOrIgnore,
+      );
+    }
+  }
+
+  Future<void> _migrateAttachmentsToKeeper({
+    required Message extra,
+    required Message keeper,
+  }) async {
+    final keeperId = keeper.id?.trim();
+    if (keeperId == null || keeperId.isEmpty) {
+      return;
+    }
+    final attachmentOwnerIds = <String>{};
+    void addAttachmentOwnerId(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        attachmentOwnerIds.add(trimmed);
+      }
+    }
+
+    addAttachmentOwnerId(extra.id);
+    addAttachmentOwnerId(extra.stanzaID);
+    final attachments = await messageAttachmentsAccessor.selectForMessages(
+      attachmentOwnerIds,
+    );
+    for (final attachment in attachments) {
+      await into(messageAttachments).insert(
+        MessageAttachmentsCompanion.insert(
+          messageId: keeperId,
+          fileMetadataId: attachment.fileMetadataId,
+          sortOrder: Value(attachment.sortOrder),
+          transportGroupId: Value(attachment.transportGroupId),
+          groupQuotedReference: Value(attachment.groupQuotedReference),
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+  }
+
+  Future<void> _migrateReactionsToKeeper({
+    required Message extra,
+    required Message keeper,
+  }) async {
+    final reactionRows = await (select(
+      reactions,
+    )..where((tbl) => tbl.messageID.equals(extra.stanzaID))).get();
+    for (final row in reactionRows) {
+      await into(reactions).insert(
+        ReactionsCompanion.insert(
+          messageID: keeper.stanzaID,
+          senderJid: row.senderJid,
+          emoji: row.emoji,
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+    final reactionStateRows = await (select(
+      reactionStates,
+    )..where((tbl) => tbl.messageID.equals(extra.stanzaID))).get();
+    for (final row in reactionStateRows) {
+      final existing =
+          await (select(reactionStates)..where(
+                (tbl) =>
+                    tbl.messageID.equals(keeper.stanzaID) &
+                    tbl.senderJid.equals(row.senderJid),
+              ))
+              .getSingleOrNull();
+      if (existing != null && !row.updatedAt.isAfter(existing.updatedAt)) {
+        continue;
+      }
+      await into(reactionStates).insertOnConflictUpdate(
+        ReactionStatesCompanion.insert(
+          messageID: keeper.stanzaID,
+          senderJid: row.senderJid,
+          updatedAt: row.updatedAt,
+          identityVerified: Value(row.identityVerified),
+        ),
       );
     }
   }
@@ -6088,7 +6436,8 @@ WHERE stanza_i_d = ?
     required List<DraftRecipientData> draftRecipients,
     String? subject,
     String? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
+    String? quotingOriginId,
+    String? quotingMucStanzaId,
     List<String> attachmentMetadataIds = const [],
     List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
@@ -6115,7 +6464,8 @@ WHERE stanza_i_d = ?
           draftRecipients: Value(draftRecipients),
           subject: Value(subject),
           quotingStanzaId: Value(quotingStanzaId),
-          quotingReferenceKind: Value(quotingReferenceKind),
+          quotingOriginId: Value(quotingOriginId),
+          quotingMucStanzaId: Value(quotingMucStanzaId),
           attachmentMetadataIds: Value(normalizedAttachmentMetadataIds),
           calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
           forwardedBlocks: Value(forwardedBlocks),
@@ -6169,7 +6519,8 @@ WHERE stanza_i_d = ?
     String? body,
     String? subject,
     String? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
+    String? quotingOriginId,
+    String? quotingMucStanzaId,
     List<String> attachmentMetadataIds = const [],
     List<FileMetadataData> attachmentMetadata = const [],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
@@ -6198,7 +6549,8 @@ WHERE stanza_i_d = ?
             body: Value(body),
             subject: Value(subject),
             quotingStanzaId: Value(quotingStanzaId),
-            quotingReferenceKind: Value(quotingReferenceKind),
+            quotingOriginId: Value(quotingOriginId),
+            quotingMucStanzaId: Value(quotingMucStanzaId),
             attachmentMetadataIds: Value(normalizedAttachmentMetadataIds),
             calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
             forwardedBlocks: Value(forwardedBlocks),
@@ -6232,7 +6584,8 @@ WHERE stanza_i_d = ?
           body: Value(body),
           subject: Value(subject),
           quotingStanzaId: Value(quotingStanzaId),
-          quotingReferenceKind: Value(quotingReferenceKind),
+          quotingOriginId: Value(quotingOriginId),
+          quotingMucStanzaId: Value(quotingMucStanzaId),
           attachmentMetadataIds: Value(normalizedAttachmentMetadataIds),
           calendarTaskIcsMessage: Value(calendarTaskIcsMessage),
           forwardedBlocks: Value(forwardedBlocks),
@@ -6678,8 +7031,7 @@ WHERE stanza_i_d = ?
           sortOrder != null && existing.sortOrder != sortOrder;
       final shouldUpdateGroupQuote =
           groupQuotedStanzaId != null &&
-          (existing.groupQuotedReference != groupQuotedStanzaId ||
-              existing.groupQuotedReferenceKind != null);
+          existing.groupQuotedReference != groupQuotedStanzaId;
       if (shouldUpdateGroup || shouldUpdateOrder || shouldUpdateGroupQuote) {
         await (update(
           messageAttachments,
@@ -6693,9 +7045,6 @@ WHERE stanza_i_d = ?
                 : const Value.absent(),
             groupQuotedReference: shouldUpdateGroupQuote
                 ? Value(groupQuotedStanzaId)
-                : const Value.absent(),
-            groupQuotedReferenceKind: shouldUpdateGroupQuote
-                ? const Value(null)
                 : const Value.absent(),
           ),
         );
@@ -6715,7 +7064,6 @@ WHERE stanza_i_d = ?
         sortOrder: Value(nextOrder),
         transportGroupId: Value.absentIfNull(transportGroupId),
         groupQuotedReference: Value.absentIfNull(groupQuotedStanzaId),
-        groupQuotedReferenceKind: const Value.absent(),
       ),
       mode: InsertMode.insertOrIgnore,
     );
@@ -6750,7 +7098,6 @@ WHERE stanza_i_d = ?
             sortOrder: Value(order),
             transportGroupId: Value.absentIfNull(transportGroupId),
             groupQuotedReference: Value.absentIfNull(groupQuotedStanzaId),
-            groupQuotedReferenceKind: const Value.absent(),
           ),
           mode: InsertMode.insertOrIgnore,
         );
@@ -7166,8 +7513,14 @@ WHERE stanza_i_d = ?
 
   String _folderMessageItemKey(FolderMessageItem item) {
     final message = item.message;
-    final reference =
-        message?.trimmedStanzaId ?? item.messageReferenceId.trim();
+    final String reference;
+    if (message == null) {
+      reference = item.messageReferenceId.trim();
+    } else {
+      final stanzaId = message.trimmedStanzaId;
+      // ignore: prefer_if_null_operators
+      reference = stanzaId == null ? item.messageReferenceId.trim() : stanzaId;
+    }
     return '${item.collectionId.trim()}\n${item.chatJid.trim()}\n$reference';
   }
 
@@ -7434,14 +7787,16 @@ WHERE stanza_i_d = ?
       '''
 SELECT
   chat_jid,
-  message_reference_kind,
   message_reference_id,
+  max(message_stanza_id) AS message_stanza_id,
+  max(message_origin_id) AS message_origin_id,
+  max(message_muc_stanza_id) AS message_muc_stanza_id,
   max(pinned_at) AS pinned_at,
   count(*) AS pin_count,
   max(CASE WHEN pinner_jid = ? THEN 1 ELSE 0 END) AS pinned_by_self
 FROM message_pins
 WHERE chat_jid = ? AND active = 1
-GROUP BY chat_jid, message_reference_kind, message_reference_id
+GROUP BY chat_jid, message_reference_id
 ORDER BY pinned_at DESC, message_reference_id DESC
 ''',
       variables: [Variable<String>(selfPinnerJid), Variable<String>(chatJid)],
@@ -7450,16 +7805,12 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   PinnedMessageAggregate? _pinnedMessageAggregateFromRow(QueryRow row) {
-    final referenceKind = MessageReferenceKind.fromStorageValue(
-      row.read<int>('message_reference_kind'),
-    );
-    if (referenceKind == null) {
-      return null;
-    }
     return PinnedMessageAggregate(
       chatJid: row.read<String>('chat_jid'),
-      messageReferenceKind: referenceKind,
       messageReferenceId: row.read<String>('message_reference_id'),
+      messageStanzaId: row.read<String?>('message_stanza_id'),
+      messageOriginId: row.read<String?>('message_origin_id'),
+      messageMucStanzaId: row.read<String?>('message_muc_stanza_id'),
       pinnedAt: row.read<DateTime>('pinned_at').toUtc(),
       pinCount: row.read<int>('pin_count'),
       pinnedBySelf: row.read<int>('pinned_by_self') > 0,
@@ -7500,27 +7851,24 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   @override
   Future<PinEntry?> getMessagePin({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required String pinnerJid,
   }) {
+    final normalizedReference = messageReferenceId.trim();
     final query = select(messagePins)
       ..where((tbl) => tbl.chatJid.equals(chatJid))
-      ..where(
-        (tbl) =>
-            tbl.messageReferenceKind.equals(reference.kind.storageValue) &
-            tbl.messageReferenceId.equals(reference.value),
-      )
+      ..where((tbl) => tbl.messageReferenceId.equals(normalizedReference))
       ..where((tbl) => tbl.pinnerJid.equals(pinnerJid));
     return query.getSingleOrNull();
   }
 
   Future<PinEntry?> _getPinnedMessageClearAllMarker({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
   }) {
     return getMessagePin(
       chatJid: chatJid,
-      reference: reference,
+      messageReferenceId: messageReferenceId,
       pinnerJid: _pinnedMessageClearAllMarkerPinnerJid,
     );
   }
@@ -7528,11 +7876,11 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   @override
   Future<DateTime?> getPinnedMessageClearAllTimestamp({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
   }) async {
     final marker = await _getPinnedMessageClearAllMarker(
       chatJid: chatJid,
-      reference: reference,
+      messageReferenceId: messageReferenceId,
     );
     return marker?.pinnedAt.toUtc();
   }
@@ -7598,20 +7946,17 @@ ORDER BY pinned_at DESC, message_reference_id DESC
 
   Future<void> _refreshPinnedMessageAggregate({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required DateTime fallbackTimestamp,
     required bool writeTombstone,
   }) async {
+    final normalizedReference = messageReferenceId.trim();
     final normalizedFallbackTimestamp = fallbackTimestamp.toUtc();
     final activePins =
         await (select(messagePins)
               ..where((tbl) => tbl.chatJid.equals(chatJid))
               ..where(
-                (tbl) =>
-                    tbl.messageReferenceKind.equals(
-                      reference.kind.storageValue,
-                    ) &
-                    tbl.messageReferenceId.equals(reference.value),
+                (tbl) => tbl.messageReferenceId.equals(normalizedReference),
               )
               ..where((tbl) => tbl.active.equals(true))
               ..orderBy([
@@ -7624,12 +7969,12 @@ ORDER BY pinned_at DESC, message_reference_id DESC
     if (activePins.isEmpty) {
       final existingAggregate = await getPinnedMessage(
         chatJid: chatJid,
-        messageStanzaId: reference.value,
+        messageStanzaId: normalizedReference,
       );
       if (!writeTombstone) {
         await deletePinnedMessage(
           chatJid: chatJid,
-          messageStanzaId: reference.value,
+          messageStanzaId: normalizedReference,
         );
         return;
       }
@@ -7642,7 +7987,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       }
       await into(pinnedMessages).insertOnConflictUpdate(
         PinnedMessageEntry(
-          messageStanzaId: reference.value,
+          messageStanzaId: normalizedReference,
           chatJid: chatJid,
           pinnedAt: normalizedFallbackTimestamp,
           active: false,
@@ -7653,7 +7998,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
     final activePinnedAt = activePins.first.pinnedAt.toUtc();
     final clearAllMarker = await _getPinnedMessageClearAllMarker(
       chatJid: chatJid,
-      reference: reference,
+      messageReferenceId: normalizedReference,
     );
     if (clearAllMarker != null &&
         !clearAllMarker.pinnedAt.toUtc().isBefore(activePinnedAt)) {
@@ -7661,7 +8006,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
     }
     await into(pinnedMessages).insertOnConflictUpdate(
       PinnedMessageEntry(
-        messageStanzaId: reference.value,
+        messageStanzaId: normalizedReference,
         chatJid: chatJid,
         pinnedAt: activePinnedAt,
         active: true,
@@ -7672,17 +8017,21 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   @override
   Future<void> applyMessagePinMutation({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
+    String? messageStanzaId,
+    String? messageOriginId,
+    String? messageMucStanzaId,
     required String pinnerJid,
     required DateTime pinnedAt,
     required bool active,
     required bool identityVerified,
   }) async {
+    final normalizedReference = messageReferenceId.trim();
     await transaction(() async {
       final normalizedPinnedAt = pinnedAt.toUtc();
       final clearAllMarker = await _getPinnedMessageClearAllMarker(
         chatJid: chatJid,
-        reference: reference,
+        messageReferenceId: normalizedReference,
       );
       if (clearAllMarker != null &&
           !clearAllMarker.pinnedAt.toUtc().isBefore(normalizedPinnedAt)) {
@@ -7690,7 +8039,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       }
       final existing = await getMessagePin(
         chatJid: chatJid,
-        reference: reference,
+        messageReferenceId: normalizedReference,
         pinnerJid: pinnerJid,
       );
       if (existing != null) {
@@ -7708,8 +8057,10 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       await into(messagePins).insertOnConflictUpdate(
         PinEntry(
           chatJid: chatJid,
-          messageReferenceKind: reference.kind.storageValue,
-          messageReferenceId: reference.value,
+          messageReferenceId: normalizedReference,
+          messageStanzaId: messageStanzaId,
+          messageOriginId: messageOriginId,
+          messageMucStanzaId: messageMucStanzaId,
           pinnerJid: pinnerJid,
           pinnedAt: normalizedPinnedAt,
           active: active,
@@ -7718,7 +8069,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       );
       await _refreshPinnedMessageAggregate(
         chatJid: chatJid,
-        reference: reference,
+        messageReferenceId: normalizedReference,
         fallbackTimestamp: normalizedPinnedAt,
         writeTombstone: false,
       );
@@ -7728,22 +8079,25 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   @override
   Future<void> clearMessagePins({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required DateTime pinnedAt,
   }) async {
+    final normalizedReference = messageReferenceId.trim();
     await transaction(() async {
       final normalizedPinnedAt = pinnedAt.toUtc();
       final existingMarker = await _getPinnedMessageClearAllMarker(
         chatJid: chatJid,
-        reference: reference,
+        messageReferenceId: normalizedReference,
       );
       if (existingMarker == null ||
           existingMarker.pinnedAt.toUtc().isBefore(normalizedPinnedAt)) {
         await into(messagePins).insertOnConflictUpdate(
           PinEntry(
             chatJid: chatJid,
-            messageReferenceKind: reference.kind.storageValue,
-            messageReferenceId: reference.value,
+            messageReferenceId: normalizedReference,
+            messageStanzaId: null,
+            messageOriginId: null,
+            messageMucStanzaId: null,
             pinnerJid: _pinnedMessageClearAllMarkerPinnerJid,
             pinnedAt: normalizedPinnedAt,
             active: false,
@@ -7755,11 +8109,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
           await (select(messagePins)
                 ..where((tbl) => tbl.chatJid.equals(chatJid))
                 ..where(
-                  (tbl) =>
-                      tbl.messageReferenceKind.equals(
-                        reference.kind.storageValue,
-                      ) &
-                      tbl.messageReferenceId.equals(reference.value),
+                  (tbl) => tbl.messageReferenceId.equals(normalizedReference),
                 )
                 ..where((tbl) => tbl.active.equals(true)))
               .get();
@@ -7773,7 +8123,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       }
       await _refreshPinnedMessageAggregate(
         chatJid: chatJid,
-        reference: reference,
+        messageReferenceId: normalizedReference,
         fallbackTimestamp: normalizedPinnedAt,
         writeTombstone: true,
       );
@@ -7808,24 +8158,24 @@ ORDER BY pinned_at DESC, message_reference_id DESC
         if (message?.isEmailBacked == true) {
           continue;
         }
-        final reference =
-            message?.pinReference(
-              isGroupChat: message.trimmedMucStanzaId != null,
-            ) ??
-            LocalMessageReference(
-              kind: MessageReferenceKind.stanzaId,
-              value: messageId,
-            );
+        String referenceId = messageId;
+        String? messageStanzaId;
+        String? messageOriginId;
+        String? messageMucStanzaId;
+        if (message != null) {
+          final isGroupPin = message.trimmedMucStanzaId != null;
+          final pinId = message.pinId(isGroupChat: isGroupPin);
+          if (pinId != null) {
+            referenceId = pinId;
+          }
+          messageStanzaId = message.trimmedStanzaId;
+          messageOriginId = message.trimmedOriginId;
+          messageMucStanzaId = message.trimmedMucStanzaId;
+        }
         final existingPinRows =
             await (select(messagePins)
                   ..where((tbl) => tbl.chatJid.equals(legacy.chatJid))
-                  ..where(
-                    (tbl) =>
-                        tbl.messageReferenceKind.equals(
-                          reference.kind.storageValue,
-                        ) &
-                        tbl.messageReferenceId.equals(reference.value),
-                  ))
+                  ..where((tbl) => tbl.messageReferenceId.equals(referenceId)))
                 .get();
         if (existingPinRows.isNotEmpty) {
           continue;
@@ -7833,8 +8183,10 @@ ORDER BY pinned_at DESC, message_reference_id DESC
         await into(messagePins).insert(
           PinEntry(
             chatJid: legacy.chatJid,
-            messageReferenceKind: reference.kind.storageValue,
-            messageReferenceId: reference.value,
+            messageReferenceId: referenceId,
+            messageStanzaId: messageStanzaId,
+            messageOriginId: messageOriginId,
+            messageMucStanzaId: messageMucStanzaId,
             pinnerJid: normalizedPinner,
             pinnedAt: legacy.pinnedAt.toUtc(),
             active: true,
@@ -7914,10 +8266,10 @@ ORDER BY pinned_at DESC, message_reference_id DESC
         canonical,
         chatJid: chatJid,
       );
-      final canonicalReference = message?.pinReference(
-        isGroupChat: message.trimmedMucStanzaId != null,
-      );
-      if (canonicalReference == null) {
+      final canonicalReference = message == null
+          ? canonical
+          : message.pinId(isGroupChat: message.trimmedMucStanzaId != null);
+      if (canonicalReference == null || canonicalReference.trim().isEmpty) {
         return;
       }
       final existingPins =
@@ -7964,8 +8316,10 @@ ORDER BY pinned_at DESC, message_reference_id DESC
         await into(messagePins).insertOnConflictUpdate(
           PinEntry(
             chatJid: pin.chatJid,
-            messageReferenceKind: canonicalReference.kind.storageValue,
-            messageReferenceId: canonicalReference.value,
+            messageReferenceId: canonicalReference,
+            messageStanzaId: message?.trimmedStanzaId,
+            messageOriginId: message?.trimmedOriginId,
+            messageMucStanzaId: message?.trimmedMucStanzaId,
             pinnerJid: pin.pinnerJid,
             pinnedAt: pin.pinnedAt.toUtc(),
             active: pin.active,
@@ -7975,7 +8329,7 @@ ORDER BY pinned_at DESC, message_reference_id DESC
       }
       await _refreshPinnedMessageAggregate(
         chatJid: chatJid,
-        reference: canonicalReference,
+        messageReferenceId: canonicalReference,
         fallbackTimestamp: latestPinsByPinner.values
             .map((pin) => pin.pinnedAt.toUtc())
             .reduce((a, b) => a.isAfter(b) ? a : b),
@@ -8581,6 +8935,7 @@ WHERE jid = ?
       );
     }
     for (final chatJid in affectedChatJids) {
+      await repairUnreadCountForChat(chatJid);
       await repairChatSummaryPreservingTimestamp(chatJid);
     }
     return removed;
@@ -8644,6 +8999,8 @@ WHERE jid = ?
           keeper: keeper,
         );
         await _migratePinsToKeeper(extra: legacyRow, keeper: keeper);
+        await _migrateAttachmentsToKeeper(extra: legacyRow, keeper: keeper);
+        await _migrateReactionsToKeeper(extra: legacyRow, keeper: keeper);
         await _deleteMessageRowWithDependents(legacyRow);
         removed++;
       }
@@ -8653,6 +9010,907 @@ WHERE jid = ?
       }
       return removed;
     });
+  }
+
+  @override
+  Future<int> normalizeDeltaAccountsForSingleContext() async {
+    return transaction(() async {
+      final affectedChatJids = <String>{};
+      var changed = 0;
+      changed += await _collapseLegacyDeltaStanzaDuplicates(affectedChatJids);
+      changed += await _collapseDuplicateDeltaMessagesAcrossAccounts(
+        affectedChatJids,
+      );
+      changed += await _normalizeMessageRowsForSingleContext(affectedChatJids);
+      changed += await _normalizeMessageCollectionMembershipsForSingleContext();
+      changed += await _normalizeMessageCopiesForSingleContext();
+      changed += await _normalizeEmailChatAccountsForSingleContext();
+      changed += await _normalizeEmailTrustedContactKeysForSingleContext();
+      changed += await collapseDuplicateDeltaPairRows();
+      for (final chatJid in affectedChatJids) {
+        await repairUnreadCountForChat(chatJid);
+        await repairChatSummaryPreservingTimestamp(chatJid);
+      }
+      return changed;
+    });
+  }
+
+  Future<int> _collapseLegacyDeltaStanzaDuplicates(
+    Set<String> affectedChatJids,
+  ) async {
+    final legacyRows =
+        await (select(messages)
+              ..where(
+                (tbl) =>
+                    tbl.deltaMsgId.isNull() &
+                    (tbl.stanzaID.like('dc-msg-%') |
+                        tbl.stanzaID.like('dc-local-msg-%')),
+              )
+              ..orderBy([
+                (tbl) => OrderingTerm.asc(tbl.timestamp),
+                (tbl) => OrderingTerm.asc(tbl.stanzaID),
+              ]))
+            .get();
+    var changed = 0;
+    for (final legacyRow in legacyRows) {
+      final parsedDeltaMsgId = deltaMsgIdFromDeviceLocalStanzaId(
+        legacyRow.stanzaID,
+      );
+      if (parsedDeltaMsgId == null) {
+        continue;
+      }
+      final keeper = await _legacyDeltaStanzaDuplicateKeeper(
+        legacyRow: legacyRow,
+        deltaMsgId: parsedDeltaMsgId,
+      );
+      if (keeper == null) {
+        continue;
+      }
+      affectedChatJids
+        ..add(legacyRow.chatJid)
+        ..add(keeper.chatJid);
+      final mergedKeeper = await _mergeDeltaMessageStateIntoKeeper(
+        extra: legacyRow,
+        keeper: keeper,
+      );
+      await _migrateDeltaDuplicateMemberships(
+        extra: legacyRow.copyWith(deltaMsgId: parsedDeltaMsgId),
+        keeper: mergedKeeper,
+      );
+      await _migratePinsToKeeper(extra: legacyRow, keeper: mergedKeeper);
+      await _migrateAttachmentsToKeeper(extra: legacyRow, keeper: mergedKeeper);
+      await _migrateReactionsToKeeper(extra: legacyRow, keeper: mergedKeeper);
+      await _deleteMessageRowWithDependents(legacyRow);
+      changed++;
+    }
+    return changed;
+  }
+
+  Future<Message?> _legacyDeltaStanzaDuplicateKeeper({
+    required Message legacyRow,
+    required int deltaMsgId,
+  }) async {
+    final rows =
+        await (select(messages)
+              ..where((tbl) => tbl.deltaMsgId.equals(deltaMsgId))
+              ..orderBy([
+                (tbl) => OrderingTerm.asc(tbl.timestamp),
+                (tbl) => OrderingTerm.asc(tbl.stanzaID),
+              ]))
+            .get();
+    if (rows.isEmpty) {
+      return null;
+    }
+    final keeper = rows.length == 1
+        ? rows.single
+        : await _preferredSingleContextDeltaMessage(rows);
+    if (keeper == null ||
+        !await _legacyDeltaStanzaRowMatchesKeeper(
+          legacyRow: legacyRow,
+          keeper: keeper,
+          deltaMsgId: deltaMsgId,
+        )) {
+      return null;
+    }
+    return keeper;
+  }
+
+  Future<bool> _legacyDeltaStanzaRowMatchesKeeper({
+    required Message legacyRow,
+    required Message keeper,
+    required int deltaMsgId,
+  }) async {
+    if (keeper.deltaMsgId != deltaMsgId) {
+      return false;
+    }
+    if (legacyRow.chatJid == keeper.chatJid) {
+      return true;
+    }
+    final legacyOrigin = genuineEmailMessageId(legacyRow.originID);
+    return legacyOrigin != null &&
+        legacyOrigin == genuineEmailMessageId(keeper.originID);
+  }
+
+  Future<int> _collapseDuplicateDeltaMessagesAcrossAccounts(
+    Set<String> affectedChatJids,
+  ) async {
+    final count = countAll();
+    final duplicateGroups = selectOnly(messages)
+      ..addColumns([messages.deltaMsgId, count])
+      ..where(messages.deltaMsgId.isNotNull())
+      ..groupBy([messages.deltaMsgId], having: count.isBiggerThanValue(1));
+    final groups = await duplicateGroups.get();
+    var changed = 0;
+    for (final group in groups) {
+      final deltaMsgId = group.read(messages.deltaMsgId);
+      if (deltaMsgId == null) {
+        continue;
+      }
+      final rows =
+          await (select(messages)
+                ..where((tbl) => tbl.deltaMsgId.equals(deltaMsgId))
+                ..orderBy([
+                  (tbl) => OrderingTerm.asc(tbl.timestamp),
+                  (tbl) => OrderingTerm.asc(tbl.stanzaID),
+                ]))
+              .get();
+      if (rows.length < 2) {
+        continue;
+      }
+      for (final row in rows) {
+        affectedChatJids.add(row.chatJid);
+      }
+      final initialKeeper = await _preferredSingleContextDeltaMessage(rows);
+      if (initialKeeper == null) {
+        for (final row in rows) {
+          await _clearAmbiguousDuplicateDeltaLocator(row);
+          changed++;
+        }
+        continue;
+      }
+      var keeper = initialKeeper;
+      for (final extra in rows) {
+        if (extra.stanzaID == keeper.stanzaID) {
+          continue;
+        }
+        if (!await _singleContextDeltaRowsAreProvenDuplicates(
+          first: extra,
+          second: keeper,
+        )) {
+          await _clearAmbiguousDuplicateDeltaLocator(extra);
+          changed++;
+          continue;
+        }
+        keeper = await _mergeDeltaMessageStateIntoKeeper(
+          extra: extra,
+          keeper: keeper,
+        );
+        await _migrateDeltaDuplicateMemberships(extra: extra, keeper: keeper);
+        await _migratePinsToKeeper(extra: extra, keeper: keeper);
+        await _migrateAttachmentsToKeeper(extra: extra, keeper: keeper);
+        await _migrateReactionsToKeeper(extra: extra, keeper: keeper);
+        await _deleteMessageRowWithDependents(extra);
+        changed++;
+      }
+    }
+    return changed;
+  }
+
+  Future<Message?> _preferredSingleContextDeltaMessage(
+    List<Message> rows,
+  ) async {
+    return await _preferredSingleContextDeltaMessageBy(
+          rows,
+          _deltaMessageMatchesStoredChatAccount,
+        ) ??
+        await _preferredSingleContextDeltaMessageBy(
+          rows,
+          _deltaMessageMatchesSingleContextChatAccount,
+        ) ??
+        await _preferredSingleContextDeltaMessageBy(
+          rows,
+          _chatDeltaIdMatchesMessage,
+        ) ??
+        _uniqueDeltaMessageBy(
+          rows,
+          (row) => row.deltaAccountId == DeltaAccountDefaults.singleContextId,
+        ) ??
+        _uniqueDeltaMessageBy(
+          rows,
+          (row) => genuineEmailMessageId(row.originID) != null,
+        );
+  }
+
+  Future<Message?> _preferredSingleContextDeltaMessageBy(
+    List<Message> rows,
+    Future<bool> Function(Message row) predicate,
+  ) async {
+    final matches = <Message>[];
+    for (final row in rows) {
+      if (await predicate(row)) {
+        matches.add(row);
+      }
+    }
+    if (matches.isEmpty) {
+      return null;
+    }
+    return _preferredDuplicateDeltaMessageRow(matches);
+  }
+
+  Message? _uniqueDeltaMessageBy(
+    List<Message> rows,
+    bool Function(Message row) predicate,
+  ) {
+    Message? match;
+    for (final row in rows) {
+      if (!predicate(row)) {
+        continue;
+      }
+      if (match != null) {
+        return null;
+      }
+      match = row;
+    }
+    return match;
+  }
+
+  Future<Message> _preferredDuplicateDeltaMessageRow(List<Message> rows) async {
+    return _uniqueDeltaMessageBy(
+          rows,
+          (row) => row.deltaAccountId == DeltaAccountDefaults.singleContextId,
+        ) ??
+        _uniqueDeltaMessageBy(
+          rows,
+          (row) => genuineEmailMessageId(row.originID) != null,
+        ) ??
+        await _uniqueDeltaMessageByAsync(
+          rows,
+          _deltaMessageHasUserReferences,
+        ) ??
+        _uniqueDeltaMessageBy(
+          rows,
+          (row) => row.rfc822BodyStatus == EmailRfc822BodyStatus.hydrated,
+        ) ??
+        _uniqueDeltaMessageBy(
+          rows,
+          (row) =>
+              row.body?.trim().isNotEmpty == true ||
+              row.htmlBody?.trim().isNotEmpty == true ||
+              row.fileMetadataID?.trim().isNotEmpty == true,
+        ) ??
+        rows.first;
+  }
+
+  Future<Message?> _uniqueDeltaMessageByAsync(
+    List<Message> rows,
+    Future<bool> Function(Message row) predicate,
+  ) async {
+    Message? match;
+    for (final row in rows) {
+      if (!await predicate(row)) {
+        continue;
+      }
+      if (match != null) {
+        return null;
+      }
+      match = row;
+    }
+    return match;
+  }
+
+  Future<bool> _deltaMessageHasUserReferences(Message row) async {
+    final attachmentOwnerIds = <String>{row.stanzaID.trim()};
+    final rowId = row.id?.trim();
+    if (rowId != null && rowId.isNotEmpty) {
+      attachmentOwnerIds.add(rowId);
+    }
+    final attachment =
+        await (select(messageAttachments)
+              ..where((tbl) => tbl.messageId.isIn(attachmentOwnerIds))
+              ..limit(1))
+            .getSingleOrNull();
+    if (attachment != null) {
+      return true;
+    }
+    final legacyPin =
+        await (select(pinnedMessages)
+              ..where(
+                (tbl) =>
+                    tbl.chatJid.equals(row.chatJid) &
+                    tbl.messageStanzaId.equals(row.stanzaID),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    if (legacyPin != null) {
+      return true;
+    }
+    final references = row.referenceIds;
+    if (references.isNotEmpty) {
+      final pin =
+          await (select(messagePins)
+                ..where(
+                  (tbl) =>
+                      tbl.chatJid.equals(row.chatJid) &
+                      tbl.messageReferenceId.isIn(references),
+                )
+                ..limit(1))
+              .getSingleOrNull();
+      if (pin != null) {
+        return true;
+      }
+    }
+    final deltaMsgId = row.deltaMsgId;
+    Expression<bool> membershipPredicate(
+      $MessageCollectionMembershipsTable tbl,
+    ) {
+      var predicate = references.isEmpty
+          ? const Constant(false)
+          : tbl.messageReferenceId.isIn(references);
+      if (deltaMsgId != null) {
+        predicate =
+            predicate |
+            (tbl.deltaMsgId.equals(deltaMsgId) &
+                tbl.deltaAccountId.equals(row.deltaAccountId));
+      }
+      return tbl.chatJid.equals(row.chatJid) & predicate;
+    }
+
+    final membership =
+        await (select(messageCollectionMemberships)
+              ..where(membershipPredicate)
+              ..limit(1))
+            .getSingleOrNull();
+    if (membership != null) {
+      return true;
+    }
+    final reaction =
+        await (select(reactions)
+              ..where((tbl) => tbl.messageID.equals(row.stanzaID))
+              ..limit(1))
+            .getSingleOrNull();
+    if (reaction != null) {
+      return true;
+    }
+    final reactionState =
+        await (select(reactionStates)
+              ..where((tbl) => tbl.messageID.equals(row.stanzaID))
+              ..limit(1))
+            .getSingleOrNull();
+    return reactionState != null;
+  }
+
+  Future<bool> _deltaMessageHasStoredChatEvidence(Message row) async {
+    return await _deltaMessageMatchesStoredChatAccount(row) ||
+        await _deltaMessageMatchesSingleContextChatAccount(row) ||
+        await _chatDeltaIdMatchesMessage(row);
+  }
+
+  Future<bool> _singleContextDeltaRowsAreProvenDuplicates({
+    required Message first,
+    required Message second,
+  }) async {
+    final firstOrigin = genuineEmailMessageId(first.originID);
+    final secondOrigin = genuineEmailMessageId(second.originID);
+    if (firstOrigin != null && firstOrigin == secondOrigin) {
+      return true;
+    }
+    if (first.chatJid != second.chatJid) {
+      return false;
+    }
+    final firstDeltaChatId = first.deltaChatId;
+    if (firstDeltaChatId == null || firstDeltaChatId != second.deltaChatId) {
+      return false;
+    }
+    return await _deltaMessageHasStoredChatEvidence(first) &&
+        await _deltaMessageHasStoredChatEvidence(second);
+  }
+
+  Future<bool> _deltaMessageMatchesStoredChatAccount(Message row) async {
+    final deltaChatId = row.deltaChatId;
+    if (deltaChatId == null) {
+      return false;
+    }
+    final mapped = await _emailChatAccountJid(
+      deltaAccountId: row.deltaAccountId,
+      deltaChatId: deltaChatId,
+    );
+    return mapped == row.chatJid;
+  }
+
+  Future<bool> _deltaMessageMatchesSingleContextChatAccount(Message row) async {
+    final deltaChatId = row.deltaChatId;
+    if (deltaChatId == null) {
+      return false;
+    }
+    final mapped = await _emailChatAccountJid(
+      deltaAccountId: DeltaAccountDefaults.singleContextId,
+      deltaChatId: deltaChatId,
+    );
+    return mapped == row.chatJid;
+  }
+
+  Future<bool> _chatDeltaIdMatchesMessage(Message row) async {
+    final deltaChatId = row.deltaChatId;
+    if (deltaChatId == null) {
+      return false;
+    }
+    final chat = await getChat(row.chatJid);
+    return chat?.deltaChatId == deltaChatId;
+  }
+
+  Future<void> _clearAmbiguousDuplicateDeltaLocator(Message row) async {
+    await (update(messages)..where((tbl) => tbl.stanzaID.equals(row.stanzaID)))
+        .write(const MessagesCompanion(deltaMsgId: Value(null)));
+    final deltaMsgId = row.deltaMsgId;
+    if (deltaMsgId == null) {
+      return;
+    }
+    final references = row.referenceIds;
+    Expression<bool> referencePredicate(
+      $MessageCollectionMembershipsTable tbl,
+    ) {
+      var predicate = references.isEmpty
+          ? const Constant(false)
+          : tbl.messageReferenceId.isIn(references);
+      predicate =
+          predicate |
+          (tbl.deltaMsgId.equals(deltaMsgId) &
+              tbl.deltaAccountId.equals(row.deltaAccountId));
+      return tbl.chatJid.equals(row.chatJid) & predicate;
+    }
+
+    final entries = await (select(
+      messageCollectionMemberships,
+    )..where(referencePredicate)).get();
+    for (final entry in entries) {
+      await _clearCollectionMembershipHandles(entry);
+    }
+  }
+
+  Future<Message> _mergeDeltaMessageStateIntoKeeper({
+    required Message extra,
+    required Message keeper,
+  }) async {
+    final merged = keeper.copyWith(
+      originID: _preferPresentString(keeper.originID, extra.originID),
+      mucStanzaId: _preferPresentString(keeper.mucStanzaId, extra.mucStanzaId),
+      occupantID: _preferPresentString(keeper.occupantID, extra.occupantID),
+      senderRealJid: _preferPresentString(
+        keeper.senderRealJid,
+        extra.senderRealJid,
+      ),
+      body: _preferPresentString(keeper.body, extra.body),
+      htmlBody: _preferPresentString(keeper.htmlBody, extra.htmlBody),
+      subject: _preferPresentString(keeper.subject, extra.subject),
+      trust: keeper.trust ?? extra.trust,
+      trusted: keeper.trusted ?? extra.trusted,
+      deviceID: keeper.deviceID ?? extra.deviceID,
+      noStore: keeper.noStore || extra.noStore,
+      acked: keeper.acked || extra.acked,
+      received: keeper.received || extra.received,
+      displayed: keeper.displayed || extra.displayed,
+      edited: keeper.edited || extra.edited,
+      retracted: keeper.retracted || extra.retracted,
+      isFileUploadNotification:
+          keeper.isFileUploadNotification || extra.isFileUploadNotification,
+      fileDownloading: keeper.fileDownloading || extra.fileDownloading,
+      fileUploading: keeper.fileUploading || extra.fileUploading,
+      fileMetadataID: _preferPresentString(
+        keeper.fileMetadataID,
+        extra.fileMetadataID,
+      ),
+      replyStanzaId: _preferPresentString(
+        keeper.replyStanzaId,
+        extra.replyStanzaId,
+      ),
+      replyOriginId: _preferPresentString(
+        keeper.replyOriginId,
+        extra.replyOriginId,
+      ),
+      replyMucStanzaId: _preferPresentString(
+        keeper.replyMucStanzaId,
+        extra.replyMucStanzaId,
+      ),
+      stickerPackID: _preferPresentString(
+        keeper.stickerPackID,
+        extra.stickerPackID,
+      ),
+      pseudoMessageType: keeper.pseudoMessageType ?? extra.pseudoMessageType,
+      pseudoMessageData: keeper.pseudoMessageData ?? extra.pseudoMessageData,
+      rfc822BodyStatus: _bestRfc822BodyStatus(
+        keeper.rfc822BodyStatus,
+        extra.rfc822BodyStatus,
+      ),
+      manualSendAgainStanzaID: _preferPresentString(
+        keeper.manualSendAgainStanzaID,
+        extra.manualSendAgainStanzaID,
+      ),
+      deltaChatId: keeper.deltaChatId ?? extra.deltaChatId,
+    );
+    if (merged == keeper) {
+      return keeper;
+    }
+    await updateMessage(merged);
+    return merged;
+  }
+
+  String? _preferPresentString(String? preferred, String? fallback) {
+    final preferredTrimmed = preferred?.trim();
+    if (preferredTrimmed != null && preferredTrimmed.isNotEmpty) {
+      return preferred;
+    }
+    final fallbackTrimmed = fallback?.trim();
+    if (fallbackTrimmed != null && fallbackTrimmed.isNotEmpty) {
+      return fallback;
+    }
+    return preferred ?? fallback;
+  }
+
+  EmailRfc822BodyStatus _bestRfc822BodyStatus(
+    EmailRfc822BodyStatus preferred,
+    EmailRfc822BodyStatus fallback,
+  ) {
+    if (_rfc822BodyStatusRank(fallback) > _rfc822BodyStatusRank(preferred)) {
+      return fallback;
+    }
+    return preferred;
+  }
+
+  int _rfc822BodyStatusRank(EmailRfc822BodyStatus status) {
+    return switch (status) {
+      EmailRfc822BodyStatus.hydrated => 3,
+      EmailRfc822BodyStatus.pendingDownload => 2,
+      EmailRfc822BodyStatus.unavailable => 1,
+      EmailRfc822BodyStatus.unknown => 0,
+    };
+  }
+
+  Future<int> _normalizeMessageRowsForSingleContext(
+    Set<String> affectedChatJids,
+  ) async {
+    final rows =
+        await (select(messages)..where(
+              (tbl) =>
+                  (tbl.deltaMsgId.isNotNull() | tbl.deltaChatId.isNotNull()) &
+                  tbl.deltaAccountId.isNotValue(
+                    DeltaAccountDefaults.singleContextId,
+                  ),
+            ))
+            .get();
+    for (final row in rows) {
+      affectedChatJids.add(row.chatJid);
+      await (update(
+        messages,
+      )..where((tbl) => tbl.stanzaID.equals(row.stanzaID))).write(
+        const MessagesCompanion(
+          deltaAccountId: Value(DeltaAccountDefaults.singleContextId),
+        ),
+      );
+    }
+    return rows.length;
+  }
+
+  Future<int> _normalizeMessageCollectionMembershipsForSingleContext() async {
+    final rows =
+        await (select(messageCollectionMemberships)..where(
+              (tbl) =>
+                  tbl.deltaMsgId.isNotNull() &
+                  (tbl.deltaAccountId.isNull() |
+                      tbl.deltaAccountId.isNotValue(
+                        DeltaAccountDefaults.singleContextId,
+                      )),
+            ))
+            .get();
+    for (final row in rows) {
+      await (update(messageCollectionMemberships)..where(
+            (tbl) =>
+                tbl.collectionId.equals(row.collectionId) &
+                tbl.chatJid.equals(row.chatJid) &
+                tbl.messageReferenceId.equals(row.messageReferenceId),
+          ))
+          .write(
+            const MessageCollectionMembershipsCompanion(
+              deltaAccountId: Value(DeltaAccountDefaults.singleContextId),
+            ),
+          );
+    }
+    return rows.length;
+  }
+
+  Future<int> _normalizeMessageCopiesForSingleContext() async {
+    final count = countAll();
+    final duplicateGroups = selectOnly(messageCopies)
+      ..addColumns([messageCopies.dcMsgId, count])
+      ..groupBy([messageCopies.dcMsgId], having: count.isBiggerThanValue(1));
+    final groups = await duplicateGroups.get();
+    var changed = 0;
+    for (final group in groups) {
+      final dcMsgId = group.read(messageCopies.dcMsgId);
+      if (dcMsgId == null) {
+        continue;
+      }
+      final rows =
+          await (select(messageCopies)
+                ..where((tbl) => tbl.dcMsgId.equals(dcMsgId))
+                ..orderBy([
+                  (tbl) => OrderingTerm.desc(
+                    tbl.dcAccountId.equals(
+                      DeltaAccountDefaults.singleContextId,
+                    ),
+                  ),
+                  (tbl) => OrderingTerm.asc(tbl.id),
+                ]))
+              .get();
+      final keeper = await _preferredSingleContextMessageCopy(rows);
+      if (keeper == null) {
+        continue;
+      }
+      for (final row in rows) {
+        if (row.id == keeper.id) {
+          continue;
+        }
+        await (delete(
+          messageCopies,
+        )..where((tbl) => tbl.id.equals(row.id))).go();
+        changed++;
+      }
+    }
+    final rows =
+        await (select(messageCopies)..where(
+              (tbl) => tbl.dcAccountId.isNotValue(
+                DeltaAccountDefaults.singleContextId,
+              ),
+            ))
+            .get();
+    for (final row in rows) {
+      await (update(
+        messageCopies,
+      )..where((tbl) => tbl.id.equals(row.id))).write(
+        const MessageCopiesCompanion(
+          dcAccountId: Value(DeltaAccountDefaults.singleContextId),
+        ),
+      );
+    }
+    return changed + rows.length;
+  }
+
+  Future<MessageCopyData?> _preferredSingleContextMessageCopy(
+    List<MessageCopyData> rows,
+  ) async {
+    if (rows.isEmpty) {
+      return null;
+    }
+    final messageBacked = <MessageCopyData>[];
+    for (final row in rows) {
+      if (await _messageCopyHasStoredMessage(row)) {
+        messageBacked.add(row);
+      }
+    }
+    return _uniqueMessageCopyBy(messageBacked, (_) => true) ??
+        _uniqueMessageCopyBy(
+          rows,
+          (row) => row.dcAccountId == DeltaAccountDefaults.singleContextId,
+        ) ??
+        rows.first;
+  }
+
+  Future<bool> _messageCopyHasStoredMessage(MessageCopyData row) async {
+    final messageCount = countAll();
+    final query = selectOnly(messages)
+      ..addColumns([messageCount])
+      ..where(
+        messages.deltaMsgId.equals(row.dcMsgId) &
+            messages.deltaChatId.equals(row.dcChatId),
+      );
+    return ((await query.getSingle()).read(messageCount) ?? 0) > 0;
+  }
+
+  MessageCopyData? _uniqueMessageCopyBy(
+    List<MessageCopyData> rows,
+    bool Function(MessageCopyData row) predicate,
+  ) {
+    MessageCopyData? match;
+    for (final row in rows) {
+      if (!predicate(row)) {
+        continue;
+      }
+      if (match != null) {
+        return null;
+      }
+      match = row;
+    }
+    return match;
+  }
+
+  Future<int> _normalizeEmailChatAccountsForSingleContext() async {
+    final count = countAll();
+    final duplicateGroups = selectOnly(emailChatAccounts)
+      ..addColumns([emailChatAccounts.deltaChatId, count])
+      ..groupBy([
+        emailChatAccounts.deltaChatId,
+      ], having: count.isBiggerThanValue(1));
+    final groups = await duplicateGroups.get();
+    var changed = 0;
+    for (final group in groups) {
+      final deltaChatId = group.read(emailChatAccounts.deltaChatId);
+      if (deltaChatId == null) {
+        continue;
+      }
+      final rows =
+          await (select(emailChatAccounts)
+                ..where((tbl) => tbl.deltaChatId.equals(deltaChatId))
+                ..orderBy([
+                  (tbl) => OrderingTerm.desc(
+                    tbl.deltaAccountId.equals(
+                      DeltaAccountDefaults.singleContextId,
+                    ),
+                  ),
+                  (tbl) => OrderingTerm.asc(tbl.chatJid),
+                ]))
+              .get();
+      final keeper = await _preferredSingleContextEmailChatAccount(rows);
+      if (keeper == null) {
+        continue;
+      }
+      for (final row in rows) {
+        if (row == keeper) {
+          continue;
+        }
+        await (delete(emailChatAccounts)..where(
+              (tbl) =>
+                  tbl.chatJid.equals(row.chatJid) &
+                  tbl.deltaAccountId.equals(row.deltaAccountId) &
+                  tbl.deltaChatId.equals(row.deltaChatId),
+            ))
+            .go();
+        changed++;
+      }
+    }
+    final rows =
+        await (select(emailChatAccounts)..where(
+              (tbl) => tbl.deltaAccountId.isNotValue(
+                DeltaAccountDefaults.singleContextId,
+              ),
+            ))
+            .get();
+    for (final row in rows) {
+      await (delete(emailChatAccounts)..where(
+            (tbl) =>
+                tbl.chatJid.equals(row.chatJid) &
+                tbl.deltaAccountId.equals(row.deltaAccountId) &
+                tbl.deltaChatId.equals(row.deltaChatId),
+          ))
+          .go();
+      await into(emailChatAccounts).insert(
+        row.copyWith(deltaAccountId: DeltaAccountDefaults.singleContextId),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+    return changed + rows.length;
+  }
+
+  Future<EmailChatAccountData?> _preferredSingleContextEmailChatAccount(
+    List<EmailChatAccountData> rows,
+  ) async {
+    if (rows.isEmpty) {
+      return null;
+    }
+    final chatBacked = <EmailChatAccountData>[];
+    for (final row in rows) {
+      if (await _emailChatAccountMatchesChatRow(row)) {
+        chatBacked.add(row);
+      }
+    }
+    final messageBacked = <EmailChatAccountData>[];
+    for (final row in rows) {
+      if (await _emailChatAccountHasStoredMessages(row)) {
+        messageBacked.add(row);
+      }
+    }
+    return _uniqueEmailChatAccountBy(chatBacked, (_) => true) ??
+        _uniqueEmailChatAccountBy(messageBacked, (_) => true) ??
+        _uniqueEmailChatAccountBy(
+          rows,
+          (row) => row.deltaAccountId == DeltaAccountDefaults.singleContextId,
+        ) ??
+        rows.first;
+  }
+
+  Future<bool> _emailChatAccountMatchesChatRow(EmailChatAccountData row) async {
+    final chat = await getChat(row.chatJid);
+    return chat?.deltaChatId == row.deltaChatId;
+  }
+
+  Future<bool> _emailChatAccountHasStoredMessages(
+    EmailChatAccountData row,
+  ) async {
+    final messageCount = countAll();
+    final query = selectOnly(messages)
+      ..addColumns([messageCount])
+      ..where(
+        messages.chatJid.equals(row.chatJid) &
+            messages.deltaChatId.equals(row.deltaChatId),
+      );
+    return ((await query.getSingle()).read(messageCount) ?? 0) > 0;
+  }
+
+  EmailChatAccountData? _uniqueEmailChatAccountBy(
+    List<EmailChatAccountData> rows,
+    bool Function(EmailChatAccountData row) predicate,
+  ) {
+    EmailChatAccountData? match;
+    for (final row in rows) {
+      if (!predicate(row)) {
+        continue;
+      }
+      if (match != null) {
+        return null;
+      }
+      match = row;
+    }
+    return match;
+  }
+
+  Future<int> _normalizeEmailTrustedContactKeysForSingleContext() async {
+    final count = countAll();
+    final duplicateGroups = selectOnly(emailTrustedContactKeys)
+      ..addColumns([emailTrustedContactKeys.address, count])
+      ..groupBy([
+        emailTrustedContactKeys.address,
+      ], having: count.isBiggerThanValue(1));
+    final groups = await duplicateGroups.get();
+    var changed = 0;
+    for (final group in groups) {
+      final address = group.read(emailTrustedContactKeys.address);
+      if (address == null) {
+        continue;
+      }
+      final rows =
+          await (select(emailTrustedContactKeys)
+                ..where((tbl) => tbl.address.equals(address))
+                ..orderBy([
+                  (tbl) => OrderingTerm.desc(
+                    tbl.deltaAccountId.equals(
+                      DeltaAccountDefaults.singleContextId,
+                    ),
+                  ),
+                  (tbl) => OrderingTerm.desc(tbl.importedAt),
+                ]))
+              .get();
+      final keeper = rows.firstOrNull;
+      if (keeper == null) {
+        continue;
+      }
+      for (final row in rows.skip(1)) {
+        await (delete(emailTrustedContactKeys)..where(
+              (tbl) =>
+                  tbl.deltaAccountId.equals(row.deltaAccountId) &
+                  tbl.address.equals(row.address),
+            ))
+            .go();
+        changed++;
+      }
+    }
+    final rows =
+        await (select(emailTrustedContactKeys)..where(
+              (tbl) => tbl.deltaAccountId.isNotValue(
+                DeltaAccountDefaults.singleContextId,
+              ),
+            ))
+            .get();
+    for (final row in rows) {
+      await (delete(emailTrustedContactKeys)..where(
+            (tbl) =>
+                tbl.deltaAccountId.equals(row.deltaAccountId) &
+                tbl.address.equals(row.address),
+          ))
+          .go();
+      await into(emailTrustedContactKeys).insert(
+        row.copyWith(deltaAccountId: DeltaAccountDefaults.singleContextId),
+        mode: InsertMode.insertOrIgnore,
+      );
+    }
+    return changed + rows.length;
   }
 
   Message? _legacyDeltaDuplicateKeeper({
@@ -8724,13 +9982,27 @@ WHERE jid = ?
     if (rows.length < 2) {
       return 0;
     }
-    final keeper = await _preferredDeltaPairRow(rows);
-    var removed = 0;
     for (final row in rows) {
       affectedChatJids.add(row.chatJid);
     }
+    final keeper = await _preferredSingleContextDeltaMessage(rows);
+    var removed = 0;
+    if (keeper == null) {
+      for (final row in rows) {
+        await _clearAmbiguousDuplicateDeltaLocator(row);
+      }
+      return rows.length;
+    }
     for (final extra in rows) {
       if (extra.stanzaID == keeper.stanzaID) {
+        continue;
+      }
+      if (!await _singleContextDeltaRowsAreProvenDuplicates(
+        first: extra,
+        second: keeper,
+      )) {
+        await _clearAmbiguousDuplicateDeltaLocator(extra);
+        removed++;
         continue;
       }
       if (extra.chatJid != keeper.chatJid) {
@@ -8748,28 +10020,12 @@ WHERE jid = ?
         );
       }
       await _migratePinsToKeeper(extra: extra, keeper: keeper);
+      await _migrateAttachmentsToKeeper(extra: extra, keeper: keeper);
+      await _migrateReactionsToKeeper(extra: extra, keeper: keeper);
       await _deleteMessageRowWithDependents(extra);
       removed++;
     }
     return removed;
-  }
-
-  Future<Message> _preferredDeltaPairRow(List<Message> rows) async {
-    for (final row in rows.reversed) {
-      final deltaChatId = row.deltaChatId;
-      if (deltaChatId == null) {
-        continue;
-      }
-      final mapped = await _emailChatAccountJid(
-        deltaAccountId: row.deltaAccountId,
-        deltaChatId: deltaChatId,
-      );
-      if (mapped != null && mapped == row.chatJid) {
-        return row;
-      }
-    }
-    final chatJids = rows.map((row) => row.chatJid).toSet();
-    return chatJids.length > 1 ? rows.last : rows.first;
   }
 
   Future<String?> _emailChatAccountJid({
@@ -8790,12 +10046,17 @@ WHERE jid = ?
   Future<void> _deleteMessageRowWithDependents(Message extra) async {
     await reactionsAccessor.deleteByMessage(extra.stanzaID);
     await reactionsAccessor.deleteStatesByMessage(extra.stanzaID);
+    final attachmentOwnerIds = <String>{extra.stanzaID};
     final rowId = extra.id?.trim();
     if (rowId != null && rowId.isNotEmpty) {
-      final metadataIds = await deleteMessageAttachments(rowId);
-      for (final metadataId in metadataIds) {
-        await _deleteFileMetadataIfOrphaned(metadataId);
-      }
+      attachmentOwnerIds.add(rowId);
+    }
+    final metadataIds = <String>{};
+    for (final ownerId in attachmentOwnerIds) {
+      metadataIds.addAll(await deleteMessageAttachments(ownerId));
+    }
+    for (final metadataId in metadataIds) {
+      await _deleteFileMetadataIfOrphaned(metadataId);
     }
     await (delete(
       messages,
@@ -11225,13 +12486,45 @@ ON CONFLICT(address) DO UPDATE SET
         'ALTER TABLE "$tableName" RENAME TO "$tempTableName"',
       );
       await m.createTable(messages);
+      final targetColumns = copiedColumnNames.map((c) => '"$c"').toList();
+      final sourceColumns = copiedColumnNames.map((c) => '"$c"').toList();
+      final hasLegacyQuoting = await _tableHasColumn(tempTableName, 'quoting');
+      if (hasLegacyQuoting) {
+        targetColumns.add('"reply_stanza_id"');
+        sourceColumns.add('NULLIF(trim("quoting"), \'\')');
+      }
+      final targetColumnList = targetColumns.join(', ');
+      final sourceColumnList = sourceColumns.join(', ');
       await customStatement(
         'INSERT INTO "$tableName" ($columnList) '
         'SELECT $columnList FROM "$tempTableName"',
       );
+      if (hasLegacyQuoting) {
+        await _resolveRebuiltMessageReplyFieldsFromLegacyQuoting();
+      }
       await customStatement('DROP TABLE "$tempTableName"');
     } finally {
       await customStatement('PRAGMA foreign_keys = ON');
+    }
+  }
+
+  Future<void> _resolveRebuiltMessageReplyFieldsFromLegacyQuoting() async {
+    final rows = await customSelect(
+      '''
+SELECT stanza_i_d, chat_jid, reply_stanza_id
+FROM messages
+WHERE reply_stanza_id IS NOT NULL AND trim(reply_stanza_id) != ''
+''',
+      readsFrom: {messages},
+    ).get();
+    for (final row in rows) {
+      final stanzaId = row.read<String>('stanza_i_d');
+      final chatJid = row.read<String>('chat_jid');
+      final resolved = await _replyFieldsForLegacyQuoting(
+        legacyValue: row.read<String>('reply_stanza_id'),
+        chatJid: chatJid,
+      );
+      await _updateMessageReplyFields(stanzaId, resolved);
     }
   }
 
@@ -11286,6 +12579,60 @@ FROM email_chat_accounts
     return rows.isNotEmpty;
   }
 
+  Future<void> _dropLegacyMessagePinIndexes() async {
+    await customStatement(
+      'DROP INDEX IF EXISTS idx_message_pins_chat_reference',
+    );
+    await customStatement(
+      'DROP INDEX IF EXISTS idx_message_pins_chat_active_pinned',
+    );
+  }
+
+  Future<void> _ensureMessagePinReferenceColumns(Migrator m) async {
+    if (!await _tableHasColumn(
+      messagePins.actualTableName,
+      'message_stanza_id',
+    )) {
+      await m.addColumn(messagePins, messagePins.messageStanzaId);
+    }
+    if (!await _tableHasColumn(
+      messagePins.actualTableName,
+      'message_origin_id',
+    )) {
+      await m.addColumn(messagePins, messagePins.messageOriginId);
+    }
+    if (!await _tableHasColumn(
+      messagePins.actualTableName,
+      'message_muc_stanza_id',
+    )) {
+      await m.addColumn(messagePins, messagePins.messageMucStanzaId);
+    }
+  }
+
+  Future<void> _migrateMessagePinsReferenceKindColumn(Migrator m) async {
+    await _ensureMessagePinReferenceColumns(m);
+    await customStatement('''
+UPDATE message_pins
+SET
+  message_stanza_id = COALESCE(
+    message_stanza_id,
+    CASE WHEN message_reference_kind = 0 THEN message_reference_id ELSE NULL END
+  ),
+  message_origin_id = COALESCE(
+    message_origin_id,
+    CASE WHEN message_reference_kind = 1 THEN message_reference_id ELSE NULL END
+  ),
+  message_muc_stanza_id = COALESCE(
+    message_muc_stanza_id,
+    CASE WHEN message_reference_kind = 2 THEN message_reference_id ELSE NULL END
+  )
+''');
+    await m.alterTable(
+      // ignore: experimental_member_use
+      TableMigration(messagePins),
+    );
+  }
+
   Future<void> _migrateMessagePinsTable(Migrator m) async {
     final tableName = messagePins.actualTableName;
     if (!await _tableExists(tableName)) {
@@ -11299,11 +12646,26 @@ FROM email_chat_accounts
       if (!await _tableExists(oldTableName)) {
         return;
       }
+      final hasReferenceKind = await _tableHasColumn(
+        oldTableName,
+        'message_reference_kind',
+      );
+      final messageStanzaIdSelect = hasReferenceKind
+          ? 'CASE WHEN message_reference_kind = 0 THEN message_reference_id ELSE NULL END'
+          : 'message_reference_id';
+      final messageOriginIdSelect = hasReferenceKind
+          ? 'CASE WHEN message_reference_kind = 1 THEN message_reference_id ELSE NULL END'
+          : 'NULL';
+      final messageMucStanzaIdSelect = hasReferenceKind
+          ? 'CASE WHEN message_reference_kind = 2 THEN message_reference_id ELSE NULL END'
+          : 'NULL';
       await customStatement('''
 INSERT OR REPLACE INTO message_pins (
   chat_jid,
-  message_reference_kind,
   message_reference_id,
+  message_stanza_id,
+  message_origin_id,
+  message_muc_stanza_id,
   pinner_jid,
   pinned_at,
   active,
@@ -11311,8 +12673,10 @@ INSERT OR REPLACE INTO message_pins (
 )
 SELECT
   chat_jid,
-  message_reference_kind,
   message_reference_id,
+  $messageStanzaIdSelect,
+  $messageOriginIdSelect,
+  $messageMucStanzaIdSelect,
   $oldPinnerColumn,
   pinned_at,
   active,
@@ -11524,6 +12888,7 @@ END
   }
 
   Future<void> _createCurrentSchemaIndexes() async {
+    await _dropLegacyMessagePinIndexes();
     final statements = <String>[
       '''
 CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp
@@ -11565,7 +12930,7 @@ ON pinned_messages(chat_jid, active, pinned_at, message_stanza_id)
 ''',
       '''
 CREATE INDEX IF NOT EXISTS idx_message_pins_chat_reference
-ON message_pins(chat_jid, message_reference_kind, message_reference_id)
+ON message_pins(chat_jid, message_reference_id)
 ''',
       '''
 CREATE INDEX IF NOT EXISTS idx_message_pins_chat_active_pinned

@@ -536,14 +536,12 @@ final class _OutboundMessageSummary {
 final class _OutboundPinMutation {
   const _OutboundPinMutation({
     required this.chatJid,
-    required this.referenceKind,
     required this.messageStanzaId,
     required this.pinned,
     required this.scope,
   });
 
   final String chatJid;
-  final MessageReferenceKind referenceKind;
   final String messageStanzaId;
   final bool pinned;
   final PinMessageMutationScope scope;
@@ -1454,7 +1452,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required String body,
     String? subject,
     String? quotingStanzaId,
-    MessageReferenceKind? quotingReferenceKind,
+    String? quotingOriginId,
+    String? quotingMucStanzaId,
     List<Attachment> attachments = const <Attachment>[],
     CalendarTaskIcsMessage? calendarTaskIcsMessage,
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
@@ -1484,7 +1483,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     ).resolvedStoredRecipients();
     final quoteTarget = DraftQuoteTarget.fromDraft(
       stanzaId: quotingStanzaId,
-      referenceKind: quotingReferenceKind,
+      originId: quotingOriginId,
+      mucStanzaId: quotingMucStanzaId,
     );
     final draftSave =
         await _dbOpReturning<
@@ -1512,7 +1512,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             draftRecipients: draftRecipients,
             subject: subject,
             quotingStanzaId: quoteTarget?.stanzaId,
-            quotingReferenceKind: null,
+            quotingOriginId: quoteTarget?.originId,
+            quotingMucStanzaId: quoteTarget?.mucStanzaId,
             attachmentMetadataIds: attachmentMetadata.values,
             attachmentMetadata: attachmentMetadataRows,
             calendarTaskIcsMessage: calendarTaskIcsMessage,
@@ -1545,7 +1546,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           body: body,
           subject: subject,
           quotingStanzaId: quoteTarget?.stanzaId,
-          quotingReferenceKind: null,
+          quotingOriginId: quoteTarget?.originId,
+          quotingMucStanzaId: quoteTarget?.mucStanzaId,
           attachmentMetadataIds: attachmentMetadata.values,
           calendarTaskIcsMessage: calendarTaskIcsMessage,
           forwardedBlocks: forwardedBlocks,
@@ -2084,7 +2086,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         body: payload.body,
         subject: payload.subject,
         quotingStanzaId: payload.quotingStanzaId,
-        quotingReferenceKind: null,
+        quotingOriginId: payload.quotingOriginId,
+        quotingMucStanzaId: payload.quotingMucStanzaId,
         attachmentMetadataIds: attachmentMetadata.values,
         attachmentMetadata: attachmentMetadataRows,
         calendarTaskIcsMessage: payload.calendarTaskIcsMessage,
@@ -2110,8 +2113,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (attachments == null) {
       return null;
     }
-    final quoteTarget = draft.quoteTarget;
-    final quoteId = _wireDraftQuoteReference(quoteTarget);
     return DraftSyncPayload(
       syncId: syncId,
       updatedAt: syncMetadata.updatedAt.toUtc(),
@@ -2119,7 +2120,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       recipients: recipients,
       subject: draft.subject,
       body: draft.body,
-      quotingStanzaId: quoteId,
+      quotingStanzaId: _wireDraftQuoteReference(draft.quoteTarget?.stanzaId),
+      quotingOriginId: _wireDraftQuoteReference(draft.quoteTarget?.originId),
+      quotingMucStanzaId: _wireDraftQuoteReference(
+        draft.quoteTarget?.mucStanzaId,
+      ),
       attachments: attachments,
       calendarTaskIcsMessage: draft.calendarTaskIcsMessage,
       forwardedBlocks: draft.forwardedBlocks,
@@ -2695,8 +2700,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     required ChatPrimaryView primaryView,
   });
 
-  Stream<CalendarSyncDispatch> get calendarSyncDispatchStream =>
-      _calendarSyncDispatchController.stream;
+  Stream<CalendarSyncDispatch> get calendarSyncDispatchStream {
+    scheduleMicrotask(_flushPendingCalendarSyncDispatches);
+    return _calendarSyncDispatchController.stream;
+  }
 
   Stream<ChatCalendarSyncDispatch> get chatCalendarSyncDispatchStream =>
       _chatCalendarSyncDispatchController.stream;
@@ -3220,35 +3227,32 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return <String>{normalizedSelfPinner};
   }
 
-  List<LocalMessageReference> _pinReferencesForMessage({
-    required LocalMessageReference reference,
+  List<String> _pinReferencesForMessage({
+    required String messageReferenceId,
     required Message message,
   }) {
-    final references = <String, LocalMessageReference>{};
+    final references = <String>{};
 
-    void addReference(MessageReferenceKind kind, String? value) {
+    void addReference(String? value) {
       final trimmed = value?.trim();
       if (trimmed == null || trimmed.isEmpty) {
         return;
       }
-      references['${kind.storageValue}:$trimmed'] = LocalMessageReference(
-        kind: kind,
-        value: trimmed,
-      );
+      references.add(trimmed);
     }
 
-    addReference(reference.kind, reference.value);
-    addReference(MessageReferenceKind.stanzaId, message.trimmedStanzaId);
-    addReference(MessageReferenceKind.originId, message.trimmedOriginId);
-    addReference(MessageReferenceKind.mucStanzaId, message.trimmedMucStanzaId);
-    return references.values.toList(growable: false);
+    addReference(messageReferenceId);
+    addReference(message.trimmedStanzaId);
+    addReference(message.trimmedOriginId);
+    addReference(message.trimmedMucStanzaId);
+    return references.toList(growable: false);
   }
 
   Future<List<PinEntry>> _activeSelfPinRowsForMessage({
     required String chatJid,
     required ChatType chatType,
     required Message message,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required String selfPinnerJid,
   }) async {
     final pinnerJids = _selfPinnerJidsForChat(
@@ -3260,7 +3264,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return const <PinEntry>[];
     }
     final references = _pinReferencesForMessage(
-      reference: reference,
+      messageReferenceId: messageReferenceId,
       message: message,
     );
     if (references.isEmpty) {
@@ -3273,15 +3277,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         for (final pinReference in references) {
           final entry = await db.getMessagePin(
             chatJid: chatJid,
-            reference: pinReference,
+            messageReferenceId: pinReference,
             pinnerJid: pinnerJid,
           );
           if (entry?.active != true) {
             continue;
           }
-          final key =
-              '${entry!.pinnerJid}\u0000${entry.messageReferenceKind}'
-              '\u0000${entry.messageReferenceId}';
+          final key = '${entry!.pinnerJid}\u0000${entry.messageReferenceId}';
           if (seen.add(key)) {
             entries.add(entry);
           }
@@ -3294,42 +3296,42 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<PinnedMessageAggregate?> _activePinnedAggregateForMessage({
     required String chatJid,
     required Message message,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required String selfPinnerJid,
   }) async {
     final references = _pinReferencesForMessage(
-      reference: reference,
+      messageReferenceId: messageReferenceId,
       message: message,
     );
     if (references.isEmpty) {
       return null;
     }
-    final referenceKeys = {
-      for (final reference in references)
-        (kind: reference.kind, value: reference.value),
-    };
     return await _activePinnedAggregateForReferences(
       chatJid: chatJid,
-      references: referenceKeys,
+      references: references.toSet(),
       selfPinnerJid: selfPinnerJid,
     );
   }
 
   Future<PinnedMessageAggregate?> _activePinnedAggregateForReference({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required String selfPinnerJid,
   }) async {
+    final normalizedReference = messageReferenceId.trim();
+    if (normalizedReference.isEmpty) {
+      return null;
+    }
     return await _activePinnedAggregateForReferences(
       chatJid: chatJid,
-      references: {(kind: reference.kind, value: reference.value)},
+      references: {normalizedReference},
       selfPinnerJid: selfPinnerJid,
     );
   }
 
   Future<PinnedMessageAggregate?> _activePinnedAggregateForReferences({
     required String chatJid,
-    required Set<({MessageReferenceKind kind, String value})> references,
+    required Set<String> references,
     required String selfPinnerJid,
   }) async {
     if (references.isEmpty) {
@@ -3343,10 +3345,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         selfPinnerJid: selfPinnerJid,
       );
       for (final aggregate in aggregates) {
-        if (references.contains((
-          kind: aggregate.messageReferenceKind,
-          value: aggregate.messageReferenceId.trim(),
-        ))) {
+        if (references.contains(aggregate.messageReferenceId.trim())) {
           return aggregate;
         }
       }
@@ -4531,7 +4530,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       jid: normalizedChat,
       requestedChatType: ChatType.chat,
     );
-    final rawReference = message.pinReference(
+    final rawReference = message.pinId(
       isGroupChat: resolvedChatType == ChatType.groupChat,
     );
     if (rawReference == null) {
@@ -4543,12 +4542,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final reference = await _normalizePinMessageReferenceForChat(
       chatJid: normalizedChat,
       chatType: resolvedChatType,
-      reference: rawReference,
+      messageReferenceId: rawReference,
     );
     if (reference == null) {
       return;
     }
-    final messageId = reference.value;
+    final messageId = reference;
     final selfPinnerJid = _selfPinnerJid();
     if (selfPinnerJid == null) {
       return;
@@ -4557,7 +4556,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final activeAggregate = await _activePinnedAggregateForMessage(
       chatJid: normalizedChat,
       message: message,
-      reference: reference,
+      messageReferenceId: reference,
       selfPinnerJid: selfPinnerJid,
     );
     if (activeAggregate != null) {
@@ -4567,7 +4566,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await _dbOp<XmppDatabase>(
       (db) => db.applyMessagePinMutation(
         chatJid: normalizedChat,
-        reference: reference,
+        messageReferenceId: reference,
+        messageStanzaId: message.trimmedStanzaId,
+        messageOriginId: message.trimmedOriginId,
+        messageMucStanzaId: message.trimmedMucStanzaId,
         pinnerJid: selfPinnerJid,
         pinnedAt: pinnedAt,
         active: true,
@@ -4601,7 +4603,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       jid: normalizedChat,
       requestedChatType: ChatType.chat,
     );
-    final rawReference = message.pinReference(
+    final rawReference = message.pinId(
       isGroupChat: resolvedChatType == ChatType.groupChat,
     );
     if (rawReference == null) {
@@ -4613,12 +4615,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final reference = await _normalizePinMessageReferenceForChat(
       chatJid: normalizedChat,
       chatType: resolvedChatType,
-      reference: rawReference,
+      messageReferenceId: rawReference,
     );
     if (reference == null) {
       throw XmppMessageException();
     }
-    final messageId = reference.value;
+    final messageId = reference;
     final selfPinnerJid = _selfPinnerJid();
     if (selfPinnerJid == null) {
       throw XmppMessageException();
@@ -4635,7 +4637,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             chatJid: normalizedChat,
             chatType: resolvedChatType,
             message: message,
-            reference: reference,
+            messageReferenceId: reference,
             selfPinnerJid: selfPinnerJid,
           );
     final scope = canClearAnyPins
@@ -4649,19 +4651,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (scope == PinMessageMutationScope.own) {
       await _dbOp<XmppDatabase>((db) async {
         for (final pinToClear in pinsToClear) {
-          final ownReferenceKind = MessageReferenceKind.fromStorageValue(
-            pinToClear.messageReferenceKind,
-          );
           final ownReferenceId = pinToClear.messageReferenceId.trim();
-          if (ownReferenceKind == null || ownReferenceId.isEmpty) {
+          if (ownReferenceId.isEmpty) {
             continue;
           }
           await db.applyMessagePinMutation(
             chatJid: normalizedChat,
-            reference: LocalMessageReference(
-              kind: ownReferenceKind,
-              value: ownReferenceId,
-            ),
+            messageReferenceId: ownReferenceId,
+            messageStanzaId: pinToClear.messageStanzaId,
+            messageOriginId: pinToClear.messageOriginId,
+            messageMucStanzaId: pinToClear.messageMucStanzaId,
             pinnerJid: pinToClear.pinnerJid,
             pinnedAt: unpinnedAt,
             active: false,
@@ -4673,7 +4672,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await _dbOp<XmppDatabase>(
         (db) => db.clearMessagePins(
           chatJid: normalizedChat,
-          reference: reference,
+          messageReferenceId: reference,
           pinnedAt: unpinnedAt,
         ),
       );
@@ -4751,7 +4750,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       StreamController<ChatCalendarSyncDispatch>.broadcast();
   StreamController<CalendarSyncWarning> _calendarSyncWarningController =
       StreamController<CalendarSyncWarning>.broadcast();
-  CalendarSyncManager? _servicePersonalCalendarSyncManager;
+  final Queue<CalendarSyncDispatch> _pendingCalendarSyncDispatches =
+      Queue<CalendarSyncDispatch>();
   ChatCalendarSyncCoordinator? _serviceChatCalendarSyncCoordinator;
 
   final Map<String, _OutboundMessageSummary> _outboundMessageSummaries =
@@ -5090,10 +5090,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await db.applyMessageCollectionMembershipMutation(
         collectionId: payload.collectionId,
         chatJid: payload.chatJid,
-        messageReferenceId: payload.messageReferenceId.value,
-        messageStanzaId: payload.messageStanzaId?.value,
-        messageOriginId: payload.messageOriginId?.value,
-        messageMucStanzaId: payload.messageMucStanzaId?.value,
+        messageReferenceId: payload.messageReferenceId,
+        messageStanzaId: payload.messageStanzaId,
+        messageOriginId: payload.messageOriginId,
+        messageMucStanzaId: payload.messageMucStanzaId,
         deltaAccountId: null,
         deltaMsgId: null,
         addedAt: payload.updatedAt.toUtc(),
@@ -5102,11 +5102,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await db.normalizeMessageCollectionMembershipAliases(
         collectionId: payload.collectionId,
         chatJid: payload.chatJid,
-        canonicalMessageReferenceId: payload.messageReferenceId.value,
+        canonicalMessageReferenceId: payload.messageReferenceId,
         aliases: payload.aliases,
-        messageStanzaId: payload.messageStanzaId?.value,
-        messageOriginId: payload.messageOriginId?.value,
-        messageMucStanzaId: payload.messageMucStanzaId?.value,
+        messageStanzaId: payload.messageStanzaId,
+        messageOriginId: payload.messageOriginId,
+        messageMucStanzaId: payload.messageMucStanzaId,
         deltaAccountId: null,
         deltaMsgId: null,
       );
@@ -5136,9 +5136,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       mucStanzaId: local.messageMucStanzaId,
     );
     final remoteAliasScore = _messageCollectionAliasScore(
-      stanzaId: remote.messageStanzaId?.value,
-      originId: remote.messageOriginId?.value,
-      mucStanzaId: remote.messageMucStanzaId?.value,
+      stanzaId: remote.messageStanzaId,
+      originId: remote.messageOriginId,
+      mucStanzaId: remote.messageMucStanzaId,
     );
     if (remoteAliasScore > localAliasScore) {
       return _MessageCollectionSyncDecision.applyRemote;
@@ -5169,22 +5169,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   Future<MessageCollectionSyncPayload> _buildMessageCollectionPayload(
     MessageCollectionMembershipEntry entry, {
-    required WireMessageReference wireReference,
+    required String wireReference,
   }) async {
     return MessageCollectionSyncPayload(
       collectionId: entry.collectionId,
       chatJid: entry.chatJid,
       messageReferenceId: wireReference,
       messageStanzaId: entry.deltaMsgId == null
-          ? WireMessageReference.tryParseXmpp(
-              kind: MessageReferenceKind.stanzaId,
-              value: entry.messageStanzaId,
-            )
+          ? _wireMessageCollectionXmppReference(entry.messageStanzaId)
           : null,
       messageOriginId: _wireMessageCollectionOriginReference(entry),
-      messageMucStanzaId: WireMessageReference.tryParseXmpp(
-        kind: MessageReferenceKind.mucStanzaId,
-        value: entry.messageMucStanzaId,
+      messageMucStanzaId: _wireMessageCollectionXmppReference(
+        entry.messageMucStanzaId,
       ),
       updatedAt: entry.addedAt.toUtc(),
       active: entry.active,
@@ -5192,61 +5188,71 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  String? _wireDraftQuoteReference(DraftQuoteTarget? quoteTarget) {
-    if (quoteTarget == null) {
+  String? _wireDraftQuoteReference(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null ||
+        normalized.isEmpty ||
+        isLegacyWireMessageReferenceValue(normalized)) {
       return null;
     }
-    final stanzaId = quoteTarget.stanzaId.trim();
-    if (stanzaId.isEmpty || isLegacyWireMessageReferenceValue(stanzaId)) {
-      return null;
-    }
-    return stanzaId;
+    return normalized;
   }
 
-  WireMessageReference? _wireMessageCollectionReferenceForEntry(
+  String? _wireMessageCollectionReferenceForEntry(
     MessageCollectionMembershipEntry entry,
   ) {
     if (entry.deltaMsgId != null || entry.deltaAccountId != null) {
-      return WireMessageReference.tryParseEmailMessageId(
-        entry.messageReferenceId,
-      );
+      return _wireMessageCollectionEmailReference(entry.messageReferenceId);
     }
     final reference = entry.messageReferenceId.trim();
     final mucStanzaId = entry.messageMucStanzaId?.trim();
     if (mucStanzaId != null &&
         mucStanzaId.isNotEmpty &&
         reference == mucStanzaId) {
-      return WireMessageReference.tryParseXmpp(
-        kind: MessageReferenceKind.mucStanzaId,
-        value: mucStanzaId,
-      );
+      return _wireMessageCollectionXmppReference(mucStanzaId);
     }
     final stanzaId = entry.messageStanzaId?.trim();
     if (stanzaId == null || stanzaId.isEmpty) {
       if (reference == entry.messageOriginId?.trim()) {
         return null;
       }
-      return WireMessageReference.tryParseXmpp(
-        kind: MessageReferenceKind.stanzaId,
-        value: reference,
-      );
+      return _wireMessageCollectionXmppReference(reference);
     }
-    return WireMessageReference.tryParseXmpp(
-      kind: MessageReferenceKind.stanzaId,
-      value: stanzaId,
-    );
+    return _wireMessageCollectionXmppReference(stanzaId);
   }
 
-  WireMessageReference? _wireMessageCollectionOriginReference(
+  String? _wireMessageCollectionOriginReference(
     MessageCollectionMembershipEntry entry,
   ) {
     if (entry.deltaMsgId != null || entry.deltaAccountId != null) {
-      return WireMessageReference.tryParseEmailMessageId(
-            entry.messageOriginId,
-          ) ??
-          WireMessageReference.tryParseEmailMessageId(entry.messageReferenceId);
+      final originReference = _wireMessageCollectionEmailReference(
+        entry.messageOriginId,
+      );
+      if (originReference != null) {
+        return originReference;
+      }
+      return _wireMessageCollectionEmailReference(entry.messageReferenceId);
     }
     return null;
+  }
+
+  String? _wireMessageCollectionXmppReference(String? value) {
+    final normalized = normalizeWireMessageReferenceValue(value);
+    if (normalized == null || isLegacyWireMessageReferenceValue(normalized)) {
+      return null;
+    }
+    return normalized;
+  }
+
+  String? _wireMessageCollectionEmailReference(String? value) {
+    final genuine = genuineEmailMessageId(value);
+    final normalized = normalizeWireMessageReferenceValue(genuine);
+    if (normalized == null ||
+        !normalized.contains('@') ||
+        isLegacyWireMessageReferenceValue(normalized)) {
+      return null;
+    }
+    return normalized;
   }
 
   Future<List<MessageCollectionMembershipEntry>>
@@ -5626,12 +5632,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         final hasAttachmentMetadata = metadata != null;
 
         final isGroupChat = event.type == 'groupchat';
+        final chatType = isGroupChat ? ChatType.groupChat : ChatType.chat;
         var message = Message.fromMox(
           event,
           accountJid: myJid,
           senderRealJid: _senderRealJidForInboundMessageEvent(
             event,
-            chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+            chatType: chatType,
           ),
         );
         final shouldPersistAttachment = metadata != null && !message.noStore;
@@ -5651,7 +5658,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
               !isGroupChat && message.isFromAccount(accountJid);
           final bool isSelfGroupMessage = _isSelfArchivedMessageEvent(
             event: event,
-            chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+            chatType: chatType,
           );
           if (isSelfDirectMessage || isSelfGroupMessage) {
             message = message.copyWith(acked: true);
@@ -5713,6 +5720,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         }
 
         message = _applyArchivedUnreadState(message, event);
+        message = await _resolveInboundReplyIds(message, chatType: chatType);
 
         if (shouldPersistAttachment) {
           await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
@@ -5742,7 +5750,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
                 pseudoMessageType: PseudoMessageType.newDevice,
                 pseudoMessageData: pseudoMessageData,
               ),
-              chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+              chatType: chatType,
             );
           }
 
@@ -5755,7 +5763,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
                 pseudoMessageType: PseudoMessageType.changedDevice,
                 pseudoMessageData: pseudoMessageData,
               ),
-              chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+              chatType: chatType,
             );
           }
         }
@@ -5763,10 +5771,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         await _rememberReadOnlyTaskShare(message);
 
         if (!message.noStore) {
-          await _storeMessage(
-            message,
-            chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
-          );
+          await _storeMessage(message, chatType: chatType);
         }
         if (shouldPersistAttachment &&
             _allowInboundAttachmentAutoDownload(message.chatJid)) {
@@ -6063,7 +6068,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     mox.MessageDeliveryReceiptManager(),
     TransportChatMarkerManager(),
     mox.ChatMarkerManager(),
-    mox.MessageRepliesManager(),
+    AxiMessageRepliesManager(),
     mox.ChatStateManager(),
     mox.DelayedDeliveryManager(),
     mox.MessageRetractionManager(),
@@ -6112,6 +6117,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final type = isGroupChat && !isPrivateMucMessage ? 'groupchat' : 'chat';
 
     return message.toMox(
+      replyId: message.storedReplyId,
       quotedBody: quotedMessage?.body,
       quotedJid: quotedJid,
       extraExtensions: extraExtensions,
@@ -6130,17 +6136,72 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
-  String _outboundReplyStanzaId({
-    required Message message,
-    required ChatType chatType,
-  }) {
-    final stanzaId = message.quoteStanzaId(
-      isGroupChat: chatType == ChatType.groupChat,
-    );
+  ({String? stanzaId, String? originId, String? mucStanzaId})
+  _outboundReplyIds({required Message message, required ChatType chatType}) {
+    if (chatType == ChatType.groupChat) {
+      final mucStanzaId = message.trimmedMucStanzaId;
+      if (mucStanzaId == null) {
+        throw XmppMessageException();
+      }
+      return (stanzaId: null, originId: null, mucStanzaId: mucStanzaId);
+    }
+    final originId = message.trimmedOriginId;
+    if (originId != null) {
+      return (stanzaId: null, originId: originId, mucStanzaId: null);
+    }
+    final stanzaId = message.trimmedStanzaId;
     if (stanzaId == null) {
       throw XmppMessageException();
     }
-    return stanzaId;
+    return (stanzaId: stanzaId, originId: null, mucStanzaId: null);
+  }
+
+  Future<Message> _resolveInboundReplyIds(
+    Message message, {
+    required ChatType chatType,
+  }) async {
+    final referenceId = message.storedReplyId?.trim();
+    if (referenceId == null ||
+        referenceId.isEmpty ||
+        isLegacyWireMessageReferenceValue(referenceId)) {
+      return message;
+    }
+    if (chatType == ChatType.groupChat) {
+      return message.copyWith(
+        replyStanzaId: null,
+        replyOriginId: null,
+        replyMucStanzaId: referenceId,
+      );
+    }
+    final target = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByReferenceId(referenceId, chatJid: message.chatJid),
+    );
+    if (target?.trimmedOriginId == referenceId) {
+      return message.copyWith(
+        replyStanzaId: null,
+        replyOriginId: referenceId,
+        replyMucStanzaId: null,
+      );
+    }
+    if (target?.trimmedStanzaId == referenceId) {
+      return message.copyWith(
+        replyStanzaId: referenceId,
+        replyOriginId: null,
+        replyMucStanzaId: null,
+      );
+    }
+    if (target?.trimmedMucStanzaId == referenceId) {
+      return message.copyWith(
+        replyStanzaId: null,
+        replyOriginId: null,
+        replyMucStanzaId: referenceId,
+      );
+    }
+    return message.copyWith(
+      replyStanzaId: referenceId,
+      replyOriginId: null,
+      replyMucStanzaId: null,
+    );
   }
 
   Future<String?> _resolveOutboundPinMessageId({
@@ -6161,7 +6222,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (message == null) {
       return null;
     }
-    return message.pinReference(isGroupChat: true)?.value;
+    return message.pinId(isGroupChat: true);
   }
 
   Future<void> _sendReactionUpdate({
@@ -6182,21 +6243,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         chatType: chatType,
       );
     }
-    final reactionTarget = message.reactionReference(isGroupChat: isGroupChat);
-    if (reactionTarget == null || reactionTarget.value.isEmpty) {
+    final reactionTarget = message.reactionId(isGroupChat: isGroupChat);
+    if (reactionTarget == null || reactionTarget.isEmpty) {
       return;
     }
     final stanzaId = _connection.generateId();
     _log.fine(
       'Sending reaction stanza=$stanzaId chat=${message.chatJid} '
-      'groupchat=$isGroupChat targetKind=${reactionTarget.kind.name} '
-      'target=${reactionTarget.value} emojis=$emojis',
+      'groupchat=$isGroupChat target=$reactionTarget emojis=$emojis',
     );
     final reactionExtensions = <mox.StanzaHandlerExtension>[
       mox.MessageIdData(stanzaId),
       if (!message.noStore)
         const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
-      mox.MessageReactionsData(reactionTarget.value, emojis),
+      mox.MessageReactionsData(reactionTarget, emojis),
     ];
     final reactionEvent = mox.MessageEvent(
       fromJid,
@@ -6312,7 +6372,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   void _trackOutboundPinMutation({
     required String stanzaId,
     required String chatJid,
-    required MessageReferenceKind referenceKind,
     required String messageStanzaId,
     required bool pinned,
     required PinMessageMutationScope scope,
@@ -6327,7 +6386,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     _outboundPinMutationsByStanzaId[trimmedStanzaId] = _OutboundPinMutation(
       chatJid: normalizedChat,
-      referenceKind: referenceKind,
       messageStanzaId: trimmedMessageId,
       pinned: pinned,
       scope: scope,
@@ -6630,12 +6688,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final DateTime timestamp = offlineDemo
         ? await _resolveDemoTimestampForChat(jid, demoNow())
         : DateTime.timestamp();
-    final resolvedQuotedStanzaId = quotedMessage == null
-        ? _normalizedOutboundQuotedStanzaId(quotedStanzaId)
-        : _outboundReplyStanzaId(
-            message: quotedMessage,
-            chatType: resolvedChatType,
-          );
+    final ({String? stanzaId, String? originId, String? mucStanzaId})
+    resolvedReplyIds = quotedMessage == null
+        ? (
+            stanzaId: _normalizedOutboundQuotedStanzaId(quotedStanzaId),
+            originId: null,
+            mucStanzaId: null,
+          )
+        : _outboundReplyIds(message: quotedMessage, chatType: resolvedChatType);
     var message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -6647,8 +6707,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       htmlBody: normalizedHtml,
       encryptionProtocol: resolvedEncryptionProtocol,
       noStore: noStore,
-      quoting: resolvedQuotedStanzaId,
-      quotingReferenceKind: null,
+      replyStanzaId: resolvedReplyIds.stanzaId,
+      replyOriginId: resolvedReplyIds.originId,
+      replyMucStanzaId: resolvedReplyIds.mucStanzaId,
       timestamp: timestamp,
       acked: localOnly,
       received: localOnly,
@@ -6933,15 +6994,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final DateTime timestamp = demoOfflineMode
         ? await _resolveDemoTimestampForChat(jid, demoNow())
         : DateTime.timestamp();
-    final resolvedQuotedStanzaId = quotedMessage == null
-        ? _normalizedOutboundQuotedStanzaId(quotedStanzaId)
-        : _outboundReplyStanzaId(
-            message: quotedMessage,
-            chatType: resolvedChatType,
-          );
+    final ({String? stanzaId, String? originId, String? mucStanzaId})
+    resolvedReplyIds = quotedMessage == null
+        ? (
+            stanzaId: _normalizedOutboundQuotedStanzaId(quotedStanzaId),
+            originId: null,
+            mucStanzaId: null,
+          )
+        : _outboundReplyIds(message: quotedMessage, chatType: resolvedChatType);
     final resolvedGroupQuotedStanzaId =
         _normalizedOutboundQuotedStanzaId(groupQuotedStanzaId) ??
-        (transportGroupId == null ? null : resolvedQuotedStanzaId);
+        (transportGroupId == null ? null : quotedMessage?.storedReplyId);
     var message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
@@ -6954,8 +7017,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       encryptionProtocol: resolvedEncryptionProtocol,
       timestamp: timestamp,
       fileMetadataID: metadata.id,
-      quoting: resolvedQuotedStanzaId,
-      quotingReferenceKind: null,
+      replyStanzaId: resolvedReplyIds.stanzaId,
+      replyOriginId: resolvedReplyIds.originId,
+      replyMucStanzaId: resolvedReplyIds.mucStanzaId,
       acked: localOnly,
       received: localOnly,
       displayed: localOnly,
@@ -8086,12 +8150,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         ) ??
         ChatType.chat;
     Message? quoted;
-    if (message.quoting != null) {
+    final storedReplyId = message.storedReplyId;
+    if (storedReplyId != null) {
       quoted = await _dbOpReturning<XmppDatabase, Message?>(
-        (db) => db.getMessageByReferenceId(
-          message.quoting!,
-          chatJid: message.chatJid,
-        ),
+        (db) =>
+            db.getMessageByReferenceId(storedReplyId, chatJid: message.chatJid),
       );
     }
     await sendMessage(
@@ -10162,7 +10225,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   @override
   Future<void> _reset() async {
-    await _abortCalendarSyncQueue(XmppAbortedException(), StackTrace.current);
+    final abort = XmppAbortedException();
+    final abortStackTrace = StackTrace.current;
+    await _abortCalendarSyncQueue(abort, abortStackTrace);
+    _abortPendingCalendarSyncDispatches(abort, abortStackTrace);
     _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
     await super._reset();
 
@@ -10199,6 +10265,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     _suppressedMessageNotificationIds.clear();
     _internalEnvelopeChats.clear();
     _pinChatSyncSessions.clear();
+    _pendingCalendarSyncDispatches.clear();
     for (final session in _chatMamSessions.values) {
       _invalidateChatMamSession(session);
     }
@@ -10281,7 +10348,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   //             ?.hints
   //             .contains(mox.MessageProcessingHint.noStore) ??
   //         false,
-  //     quoting: get<mox.ReplyData>()?.id,
   //     originID: get<mox.StableIdData>()?.originId,
   //     occupantID: get<mox.OccupantIdData>()?.id,
   //     encryptionProtocol:
@@ -10546,16 +10612,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final outboundMutation = fromSelf
         ? _takeOutboundPinMutation(event.id)
         : null;
+    final chatType = isGroupChat ? ChatType.groupChat : ChatType.chat;
     final reference = await _normalizePinMessageReferenceForChat(
       chatJid: normalizedChat,
-      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
-      reference: mutation.reference,
+      chatType: chatType,
+      messageReferenceId: mutation.messageId,
     );
     if (reference == null) {
       return true;
     }
     final pendingMutation = _PendingInboundPinMutation(
-      reference: reference,
+      messageReferenceId: reference,
+      chatType: chatType,
       pinnerJid: pinnerIdentity.pinnerJid,
       identityVerified: pinnerIdentity.identityVerified,
       pinned: mutation.pinned,
@@ -10571,13 +10639,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       if (fromSelf) {
         _dropOutboundPinMutationByAction(
           chatJid: normalizedChat,
-          messageStanzaId: reference.value,
+          messageStanzaId: reference,
           pinned: mutation.pinned,
           scope: outboundMutation?.scope ?? mutation.scope,
         );
         await _clearPendingPinMutation(
           chatJid: normalizedChat,
-          messageStanzaId: reference.value,
+          messageStanzaId: reference,
           pinned: mutation.pinned,
           scope: outboundMutation?.scope ?? mutation.scope,
         );
@@ -10590,19 +10658,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return true;
     }
     var message = await _dbOpReturning<XmppDatabase, Message?>(
-      (db) =>
-          db.getMessageByReferenceId(reference.value, chatJid: normalizedChat),
+      (db) => db.getMessageByReferenceId(reference, chatJid: normalizedChat),
     );
     if (message == null) {
       _queuePendingInboundPinMutation(
         chatJid: normalizedChat,
-        reference: reference,
+        messageReferenceId: reference,
         mutation: pendingMutation,
       );
       message = await _hydrateMissingPinMutationTargetFromArchive(
         chatJid: normalizedChat,
-        chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
-        reference: reference,
+        chatType: chatType,
+        messageReferenceId: reference,
       );
       if (message == null) {
         return true;
@@ -10610,20 +10677,20 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     if (!_pinReferenceMatchesMessage(
       message: message,
-      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
-      reference: reference,
+      chatType: chatType,
+      messageReferenceId: reference,
     )) {
       return true;
     }
     final resolvedMutation = _canonicalizeInboundPinMutationForTarget(
       chatJid: normalizedChat,
-      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+      chatType: chatType,
       message: message,
       mutation: pendingMutation,
     );
     if (!_isInboundPinSenderAuthorized(
       chatJid: normalizedChat,
-      chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+      chatType: chatType,
       mutation: resolvedMutation,
     )) {
       return true;
@@ -10635,13 +10702,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (fromSelf) {
       _dropOutboundPinMutationByAction(
         chatJid: normalizedChat,
-        messageStanzaId: reference.value,
+        messageStanzaId: reference,
         pinned: mutation.pinned,
         scope: outboundMutation?.scope ?? mutation.scope,
       );
       await _clearPendingPinMutation(
         chatJid: normalizedChat,
-        messageStanzaId: reference.value,
+        messageStanzaId: reference,
         pinned: mutation.pinned,
         scope: outboundMutation?.scope ?? mutation.scope,
       );
@@ -10657,13 +10724,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   Future<Message?> _hydrateMissingPinMutationTargetFromArchive({
     required String chatJid,
     required ChatType chatType,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
   }) async {
     final syncSession = _pinSyncSession(chatJid);
     if (syncSession.archiveBootstrapInFlight) {
       return null;
     }
-    final referenceId = reference.value.trim();
+    final referenceId = messageReferenceId.trim();
     if (referenceId.isEmpty ||
         !syncSession.hydratingMissingReferences.add(referenceId)) {
       return null;
@@ -10705,11 +10772,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   void _queuePendingInboundPinMutation({
     required String chatJid,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
     required _PendingInboundPinMutation mutation,
   }) {
     final normalizedChat = chatJid.trim();
-    final normalizedReference = reference.value.trim();
+    final normalizedReference = messageReferenceId.trim();
     if (normalizedChat.isEmpty || normalizedReference.isEmpty) {
       return;
     }
@@ -10742,26 +10809,22 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       _pendingInboundPinMutationsByChatAndReference.remove(message.chatJid);
     }
     for (final mutation in drained) {
-      final chatType =
-          mutation.reference.kind == MessageReferenceKind.mucStanzaId
-          ? ChatType.groupChat
-          : ChatType.chat;
       if (!_pinReferenceMatchesMessage(
         message: message,
-        chatType: chatType,
-        reference: mutation.reference,
+        chatType: mutation.chatType,
+        messageReferenceId: mutation.messageReferenceId,
       )) {
         continue;
       }
       final resolvedMutation = _canonicalizeInboundPinMutationForTarget(
         chatJid: message.chatJid,
-        chatType: chatType,
+        chatType: mutation.chatType,
         message: message,
         mutation: mutation,
       );
       if (!_isInboundPinSenderAuthorized(
         chatJid: message.chatJid,
-        chatType: chatType,
+        chatType: mutation.chatType,
         mutation: resolvedMutation,
       )) {
         continue;
@@ -10781,32 +10844,43 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await _dbOp<XmppDatabase>(
         (db) => db.clearMessagePins(
           chatJid: chatJid,
-          reference: mutation.reference,
+          messageReferenceId: mutation.messageReferenceId,
           pinnedAt: mutation.timestamp,
         ),
       );
       return;
     }
     if (mutation.pinned) {
+      final selfPinnerJid = _selfPinnerJid();
+      if (selfPinnerJid == null) {
+        return;
+      }
       final activeAggregate = await _activePinnedAggregateForReference(
         chatJid: chatJid,
-        reference: mutation.reference,
-        selfPinnerJid: _selfPinnerJid() ?? '',
+        messageReferenceId: mutation.messageReferenceId,
+        selfPinnerJid: selfPinnerJid,
       );
       if (activeAggregate != null) {
         return;
       }
     }
-    await _dbOp<XmppDatabase>(
-      (db) => db.applyMessagePinMutation(
+    await _dbOp<XmppDatabase>((db) async {
+      final referencedMessage = await db.getMessageByReferenceId(
+        mutation.messageReferenceId,
         chatJid: chatJid,
-        reference: mutation.reference,
+      );
+      await db.applyMessagePinMutation(
+        chatJid: chatJid,
+        messageReferenceId: mutation.messageReferenceId,
+        messageStanzaId: referencedMessage?.trimmedStanzaId,
+        messageOriginId: referencedMessage?.trimmedOriginId,
+        messageMucStanzaId: referencedMessage?.trimmedMucStanzaId,
         pinnerJid: mutation.pinnerJid,
         pinnedAt: mutation.timestamp,
         active: mutation.pinned,
         identityVerified: mutation.identityVerified,
-      ),
-    );
+      );
+    });
   }
 
   Future<bool> _handleReactions(mox.MessageEvent event) async {
@@ -10958,11 +11032,19 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   Set<String> _reactionReferenceIdsForMessage(Message message) {
-    return {
-      message.stanzaID.trim(),
-      message.originID?.trim() ?? '',
-      message.mucStanzaId?.trim() ?? '',
-    }.where((id) => id.isNotEmpty).toSet();
+    final ids = <String>{};
+    void addId(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) {
+        return;
+      }
+      ids.add(trimmed);
+    }
+
+    addId(message.stanzaID);
+    addId(message.originID);
+    addId(message.mucStanzaId);
+    return ids;
   }
 
   Future<void> _applyInboundReactionMutation({
@@ -11739,11 +11821,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         mamSession: calendarMamSession,
         onMessageDecoded: (fullMessage, decodedEvent, snapshotResult) async {
           if (isSelfCalendar) {
-            return _invokeCalendarCallback(
+            final outcome = await _invokeCalendarCallback(
               fullMessage,
               decodedEvent,
               snapshotResult,
             );
+            return outcome.didApply;
           }
           final sanitized = snapshotResult == null
               ? (
@@ -11791,7 +11874,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
     if (isSelfCalendar) {
       // Route to CalendarSyncManager for processing
-      await _invokeCalendarCallback(syncMessage, event, null);
+      final outcome = await _invokeCalendarCallback(syncMessage, event, null);
+      if (event.isFromMAM && !outcome.wasHandled) {
+        await _recordCalendarMamEnvelopeFailure(
+          mamSession: calendarMamSession,
+          event: event,
+          isSelfCalendar: isSelfCalendar,
+          chatJid: chatJid,
+        );
+        return;
+      }
     } else {
       await _invokeChatCalendarCallback(
         syncMessage,
@@ -12471,30 +12563,32 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
   }
 
-  Future<bool> _invokeCalendarCallback(
+  Future<CalendarSyncDispatchOutcome> _invokeCalendarCallback(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event,
     CalendarSnapshotResult? snapshotResult,
   ) async {
     final inbound = _calendarSyncInbound(syncMessage, event, snapshotResult);
-    if (!_calendarSyncDispatchController.hasListener) {
-      _log.info('No calendar sync listeners registered - applying directly');
-      return _processPersonalCalendarSyncDirect(
-        syncMessage,
-        event,
-        snapshotResult,
-      );
-    }
     final dispatch = CalendarSyncDispatch(inbound: inbound);
+    if (!_calendarSyncDispatchController.hasListener) {
+      _log.info('No calendar sync listeners registered - queuing for bloc');
+      _observeQueuedCalendarDispatch(
+        dispatch,
+        event,
+        acknowledge: !event.isFromMAM,
+      );
+      _pendingCalendarSyncDispatches.add(dispatch);
+      return CalendarSyncDispatchOutcome.unavailable;
+    }
     _calendarSyncDispatchController.add(dispatch);
     try {
-      final applied = await _awaitCalendarSyncQueueWork(dispatch.result);
+      final outcome = await _awaitCalendarSyncQueueWork(dispatch.result);
       try {
         await _acknowledgeMessage(event);
       } catch (error, stackTrace) {
         _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
       }
-      return applied;
+      return outcome;
     } on XmppAbortedException {
       rethrow;
     } on TimeoutException catch (error, stackTrace) {
@@ -12502,10 +12596,44 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       rethrow;
     } on Exception catch (error, stackTrace) {
       _log.warning('Calendar sync handler failed.', error, stackTrace);
-      return _processPersonalCalendarSyncDirect(
-        syncMessage,
-        event,
-        snapshotResult,
+      return CalendarSyncDispatchOutcome.failed;
+    }
+  }
+
+  void _observeQueuedCalendarDispatch(
+    CalendarSyncDispatch dispatch,
+    mox.MessageEvent event, {
+    required bool acknowledge,
+  }) {
+    unawaited(() async {
+      try {
+        final outcome = await dispatch.result;
+        if (acknowledge && outcome.wasHandled) {
+          await _acknowledgeMessage(event);
+        }
+      } on Exception catch (error, stackTrace) {
+        _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
+      }
+    }());
+  }
+
+  void _abortPendingCalendarSyncDispatches(
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    while (_pendingCalendarSyncDispatches.isNotEmpty) {
+      _pendingCalendarSyncDispatches.removeFirst().completeError(
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  void _flushPendingCalendarSyncDispatches() {
+    while (_calendarSyncDispatchController.hasListener &&
+        _pendingCalendarSyncDispatches.isNotEmpty) {
+      _calendarSyncDispatchController.add(
+        _pendingCalendarSyncDispatches.removeFirst(),
       );
     }
   }
@@ -12590,71 +12718,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return null;
   }
 
-  CalendarSyncManager _directPersonalCalendarSyncManager() {
-    return _servicePersonalCalendarSyncManager ??= CalendarSyncManager(
-      readModel: _readDirectPersonalCalendarModel,
-      applyModel: _writeDirectPersonalCalendarModel,
-      sendCalendarMessage: (outbound) async {
-        final jid = myJid;
-        if (jid == null || jid.trim().isEmpty) {
-          throw XmppMessageException();
-        }
-        await sendCalendarSyncMessage(jid: jid, outbound: outbound);
-      },
-      publishCalendarSnapshot: (_) => publishPersonalCalendarSnapshot(
-        readModel: _readDirectPersonalCalendarModel,
-        applyModel: _writeDirectPersonalCalendarModel,
-        onSnapshotPublishStatusChanged: _emitCalendarSnapshotPublishWarning,
-      ),
-      refreshCalendarSnapshot: () async {
-        final status = await syncPersonalCalendarSnapshot(
-          readModel: _readDirectPersonalCalendarModel,
-          applyModel: _writeDirectPersonalCalendarModel,
-          publishIfChanged: true,
-          onSnapshotPublishStatusChanged: _emitCalendarSnapshotPublishWarning,
-        );
-        return status == CalendarSnapshotPublishStatus.idle;
-      },
-      onSnapshotPublishStatusChanged: _emitCalendarSnapshotPublishWarning,
-    );
-  }
-
-  Future<void> _emitCalendarSnapshotPublishWarning(
-    CalendarSnapshotPublishStatus status,
-  ) async {
-    switch (status) {
-      case CalendarSnapshotPublishStatus.idle:
-        return;
-      case CalendarSnapshotPublishStatus.pending:
-        await _emitCalendarSyncWarning(
-          const CalendarSyncWarning(
-            type: CalendarSyncWarningType.snapshotPublishPending,
-          ),
-        );
-        return;
-      case CalendarSnapshotPublishStatus.blocked:
-        await _emitCalendarSyncWarning(
-          const CalendarSyncWarning(
-            type: CalendarSyncWarningType.snapshotPublishBlocked,
-          ),
-        );
-        return;
-    }
-  }
-
-  CalendarModel _readDirectPersonalCalendarModel() {
-    try {
-      return _readDirectPersonalCalendarStateOrNull()?.model ??
-          CalendarState.initial().model;
-    } on StorageNotFound {
-      return CalendarModel.empty();
-    }
-  }
-
-  CalendarState _readDirectPersonalCalendarState() {
-    return _readDirectPersonalCalendarStateOrNull() ?? CalendarState.initial();
-  }
-
   CalendarState? _readDirectPersonalCalendarStateOrNull() {
     final Object? raw;
     try {
@@ -12671,30 +12734,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
     }
     return null;
-  }
-
-  Future<void> _writeDirectPersonalCalendarModel(CalendarModel model) async {
-    final state = _readDirectPersonalCalendarState().copyWith(model: model);
-    final encoded = CalendarStateStorageCodec.encode(state);
-    if (encoded == null) {
-      return;
-    }
-    await HydratedBloc.storage.write(authStoragePrefix, encoded);
-  }
-
-  Future<void> _ensureDirectPersonalCalendarStateStored() async {
-    if (_readDirectPersonalCalendarStateOrNull() != null) {
-      return;
-    }
-    final encoded = CalendarStateStorageCodec.encode(CalendarState.initial());
-    if (encoded == null) {
-      return;
-    }
-    try {
-      await HydratedBloc.storage.write(authStoragePrefix, encoded);
-    } on StorageNotFound {
-      return;
-    }
   }
 
   CalendarSyncState _readPersonalCalendarSyncState() {
@@ -12812,30 +12851,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  Future<bool> _processPersonalCalendarSyncDirect(
-    CalendarSyncMessage syncMessage,
-    mox.MessageEvent event,
-    CalendarSnapshotResult? snapshotResult,
-  ) async {
-    try {
-      final inbound = _calendarSyncInbound(syncMessage, event, snapshotResult);
-      final applied = await _directPersonalCalendarSyncManager()
-          .onCalendarMessage(inbound);
-      try {
-        await _acknowledgeMessage(event);
-      } catch (error, stackTrace) {
-        _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
-      }
-      return applied;
-    } on StorageNotFound catch (error, stackTrace) {
-      _log.warning('Calendar storage unavailable for sync.', error, stackTrace);
-      return false;
-    } catch (error, stackTrace) {
-      _log.warning('Calendar sync handler failed.', error, stackTrace);
-      return false;
-    }
-  }
-
   Future<bool> _processChatCalendarSyncDirect(
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event, {
@@ -12879,18 +12894,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         await callback();
       } on Exception catch (error, stackTrace) {
         _log.warning('Pending calendar sync flush failed.', error, stackTrace);
-      }
-    }
-    final personalManager = _servicePersonalCalendarSyncManager;
-    if (personalManager != null) {
-      try {
-        await personalManager.flushPending();
-      } on Exception catch (error, stackTrace) {
-        _log.warning(
-          'Direct personal calendar sync flush failed.',
-          error,
-          stackTrace,
-        );
       }
     }
     final chatCoordinator = _serviceChatCalendarSyncCoordinator;
@@ -13279,9 +13282,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           calendarJid: selfJid,
           archiveJid: selfJid,
         );
-        if (completed) {
-          await _ensureDirectPersonalCalendarStateStored();
-        }
         _log.info('Calendar rehydration catch-up complete');
         if (!completed) {
           await _emitCalendarArchiveIncompleteWarning();
@@ -13314,9 +13314,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         calendarJid: selfJid,
         archiveJid: selfJid,
       );
-      if (complete) {
-        await _ensureDirectPersonalCalendarStateStored();
-      }
       _log.info('Calendar rehydration query complete');
       if (!complete) {
         await _emitCalendarArchiveIncompleteWarning();
@@ -14928,10 +14925,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (selfPinnerJid == null) {
       return;
     }
-    final chatType = _resolvedChatTypeForPeer(chatJid: chatJid, chat: chat);
-    final referenceKind = chatType == ChatType.groupChat
-        ? MessageReferenceKind.mucStanzaId
-        : MessageReferenceKind.stanzaId;
     final pendingClearAllRetractions = syncSession
         .pendingClearAllRetractionsSnapshot();
     final pendingRetractions = syncSession.pendingRetractionsSnapshot();
@@ -14957,14 +14950,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       )) {
         continue;
       }
-      final reference = LocalMessageReference(
-        kind: referenceKind,
-        value: canonicalMessageId,
-      );
       var pinnedAt = await _dbOpReturning<XmppDatabase, DateTime?>(
         (db) => db.getPinnedMessageClearAllTimestamp(
           chatJid: chatJid,
-          reference: reference,
+          messageReferenceId: canonicalMessageId,
         ),
       );
       if (pinnedAt == null) {
@@ -15020,10 +15009,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       final record = await _dbOpReturning<XmppDatabase, PinEntry?>(
         (db) => db.getMessagePin(
           chatJid: chatJid,
-          reference: LocalMessageReference(
-            kind: referenceKind,
-            value: canonicalMessageId,
-          ),
+          messageReferenceId: canonicalMessageId,
           pinnerJid: selfPinnerJid,
         ),
       );
@@ -15071,10 +15057,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       final record = await _dbOpReturning<XmppDatabase, PinEntry?>(
         (db) => db.getMessagePin(
           chatJid: chatJid,
-          reference: LocalMessageReference(
-            kind: referenceKind,
-            value: canonicalMessageId,
-          ),
+          messageReferenceId: canonicalMessageId,
           pinnerJid: selfPinnerJid,
         ),
       );
@@ -15133,9 +15116,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (outboundMessageId == null) {
       return false;
     }
-    final referenceKind = isGroupChat
-        ? MessageReferenceKind.mucStanzaId
-        : MessageReferenceKind.stanzaId;
     final stanzaId = _connection.generateId();
     final senderJid = _outboundSenderJidForChat(
       chatJid: chatJid,
@@ -15147,10 +15127,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       mox.MessageIdData(stanzaId),
       const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
       PinMessageMutationData(
-        reference: LocalMessageReference(
-          kind: referenceKind,
-          value: outboundMessageId,
-        ),
+        messageId: outboundMessageId,
         pinned: pinned,
         scope: scope,
         timestamp: pinnedAt.toUtc(),
@@ -15197,7 +15174,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       _trackOutboundPinMutation(
         stanzaId: stanzaId,
         chatJid: chatJid,
-        referenceKind: referenceKind,
         messageStanzaId: messageStanzaId,
         pinned: pinned,
         scope: scope,
@@ -15239,13 +15215,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
   Set<String> _pinMessageAliases(Message message) {
     final aliases = <String>{};
-    final directReference = message.pinReference(isGroupChat: false);
+    final directReference = message.pinId(isGroupChat: false);
     if (directReference != null) {
-      aliases.add(directReference.value);
+      aliases.add(directReference);
     }
-    final groupReference = message.pinReference(isGroupChat: true);
+    final groupReference = message.pinId(isGroupChat: true);
     if (groupReference != null) {
-      aliases.add(groupReference.value);
+      aliases.add(groupReference);
     }
     return aliases;
   }
@@ -15296,15 +15272,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return canonicalId;
   }
 
-  Future<LocalMessageReference?> _normalizePinMessageReferenceForChat({
+  Future<String?> _normalizePinMessageReferenceForChat({
     required String chatJid,
     required ChatType chatType,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
   }) async {
-    if (reference.kind == MessageReferenceKind.originId) {
-      return null;
-    }
-    final rawValue = reference.value.trim();
+    final rawValue = messageReferenceId.trim();
     if (rawValue.isEmpty) {
       return null;
     }
@@ -15315,33 +15288,27 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         !_pinReferenceMatchesMessage(
           message: referencedMessage,
           chatType: chatType,
-          reference: reference,
+          messageReferenceId: rawValue,
         )) {
       return null;
     }
     final messageId = await _normalizePinReferenceForChat(
       chatJid: chatJid,
-      messageId: reference.value,
+      messageId: rawValue,
     );
     if (messageId == null) {
       return null;
     }
-    final referenceKind = chatType == ChatType.groupChat
-        ? MessageReferenceKind.mucStanzaId
-        : MessageReferenceKind.stanzaId;
-    return LocalMessageReference(kind: referenceKind, value: messageId);
+    return messageId;
   }
 
   bool _pinReferenceMatchesMessage({
     required Message message,
     required ChatType chatType,
-    required LocalMessageReference reference,
+    required String messageReferenceId,
   }) {
-    final expected = message.pinReference(
-      isGroupChat: chatType == ChatType.groupChat,
-    );
-    return expected?.kind == reference.kind &&
-        expected?.value == reference.value;
+    final expected = message.pinId(isGroupChat: chatType == ChatType.groupChat);
+    return expected == messageReferenceId;
   }
 
   Future<({String canonicalId, Set<String> aliases})>
@@ -15460,7 +15427,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       updatedOutboundMutations[entry.key] = _OutboundPinMutation(
         chatJid: mutation.chatJid,
-        referenceKind: mutation.referenceKind,
         messageStanzaId: canonicalId,
         pinned: mutation.pinned,
         scope: mutation.scope,
@@ -15472,9 +15438,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   String? _pinMessageReferenceId(Message message) {
-    return message
-        .pinReference(isGroupChat: message.trimmedMucStanzaId != null)
-        ?.value;
+    return message.pinId(isGroupChat: message.trimmedMucStanzaId != null);
   }
 
   String _normalizeBase64(String input) {
@@ -15632,7 +15596,8 @@ class _PendingInboundReaction {
 
 class _PendingInboundPinMutation {
   const _PendingInboundPinMutation({
-    required this.reference,
+    required this.messageReferenceId,
+    required this.chatType,
     required this.pinnerJid,
     required this.identityVerified,
     required this.pinned,
@@ -15641,7 +15606,8 @@ class _PendingInboundPinMutation {
     required this.event,
   });
 
-  final LocalMessageReference reference;
+  final String messageReferenceId;
+  final ChatType chatType;
   final String pinnerJid;
   final bool identityVerified;
   final bool pinned;
@@ -15654,7 +15620,8 @@ class _PendingInboundPinMutation {
     required bool identityVerified,
   }) {
     return _PendingInboundPinMutation(
-      reference: reference,
+      messageReferenceId: messageReferenceId,
+      chatType: chatType,
       pinnerJid: pinnerJid,
       identityVerified: identityVerified,
       pinned: pinned,
