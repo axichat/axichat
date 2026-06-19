@@ -18,6 +18,7 @@ class _ChatMessageList extends StatefulWidget {
     ChatTimelineItem item,
     ChatTimelineItem? previous,
     ChatTimelineItem? next,
+    int visualOrder,
   )
   itemBuilder;
   final MessageListOptions messageListOptions;
@@ -32,28 +33,12 @@ class _ChatMessageList extends StatefulWidget {
   State<_ChatMessageList> createState() => _ChatMessageListState();
 }
 
-class _ChatMessageListViewportScope extends InheritedWidget {
-  const _ChatMessageListViewportScope({
-    required this.height,
-    required super.child,
-  });
-
-  final double height;
-
-  static double? maybeOf(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<_ChatMessageListViewportScope>()
-      ?.height;
-
-  @override
-  bool updateShouldNotify(_ChatMessageListViewportScope oldWidget) =>
-      height != oldWidget.height;
-}
-
 class _ChatMessageListRow extends StatefulWidget {
   const _ChatMessageListRow({
     required this.item,
     required this.previousItem,
     required this.nextItem,
+    required this.visualOrder,
     required this.itemBuilder,
     required this.messageListOptions,
     required this.onTimelineItemMounted,
@@ -65,10 +50,12 @@ class _ChatMessageListRow extends StatefulWidget {
   final ChatTimelineItem item;
   final ChatTimelineItem? previousItem;
   final ChatTimelineItem? nextItem;
+  final int visualOrder;
   final Widget Function(
     ChatTimelineItem item,
     ChatTimelineItem? previous,
     ChatTimelineItem? next,
+    int visualOrder,
   )
   itemBuilder;
   final MessageListOptions messageListOptions;
@@ -155,7 +142,12 @@ class _ChatMessageListRowState extends State<_ChatMessageListRow> {
                   date: widget.item.createdAt,
                   messageListOptions: widget.messageListOptions,
                 ),
-        widget.itemBuilder(widget.item, widget.previousItem, widget.nextItem),
+        widget.itemBuilder(
+          widget.item,
+          widget.previousItem,
+          widget.nextItem,
+          widget.visualOrder,
+        ),
       ],
     );
   }
@@ -219,48 +211,47 @@ class _ChatMessageListState extends State<_ChatMessageList> {
                       ? constraints.maxHeight
                       : MediaQuery.sizeOf(context).height;
                   final cacheExtent = viewportExtent * 3;
-                  return _ChatMessageListViewportScope(
-                    height: viewportExtent,
-                    child: ListView.builder(
-                      cacheExtent: cacheExtent,
-                      physics: messageListOptions.scrollPhysics,
-                      padding: EdgeInsets.zero,
-                      controller: _scrollController,
-                      reverse: true,
-                      itemCount:
-                          items.length + (shouldShowLoadEarlierSpinner ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == items.length) {
-                          return messageListOptions.loadEarlierBuilder ??
-                              Padding(
-                                padding: EdgeInsets.all(context.spacing.m),
-                                child: const Center(
-                                  child: AxiProgressIndicator(),
-                                ),
-                              );
-                        }
-                        final ChatTimelineItem? previousItem =
-                            index < items.length - 1 ? items[index + 1] : null;
-                        final ChatTimelineItem? nextItem = index > 0
-                            ? items[index - 1]
-                            : null;
-                        return RepaintBoundary(
-                          key: ValueKey<String>(items[index].id),
-                          child: _ChatMessageListRow(
-                            item: items[index],
-                            previousItem: previousItem,
-                            nextItem: nextItem,
-                            itemBuilder: itemBuilder,
-                            messageListOptions: messageListOptions,
-                            onTimelineItemMounted: widget.onTimelineItemMounted,
-                            onTimelineItemUnmounted:
-                                widget.onTimelineItemUnmounted,
-                            onMessageRowMounted: _handleMessageRowMounted,
-                            onMessageRowUnmounted: _handleMessageRowUnmounted,
-                          ),
-                        );
-                      },
-                    ),
+                  return ListView.builder(
+                    cacheExtent: cacheExtent,
+                    physics: messageListOptions.scrollPhysics,
+                    padding: EdgeInsets.zero,
+                    controller: _scrollController,
+                    reverse: true,
+                    itemCount:
+                        items.length + (shouldShowLoadEarlierSpinner ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == items.length) {
+                        return messageListOptions.loadEarlierBuilder ??
+                            Padding(
+                              padding: EdgeInsets.all(context.spacing.m),
+                              child: const Center(
+                                child: AxiProgressIndicator(),
+                              ),
+                            );
+                      }
+                      final ChatTimelineItem? previousItem =
+                          index < items.length - 1 ? items[index + 1] : null;
+                      final ChatTimelineItem? nextItem = index > 0
+                          ? items[index - 1]
+                          : null;
+                      final visualOrder = items.length - index;
+                      return RepaintBoundary(
+                        key: ValueKey<String>(items[index].id),
+                        child: _ChatMessageListRow(
+                          item: items[index],
+                          previousItem: previousItem,
+                          nextItem: nextItem,
+                          visualOrder: visualOrder,
+                          itemBuilder: itemBuilder,
+                          messageListOptions: messageListOptions,
+                          onTimelineItemMounted: widget.onTimelineItemMounted,
+                          onTimelineItemUnmounted:
+                              widget.onTimelineItemUnmounted,
+                          onMessageRowMounted: _handleMessageRowMounted,
+                          onMessageRowUnmounted: _handleMessageRowUnmounted,
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -400,7 +391,7 @@ Widget debugChatMessageListForTesting({
 }) {
   return _ChatMessageList(
     items: items,
-    itemBuilder: itemBuilder,
+    itemBuilder: (item, previous, next, _) => itemBuilder(item, previous, next),
     messageListOptions: messageListOptions,
     scrollToBottomOptions: scrollToBottomOptions,
     onRenderedMessagesChanged: onRenderedMessagesChanged,

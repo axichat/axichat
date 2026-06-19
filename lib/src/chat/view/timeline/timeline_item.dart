@@ -66,6 +66,7 @@ class _ChatTimelineItemView extends StatelessWidget {
     required this.currentItem,
     required this.previous,
     required this.next,
+    required this.visualOrder,
     required this.state,
     required this.chatEntity,
     required this.currentUserId,
@@ -106,9 +107,6 @@ class _ChatTimelineItemView extends StatelessWidget {
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
     required this.unreadDividerKey,
-    required this.emailWebViewTipTargetMessageId,
-    required this.emailWebViewTipKey,
-    required this.emailWebViewTipScope,
     required this.messageKeys,
     required this.bubbleWidthByMessageId,
     required this.shouldAnimateMessage,
@@ -143,6 +141,7 @@ class _ChatTimelineItemView extends StatelessWidget {
   final ChatTimelineItem currentItem;
   final ChatTimelineItem? previous;
   final ChatTimelineItem? next;
+  final int visualOrder;
   final ChatState state;
   final chat_models.Chat? chatEntity;
   final String? currentUserId;
@@ -183,9 +182,6 @@ class _ChatTimelineItemView extends StatelessWidget {
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
   final GlobalKey unreadDividerKey;
-  final String? emailWebViewTipTargetMessageId;
-  final GlobalKey emailWebViewTipKey;
-  final String emailWebViewTipScope;
   final Map<String, GlobalKey> messageKeys;
   final Map<String, double> bubbleWidthByMessageId;
   final bool Function(Message message) shouldAnimateMessage;
@@ -342,6 +338,23 @@ class _ChatTimelineItemView extends StatelessWidget {
   final void Function(chat_models.Chat chat) onRecipientTap;
   final void Function(String messageId, Size size) onBubbleSizeChanged;
 
+  bool _shouldShowEmailWebViewTip({
+    required ChatTimelineMessageItem timelineMessageItem,
+  }) {
+    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
+      timelineMessageItem.resolvedHtmlBody,
+    );
+    return shouldShowEmailWebViewTipForTesting(
+      isEmailMessage: timelineMessageItem.isEmailMessage,
+      readOnly: readOnly,
+      multiSelectActive: multiSelectActive,
+      isSingleSelection: selectedMessageId != null,
+      normalizedHtmlBody: normalizedHtmlBody,
+      renderedText: timelineMessageItem.renderedText,
+      emailDerivation: emailHtmlDerivationForBody(normalizedHtmlBody),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (currentItem case final ChatTimelineSpecialItem item) {
@@ -396,11 +409,10 @@ class _ChatTimelineItemView extends StatelessWidget {
         shareRequestStatus: shareRequestStatus,
         bubbleRegionRegistry: bubbleRegionRegistry,
         selectionTapRegionGroup: selectionTapRegionGroup,
-        showEmailWebViewTip:
-            emailWebViewTipTargetMessageId ==
-            timelineMessageItem.messageModel.stanzaID,
-        emailWebViewTipKey: emailWebViewTipKey,
-        emailWebViewTipScope: emailWebViewTipScope,
+        emailWebViewTipOrder: visualOrder,
+        showEmailWebViewTip: _shouldShowEmailWebViewTip(
+          timelineMessageItem: timelineMessageItem,
+        ),
         messageKeys: messageKeys,
         bubbleWidthByMessageId: bubbleWidthByMessageId,
         shouldAnimateMessage: shouldAnimateMessage,

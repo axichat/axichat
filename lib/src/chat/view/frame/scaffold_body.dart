@@ -1083,8 +1083,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                       selectedMessageId: owner._selectedMessageId,
                       normalizedXmppSelfJid: normalizedXmppSelfJid,
                       normalizedEmailSelfJid: normalizedEmailSelfJid,
-                      emailWebViewTipTargetMessageId:
-                          owner._emailWebViewTipTargetMessageId,
                       messageFontSize: settingsState.messageTextSize.fontSize,
                       loadingMessages: loadingMessages,
                       hideTimelineUntilInitialReadiness: owner
@@ -1118,8 +1116,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                       bubbleRegionRegistry: owner._bubbleRegionRegistry,
                       selectionTapRegionGroup: owner._selectionTapRegionGroup,
                       unreadDividerKey: owner._unreadDividerKey,
-                      emailWebViewTipKey: owner._emailWebViewTipKey,
-                      emailWebViewTipScope: owner._emailWebViewTipScope,
                       onTimelineItemMounted: owner._handleTimelineItemMounted,
                       onTimelineItemUnmounted:
                           owner._handleTimelineItemUnmounted,

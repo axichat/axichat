@@ -11,6 +11,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_task_drag_onboarding.dart';
 import 'package:axichat/src/calendar/view/tasks/resizable_task_widget.dart';
 import 'calendar_task_geometry.dart';
 import 'calendar_task_draggable.dart';
@@ -72,6 +73,7 @@ class CalendarTaskEntryBindings {
     required this.removeGeometryListener,
     required this.requiresLongPressToDrag,
     required this.longPressToDragDelay,
+    this.dragTipOrder = 0,
   });
 
   final bool isSelectionMode;
@@ -82,6 +84,7 @@ class CalendarTaskEntryBindings {
   final CalendarTaskContextMenuBuilderFactory contextMenuBuilderFactory;
   final bool enableContextMenuLongPress;
   final double resizeHandleExtent;
+  final int dragTipOrder;
   final TaskInteractionController interactionController;
   final ValueListenable<bool> cancelBucketHoverNotifier;
   final ValueListenable<bool> composeWindowDragRegionHoverNotifier;
@@ -322,6 +325,13 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                     : null,
                 onTap: enableInteractions ? _callbacks.onTap : null,
               );
+              final Widget dragTipTarget = CalendarTaskDragTipCandidate(
+                source: CalendarTaskDragTipSource.grid,
+                location: CalendarTaskDragTipLocation.grid,
+                taskId: task.id,
+                order: bindings.dragTipOrder,
+                child: resizable,
+              );
               return CalendarTaskDraggable(
                 task: task,
                 geometry: geometry,
@@ -346,7 +356,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 childWhenDragging: const SizedBox.expand(),
                 requiresLongPress: bindings.requiresLongPressToDrag,
                 longPressDelay: bindings.longPressToDragDelay,
-                child: resizable,
+                child: dragTipTarget,
               );
             }
 

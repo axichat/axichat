@@ -34,20 +34,22 @@ class CalendarMobileSplitScaffold extends StatelessWidget {
     Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AnimatedBuilder(
-          animation: tabController,
-          builder: (context, _) {
-            final bool showingPrimary = tabController.index == 0;
-            return headerBuilder(context, showingPrimary);
-          },
-        ),
         Expanded(
           child: Stack(
             children: [
               TabBarView(
                 controller: tabController,
                 physics: const NeverScrollableScrollPhysics(),
-                children: [primaryPane, secondaryPane],
+                children: [
+                  _CalendarMobilePane(
+                    header: headerBuilder(context, true),
+                    child: primaryPane,
+                  ),
+                  _CalendarMobilePane(
+                    header: headerBuilder(context, false),
+                    child: secondaryPane,
+                  ),
+                ],
               ),
               dragOverlay,
             ],
@@ -66,6 +68,24 @@ class CalendarMobileSplitScaffold extends StatelessWidget {
     }
 
     return content;
+  }
+}
+
+class _CalendarMobilePane extends StatelessWidget {
+  const _CalendarMobilePane({required this.header, required this.child});
+
+  final Widget header;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        Expanded(child: child),
+      ],
+    );
   }
 }
 

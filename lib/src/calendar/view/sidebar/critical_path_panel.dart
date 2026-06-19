@@ -828,7 +828,9 @@ class _FocusedPathTasks extends StatelessWidget {
                 key: ValueKey(task.id),
                 child: CalendarTaskDragTipCandidate(
                   source: CalendarTaskDragTipSource.sidebar,
+                  location: CalendarTaskDragTipLocation.criticalPath,
                   taskId: task.id,
+                  order: index,
                   enabled: showDragTipCandidates,
                   child: taskTileBuilder(
                     task,

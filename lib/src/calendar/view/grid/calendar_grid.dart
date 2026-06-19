@@ -2066,6 +2066,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required CalendarTask task,
     required double stepHeight,
     required double hourHeight,
+    required int dragTipOrder,
   }) {
     final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
       context,
@@ -2086,6 +2087,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           : (_) => null,
       enableContextMenuLongPress: hasMouse,
       resizeHandleExtent: hasMouse ? _desktopHandleExtent : _touchHandleExtent,
+      dragTipOrder: dragTipOrder,
       interactionController: _taskInteractionController,
       cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
       composeWindowDragRegionHoverNotifier:
@@ -4049,6 +4051,7 @@ class _CalendarGridContent extends StatelessWidget {
                   task: task,
                   stepHeight: stepHeight,
                   hourHeight: resolvedHourHeight,
+                  dragTipOrder: taskEntries.length,
                 );
 
             final DateTime columnDate = DateTime(

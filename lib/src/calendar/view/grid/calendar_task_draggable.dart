@@ -277,38 +277,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       onPointerCancel: _handlePointerCancel,
       child: widget.child,
     );
-    Widget wrapDragTip(Widget child) {
-      return CalendarTaskDragTipCandidate(
-        source: CalendarTaskDragTipSource.grid,
-        taskId: widget.task.id,
-        child: child,
-      );
-    }
 
     if (widget.requiresLongPress) {
-      return wrapDragTip(
-        _TaskTargetAwareLongPressDraggable<CalendarDragPayload>(
-          interactionController: _controller,
-          taskId: widget.task.id,
-          data: payload,
-          dragAnchorStrategy: _dragAnchorStrategy,
-          maxSimultaneousDrags: canDrag ? 1 : 0,
-          feedback: widget.feedbackBuilder(context, widget.task, _geometry),
-          rootOverlay: true,
-          childWhenDragging:
-              widget.childWhenDragging ?? const SizedBox.expand(),
-          onDragStarted: _handleDragStarted,
-          onDragUpdate: _handleDragUpdate,
-          onDragEnd: (details) => _handleDragFinished(cancelled: false),
-          onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
-          delay: widget.longPressDelay ?? kLongPressTimeout,
-          child: interactiveChild,
-        ),
-      );
-    }
-
-    return wrapDragTip(
-      _TaskTargetAwareDraggable<CalendarDragPayload>(
+      return _TaskTargetAwareLongPressDraggable<CalendarDragPayload>(
         interactionController: _controller,
         taskId: widget.task.id,
         data: payload,
@@ -321,8 +292,25 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         onDragUpdate: _handleDragUpdate,
         onDragEnd: (details) => _handleDragFinished(cancelled: false),
         onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
+        delay: widget.longPressDelay ?? kLongPressTimeout,
         child: interactiveChild,
-      ),
+      );
+    }
+
+    return _TaskTargetAwareDraggable<CalendarDragPayload>(
+      interactionController: _controller,
+      taskId: widget.task.id,
+      data: payload,
+      dragAnchorStrategy: _dragAnchorStrategy,
+      maxSimultaneousDrags: canDrag ? 1 : 0,
+      feedback: widget.feedbackBuilder(context, widget.task, _geometry),
+      rootOverlay: true,
+      childWhenDragging: widget.childWhenDragging ?? const SizedBox.expand(),
+      onDragStarted: _handleDragStarted,
+      onDragUpdate: _handleDragUpdate,
+      onDragEnd: (details) => _handleDragFinished(cancelled: false),
+      onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
+      child: interactiveChild,
     );
   }
 

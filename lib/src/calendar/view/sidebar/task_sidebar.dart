@@ -5016,6 +5016,7 @@ class _TaskSectionsPanel extends StatelessWidget {
             ),
             child: _SidebarTaskList(
               tasks: unscheduledTasks,
+              dragTipLocation: CalendarTaskDragTipLocation.unscheduled,
               emptyLabel: context.l10n.calendarUnscheduledEmptyLabel,
               emptyHint: context.l10n.calendarUnscheduledEmptyHint,
               onDragHover: onTaskListHover,
@@ -5055,6 +5056,7 @@ class _TaskSectionsPanel extends StatelessWidget {
             ),
             child: _SidebarTaskList(
               tasks: reminderTasks,
+              dragTipLocation: CalendarTaskDragTipLocation.reminders,
               emptyLabel: context.l10n.calendarRemindersEmptyLabel,
               emptyHint: context.l10n.calendarRemindersEmptyHint,
               onDragHover: onTaskListHover,
@@ -5429,6 +5431,7 @@ class _CollapsedTaskPreview extends StatelessWidget {
 class _SidebarTaskList extends StatelessWidget {
   const _SidebarTaskList({
     required this.tasks,
+    required this.dragTipLocation,
     required this.emptyLabel,
     required this.emptyHint,
     required this.onDragHover,
@@ -5442,6 +5445,7 @@ class _SidebarTaskList extends StatelessWidget {
   });
 
   final List<CalendarTask> tasks;
+  final CalendarTaskDragTipLocation dragTipLocation;
   final String emptyLabel;
   final String? emptyHint;
   final _CalendarDragDetailsCallback onDragHover;
@@ -5514,7 +5518,9 @@ class _SidebarTaskList extends StatelessWidget {
                       key: ValueKey(task.id),
                       child: CalendarTaskDragTipCandidate(
                         source: CalendarTaskDragTipSource.sidebar,
+                        location: dragTipLocation,
                         taskId: task.id,
+                        order: index,
                         enabled: showDragTipCandidates,
                         child: tile,
                       ),
@@ -5540,7 +5546,9 @@ class _SidebarTaskList extends StatelessWidget {
                       key: ValueKey(task.id),
                       child: CalendarTaskDragTipCandidate(
                         source: CalendarTaskDragTipSource.sidebar,
+                        location: dragTipLocation,
                         taskId: task.id,
+                        order: index,
                         enabled: showDragTipCandidates,
                         child: tile,
                       ),

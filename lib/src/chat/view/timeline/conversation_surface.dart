@@ -194,7 +194,6 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.selectedMessageId,
     required this.normalizedXmppSelfJid,
     required this.normalizedEmailSelfJid,
-    required this.emailWebViewTipTargetMessageId,
     required this.messageFontSize,
     required this.loadingMessages,
     required this.hideTimelineUntilInitialReadiness,
@@ -218,8 +217,6 @@ class _ChatMainConversationSection extends StatelessWidget {
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
     required this.unreadDividerKey,
-    required this.emailWebViewTipKey,
-    required this.emailWebViewTipScope,
     required this.onTimelineItemMounted,
     required this.onTimelineItemUnmounted,
     required this.messageKeys,
@@ -318,7 +315,6 @@ class _ChatMainConversationSection extends StatelessWidget {
   final String? selectedMessageId;
   final String? normalizedXmppSelfJid;
   final String? normalizedEmailSelfJid;
-  final String? emailWebViewTipTargetMessageId;
   final double messageFontSize;
   final bool loadingMessages;
   final bool hideTimelineUntilInitialReadiness;
@@ -342,8 +338,6 @@ class _ChatMainConversationSection extends StatelessWidget {
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
   final GlobalKey unreadDividerKey;
-  final GlobalKey emailWebViewTipKey;
-  final String emailWebViewTipScope;
   final ValueChanged<String> onTimelineItemMounted;
   final ValueChanged<String> onTimelineItemUnmounted;
   final Map<String, GlobalKey> messageKeys;
@@ -555,215 +549,225 @@ class _ChatMainConversationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _EmailWebViewTipShowcaseHost(
+    return _EmailWebViewTipHost(
       active: active,
       identity: chatEntity?.jid ?? '',
       accountJid: profileJid,
-      targetMessageId: emailWebViewTipTargetMessageId,
-      showcaseKey: emailWebViewTipKey,
-      showcaseScope: emailWebViewTipScope,
       lowMotion: context.watch<SettingsCubit>().state.lowMotion,
-      builder: (context, activeEmailWebViewTipTargetMessageId) =>
-          _ChatConversationPane(
-            pinnedPanel: _ChatPinnedPanelSection(
-              chatEntity: chatEntity,
-              visible: pinnedPanelVisible,
-              maxHeight: pinnedPanelMaxHeight,
-              accountJid: accountJidForPins,
-              pinnedMessages: state.pinnedMessages,
-              pinnedMessagesStatus: state.pinnedMessagesStatus,
-              onClose: onClosePinnedMessages,
-              canTogglePins: canTogglePins,
-              canShowCalendarTasks: chatCalendarAvailable,
-              canAddToPersonalCalendar: personalCalendarAvailable,
-              canAddToChatCalendar: chatCalendarAvailable,
-              onCopyTaskToPersonalCalendar: onCopyTaskToPersonalCalendar,
-              onCopyCriticalPathToPersonalCalendar:
-                  onCopyCriticalPathToPersonalCalendar,
-              roomState: state.roomState,
-              metadataFor: metadataFor,
-              metadataPendingFor: metadataPendingFor,
-              attachmentsBlocked: attachmentsBlockedForChat,
-              isOneTimeAttachmentAllowed: isOneTimeAttachmentAllowed,
-              shouldAllowAttachment: shouldAllowAttachment,
-              onConfirmAttachmentDownload: onConfirmAttachmentDownload,
-              onApproveAttachment: onApproveAttachment,
-              previewMessageIdPrefix: pinnedPreviewMessagePrefix,
-              isGroupChat: isGroupChat,
-              isEmailChat: isEmailChat,
-              resolvedEmailSelfJid: resolvedEmailSelfJid,
-              currentUserId: currentUserId,
-              selfUserId: selfUserId,
-              selfDisplayName: selfDisplayName,
-              selfAvatarPath: selfAvatarPath,
-              myOccupantJid: myOccupantJid,
-              selfNick: selfNick,
-              roomMemberSections: state.roomMemberSections,
-              chat: state.chat,
-              messageById: messageById,
-              shareContexts: shareContexts,
-              shareReplies: shareReplies,
-              emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
-              emailFullHtmlUnavailable: state.emailFullHtmlUnavailable,
-              emailQuotedTextByDeltaId: state.emailQuotedTextByDeltaId,
-              revokedInviteTokens: revokedInviteTokens,
-              acceptedInviteTokens: acceptedInviteTokens,
-              supportsMarkers: supportsMarkers,
-              supportsReceipts: supportsReceipts,
-              attachmentsForMessage: attachmentsForMessage,
-              reactionPreviewsForMessage: reactionPreviewsForMessage,
-              participantsForBanner: participantsForBanner,
-              avatarPathForBareJid: avatarPathForBareJid,
-              ownerJidForShare: (shareId) =>
-                  availabilityShareOwnersById[shareId] ??
-                  availabilityCoordinator?.ownerJidForShare(shareId),
-              profileJid: context.read<ProfileCubit>().state.jid,
-              onMessageLinkTap: onMessageLinkTap,
-            ),
-            timelineViewport: _ChatTimelineViewport(
-              loadingMessages: loadingMessages,
-              hideTimelineUntilInitialReadiness:
-                  hideTimelineUntilInitialReadiness,
-              messageListKey: messageListKey,
-              onPointerMove: onPointerMove,
-              onPointerUp: onPointerUp,
-              onPointerCancel: onPointerCancel,
-              messageList: _ChatMainTimelineList(
-                items: mainTimelineItems,
-                messageListOptions: messageListOptions,
-                onRenderedMessagesChanged: onRenderedMessagesChanged,
-                renderedMessagesHydrationKey: renderedMessagesHydrationKey,
-                state: state,
-                chatEntity: chatEntity,
-                currentUserId: currentUserId,
-                selfNick: selfNick,
-                selfXmppJid: selfXmppJid,
-                myOccupantJid: myOccupantJid,
-                resolvedDirectChatDisplayName: resolvedDirectChatDisplayName,
-                readOnly: readOnly,
-                isGroupChat: isGroupChat,
-                isEmailChat: isEmailChat,
-                isWelcomeChat: isWelcomeChat,
-                attachmentsBlockedForChat: attachmentsBlockedForChat,
-                multiSelectActive: multiSelectActive,
-                selectedMessageId: selectedMessageId,
-                canTogglePins: canTogglePins,
-                availabilityActorId: availabilityActorId,
-                availabilityShareOwnersById: availabilityShareOwnersById,
-                availabilityCoordinator: availabilityCoordinator,
-                normalizedXmppSelfJid: normalizedXmppSelfJid,
-                normalizedEmailSelfJid: normalizedEmailSelfJid,
-                personalCalendarAvailable: personalCalendarAvailable,
-                chatCalendarAvailable: chatCalendarAvailable,
-                messageFontSize: messageFontSize,
-                availableWidth: availableWidth,
-                inboundMessageRowMaxWidth: inboundMessageRowMaxWidth,
-                outboundMessageRowMaxWidth: outboundMessageRowMaxWidth,
-                inboundClampedBubbleWidth: inboundClampedBubbleWidth,
-                outboundClampedBubbleWidth: outboundClampedBubbleWidth,
-                messageRowMaxWidth: messageRowMaxWidth,
-                selectionExtrasPreferredMaxWidth:
-                    selectionExtrasPreferredMaxWidth,
-                overlayQuotedMessage: overlayQuotedMessage,
-                overlayQuotedSenderLabel: overlayQuotedSenderLabel,
-                overlayQuotedIsSelf: overlayQuotedIsSelf,
-                overlayNotices: overlayNotices,
-                composerOverlayBanner: composerOverlayBanner,
-                overlayAnimationDuration: overlayAnimationDuration,
-                shareRequestStatus: shareRequestStatus,
-                bubbleRegionRegistry: bubbleRegionRegistry,
-                selectionTapRegionGroup: selectionTapRegionGroup,
-                unreadDividerKey: unreadDividerKey,
-                emailWebViewTipTargetMessageId:
-                    activeEmailWebViewTipTargetMessageId,
-                emailWebViewTipKey: emailWebViewTipKey,
-                emailWebViewTipScope: emailWebViewTipScope,
-                onTimelineItemMounted: onTimelineItemMounted,
-                onTimelineItemUnmounted: onTimelineItemUnmounted,
-                messageKeys: messageKeys,
-                bubbleWidthByMessageId: bubbleWidthByMessageId,
-                shouldAnimateMessage: shouldAnimateMessage,
-                isPinnedMessage: isPinnedMessage,
-                isPinActionActiveMessage: isPinActionActiveMessage,
-                canTogglePinMessage: canTogglePinMessage,
-                isImportantMessage: isImportantMessage,
-                onTapOutsideRequested: onTapOutsideRequested,
-                resolveViewData: resolveViewData,
-                resolveInteractionData: resolveInteractionData,
-                composeBubbleContent: composeBubbleContent,
-                onReplyRequested: onReplyRequested,
-                onForwardRequested: onForwardRequested,
-                onCopyRequested: onCopyRequested,
-                onShareRequested: onShareRequested,
-                onAddToCalendarRequested: onAddToCalendarRequested,
-                onDetailsRequested: onDetailsRequested,
-                onStartMultiSelectRequested: onStartMultiSelectRequested,
-                onResendRequested: onResendRequested,
-                onEditRequested: onEditRequested,
-                onAddToFolderRequested: onAddToFolderRequested,
-                onPinToggleRequested: onPinToggleRequested,
-                onRevokeInviteRequested: onRevokeInviteRequested,
-                onBubbleTapRequested: onBubbleTapRequested,
-                onToggleMultiSelectRequested: onToggleMultiSelectRequested,
-                onToggleQuickReactionRequested: onToggleQuickReactionRequested,
-                onReactionSelectionRequested: onReactionSelectionRequested,
-                onRecipientTap: onRecipientTap,
-                onBubbleSizeChanged: onBubbleSizeChanged,
-              ),
-              typingVisible: typingVisible,
-              typingAvatars: typingAvatars,
-              typingAvatarPaths: typingAvatarPaths,
-              quotedMessage: overlayQuotedMessage,
-              quotedSenderLabel: overlayQuotedSenderLabel,
-              quotedIsSelf: overlayQuotedIsSelf,
-              onClearQuote: onClearQuote,
-              notices: overlayNotices,
-              banner: composerOverlayBanner,
-              overlayAnimationDuration: overlayAnimationDuration,
-            ),
-            bottomPane: _ChatComposerBottomPane(
-              maxHeight: bottomPaneMaxHeight,
-              onSizeChange: onBottomPaneSizeChange,
-              child: bottomContent,
-            ),
+      alwaysShow: false,
+      builder: (context) => _ChatConversationPane(
+        pinnedPanel: _ChatPinnedPanelSection(
+          chatEntity: chatEntity,
+          visible: pinnedPanelVisible,
+          maxHeight: pinnedPanelMaxHeight,
+          accountJid: accountJidForPins,
+          pinnedMessages: state.pinnedMessages,
+          pinnedMessagesStatus: state.pinnedMessagesStatus,
+          onClose: onClosePinnedMessages,
+          canTogglePins: canTogglePins,
+          canShowCalendarTasks: chatCalendarAvailable,
+          canAddToPersonalCalendar: personalCalendarAvailable,
+          canAddToChatCalendar: chatCalendarAvailable,
+          onCopyTaskToPersonalCalendar: onCopyTaskToPersonalCalendar,
+          onCopyCriticalPathToPersonalCalendar:
+              onCopyCriticalPathToPersonalCalendar,
+          roomState: state.roomState,
+          metadataFor: metadataFor,
+          metadataPendingFor: metadataPendingFor,
+          attachmentsBlocked: attachmentsBlockedForChat,
+          isOneTimeAttachmentAllowed: isOneTimeAttachmentAllowed,
+          shouldAllowAttachment: shouldAllowAttachment,
+          onConfirmAttachmentDownload: onConfirmAttachmentDownload,
+          onApproveAttachment: onApproveAttachment,
+          previewMessageIdPrefix: pinnedPreviewMessagePrefix,
+          isGroupChat: isGroupChat,
+          isEmailChat: isEmailChat,
+          resolvedEmailSelfJid: resolvedEmailSelfJid,
+          currentUserId: currentUserId,
+          selfUserId: selfUserId,
+          selfDisplayName: selfDisplayName,
+          selfAvatarPath: selfAvatarPath,
+          myOccupantJid: myOccupantJid,
+          selfNick: selfNick,
+          roomMemberSections: state.roomMemberSections,
+          chat: state.chat,
+          messageById: messageById,
+          shareContexts: shareContexts,
+          shareReplies: shareReplies,
+          emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+          emailFullHtmlUnavailable: state.emailFullHtmlUnavailable,
+          emailQuotedTextByDeltaId: state.emailQuotedTextByDeltaId,
+          revokedInviteTokens: revokedInviteTokens,
+          acceptedInviteTokens: acceptedInviteTokens,
+          supportsMarkers: supportsMarkers,
+          supportsReceipts: supportsReceipts,
+          attachmentsForMessage: attachmentsForMessage,
+          reactionPreviewsForMessage: reactionPreviewsForMessage,
+          participantsForBanner: participantsForBanner,
+          avatarPathForBareJid: avatarPathForBareJid,
+          ownerJidForShare: (shareId) =>
+              availabilityShareOwnersById[shareId] ??
+              availabilityCoordinator?.ownerJidForShare(shareId),
+          profileJid: context.read<ProfileCubit>().state.jid,
+          onMessageLinkTap: onMessageLinkTap,
+        ),
+        timelineViewport: _ChatTimelineViewport(
+          loadingMessages: loadingMessages,
+          hideTimelineUntilInitialReadiness: hideTimelineUntilInitialReadiness,
+          messageListKey: messageListKey,
+          onPointerMove: onPointerMove,
+          onPointerUp: onPointerUp,
+          onPointerCancel: onPointerCancel,
+          messageList: _ChatMainTimelineList(
+            items: mainTimelineItems,
+            messageListOptions: messageListOptions,
+            onRenderedMessagesChanged: onRenderedMessagesChanged,
+            renderedMessagesHydrationKey: renderedMessagesHydrationKey,
+            state: state,
+            chatEntity: chatEntity,
+            currentUserId: currentUserId,
+            selfNick: selfNick,
+            selfXmppJid: selfXmppJid,
+            myOccupantJid: myOccupantJid,
+            resolvedDirectChatDisplayName: resolvedDirectChatDisplayName,
+            readOnly: readOnly,
+            isGroupChat: isGroupChat,
+            isEmailChat: isEmailChat,
+            isWelcomeChat: isWelcomeChat,
+            attachmentsBlockedForChat: attachmentsBlockedForChat,
+            multiSelectActive: multiSelectActive,
+            selectedMessageId: selectedMessageId,
+            canTogglePins: canTogglePins,
+            availabilityActorId: availabilityActorId,
+            availabilityShareOwnersById: availabilityShareOwnersById,
+            availabilityCoordinator: availabilityCoordinator,
+            normalizedXmppSelfJid: normalizedXmppSelfJid,
+            normalizedEmailSelfJid: normalizedEmailSelfJid,
+            personalCalendarAvailable: personalCalendarAvailable,
+            chatCalendarAvailable: chatCalendarAvailable,
+            messageFontSize: messageFontSize,
+            availableWidth: availableWidth,
+            inboundMessageRowMaxWidth: inboundMessageRowMaxWidth,
+            outboundMessageRowMaxWidth: outboundMessageRowMaxWidth,
+            inboundClampedBubbleWidth: inboundClampedBubbleWidth,
+            outboundClampedBubbleWidth: outboundClampedBubbleWidth,
+            messageRowMaxWidth: messageRowMaxWidth,
+            selectionExtrasPreferredMaxWidth: selectionExtrasPreferredMaxWidth,
+            overlayQuotedMessage: overlayQuotedMessage,
+            overlayQuotedSenderLabel: overlayQuotedSenderLabel,
+            overlayQuotedIsSelf: overlayQuotedIsSelf,
+            overlayNotices: overlayNotices,
+            composerOverlayBanner: composerOverlayBanner,
+            overlayAnimationDuration: overlayAnimationDuration,
+            shareRequestStatus: shareRequestStatus,
+            bubbleRegionRegistry: bubbleRegionRegistry,
+            selectionTapRegionGroup: selectionTapRegionGroup,
+            unreadDividerKey: unreadDividerKey,
+            onTimelineItemMounted: onTimelineItemMounted,
+            onTimelineItemUnmounted: onTimelineItemUnmounted,
+            messageKeys: messageKeys,
+            bubbleWidthByMessageId: bubbleWidthByMessageId,
+            shouldAnimateMessage: shouldAnimateMessage,
+            isPinnedMessage: isPinnedMessage,
+            isPinActionActiveMessage: isPinActionActiveMessage,
+            canTogglePinMessage: canTogglePinMessage,
+            isImportantMessage: isImportantMessage,
+            onTapOutsideRequested: onTapOutsideRequested,
+            resolveViewData: resolveViewData,
+            resolveInteractionData: resolveInteractionData,
+            composeBubbleContent: composeBubbleContent,
+            onReplyRequested: onReplyRequested,
+            onForwardRequested: onForwardRequested,
+            onCopyRequested: onCopyRequested,
+            onShareRequested: onShareRequested,
+            onAddToCalendarRequested: onAddToCalendarRequested,
+            onDetailsRequested: onDetailsRequested,
+            onStartMultiSelectRequested: onStartMultiSelectRequested,
+            onResendRequested: onResendRequested,
+            onEditRequested: onEditRequested,
+            onAddToFolderRequested: onAddToFolderRequested,
+            onPinToggleRequested: onPinToggleRequested,
+            onRevokeInviteRequested: onRevokeInviteRequested,
+            onBubbleTapRequested: onBubbleTapRequested,
+            onToggleMultiSelectRequested: onToggleMultiSelectRequested,
+            onToggleQuickReactionRequested: onToggleQuickReactionRequested,
+            onReactionSelectionRequested: onReactionSelectionRequested,
+            onRecipientTap: onRecipientTap,
+            onBubbleSizeChanged: onBubbleSizeChanged,
           ),
+          typingVisible: typingVisible,
+          typingAvatars: typingAvatars,
+          typingAvatarPaths: typingAvatarPaths,
+          quotedMessage: overlayQuotedMessage,
+          quotedSenderLabel: overlayQuotedSenderLabel,
+          quotedIsSelf: overlayQuotedIsSelf,
+          onClearQuote: onClearQuote,
+          notices: overlayNotices,
+          banner: composerOverlayBanner,
+          overlayAnimationDuration: overlayAnimationDuration,
+        ),
+        bottomPane: _ChatComposerBottomPane(
+          maxHeight: bottomPaneMaxHeight,
+          onSizeChange: onBottomPaneSizeChange,
+          child: bottomContent,
+        ),
+      ),
     );
   }
 }
 
-class _EmailWebViewTipShowcaseHost extends StatefulWidget {
-  const _EmailWebViewTipShowcaseHost({
+class _EmailWebViewTipHost extends StatefulWidget {
+  const _EmailWebViewTipHost({
     required this.active,
     required this.identity,
     required this.accountJid,
-    required this.targetMessageId,
-    required this.showcaseKey,
-    required this.showcaseScope,
     required this.lowMotion,
     required this.builder,
+    this.alwaysShow = false,
   });
 
   final bool active;
   final Object identity;
   final String? accountJid;
-  final String? targetMessageId;
-  final GlobalKey showcaseKey;
-  final String showcaseScope;
   final bool lowMotion;
-  final Widget Function(BuildContext context, String? targetMessageId) builder;
+  final WidgetBuilder builder;
+  final bool alwaysShow;
 
   @override
-  State<_EmailWebViewTipShowcaseHost> createState() =>
-      _EmailWebViewTipShowcaseHostState();
+  State<_EmailWebViewTipHost> createState() => _EmailWebViewTipHostState();
 }
 
-class _EmailWebViewTipShowcaseHostState
-    extends State<_EmailWebViewTipShowcaseHost> {
+@visibleForTesting
+bool emailWebViewTipShownFromStoredForTesting({
+  required bool storedShown,
+  required bool alwaysShow,
+  bool completedThisSession = false,
+}) {
+  return _emailWebViewTipShownFromStored(
+    storedShown: storedShown,
+    alwaysShow: alwaysShow,
+    completedThisSession: completedThisSession,
+  );
+}
+
+bool _emailWebViewTipShownFromStored({
+  required bool storedShown,
+  required bool alwaysShow,
+  required bool completedThisSession,
+}) {
+  if (alwaysShow) {
+    return false;
+  }
+  return completedThisSession || storedShown;
+}
+
+class _EmailWebViewTipHostState extends State<_EmailWebViewTipHost> {
   bool _tipShown = true;
-  bool _tipDismissedForSession = false;
-  bool _startScheduled = false;
+  bool _tipStateLoaded = false;
+  bool _tipCompletedThisSession = false;
   String? _loadedAccountJid;
-  String? _startedTargetMessageId;
+
+  bool get _tipPending => widget.active && _tipStateLoaded && !_tipShown;
 
   @override
   void initState() {
@@ -772,55 +776,48 @@ class _EmailWebViewTipShowcaseHostState
   }
 
   @override
-  void didUpdateWidget(covariant _EmailWebViewTipShowcaseHost oldWidget) {
+  void didUpdateWidget(covariant _EmailWebViewTipHost oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.accountJid != widget.accountJid) {
-      _tipShown = true;
-      _tipDismissedForSession = false;
-      _loadedAccountJid = null;
-      _startedTargetMessageId = null;
-      _loadTipState();
-      return;
+      _tipCompletedThisSession = false;
     }
-    if (oldWidget.active != widget.active ||
+    if (oldWidget.accountJid != widget.accountJid ||
+        oldWidget.active != widget.active ||
         oldWidget.identity != widget.identity ||
-        oldWidget.targetMessageId != widget.targetMessageId) {
-      _startedTargetMessageId = null;
-    }
-    if ((oldWidget.active != widget.active && widget.active) ||
-        oldWidget.identity != widget.identity) {
-      _tipDismissedForSession = false;
+        oldWidget.alwaysShow != widget.alwaysShow) {
+      _tipShown = true;
+      _tipStateLoaded = false;
+      _loadedAccountJid = null;
+      _loadTipState();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final targetMessageId =
-        _tipShown || _tipDismissedForSession || !widget.active
-        ? null
-        : widget.targetMessageId;
-    return AxiShowcaseBoundary(
-      active: targetMessageId != null,
-      identity: '${widget.identity}|${targetMessageId ?? ''}',
+    return OnboardingTipArena(
+      kind: OnboardingTipKind.emailWebView,
+      enabled: _tipPending,
+      identity: widget.identity,
       lowMotion: widget.lowMotion,
-      scope: widget.showcaseScope,
-      onDismiss: _handleShowcaseDismissed,
-      onTargetInteraction: _markTipShown,
-      disableBarrierInteraction: true,
-      child: Builder(
-        builder: (context) {
-          if (targetMessageId != null) {
-            _scheduleStart(context);
-          }
-          return widget.builder(context, targetMessageId);
-        },
-      ),
+      onCompleted: _markTipShown,
+      child: Builder(builder: widget.builder),
     );
   }
 
   void _loadTipState() {
     final accountJid = widget.accountJid;
+    if (!widget.active || accountJid == null || accountJid.trim().isEmpty) {
+      _loadedAccountJid = null;
+      _tipShown = true;
+      _tipStateLoaded = true;
+      return;
+    }
     _loadedAccountJid = accountJid;
+    if (widget.alwaysShow) {
+      _tipShown = false;
+      _tipStateLoaded = true;
+      return;
+    }
     final settingsCubit = context.read<SettingsCubit>();
     unawaited(
       settingsCubit.emailWebViewTipShownFor(accountJid).then((shown) {
@@ -828,73 +825,29 @@ class _EmailWebViewTipShowcaseHostState
           return;
         }
         setState(() {
-          _tipShown = shown;
-          _tipDismissedForSession = false;
+          _tipShown = _emailWebViewTipShownFromStored(
+            storedShown: shown,
+            alwaysShow: false,
+            completedThisSession: _tipCompletedThisSession,
+          );
+          _tipStateLoaded = true;
         });
       }),
     );
-  }
-
-  void _scheduleStart(BuildContext controllerContext) {
-    final targetMessageId = widget.targetMessageId;
-    if (_tipShown ||
-        _tipDismissedForSession ||
-        !widget.active ||
-        targetMessageId == null ||
-        _startedTargetMessageId == targetMessageId ||
-        _startScheduled) {
-      return;
-    }
-    _startScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startScheduled = false;
-      if (!mounted ||
-          _tipShown ||
-          _tipDismissedForSession ||
-          !widget.active ||
-          widget.targetMessageId != targetMessageId ||
-          _startedTargetMessageId == targetMessageId) {
-        return;
-      }
-      final controller = AxiShowcaseController.maybeOf(controllerContext);
-      if (controller == null) {
-        return;
-      }
-      if (controller.start([widget.showcaseKey])) {
-        _startedTargetMessageId = targetMessageId;
-      }
-    });
-  }
-
-  void _dismissTipForSession() {
-    if (!mounted || _tipShown || _tipDismissedForSession) {
-      return;
-    }
-    setState(() {
-      _tipDismissedForSession = true;
-      _startedTargetMessageId = null;
-    });
-  }
-
-  void _handleShowcaseDismissed(
-    GlobalKey? key,
-    AxiShowcaseDismissReason reason,
-  ) {
-    if (key != widget.showcaseKey || reason != AxiShowcaseDismissReason.user) {
-      return;
-    }
-    _dismissTipForSession();
   }
 
   void _markTipShown() {
     if (!mounted || _tipShown) {
       return;
     }
+    _tipCompletedThisSession = true;
     setState(() {
       _tipShown = true;
-      _tipDismissedForSession = false;
-      _startedTargetMessageId = null;
+      _tipStateLoaded = true;
     });
+    if (widget.alwaysShow) {
+      return;
+    }
     unawaited(
       context.read<SettingsCubit>().markEmailWebViewTipShownFor(
         widget.accountJid,

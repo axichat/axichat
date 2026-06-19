@@ -388,8 +388,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
     required this.showEmailWebViewTip,
-    required this.emailWebViewTipKey,
-    required this.emailWebViewTipScope,
+    required this.emailWebViewTipOrder,
     required this.messageKeys,
     required this.bubbleWidthByMessageId,
     required this.shouldAnimateMessage,
@@ -460,8 +459,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
   final bool showEmailWebViewTip;
-  final GlobalKey emailWebViewTipKey;
-  final String emailWebViewTipScope;
+  final int emailWebViewTipOrder;
   final Map<String, GlobalKey> messageKeys;
   final Map<String, double> bubbleWidthByMessageId;
   final bool Function(Message message) shouldAnimateMessage;
@@ -751,8 +749,7 @@ class _ChatTimelineMessageInteractionView extends StatelessWidget {
       bubbleRegionRegistry: bubbleRegionRegistry,
       selectionTapRegionGroup: selectionTapRegionGroup,
       showEmailWebViewTip: showEmailWebViewTip,
-      emailWebViewTipKey: emailWebViewTipKey,
-      emailWebViewTipScope: emailWebViewTipScope,
+      emailWebViewTipOrder: emailWebViewTipOrder,
       rowKey: rowKey,
       measuredBubbleWidth: measuredBubbleWidth,
       animate: animate,
@@ -841,8 +838,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
     required this.bubbleRegionRegistry,
     required this.selectionTapRegionGroup,
     required this.showEmailWebViewTip,
-    required this.emailWebViewTipKey,
-    required this.emailWebViewTipScope,
+    required this.emailWebViewTipOrder,
     required this.rowKey,
     required this.measuredBubbleWidth,
     required this.animate,
@@ -896,8 +892,7 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
   final _BubbleRegionRegistry bubbleRegionRegistry;
   final Object selectionTapRegionGroup;
   final bool showEmailWebViewTip;
-  final GlobalKey emailWebViewTipKey;
-  final String emailWebViewTipScope;
+  final int emailWebViewTipOrder;
   final Key? rowKey;
   final double? measuredBubbleWidth;
   final bool animate;
@@ -1099,8 +1094,8 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
         : null;
     final Widget Function(Widget child)? bubbleWrapper = showEmailWebViewTip
         ? (child) => _EmailWebViewTipTarget(
-            showcaseKey: emailWebViewTipKey,
-            showcaseScope: emailWebViewTipScope,
+            messageId: messageModel.stanzaID,
+            order: emailWebViewTipOrder,
             onTargetTap: onBubbleTap,
             child: child,
           )
@@ -1145,118 +1140,27 @@ class _ChatTimelineMessageChromeView extends StatelessWidget {
 
 class _EmailWebViewTipTarget extends StatelessWidget {
   const _EmailWebViewTipTarget({
-    required this.showcaseKey,
-    required this.showcaseScope,
+    required this.messageId,
+    required this.order,
     required this.onTargetTap,
     required this.child,
   });
 
-  final GlobalKey showcaseKey;
-  final String showcaseScope;
+  final String messageId;
+  final int order;
   final VoidCallback? onTargetTap;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final targetPadding = EdgeInsets.all(context.spacing.xs);
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        child,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: _EmailWebViewTipTargetOverlay(
-              showcaseKey: showcaseKey,
-              showcaseScope: showcaseScope,
-              targetPadding: targetPadding,
-              onTargetTap: onTargetTap,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EmailWebViewTipTargetOverlay extends StatelessWidget {
-  const _EmailWebViewTipTargetOverlay({
-    required this.showcaseKey,
-    required this.showcaseScope,
-    required this.targetPadding,
-    required this.onTargetTap,
-  });
-
-  final GlobalKey showcaseKey;
-  final String showcaseScope;
-  final EdgeInsets targetPadding;
-  final VoidCallback? onTargetTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final viewportHeight =
-        _ChatMessageListViewportScope.maybeOf(context) ??
-        MediaQuery.sizeOf(context).height;
-    final maxTargetHeight = math.max(
-      0.0,
-      viewportHeight - targetPadding.vertical,
-    );
-    final motion = context.motion;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final bubbleHeight = constraints.hasBoundedHeight
-            ? constraints.maxHeight
-            : maxTargetHeight;
-        final targetHeight = _emailWebViewTipTargetHeight(
-          bubbleHeight: bubbleHeight,
-          viewportHeight: viewportHeight,
-          targetPaddingVertical: targetPadding.vertical,
-        );
-        if (!constraints.hasBoundedWidth ||
-            constraints.maxWidth <= 0.0 ||
-            targetHeight <= 0.0) {
-          return const SizedBox.shrink();
-        }
-        return Align(
-          alignment: Alignment.topCenter,
-          child: Showcase(
-            key: showcaseKey,
-            scope: showcaseScope,
-            title: context.l10n.chatEmailWebViewTipTitle,
-            description: context.l10n.chatEmailWebViewTipDescription,
-            targetShapeBorder: RoundedSuperellipseBorder(
-              borderRadius: context.radius,
-            ),
-            targetBorderRadius: context.radius,
-            targetPadding: targetPadding,
-            tooltipPadding: EdgeInsets.all(context.spacing.s),
-            tooltipBorderRadius: context.radius,
-            tooltipBackgroundColor: context.colorScheme.card,
-            textColor: context.colorScheme.foreground,
-            titleTextStyle: context.textTheme.small,
-            descTextStyle: context.textTheme.muted,
-            overlayColor: context.colorScheme.foreground,
-            overlayOpacity: motion.tapFocusAlpha + motion.tapHoverAlpha,
-            scrollLoadingWidget: const AxiProgressIndicator(),
-            disableMovingAnimation: context
-                .watch<SettingsCubit>()
-                .state
-                .lowMotion,
-            disableScaleAnimation: context
-                .watch<SettingsCubit>()
-                .state
-                .lowMotion,
-            disposeOnTap: true,
-            onBarrierClick: () {
-              AxiShowcaseController.maybeOf(context)?.dismissUser();
-            },
-            onTargetClick: () {
-              AxiShowcaseController.maybeOf(context)?.notifyTargetInteraction();
-              onTargetTap?.call();
-            },
-            child: SizedBox(width: constraints.maxWidth, height: targetHeight),
-          ),
-        );
-      },
+    return OnboardingTipTarget(
+      kind: OnboardingTipKind.emailWebView,
+      candidateId: messageId,
+      order: OnboardingTipOrder(path: <int>[order], tieBreaker: messageId),
+      title: context.l10n.chatEmailWebViewTipTitle,
+      description: context.l10n.chatEmailWebViewTipDescription,
+      onTargetTap: onTargetTap,
+      child: child,
     );
   }
 }
@@ -2142,7 +2046,7 @@ bool canReplyToTimelineMessage({
   if (requiresMucReference) {
     return false;
   }
-  if (message.replyReference(isGroupChat: isGroupChat) != null) {
+  if (message.replyId(isGroupChat: isGroupChat) != null) {
     return true;
   }
   return message.isEmailBacked && message.deltaMsgId != null;

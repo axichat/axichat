@@ -130,7 +130,6 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:showcaseview/showcaseview.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -253,26 +252,6 @@ bool shouldShowSelectedEmailImageLoadButtonForTesting({
     hasLoadCallback;
 
 @visibleForTesting
-double emailWebViewTipTargetHeightForTesting({
-  required double bubbleHeight,
-  required double viewportHeight,
-  required double targetPaddingVertical,
-}) => _emailWebViewTipTargetHeight(
-  bubbleHeight: bubbleHeight,
-  viewportHeight: viewportHeight,
-  targetPaddingVertical: targetPaddingVertical,
-);
-
-double _emailWebViewTipTargetHeight({
-  required double bubbleHeight,
-  required double viewportHeight,
-  required double targetPaddingVertical,
-}) => math.min(
-  bubbleHeight,
-  math.max(0.0, viewportHeight - targetPaddingVertical),
-);
-
-@visibleForTesting
 bool shouldShowEmailWebViewTipForTesting({
   required bool isEmailMessage,
   required bool readOnly,
@@ -315,166 +294,6 @@ bool shouldDeferReadThresholdSyncForTesting({
   required bool messagesLoaded,
   required bool initialTimelineReadinessPending,
 }) => !messagesLoaded || initialTimelineReadinessPending;
-
-@visibleForTesting
-String? firstEmailWebViewTipTargetMessageIdForTesting({
-  required Iterable<
-    ({
-      String messageId,
-      bool isEmailMessage,
-      String? normalizedHtmlBody,
-      String? renderedText,
-      EmailHtmlDerivation? emailDerivation,
-    })
-  >
-  items,
-  required Set<String> renderedMessageIds,
-  required bool readOnly,
-  required bool multiSelectActive,
-  required String? selectedMessageId,
-}) {
-  if (readOnly ||
-      multiSelectActive ||
-      selectedMessageId != null ||
-      renderedMessageIds.isEmpty) {
-    return null;
-  }
-  for (final item in items) {
-    final messageId = item.messageId.trim();
-    if (messageId.isEmpty || !renderedMessageIds.contains(messageId)) {
-      continue;
-    }
-    if (shouldShowEmailWebViewTipForTesting(
-      isEmailMessage: item.isEmailMessage,
-      readOnly: readOnly,
-      multiSelectActive: multiSelectActive,
-      isSingleSelection: false,
-      normalizedHtmlBody: item.normalizedHtmlBody,
-      renderedText: item.renderedText,
-      emailDerivation: item.emailDerivation,
-    )) {
-      return messageId;
-    }
-  }
-  return null;
-}
-
-@visibleForTesting
-bool emailWebViewTipBubbleStartsInViewportForTesting({
-  required Rect bubbleRect,
-  required Rect viewportRect,
-}) {
-  if (bubbleRect.width <= 0 || bubbleRect.height <= 0) {
-    return false;
-  }
-  if (bubbleRect.top < viewportRect.top ||
-      bubbleRect.top >= viewportRect.bottom) {
-    return false;
-  }
-  return math.min(bubbleRect.bottom, viewportRect.bottom) > bubbleRect.top;
-}
-
-@visibleForTesting
-String? firstVisibleEmailWebViewTipTargetMessageIdForTesting({
-  required Iterable<
-    ({
-      String messageId,
-      bool isEmailMessage,
-      String? normalizedHtmlBody,
-      String? renderedText,
-      EmailHtmlDerivation? emailDerivation,
-    })
-  >
-  items,
-  required Set<String> renderedMessageIds,
-  required Map<String, Rect> bubbleRectsByMessageId,
-  required Rect viewportRect,
-  required bool readOnly,
-  required bool multiSelectActive,
-  required String? selectedMessageId,
-}) {
-  if (readOnly ||
-      multiSelectActive ||
-      selectedMessageId != null ||
-      renderedMessageIds.isEmpty) {
-    return null;
-  }
-  for (final item in items) {
-    final messageId = item.messageId.trim();
-    if (messageId.isEmpty || !renderedMessageIds.contains(messageId)) {
-      continue;
-    }
-    final bubbleRect = bubbleRectsByMessageId[messageId];
-    if (bubbleRect == null ||
-        !emailWebViewTipBubbleStartsInViewportForTesting(
-          bubbleRect: bubbleRect,
-          viewportRect: viewportRect,
-        )) {
-      continue;
-    }
-    if (shouldShowEmailWebViewTipForTesting(
-      isEmailMessage: item.isEmailMessage,
-      readOnly: readOnly,
-      multiSelectActive: multiSelectActive,
-      isSingleSelection: false,
-      normalizedHtmlBody: item.normalizedHtmlBody,
-      renderedText: item.renderedText,
-      emailDerivation: item.emailDerivation,
-    )) {
-      return messageId;
-    }
-  }
-  return null;
-}
-
-String? _firstVisibleEmailWebViewTipTargetMessageId({
-  required Iterable<ChatTimelineItem> items,
-  required Set<String> renderedMessageIds,
-  required Rect viewportRect,
-  required Rect? Function(String messageId) bubbleRectFor,
-  required bool readOnly,
-  required bool multiSelectActive,
-  required String? selectedMessageId,
-}) {
-  if (readOnly ||
-      multiSelectActive ||
-      selectedMessageId != null ||
-      renderedMessageIds.isEmpty) {
-    return null;
-  }
-  for (final item in items) {
-    if (item is! ChatTimelineMessageItem) {
-      continue;
-    }
-    final messageId = item.id.trim();
-    if (messageId.isEmpty || !renderedMessageIds.contains(messageId)) {
-      continue;
-    }
-    final bubbleRect = bubbleRectFor(messageId);
-    if (bubbleRect == null ||
-        !emailWebViewTipBubbleStartsInViewportForTesting(
-          bubbleRect: bubbleRect,
-          viewportRect: viewportRect,
-        )) {
-      continue;
-    }
-    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
-      item.resolvedHtmlBody,
-    );
-    if (shouldShowEmailWebViewTipForTesting(
-      isEmailMessage: item.isEmailMessage,
-      readOnly: readOnly,
-      multiSelectActive: multiSelectActive,
-      isSingleSelection: false,
-      normalizedHtmlBody: normalizedHtmlBody,
-      renderedText: item.renderedText,
-      emailDerivation: emailHtmlDerivationForBody(normalizedHtmlBody),
-    )) {
-      return messageId;
-    }
-  }
-  return null;
-}
 
 double _bubbleCornerClearance(BorderRadius baseRadius) =>
     math.max(baseRadius.topLeft.x, baseRadius.topLeft.y);
@@ -586,8 +405,6 @@ class _ChatState extends State<Chat> {
   final _unreadDividerKey = GlobalKey();
   final _messageKeys = <String, GlobalKey>{};
   final _mountedTimelineItemIds = <String>{};
-  final _emailWebViewTipKey = GlobalKey(debugLabel: 'emailWebViewTip');
-  final String _emailWebViewTipScope = 'chat-email-webview-tip-${UniqueKey()}';
   var _activeUnreadDividerScrollRequestId = 0;
   var _completedUnreadDividerScrollRequestId = 0;
   var _initialEmailViewportWarmupStatus =
@@ -612,9 +429,6 @@ class _ChatState extends State<Chat> {
   Map<String, Message> _cachedMessageById = const {};
   List<Message> _cachedFilteredItems = const [];
   List<ChatTimelineItem> _cachedTimelineItems = const [];
-  Set<String> _renderedTimelineMessageIds = const <String>{};
-  String? _emailWebViewTipTargetMessageId;
-  bool _emailWebViewTipTargetSyncScheduled = false;
   final _bubbleWidthByMessageId = <String, double>{};
   final _emailWebViewHeightByContentKey =
       <String, ({String messageId, double height})>{};
@@ -951,7 +765,6 @@ class _ChatState extends State<Chat> {
     setState(() {
       _bubbleWidthByMessageId[messageId] = width;
     });
-    _scheduleEmailWebViewTipTargetSync();
   }
 
   String _emailWebViewHeightCacheKey({
@@ -989,7 +802,6 @@ class _ChatState extends State<Chat> {
       messageId: messageId,
       height: normalizedHeight,
     );
-    _scheduleEmailWebViewTipTargetSync();
     if (_selectedMessageId == messageId) {
       _scheduleSelectedMessageVisibilityCheck(messageId);
     }
@@ -1655,7 +1467,6 @@ class _ChatState extends State<Chat> {
   void _handleScrollChanged() {
     _persistScrollOffset();
     _scheduleReadThresholdSync();
-    _scheduleEmailWebViewTipTargetSync();
   }
 
   Rect? _messageListViewportRect() {
@@ -1856,81 +1667,10 @@ class _ChatState extends State<Chat> {
     return SafeLogging.profileFingerprint(buffer.toString());
   }
 
-  Set<String> _renderedTimelineIdsForMessages(List<Message> renderedMessages) {
-    return Set<String>.unmodifiable(
-      renderedMessages
-          .map((message) => message.stanzaID.trim())
-          .where((messageId) => messageId.isNotEmpty),
-    );
-  }
-
-  bool _sameStringSet(Set<String> first, Set<String> second) {
-    return first.length == second.length && first.containsAll(second);
-  }
-
-  String? _measureEmailWebViewTipTargetMessageId() {
-    final viewportRect = _messageListViewportRect();
-    if (viewportRect == null) {
-      return null;
-    }
-    final messageId = _firstVisibleEmailWebViewTipTargetMessageId(
-      items: _cachedTimelineItems,
-      renderedMessageIds: _renderedTimelineMessageIds,
-      viewportRect: viewportRect,
-      bubbleRectFor: _bubbleRegionRegistry.rectFor,
-      readOnly: widget.readOnly,
-      multiSelectActive: _multiSelectedMessageIds.isNotEmpty,
-      selectedMessageId: _selectedMessageId,
-    );
-    if (messageId == null) {
-      return null;
-    }
-    return messageId;
-  }
-
-  void _clearEmailWebViewTipSelection() {
-    _emailWebViewTipTargetMessageId = null;
-  }
-
-  void _scheduleEmailWebViewTipTargetSync() {
-    if (_emailWebViewTipTargetSyncScheduled) {
-      return;
-    }
-    _emailWebViewTipTargetSyncScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _emailWebViewTipTargetSyncScheduled = false;
-      if (!mounted) {
-        return;
-      }
-      _syncEmailWebViewTipTargetAfterLayout();
-    });
-  }
-
-  void _syncEmailWebViewTipTargetAfterLayout() {
-    final nextMessageId = _measureEmailWebViewTipTargetMessageId();
-    if (_emailWebViewTipTargetMessageId == nextMessageId) {
-      return;
-    }
-    setState(() {
-      _emailWebViewTipTargetMessageId = nextMessageId;
-    });
-  }
-
-  void _syncRenderedTimelineMessageIds(List<Message> renderedMessages) {
-    final nextIds = _renderedTimelineIdsForMessages(renderedMessages);
-    if (_sameStringSet(_renderedTimelineMessageIds, nextIds)) {
-      return;
-    }
-    _renderedTimelineMessageIds = nextIds;
-    _scheduleEmailWebViewTipTargetSync();
-  }
-
   void _handleRenderedMessagesChanged(
     List<Message> renderedMessages, {
     required T Function<T>() locate,
   }) {
-    _syncRenderedTimelineMessageIds(renderedMessages);
-    _scheduleEmailWebViewTipTargetSync();
     if (renderedMessages.isEmpty) {
       return;
     }
@@ -4825,12 +4565,19 @@ class _ChatState extends State<Chat> {
       _showSnackbar(l10n.chatAttachmentFailed);
       return false;
     }
-    final quoteTarget = DraftQuoteTarget.fromDraft(
-      stanzaId: _quotedDraft?.quoteStanzaId(
-        isGroupChat: chat.type == ChatType.groupChat,
-      ),
-      referenceKind: null,
-    );
+    final quoteTarget = chat.type == ChatType.groupChat
+        ? DraftQuoteTarget.fromDraft(
+            stanzaId: null,
+            originId: null,
+            mucStanzaId: _quotedDraft?.trimmedMucStanzaId,
+          )
+        : DraftQuoteTarget.fromDraft(
+            stanzaId: _quotedDraft?.trimmedOriginId == null
+                ? _quotedDraft?.trimmedStanzaId
+                : null,
+            originId: _quotedDraft?.trimmedOriginId,
+            mucStanzaId: null,
+          );
     final recipients = _resolveDraftRecipients(
       chat: chat,
       recipients: _recipients,
@@ -5016,15 +4763,24 @@ class _ChatState extends State<Chat> {
         .map((recipient) => recipient.target.key)
         .toList(growable: false);
     final attachments = pendingAttachments ?? _pendingAttachments;
+    String? quotedDraftIdentity;
+    if (chat?.type == ChatType.groupChat) {
+      quotedDraftIdentity = _quotedDraft?.trimmedMucStanzaId;
+    } else {
+      final originId = _quotedDraft?.trimmedOriginId;
+      if (originId != null) {
+        quotedDraftIdentity = originId;
+      } else {
+        quotedDraftIdentity = _quotedDraft?.trimmedStanzaId;
+      }
+    }
     return Object.hashAll(<Object?>[
       _normalizedInlineDraftBody(
         text: _inlineComposerController.text,
         chatState: chatState,
       ),
       _inlineComposerController.subject,
-      _quotedDraft?.quoteStanzaId(
-        isGroupChat: chat?.type == ChatType.groupChat,
-      ),
+      quotedDraftIdentity,
       ...visibleRecipients,
       ...resolvedRecipients,
       ...attachments.map(_inlineAttachmentSignature),
@@ -5886,7 +5642,6 @@ class _ChatState extends State<Chat> {
     setState(() {
       _selectedMessageId = null;
     });
-    _scheduleEmailWebViewTipTargetSync();
   }
 
   Future<void> _startMultiSelect(Message message) async {
@@ -5905,7 +5660,6 @@ class _ChatState extends State<Chat> {
       _selectedMessageSnapshots
         ..clear()
         ..[messageId] = message;
-      _clearEmailWebViewTipSelection();
     });
   }
 
@@ -5921,9 +5675,7 @@ class _ChatState extends State<Chat> {
         _multiSelectedMessageIds.add(messageId);
         _selectedMessageSnapshots[messageId] = message;
       }
-      _clearEmailWebViewTipSelection();
     });
-    _scheduleEmailWebViewTipTargetSync();
   }
 
   void _syncSelectionCaches(
@@ -5983,7 +5735,6 @@ class _ChatState extends State<Chat> {
       return;
     }
     setState(() {});
-    _scheduleEmailWebViewTipTargetSync();
   }
 
   void _ensureAvatarPathCaches({
@@ -6239,15 +5990,6 @@ class _ChatState extends State<Chat> {
     }
     final availableIds = items.map((item) => item.id).toSet();
     _mountedTimelineItemIds.removeWhere((id) => !availableIds.contains(id));
-    if (_renderedTimelineMessageIds.isNotEmpty) {
-      _renderedTimelineMessageIds = Set<String>.unmodifiable(
-        _renderedTimelineMessageIds.where(availableIds.contains),
-      );
-    }
-    if (_emailWebViewTipTargetMessageId != null &&
-        !availableIds.contains(_emailWebViewTipTargetMessageId)) {
-      _clearEmailWebViewTipSelection();
-    }
     _cachedTimelineItems = items;
   }
 
@@ -6265,7 +6007,6 @@ class _ChatState extends State<Chat> {
       _multiSelectedMessageIds.clear();
       _selectedMessageSnapshots.clear();
     });
-    _scheduleEmailWebViewTipTargetSync();
   }
 
   List<Message> _collectSelectedMessages(List<Message> orderedMessages) {
@@ -6296,7 +6037,6 @@ class _ChatState extends State<Chat> {
     if (_selectedMessageId == messageId) return;
     setState(() {
       _selectedMessageId = messageId;
-      _clearEmailWebViewTipSelection();
     });
     if (!mounted) return;
     _scheduleSelectedMessageVisibilityCheck(messageId);
@@ -7019,8 +6759,6 @@ class _ChatState extends State<Chat> {
                   _reportedReadThresholdMessageIds = const <String>{};
                   _resetInitialTimelineReadiness();
                   _mountedTimelineItemIds.clear();
-                  _renderedTimelineMessageIds = const <String>{};
-                  _clearEmailWebViewTipSelection();
                   _cachedTimelineItems = const [];
                   _animatedMessageIds.clear();
                   _hydratedAnimatedMessages = false;

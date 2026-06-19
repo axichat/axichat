@@ -68,6 +68,7 @@ abstract class CalendarExperienceState<
   int? _lastFocusedCriticalPathNoticeTabIndex;
   String? _lastFocusedCriticalPathNoticePathId;
   String? _lastObservedFocusedCriticalPathId;
+  int _calendarTaskDragTipMobileTabIndex = 0;
 
   @protected
   CalendarSizeClass? get previousLayoutSizeClass => _previousLayoutSizeClass;
@@ -109,6 +110,8 @@ abstract class CalendarExperienceState<
       parent: _tasksTabPulseController,
       curve: Curves.easeInOut,
     );
+    _calendarTaskDragTipMobileTabIndex = _mobileTabController.index;
+    _mobileTabController.addListener(_handleCalendarTaskDragTipTabChanged);
     _mobileTabController.addListener(_handleFocusedCriticalPathTabChanged);
     initCalendarDragTabMixin();
     activateFocusedCriticalPathNotice();
@@ -123,6 +126,7 @@ abstract class CalendarExperienceState<
     );
     disposeCalendarDragTabMixin();
     _mobileTabController.removeListener(_handleFocusedCriticalPathTabChanged);
+    _mobileTabController.removeListener(_handleCalendarTaskDragTipTabChanged);
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
     _taskClipboardController.dispose();
@@ -291,16 +295,10 @@ abstract class CalendarExperienceState<
         );
         final String? taskDragTipAccountJid = calendarTaskDragTipAccountJid;
         final Set<CalendarTaskDragTipSource> taskDragTipSources =
-            usesDesktopLayout
-            ? const <CalendarTaskDragTipSource>{
-                CalendarTaskDragTipSource.grid,
-                CalendarTaskDragTipSource.sidebar,
-              }
-            : _mobileTabController.index == 0
-            ? const <CalendarTaskDragTipSource>{CalendarTaskDragTipSource.grid}
-            : const <CalendarTaskDragTipSource>{
-                CalendarTaskDragTipSource.sidebar,
-              };
+            calendarTaskDragTipVisibleSources(
+              usesDesktopLayout: usesDesktopLayout,
+              mobileTabIndex: _calendarTaskDragTipMobileTabIndex,
+            );
         final Object taskDragTipRescanIdentity =
             calendarTaskDragTipRescanIdentity(state, taskDragTipSources);
         final Widget onboardingLayout = CalendarTaskDragTipHost(
@@ -312,6 +310,7 @@ abstract class CalendarExperienceState<
           visibleSources: taskDragTipSources,
           rescanIdentity: taskDragTipRescanIdentity,
           dragActive: isAnyDragActive,
+          alwaysShow: false,
           child: layout,
         );
         _updateTasksTabPulse(highlightTasksTab);
@@ -445,6 +444,19 @@ abstract class CalendarExperienceState<
       return;
     }
     scheduleFocusedCriticalPathNotice(force: false);
+  }
+
+  void _handleCalendarTaskDragTipTabChanged() {
+    if (_mobileTabController.indexIsChanging) {
+      return;
+    }
+    final int tabIndex = _mobileTabController.index;
+    if (_calendarTaskDragTipMobileTabIndex == tabIndex) {
+      return;
+    }
+    setState(() {
+      _calendarTaskDragTipMobileTabIndex = tabIndex;
+    });
   }
 
   void _handleFocusedCriticalPathNoticeStateChanged(CalendarState state) {
