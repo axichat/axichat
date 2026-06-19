@@ -1529,7 +1529,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get authSignupWelcomeMessage =>
-      'Bienvenue dans la prochaine évolution de la messagerie et de l’e-mail.\n\nAxichat est encore sous le radar, donc les limites de stockage sont actuellement faibles et seront augmentées avec le temps. Signale les bugs sur https://github.com/axichat/axichat/issues.\n\nDe nombreuses fonctions sont disponibles en touchant les bulles de message. Touche celle-ci.\n\nPour une réception fiable des messages, nous recommandons d’activer les notifications en arrière-plan via l’écran Profil.';
+      'Bienvenue dans la prochaine évolution de la messagerie et de l’e-mail.\n\nAxichat est encore sous le radar, donc les limites de stockage sont actuellement faibles et les messages ne sont conservés sur le serveur que pendant 31 jours. Les limites seront augmentées avec le temps. Signale les bugs sur https://github.com/axichat/axichat/issues.\n\nDe nombreuses fonctions sont disponibles en touchant les bulles de message. Touche celle-ci.\n\nPour une réception fiable des messages, nous recommandons d’activer les notifications en arrière-plan via l’écran Profil.';
 
   @override
   String get signupTitle => 'S’inscrire';

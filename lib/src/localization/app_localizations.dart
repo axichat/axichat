@@ -2752,7 +2752,7 @@ abstract class AppLocalizations {
   /// No description provided for @authSignupWelcomeMessage.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to the next evolution of messaging and email.\n\nAxichat is currently under the radar, so storage limits are currently low and will be expanded over time. Please report bugs at https://github.com/axichat/axichat/issues.\n\nMany features are available by tapping message bubbles. Try tapping this one.\n\nFor reliable message delivery, we recommend turning on background notifications in the Profile screen.'**
+  /// **'Welcome to the next evolution of messaging and email.\n\nAxichat is currently under the radar, so storage limits are currently low, and messages are only retained on the server for 31 days. Limits will be expanded over time. Please report bugs at https://github.com/axichat/axichat/issues.\n\nMany features are available by tapping message bubbles. Try tapping this one.\n\nFor reliable message delivery, we recommend turning on background notifications in the Profile screen.'**
   String get authSignupWelcomeMessage;
 
   /// No description provided for @signupTitle.

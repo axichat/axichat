@@ -498,7 +498,7 @@
   "authSignupPending": "En attente de l’inscription",
   "authLoginPending": "En attente de connexion",
   "authSignupWelcomeTitle": "Axichat",
-  "authSignupWelcomeMessage": "Bienvenue dans la prochaine évolution de la messagerie et de l’e-mail.\n\nAxichat est encore sous le radar, donc les limites de stockage sont actuellement faibles et seront augmentées avec le temps. Signale les bugs sur https://github.com/axichat/axichat/issues.\n\nDe nombreuses fonctions sont disponibles en touchant les bulles de message. Touche celle-ci.\n\nPour une réception fiable des messages, nous recommandons d’activer les notifications en arrière-plan via l’écran Profil.",
+  "authSignupWelcomeMessage": "Bienvenue dans la prochaine évolution de la messagerie et de l’e-mail.\n\nAxichat est encore sous le radar, donc les limites de stockage sont actuellement faibles et les messages ne sont conservés sur le serveur que pendant 31 jours. Les limites seront augmentées avec le temps. Signale les bugs sur https://github.com/axichat/axichat/issues.\n\nDe nombreuses fonctions sont disponibles en touchant les bulles de message. Touche celle-ci.\n\nPour une réception fiable des messages, nous recommandons d’activer les notifications en arrière-plan via l’écran Profil.",
   "signupTitle": "S’inscrire",
   "signupStepUsername": "Choisir un nom d’utilisateur",
   "signupStepPassword": "Créer un mot de passe",

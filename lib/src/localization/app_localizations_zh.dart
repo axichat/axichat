@@ -1427,7 +1427,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authSignupWelcomeMessage =>
-      '欢迎来到消息和电子邮件的下一次进化。\n\nAxichat 仍然鲜为人知，所以当前存储空间限制较低，后续会逐步提高。请在 https://github.com/axichat/axichat/issues 报告 bug。\n\n点按消息气泡可以使用很多功能。试着点一下这一条。\n\n为了更可靠地接收消息，我们建议通过个人资料页面启用后台通知。';
+      '欢迎来到消息和电子邮件的下一次进化。\n\nAxichat 仍然鲜为人知，所以当前存储空间限制较低，消息也只会在服务器上保留 31 天。限制后续会逐步提高。请在 https://github.com/axichat/axichat/issues 报告 bug。\n\n点按消息气泡可以使用很多功能。试着点一下这一条。\n\n为了更可靠地接收消息，我们建议通过个人资料页面启用后台通知。';
 
   @override
   String get signupTitle => '注册';
@@ -8312,7 +8312,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authSignupWelcomeMessage =>
-      '歡迎來到訊息和電郵的下一次進化。\n\nAxichat 仍然鮮為人知，所以目前儲存空間限制較低，之後會逐步提高。請在 https://github.com/axichat/axichat/issues 回報 bug。\n\n點按訊息氣泡即可使用很多功能。試試點一下這則。\n\n為了更可靠地接收訊息，我們建議透過個人資料畫面啟用背景通知。';
+      '歡迎來到訊息和電郵的下一次進化。\n\nAxichat 仍然鮮為人知，所以目前儲存空間限制較低，訊息也只會在伺服器上保留 31 天。限制之後會逐步提高。請在 https://github.com/axichat/axichat/issues 回報 bug。\n\n點按訊息氣泡即可使用很多功能。試試點一下這則。\n\n為了更可靠地接收訊息，我們建議透過個人資料畫面啟用背景通知。';
 
   @override
   String get signupTitle => '註冊';

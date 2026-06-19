@@ -497,7 +497,7 @@
   "authSignupPending": "正在註冊",
   "authLoginPending": "正在登入",
   "authSignupWelcomeTitle": "Axichat",
-  "authSignupWelcomeMessage": "歡迎來到訊息和電郵的下一次進化。\n\nAxichat 仍然鮮為人知，所以目前儲存空間限制較低，之後會逐步提高。請在 https://github.com/axichat/axichat/issues 回報 bug。\n\n點按訊息氣泡即可使用很多功能。試試點一下這則。\n\n為了更可靠地接收訊息，我們建議透過個人資料畫面啟用背景通知。",
+  "authSignupWelcomeMessage": "歡迎來到訊息和電郵的下一次進化。\n\nAxichat 仍然鮮為人知，所以目前儲存空間限制較低，訊息也只會在伺服器上保留 31 天。限制之後會逐步提高。請在 https://github.com/axichat/axichat/issues 回報 bug。\n\n點按訊息氣泡即可使用很多功能。試試點一下這則。\n\n為了更可靠地接收訊息，我們建議透過個人資料畫面啟用背景通知。",
   "signupTitle": "註冊",
   "signupStepUsername": "選擇用戶名",
   "signupStepPassword": "建立密碼",
