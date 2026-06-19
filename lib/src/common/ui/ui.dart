@@ -25,6 +25,7 @@ export 'axi_delete_menu_item.dart';
 export 'axi_dialog.dart';
 export 'axi_dialog_fab.dart';
 export 'axi_directional_indexed_stack.dart';
+export 'axi_dropdown.dart';
 export 'axi_fab.dart';
 export 'modal_close_button.dart';
 export 'axi_fade_indexed_stack.dart';

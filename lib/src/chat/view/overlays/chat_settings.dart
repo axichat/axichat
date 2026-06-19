@@ -652,17 +652,17 @@ class _ChatViewFilterControl extends StatelessWidget {
       subtitle: filter.statusLabel(l10n),
       trailing: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-        child: AxiSelect<MessageTimelineFilter>(
+        child: AxiDropdown<MessageTimelineFilter>(
           maxWidth: sizing.menuMaxWidth,
-          initialValue: filter,
+          value: filter,
           onChanged: (value) {
-            if (value == null) return;
             onChanged(value);
           },
           options: messageFilterOptions
               .map(
-                (option) => ShadOption<MessageTimelineFilter>(
+                (option) => AxiDropdownOption<MessageTimelineFilter>(
                   value: option.filter,
+                  label: option.filter.menuLabel(l10n),
                   child: Text(
                     option.filter.menuLabel(l10n),
                     maxLines: 1,
@@ -671,7 +671,7 @@ class _ChatViewFilterControl extends StatelessWidget {
                 ),
               )
               .toList(),
-          selectedOptionBuilder: (_, value) => Text(
+          selectedBuilder: (_, value) => Text(
             value.menuLabel(l10n),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -708,9 +708,9 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
       loading: state.isChatSettingLoading(settingId),
       trailing: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-        child: AxiSelect<NotificationPreviewSetting?>(
+        child: AxiDropdown<NotificationPreviewSetting?>(
           maxWidth: sizing.menuMaxWidth,
-          initialValue: setting,
+          value: setting,
           enabled: !state.isChatSettingLoading(settingId),
           onChanged: (value) {
             onChanged(value);
@@ -721,8 +721,14 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
                     ...NotificationPreviewSetting.values,
                   ]
                   .map(
-                    (option) => ShadOption<NotificationPreviewSetting?>(
+                    (option) => AxiDropdownOption<NotificationPreviewSetting?>(
                       value: option,
+                      label: option == null
+                          ? _inheritedPreviewLabel(l10n)
+                          : option.label(
+                              showLabel: l10n.chatNotificationPreviewOptionShow,
+                              hideLabel: l10n.chatNotificationPreviewOptionHide,
+                            ),
                       child: Text(
                         option == null
                             ? _inheritedPreviewLabel(l10n)
@@ -738,7 +744,7 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
                     ),
                   )
                   .toList(),
-          selectedOptionBuilder: (_, value) => Text(
+          selectedBuilder: (_, value) => Text(
             value == null
                 ? _inheritedPreviewLabel(l10n)
                 : value.label(
@@ -793,15 +799,16 @@ class _ChatInheritedBoolControl extends StatelessWidget {
       loading: state.isChatSettingLoading(settingId),
       trailing: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-        child: AxiSelect<bool?>(
+        child: AxiDropdown<bool?>(
           maxWidth: sizing.menuMaxWidth,
-          initialValue: value,
+          value: value,
           enabled: !state.isChatSettingLoading(settingId),
           onChanged: onChanged,
           options: <bool?>[null, true, false]
               .map(
-                (option) => ShadOption<bool?>(
+                (option) => AxiDropdownOption<bool?>(
                   value: option,
+                  label: _boolOptionLabel(l10n, option),
                   child: Text(
                     _boolOptionLabel(l10n, option),
                     maxLines: 1,
@@ -810,7 +817,7 @@ class _ChatInheritedBoolControl extends StatelessWidget {
                 ),
               )
               .toList(),
-          selectedOptionBuilder: (_, option) => Text(
+          selectedBuilder: (_, option) => Text(
             _boolOptionLabel(l10n, option),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -857,9 +864,9 @@ class _ChatNotificationBehaviorControl extends StatelessWidget {
       loading: state.isChatSettingLoading(settingId),
       trailing: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-        child: AxiSelect<ChatNotificationBehavior?>(
+        child: AxiDropdown<ChatNotificationBehavior?>(
           maxWidth: sizing.menuMaxWidth,
-          initialValue: behavior,
+          value: behavior,
           enabled: !state.isChatSettingLoading(settingId),
           onChanged: onChanged,
           options:
@@ -869,8 +876,9 @@ class _ChatNotificationBehaviorControl extends StatelessWidget {
                     ChatNotificationBehavior.alwaysNotify,
                   ]
                   .map(
-                    (option) => ShadOption<ChatNotificationBehavior?>(
+                    (option) => AxiDropdownOption<ChatNotificationBehavior?>(
                       value: option,
+                      label: _notificationBehaviorLabel(l10n, option),
                       child: Text(
                         _notificationBehaviorLabel(l10n, option),
                         maxLines: 1,
@@ -879,7 +887,7 @@ class _ChatNotificationBehaviorControl extends StatelessWidget {
                     ),
                   )
                   .toList(),
-          selectedOptionBuilder: (_, option) => Text(
+          selectedBuilder: (_, option) => Text(
             _notificationBehaviorLabel(l10n, option),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -965,9 +973,9 @@ class _ChatInheritedAttachmentAutoDownloadControl extends StatelessWidget {
       loading: state.isChatSettingLoading(settingId),
       trailing: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-        child: AxiSelect<AttachmentAutoDownload?>(
+        child: AxiDropdown<AttachmentAutoDownload?>(
           maxWidth: sizing.menuMaxWidth,
-          initialValue: value,
+          value: value,
           enabled: !state.isChatSettingLoading(settingId),
           onChanged: onChanged,
           options:
@@ -977,8 +985,9 @@ class _ChatInheritedAttachmentAutoDownloadControl extends StatelessWidget {
                     AttachmentAutoDownload.blocked,
                   ]
                   .map(
-                    (option) => ShadOption<AttachmentAutoDownload?>(
+                    (option) => AxiDropdownOption<AttachmentAutoDownload?>(
                       value: option,
+                      label: _attachmentAutoDownloadOptionLabel(l10n, option),
                       child: Text(
                         _attachmentAutoDownloadOptionLabel(l10n, option),
                         maxLines: 1,
@@ -987,7 +996,7 @@ class _ChatInheritedAttachmentAutoDownloadControl extends StatelessWidget {
                     ),
                   )
                   .toList(),
-          selectedOptionBuilder: (_, option) => Text(
+          selectedBuilder: (_, option) => Text(
             _attachmentAutoDownloadOptionLabel(l10n, option),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
@@ -393,83 +392,66 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double minSelectWidth = math.min(
-          context.sizing.menuMaxWidth / 2,
-          constraints.maxWidth,
-        );
-        final double maxSelectWidth = math.min(
-          context.sizing.menuMaxWidth,
-          constraints.maxWidth,
-        );
-        final BoxConstraints selectConstraints = BoxConstraints(
-          minWidth: minSelectWidth,
-          maxWidth: maxSelectWidth,
-        );
-        final sortSelect = AttachmentGallerySelect<AttachmentGallerySortOption>(
+    final l10n = context.l10n;
+    return Wrap(
+      spacing: spacing.s,
+      runSpacing: spacing.m,
+      children: [
+        AxiDropdown<AttachmentGallerySortOption>(
           value: sortOption,
           onChanged: onSortChanged,
-          labelBuilder: (value) => value.label(context.l10n),
-          options: AttachmentGallerySortOption.values,
-        );
-        final typeSelect = AttachmentGallerySelect<AttachmentGalleryTypeFilter>(
+          selectedBuilder: (context, value) => Text(
+            l10n.attachmentGalleryFilterTriggerLabel(
+              l10n.attachmentGallerySortFilterLabel,
+              value.label(l10n),
+            ),
+          ),
+          options: AttachmentGallerySortOption.values
+              .map(
+                (value) => AxiDropdownOption<AttachmentGallerySortOption>(
+                  value: value,
+                  label: value.label(l10n),
+                ),
+              )
+              .toList(growable: false),
+        ),
+        AxiDropdown<AttachmentGalleryTypeFilter>(
           value: typeFilter,
           onChanged: onTypeFilterChanged,
-          labelBuilder: (value) => value.label(context.l10n),
-          options: AttachmentGalleryTypeFilter.values,
-        );
-        final sourceSelect =
-            AttachmentGallerySelect<AttachmentGallerySourceFilter>(
-              value: sourceFilter,
-              onChanged: onSourceFilterChanged,
-              labelBuilder: (value) => value.label(context.l10n),
-              options: AttachmentGallerySourceFilter.values,
-            );
-        return Wrap(
-          spacing: spacing.s,
-          runSpacing: spacing.m,
-          children: [
-            ConstrainedBox(constraints: selectConstraints, child: sortSelect),
-            ConstrainedBox(constraints: selectConstraints, child: typeSelect),
-            ConstrainedBox(constraints: selectConstraints, child: sourceSelect),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class AttachmentGallerySelect<T> extends StatelessWidget {
-  const AttachmentGallerySelect({
-    super.key,
-    required this.value,
-    required this.onChanged,
-    required this.options,
-    required this.labelBuilder,
-  });
-
-  final T value;
-  final ValueChanged<T> onChanged;
-  final List<T> options;
-  final String Function(T) labelBuilder;
-
-  @override
-  Widget build(BuildContext context) {
-    return AxiSelect<T>(
-      initialValue: value,
-      onChanged: (value) {
-        if (value == null) return;
-        onChanged(value);
-      },
-      shrinkWrap: true,
-      options: options
-          .map(
-            (option) =>
-                ShadOption<T>(value: option, child: Text(labelBuilder(option))),
-          )
-          .toList(growable: false),
-      selectedOptionBuilder: (_, value) => Text(labelBuilder(value)),
+          selectedBuilder: (context, value) => Text(
+            l10n.attachmentGalleryFilterTriggerLabel(
+              l10n.attachmentGalleryTypeFilterLabel,
+              value.label(l10n),
+            ),
+          ),
+          options: AttachmentGalleryTypeFilter.values
+              .map(
+                (value) => AxiDropdownOption<AttachmentGalleryTypeFilter>(
+                  value: value,
+                  label: value.label(l10n),
+                ),
+              )
+              .toList(growable: false),
+        ),
+        AxiDropdown<AttachmentGallerySourceFilter>(
+          value: sourceFilter,
+          onChanged: onSourceFilterChanged,
+          selectedBuilder: (context, value) => Text(
+            l10n.attachmentGalleryFilterTriggerLabel(
+              l10n.attachmentGallerySourceFilterLabel,
+              value.label(l10n),
+            ),
+          ),
+          options: AttachmentGallerySourceFilter.values
+              .map(
+                (value) => AxiDropdownOption<AttachmentGallerySourceFilter>(
+                  value: value,
+                  label: value.label(l10n),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 }

@@ -2,7 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/axi_adaptive_sheet.dart';
+import 'package:axichat/src/common/ui/axi_tap_bounce.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +13,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 class AxiMenuAction {
   const AxiMenuAction({
     required this.label,
+    this.child,
     this.icon,
     this.leading,
     this.trailing,
@@ -21,6 +23,7 @@ class AxiMenuAction {
   });
 
   final String label;
+  final Widget? child;
   final IconData? icon;
   final Widget? leading;
   final Widget? trailing;
@@ -328,7 +331,7 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
                 Expanded(
                   child: DefaultTextStyle(
                     style: textStyle,
-                    child: Text(widget.action.label),
+                    child: widget.action.child ?? Text(widget.action.label),
                   ),
                 ),
                 if (widget.action.trailing != null) trailing,

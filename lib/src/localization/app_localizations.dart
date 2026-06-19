@@ -585,6 +585,24 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get commonCancel;
 
+  /// No description provided for @commonSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get commonSort;
+
+  /// No description provided for @commonFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get commonFilter;
+
+  /// No description provided for @commonLabeledValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {value}'**
+  String commonLabeledValue(Object label, Object value);
+
   /// No description provided for @spamEmpty.
   ///
   /// In en, this message translates to:
@@ -710,6 +728,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to load attachments.'**
   String get attachmentGalleryErrorMessage;
+
+  /// No description provided for @attachmentGallerySortFilterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get attachmentGallerySortFilterLabel;
+
+  /// No description provided for @attachmentGalleryTypeFilterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get attachmentGalleryTypeFilterLabel;
+
+  /// No description provided for @attachmentGallerySourceFilterLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get attachmentGallerySourceFilterLabel;
+
+  /// No description provided for @attachmentGalleryFilterTriggerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{filter}: {value}'**
+  String attachmentGalleryFilterTriggerLabel(Object filter, Object value);
 
   /// No description provided for @attachmentGalleryAllLabel.
   ///

@@ -304,30 +304,29 @@ class SettingsControls extends StatelessWidget {
               contentPadding: compactTilePadding,
               trailing: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-                child: AxiSelect<MessageTextSize>(
-                  initialValue: state.messageTextSize,
+                child: AxiDropdown<MessageTextSize>(
+                  value: state.messageTextSize,
+                  maxWidth: sizing.menuMaxWidth,
                   enabled: !state.isGlobalSettingLoading(
                     GlobalSettingId.messageTextSize,
                   ),
                   onChanged: (messageTextSize) {
-                    if (messageTextSize == null) {
-                      return;
-                    }
                     context.read<SettingsCubit>().updateMessageTextSize(
                       messageTextSize,
                     );
                   },
                   options: MessageTextSize.values
                       .map(
-                        (messageTextSize) => ShadOption<MessageTextSize>(
+                        (messageTextSize) => AxiDropdownOption<MessageTextSize>(
                           value: messageTextSize,
+                          label: messageTextSize.label(context.l10n),
                           child: _MessageTextSizeOptionLabel(
                             value: messageTextSize,
                           ),
                         ),
                       )
                       .toList(),
-                  selectedOptionBuilder:
+                  selectedBuilder:
                       (BuildContext context, MessageTextSize value) =>
                           _MessageTextSizeOptionLabel(value: value),
                 ),
@@ -351,8 +350,9 @@ class SettingsControls extends StatelessWidget {
               contentPadding: compactTilePadding,
               trailing: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-                child: AxiSelect<ThemeMode>(
-                  initialValue: state.themeMode,
+                child: AxiDropdown<ThemeMode>(
+                  value: state.themeMode,
+                  maxWidth: sizing.menuMaxWidth,
                   enabled: !state.isGlobalSettingLoading(
                     GlobalSettingId.themeMode,
                   ),
@@ -360,8 +360,9 @@ class SettingsControls extends StatelessWidget {
                       context.read<SettingsCubit>().updateThemeMode(themeMode),
                   options: ThemeMode.values
                       .map(
-                        (themeMode) => ShadOption<ThemeMode>(
+                        (themeMode) => AxiDropdownOption<ThemeMode>(
                           value: themeMode,
+                          label: themeMode.label(context.l10n),
                           child: Text(
                             themeMode.label(context.l10n),
                             style: context.textTheme.small,
@@ -369,7 +370,7 @@ class SettingsControls extends StatelessWidget {
                         ),
                       )
                       .toList(),
-                  selectedOptionBuilder: (BuildContext context, mode) => Text(
+                  selectedBuilder: (BuildContext context, mode) => Text(
                     mode.label(context.l10n),
                     style: context.textTheme.small,
                   ),
@@ -385,8 +386,9 @@ class SettingsControls extends StatelessWidget {
               contentPadding: compactTilePadding,
               trailing: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-                child: AxiSelect<ShadColor>(
-                  initialValue: state.shadColor,
+                child: AxiDropdown<ShadColor>(
+                  value: state.shadColor,
+                  maxWidth: sizing.menuMaxWidth,
                   enabled: !state.isGlobalSettingLoading(
                     GlobalSettingId.colorScheme,
                   ),
@@ -395,8 +397,9 @@ class SettingsControls extends StatelessWidget {
                       .updateColorScheme(colorScheme),
                   options: ShadColor.values
                       .map(
-                        (colorScheme) => ShadOption<ShadColor>(
+                        (colorScheme) => AxiDropdownOption<ShadColor>(
                           value: colorScheme,
+                          label: colorScheme.name,
                           child: Text(
                             colorScheme.name,
                             style: context.textTheme.small,
@@ -404,9 +407,8 @@ class SettingsControls extends StatelessWidget {
                         ),
                       )
                       .toList(),
-                  selectedOptionBuilder:
-                      (BuildContext context, ShadColor value) =>
-                          Text(value.name, style: context.textTheme.small),
+                  selectedBuilder: (BuildContext context, ShadColor value) =>
+                      Text(value.name, style: context.textTheme.small),
                 ),
               ),
             ),

@@ -1421,23 +1421,21 @@ class _DeadlineTimeDropdown extends StatelessWidget {
       children: [
         Text(label, style: labelStyle),
         SizedBox(height: spacing.s),
-        AxiSelect<int>(
-          initialValue: selectedValue,
+        AxiDropdown<int>(
+          value: selectedValue,
           onChanged: (selected) {
-            if (selected == null) {
-              return;
-            }
             onSelected(selected);
           },
           options: values
               .map(
-                (value) => ShadOption<int>(
+                (value) => AxiDropdownOption<int>(
                   value: value,
+                  label: formatter(value),
                   child: Text(formatter(value)),
                 ),
               )
               .toList(growable: false),
-          selectedOptionBuilder: (context, value) => Text(formatter(value)),
+          selectedBuilder: (context, value) => Text(formatter(value)),
           decoration: dropdownDecoration,
           padding: dropdownPadding,
           trailing: dropdownIcon,

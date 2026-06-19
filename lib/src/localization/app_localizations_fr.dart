@@ -282,6 +282,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get commonCancel => 'Annuler';
 
   @override
+  String get commonSort => 'Tri';
+
+  @override
+  String get commonFilter => 'Filtre';
+
+  @override
+  String commonLabeledValue(Object label, Object value) {
+    return '$label : $value';
+  }
+
+  @override
   String get spamEmpty => 'Pas encore de spam';
 
   @override
@@ -358,6 +369,20 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get attachmentGalleryErrorMessage =>
       'Impossible de charger les pièces jointes.';
+
+  @override
+  String get attachmentGallerySortFilterLabel => 'Tri';
+
+  @override
+  String get attachmentGalleryTypeFilterLabel => 'Type';
+
+  @override
+  String get attachmentGallerySourceFilterLabel => 'Source';
+
+  @override
+  String attachmentGalleryFilterTriggerLabel(Object filter, Object value) {
+    return '$filter : $value';
+  }
 
   @override
   String get attachmentGalleryAllLabel => 'Tous';

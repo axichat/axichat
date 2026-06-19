@@ -91,39 +91,40 @@ class VerificationSelector extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
-                  spacing: 8.0,
+                  spacing: context.spacing.s,
                   children: [
                     Icon(
                       fingerprint.trust.iconData(),
                       color: fingerprint.trust.color(colors),
                     ),
-                    AxiSelect<BTBVTrustState>(
-                      initialValue: fingerprint.trust,
+                    AxiDropdown<BTBVTrustState>(
+                      value: fingerprint.trust,
                       onChanged: (trust) =>
                           context.read<VerificationCubit>().setDeviceTrust(
                             jid: fingerprint.jid,
                             device: fingerprint.deviceID,
-                            trust: trust!,
+                            trust: trust,
                           ),
                       options: BTBVTrustState.values
                           .map(
-                            (trust) => ShadOption<BTBVTrustState>(
+                            (trust) => AxiDropdownOption<BTBVTrustState>(
                               value: trust,
+                              label: trust.label(l10n),
                               child: Text(trust.label(l10n)),
                             ),
                           )
                           .toList(),
-                      selectedOptionBuilder:
+                      selectedBuilder:
                           (BuildContext context, BTBVTrustState value) =>
                               Text(value.label(l10n)),
                     ),
                   ],
                 ),
-                const SizedBox.square(dimension: 8),
+                SizedBox.square(dimension: context.spacing.s),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
-                  spacing: 8.0,
+                  spacing: context.spacing.s,
                   children: [
                     Icon(
                       fingerprint.trusted.toShieldIcon,

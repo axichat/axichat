@@ -97,6 +97,15 @@
   "commonSearch": "Search",
   "commonClear": "Clear",
   "commonCancel": "Cancel",
+  "commonSort": "Sort",
+  "commonFilter": "Filter",
+  "commonLabeledValue": "{label}: {value}",
+  "@commonLabeledValue": {
+    "placeholders": {
+      "label": {},
+      "value": {}
+    }
+  },
   "spamEmpty": "No spam yet",
   "spamMoveToInbox": "Move to inbox",
   "spamMoveToastTitle": "Moved",
@@ -138,6 +147,16 @@
   "attachmentGalleryRosterErrorTitle": "Unable to add contact",
   "attachmentGalleryRosterErrorMessage": "Downloaded this attachment once, but automatic downloads are still disabled.",
   "attachmentGalleryErrorMessage": "Unable to load attachments.",
+  "attachmentGallerySortFilterLabel": "Sort",
+  "attachmentGalleryTypeFilterLabel": "Type",
+  "attachmentGallerySourceFilterLabel": "Source",
+  "attachmentGalleryFilterTriggerLabel": "{filter}: {value}",
+  "@attachmentGalleryFilterTriggerLabel": {
+    "placeholders": {
+      "filter": {},
+      "value": {}
+    }
+  },
   "attachmentGalleryAllLabel": "All",
   "attachmentGalleryImagesLabel": "Images",
   "attachmentGalleryVideosLabel": "Videos",

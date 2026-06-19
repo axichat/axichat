@@ -7,7 +7,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 final class AttachmentApprovalDecision {
   const AttachmentApprovalDecision({
@@ -136,9 +135,9 @@ class _AttachmentAutoDownloadSelect extends StatelessWidget {
         Text(hint, style: context.textTheme.muted),
         ConstrainedBox(
           constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-          child: AxiSelect<AttachmentAutoDownload?>(
+          child: AxiDropdown<AttachmentAutoDownload?>(
             maxWidth: sizing.menuMaxWidth,
-            initialValue: value,
+            value: value,
             onChanged: onChanged,
             options:
                 <AttachmentAutoDownload?>[
@@ -147,13 +146,14 @@ class _AttachmentAutoDownloadSelect extends StatelessWidget {
                       AttachmentAutoDownload.blocked,
                     ]
                     .map(
-                      (option) => ShadOption<AttachmentAutoDownload?>(
+                      (option) => AxiDropdownOption<AttachmentAutoDownload?>(
                         value: option,
+                        label: _label(l10n, option),
                         child: Text(_label(l10n, option)),
                       ),
                     )
                     .toList(),
-            selectedOptionBuilder: (_, option) => Text(_label(l10n, option)),
+            selectedBuilder: (_, option) => Text(_label(l10n, option)),
           ),
         ),
       ],

@@ -497,24 +497,22 @@ class _AlarmActionField extends StatelessWidget {
     );
     final Widget? helperWidget = helper;
     final Widget content = enabled
-        ? AxiSelect<CalendarAlarmAction>(
+        ? AxiDropdown<CalendarAlarmAction>(
             enabled: enabled,
-            initialValue: action,
+            value: action,
             onChanged: (value) {
-              if (value == null) {
-                return;
-              }
               onChanged(value);
             },
             options: options
                 .map(
-                  (option) => ShadOption<CalendarAlarmAction>(
+                  (option) => AxiDropdownOption<CalendarAlarmAction>(
                     value: option,
+                    label: option.label(context.l10n),
                     child: Text(option.label(context.l10n)),
                   ),
                 )
                 .toList(growable: false),
-            selectedOptionBuilder: (context, selected) =>
+            selectedBuilder: (context, selected) =>
                 Text(selected.label(context.l10n)),
             decoration: ShadDecoration(
               color: calendarContainerColor,
@@ -568,10 +566,10 @@ class _AlarmTriggerTypeField extends StatelessWidget {
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmTriggerLabel),
         SizedBox(height: context.spacing.xxs),
-        AxiSelect<CalendarAlarmTriggerType>(
-          initialValue: trigger.type,
+        AxiDropdown<CalendarAlarmTriggerType>(
+          value: trigger.type,
           onChanged: (value) {
-            if (value == null || value == trigger.type) {
+            if (value == trigger.type) {
               return;
             }
             if (value == CalendarAlarmTriggerType.absolute) {
@@ -598,13 +596,14 @@ class _AlarmTriggerTypeField extends StatelessWidget {
           },
           options: CalendarAlarmTriggerType.values
               .map(
-                (option) => ShadOption<CalendarAlarmTriggerType>(
+                (option) => AxiDropdownOption<CalendarAlarmTriggerType>(
                   value: option,
+                  label: option.label(context.l10n),
                   child: Text(option.label(context.l10n)),
                 ),
               )
               .toList(growable: false),
-          selectedOptionBuilder: (context, selected) =>
+          selectedBuilder: (context, selected) =>
               Text(selected.label(context.l10n)),
           decoration: ShadDecoration(
             color: calendarContainerColor,
@@ -781,22 +780,21 @@ class _AlarmSelectRow<T> extends StatelessWidget {
       children: [
         _AlarmFieldLabel(text: label),
         SizedBox(height: context.spacing.xxs),
-        AxiSelect<T>(
-          initialValue: value,
+        AxiDropdown<T>(
+          value: value,
           onChanged: (selected) {
-            if (selected == null) {
-              return;
-            }
             onChanged(selected);
           },
           options: options
               .map(
-                (option) =>
-                    ShadOption<T>(value: option, child: Text(labelFor(option))),
+                (option) => AxiDropdownOption<T>(
+                  value: option,
+                  label: labelFor(option),
+                  child: Text(labelFor(option)),
+                ),
               )
               .toList(growable: false),
-          selectedOptionBuilder: (context, selected) =>
-              Text(labelFor(selected)),
+          selectedBuilder: (context, selected) => Text(labelFor(selected)),
           decoration: ShadDecoration(
             color: calendarContainerColor,
             border: ShadBorder.all(
@@ -991,24 +989,23 @@ class _AlarmDurationFieldState extends State<AlarmDurationField> {
         ),
         SizedBox(width: context.spacing.s),
         Expanded(
-          child: AxiSelect<AlarmOffsetUnit>(
-            initialValue: _unit,
+          child: AxiDropdown<AlarmOffsetUnit>(
+            value: _unit,
+            widthBehavior: AxiButtonWidth.expand,
             onChanged: (next) {
-              if (next == null) {
-                return;
-              }
               setState(() => _unit = next);
               _handleValueChanged(_controller.text);
             },
             options: AlarmOffsetUnit.values
                 .map(
-                  (option) => ShadOption<AlarmOffsetUnit>(
+                  (option) => AxiDropdownOption<AlarmOffsetUnit>(
                     value: option,
+                    label: option.label(context.l10n),
                     child: Text(option.label(context.l10n)),
                   ),
                 )
                 .toList(growable: false),
-            selectedOptionBuilder: (context, selected) =>
+            selectedBuilder: (context, selected) =>
                 Text(selected.label(context.l10n)),
             decoration: ShadDecoration(
               color: calendarContainerColor,

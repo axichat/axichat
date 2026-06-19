@@ -162,9 +162,6 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         final placeholder = searchPresentation.label == null
             ? l10n.homeSearchPlaceholderTabs
             : l10n.homeSearchPlaceholderForTab(searchPresentation.label!);
-        final filterLabel = filters.isEmpty
-            ? null
-            : _filterLabel(filters, effectiveFilterId);
         return AnimatedCrossFade(
           crossFadeState: active
               ? CrossFadeState.showSecond
@@ -213,13 +210,15 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                   ],
                 ),
                 SizedBox(height: spacing.s),
-                Row(
-                  children: [
-                    Expanded(
-                      child: AxiSelect<SearchSortOrder>(
-                        initialValue: sortValue,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: spacing.s,
+                    runSpacing: spacing.s,
+                    children: [
+                      AxiDropdown<SearchSortOrder>(
+                        value: sortValue,
                         onChanged: (value) {
-                          if (value == null) return;
                           locate<HomeBloc>().add(
                             HomeSearchSortChanged(
                               value,
@@ -230,8 +229,12 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         },
                         options: SearchSortOrder.values
                             .map(
-                              (order) => ShadOption<SearchSortOrder>(
+                              (order) => AxiDropdownOption<SearchSortOrder>(
                                 value: order,
+                                label: searchPresentation.sortLabels.label(
+                                  order,
+                                  l10n,
+                                ),
                                 child: Text(
                                   searchPresentation.sortLabels.label(
                                     order,
@@ -241,14 +244,13 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                               ),
                             )
                             .toList(),
-                        selectedOptionBuilder: (_, _) => Text(sortLabel),
+                        selectedBuilder: (_, _) => Text(
+                          l10n.commonLabeledValue(l10n.commonSort, sortLabel),
+                        ),
                       ),
-                    ),
-                    if (filters.length > 1 && effectiveFilterId != null) ...[
-                      SizedBox(width: spacing.s),
-                      Expanded(
-                        child: AxiSelect<SearchFilterId>(
-                          initialValue: effectiveFilterId,
+                      if (filters.length > 1 && effectiveFilterId != null) ...[
+                        AxiDropdown<SearchFilterId>(
+                          value: effectiveFilterId,
                           onChanged: (value) {
                             locate<HomeBloc>().add(
                               HomeSearchFilterChanged(
@@ -260,30 +262,24 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                           },
                           options: filters
                               .map(
-                                (filter) => ShadOption<SearchFilterId>(
+                                (filter) => AxiDropdownOption<SearchFilterId>(
                                   value: filter.id,
+                                  label: filter.label,
                                   child: Text(filter.label),
                                 ),
                               )
                               .toList(),
-                          selectedOptionBuilder: (_, value) =>
-                              Text(_filterLabel(filters, value)),
+                          selectedBuilder: (_, value) => Text(
+                            l10n.commonLabeledValue(
+                              l10n.commonFilter,
+                              _filterLabel(filters, value),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-                if (filterLabel != null && filters.length > 1)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: EdgeInsets.only(top: spacing.s),
-                      child: Text(
-                        l10n.homeSearchFilterLabel(filterLabel),
-                        style: context.textTheme.muted,
-                      ),
-                    ),
                   ),
+                ),
               ],
             ),
           ),

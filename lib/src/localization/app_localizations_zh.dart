@@ -264,6 +264,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonCancel => '取消';
 
   @override
+  String get commonSort => '排序';
+
+  @override
+  String get commonFilter => '筛选';
+
+  @override
+  String commonLabeledValue(Object label, Object value) {
+    return '$label：$value';
+  }
+
+  @override
   String get spamEmpty => '还没有垃圾邮件';
 
   @override
@@ -333,6 +344,20 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get attachmentGalleryErrorMessage => '无法加载附件。';
+
+  @override
+  String get attachmentGallerySortFilterLabel => '排序';
+
+  @override
+  String get attachmentGalleryTypeFilterLabel => '类型';
+
+  @override
+  String get attachmentGallerySourceFilterLabel => '来源';
+
+  @override
+  String attachmentGalleryFilterTriggerLabel(Object filter, Object value) {
+    return '$filter：$value';
+  }
 
   @override
   String get attachmentGalleryAllLabel => '全部';
@@ -7148,6 +7173,17 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get commonCancel => '取消';
 
   @override
+  String get commonSort => '排序';
+
+  @override
+  String get commonFilter => '篩選';
+
+  @override
+  String commonLabeledValue(Object label, Object value) {
+    return '$label：$value';
+  }
+
+  @override
   String get spamEmpty => '暫時沒有垃圾郵件';
 
   @override
@@ -7217,6 +7253,20 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get attachmentGalleryErrorMessage => '無法載入附件。';
+
+  @override
+  String get attachmentGallerySortFilterLabel => '排序';
+
+  @override
+  String get attachmentGalleryTypeFilterLabel => '類型';
+
+  @override
+  String get attachmentGallerySourceFilterLabel => '來源';
+
+  @override
+  String attachmentGalleryFilterTriggerLabel(Object filter, Object value) {
+    return '$filter：$value';
+  }
 
   @override
   String get attachmentGalleryAllLabel => '全部';

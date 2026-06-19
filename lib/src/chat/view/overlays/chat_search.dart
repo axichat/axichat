@@ -101,6 +101,7 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
         }
       },
       builder: (context, state) {
+        final locate = context.read;
         final l10n = context.l10n;
         final spacing = context.spacing;
         final colors = context.colorScheme;
@@ -132,109 +133,119 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   SizedBox(width: spacing.s),
                   AxiButton(
                     variant: AxiButtonVariant.ghost,
-                    onPressed: () =>
-                        context.read<ChatSearchCubit>().setActive(false),
+                    onPressed: () => locate<ChatSearchCubit>().setActive(false),
                     child: Text(l10n.commonCancel),
                   ),
                 ],
               ),
               SizedBox(height: spacing.s),
-              Row(
-                children: [
-                  Expanded(
-                    child: AxiSelect<SearchSortOrder>(
-                      initialValue: state.sort,
-                      onChanged: (value) {
-                        if (value == null) return;
-                        context.read<ChatSearchCubit>().updateSort(value);
-                      },
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: spacing.s,
+                  runSpacing: spacing.s,
+                  children: [
+                    AxiDropdown<SearchSortOrder>(
+                      value: state.sort,
+                      onChanged: (value) =>
+                          locate<ChatSearchCubit>().updateSort(value),
                       options: SearchSortOrder.values
                           .map(
-                            (order) => ShadOption<SearchSortOrder>(
+                            (order) => AxiDropdownOption<SearchSortOrder>(
                               value: order,
+                              label: _sortLabel(order, l10n),
                               child: Text(_sortLabel(order, l10n)),
                             ),
                           )
                           .toList(),
-                      selectedOptionBuilder: (_, value) =>
-                          Text(_sortLabel(value, l10n)),
-                    ),
-                  ),
-                  SizedBox(width: spacing.s),
-                  Expanded(
-                    child: AxiSelect<MessageTimelineFilter>(
-                      initialValue: state.filter,
-                      onChanged: (value) {
-                        if (value == null) return;
-                        context.read<ChatSearchCubit>().updateFilter(value);
-                      },
-                      options: messageFilterOptions
-                          .map(
-                            (option) => ShadOption<MessageTimelineFilter>(
-                              value: option.filter,
-                              child: Text(option.label),
-                            ),
-                          )
-                          .toList(),
-                      selectedOptionBuilder: (_, value) => Text(
-                        messageFilterOptions
-                            .firstWhere((option) => option.filter == value)
-                            .label,
+                      selectedBuilder: (_, value) => Text(
+                        l10n.commonLabeledValue(
+                          l10n.commonSort,
+                          _sortLabel(value, l10n),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    AxiDropdown<MessageTimelineFilter>(
+                      value: state.filter,
+                      onChanged: (value) =>
+                          locate<ChatSearchCubit>().updateFilter(value),
+                      options: messageFilterOptions
+                          .map(
+                            (option) =>
+                                AxiDropdownOption<MessageTimelineFilter>(
+                                  value: option.filter,
+                                  label: option.label,
+                                  child: Text(option.label),
+                                ),
+                          )
+                          .toList(),
+                      selectedBuilder: (_, value) {
+                        final label = messageFilterOptions
+                            .firstWhere((option) => option.filter == value)
+                            .label;
+                        return Text(
+                          l10n.commonLabeledValue(l10n.commonFilter, label),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
               SizedBox(height: spacing.s),
-              Row(
-                children: [
-                  Expanded(
-                    child: AxiSelect<String>(
-                      initialValue: state.subjectFilter ?? '',
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: spacing.s,
+                  runSpacing: spacing.s,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    AxiDropdown<String>(
+                      value: state.subjectFilter ?? '',
                       onChanged: (value) {
-                        context.read<ChatSearchCubit>().updateSubjectFilter(
-                          value?.isEmpty == true ? null : value,
+                        locate<ChatSearchCubit>().updateSubjectFilter(
+                          value.isEmpty ? null : value,
                         );
                       },
                       options: [
-                        ShadOption<String>(
+                        AxiDropdownOption<String>(
                           value: '',
+                          label: l10n.chatSearchAnySubject,
                           child: Text(l10n.chatSearchAnySubject),
                         ),
                         ...state.subjects.map(
-                          (subject) => ShadOption<String>(
+                          (subject) => AxiDropdownOption<String>(
                             value: subject,
+                            label: subject,
                             child: Text(subject),
                           ),
                         ),
                       ],
-                      selectedOptionBuilder: (_, value) => Text(
-                        value.isNotEmpty ? value : l10n.chatSearchAnySubject,
+                      selectedBuilder: (_, value) => Text(
+                        l10n.commonLabeledValue(
+                          l10n.chatMessageSubjectLabel,
+                          value.isNotEmpty ? value : l10n.chatSearchAnySubject,
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: spacing.s),
-                  ShadSwitch(
-                    value: state.excludeSubject,
-                    onChanged: (value) => context
-                        .read<ChatSearchCubit>()
-                        .toggleExcludeSubject(value),
-                  ),
-                  SizedBox(width: spacing.s),
-                  Text(
-                    l10n.chatSearchExcludeSubject,
-                    style: context.textTheme.muted,
-                  ),
-                ],
+                    ShadSwitch(
+                      value: state.excludeSubject,
+                      onChanged: (value) =>
+                          locate<ChatSearchCubit>().toggleExcludeSubject(value),
+                    ),
+                    Text(
+                      l10n.chatSearchExcludeSubject,
+                      style: context.textTheme.muted,
+                    ),
+                  ],
+                ),
               ),
               SizedBox(height: spacing.s),
               Row(
                 children: [
                   ShadSwitch(
                     value: state.importantOnly,
-                    onChanged: (value) => context
-                        .read<ChatSearchCubit>()
-                        .updateImportantOnly(value),
+                    onChanged: (value) =>
+                        locate<ChatSearchCubit>().updateImportantOnly(value),
                   ),
                   SizedBox(width: spacing.s),
                   Text(
@@ -256,21 +267,18 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   if (state.error != null) {
                     statusChild = Text(
                       state.error ?? l10n.chatSearchFailed,
-                      style: TextStyle(color: context.colorScheme.destructive),
+                      style: context.textTheme.muted.copyWith(
+                        color: context.colorScheme.destructive,
+                      ),
                     );
                   } else if (state.status.isLoading) {
                     statusChild = Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: context.colorScheme.primary,
-                          ),
+                        AxiProgressIndicator(
+                          color: context.colorScheme.primary,
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: spacing.s),
                         Text(
                           l10n.chatSearchInProgress,
                           style: context.textTheme.muted,

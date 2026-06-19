@@ -274,6 +274,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonCancel => 'Cancel';
 
   @override
+  String get commonSort => 'Sort';
+
+  @override
+  String get commonFilter => 'Filter';
+
+  @override
+  String commonLabeledValue(Object label, Object value) {
+    return '$label: $value';
+  }
+
+  @override
   String get spamEmpty => 'No spam yet';
 
   @override
@@ -348,6 +359,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachmentGalleryErrorMessage => 'Unable to load attachments.';
+
+  @override
+  String get attachmentGallerySortFilterLabel => 'Sort';
+
+  @override
+  String get attachmentGalleryTypeFilterLabel => 'Type';
+
+  @override
+  String get attachmentGallerySourceFilterLabel => 'Source';
+
+  @override
+  String attachmentGalleryFilterTriggerLabel(Object filter, Object value) {
+    return '$filter: $value';
+  }
 
   @override
   String get attachmentGalleryAllLabel => 'All';

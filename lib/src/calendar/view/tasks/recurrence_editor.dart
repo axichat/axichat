@@ -1175,7 +1175,13 @@ class _RecurrenceIntervalRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final options = List.generate(12, (index) => index + 1)
-        .map((value) => ShadOption<int>(value: value, child: Text('$value')))
+        .map(
+          (value) => AxiDropdownOption<int>(
+            value: value,
+            label: '$value',
+            child: Text('$value'),
+          ),
+        )
         .toList();
 
     return Row(
@@ -1187,15 +1193,14 @@ class _RecurrenceIntervalRow extends StatelessWidget {
         SizedBox(width: fieldGap),
         SizedBox(
           width: intervalWidth,
-          child: AxiSelect<int>(
+          child: AxiDropdown<int>(
             enabled: enabled,
-            initialValue: currentInterval.clamp(1, 12),
+            value: currentInterval.clamp(1, 12).toInt(),
             onChanged: (newValue) {
-              if (newValue == null) return;
               onIntervalChanged(newValue);
             },
             options: options,
-            selectedOptionBuilder: (context, selected) => Text('$selected'),
+            selectedBuilder: (context, selected) => Text('$selected'),
             decoration: ShadDecoration(
               color: calendarContainerColor,
               border: ShadBorder.all(
@@ -2334,26 +2339,25 @@ class _RecurrenceOrdinalWeekdayEditorState
         Row(
           children: [
             Expanded(
-              child: AxiSelect<int>(
+              child: AxiDropdown<int>(
                 enabled: widget.enabled,
-                initialValue: _selectedOrdinal,
+                value: _selectedOrdinal,
+                widthBehavior: AxiButtonWidth.expand,
                 onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
                   setState(() {
                     _selectedOrdinal = value;
                   });
                 },
                 options: _ordinalOptions
                     .map(
-                      (option) => ShadOption<int>(
+                      (option) => AxiDropdownOption<int>(
                         value: option.position ?? _recurrenceOrdinalEveryValue,
+                        label: option.label,
                         child: Text(option.label),
                       ),
                     )
                     .toList(),
-                selectedOptionBuilder: (context, selected) =>
+                selectedBuilder: (context, selected) =>
                     Text(_ordinalLabelForValue(selected)),
                 decoration: ShadDecoration(
                   color: calendarContainerColor,
@@ -2376,26 +2380,25 @@ class _RecurrenceOrdinalWeekdayEditorState
             ),
             SizedBox(width: context.spacing.s),
             Expanded(
-              child: AxiSelect<CalendarWeekday>(
+              child: AxiDropdown<CalendarWeekday>(
                 enabled: widget.enabled,
-                initialValue: _selectedWeekday,
+                value: _selectedWeekday,
+                widthBehavior: AxiButtonWidth.expand,
                 onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
                   setState(() {
                     _selectedWeekday = value;
                   });
                 },
                 options: _orderedWeekdays
                     .map(
-                      (weekday) => ShadOption<CalendarWeekday>(
+                      (weekday) => AxiDropdownOption<CalendarWeekday>(
                         value: weekday,
+                        label: weekday.longLabel,
                         child: Text(weekday.longLabel),
                       ),
                     )
                     .toList(),
-                selectedOptionBuilder: (context, selected) =>
+                selectedBuilder: (context, selected) =>
                     Text(selected.longLabel),
                 decoration: ShadDecoration(
                   color: calendarContainerColor,

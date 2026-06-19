@@ -333,26 +333,30 @@ class _AttendeesFieldState extends State<_AttendeesField> {
     final List<CalendarAttendee> attendees = widget.attendees.isEmpty
         ? _emptyAttendees
         : widget.attendees;
-    final List<ShadOption<CalendarParticipantRole?>> roleOptions = [
-      const ShadOption<CalendarParticipantRole?>(
+    final List<AxiDropdownOption<CalendarParticipantRole?>> roleOptions = [
+      const AxiDropdownOption<CalendarParticipantRole?>(
         value: null,
+        label: _attendeeDefaultLabel,
         child: Text(_attendeeDefaultLabel),
       ),
       ...CalendarParticipantRole.values.map(
-        (role) => ShadOption<CalendarParticipantRole?>(
+        (role) => AxiDropdownOption<CalendarParticipantRole?>(
           value: role,
+          label: role.label,
           child: Text(role.label),
         ),
       ),
     ];
-    final List<ShadOption<CalendarParticipantStatus?>> statusOptions = [
-      const ShadOption<CalendarParticipantStatus?>(
+    final List<AxiDropdownOption<CalendarParticipantStatus?>> statusOptions = [
+      const AxiDropdownOption<CalendarParticipantStatus?>(
         value: null,
+        label: _attendeeDefaultLabel,
         child: Text(_attendeeDefaultLabel),
       ),
       ...CalendarParticipantStatus.values.map(
-        (status) => ShadOption<CalendarParticipantStatus?>(
+        (status) => AxiDropdownOption<CalendarParticipantStatus?>(
           value: status,
+          label: status.label,
           child: Text(status.label),
         ),
       ),
@@ -434,8 +438,8 @@ class _AttendeeCard extends StatelessWidget {
   });
 
   final CalendarAttendee attendee;
-  final List<ShadOption<CalendarParticipantRole?>> roleOptions;
-  final List<ShadOption<CalendarParticipantStatus?>> statusOptions;
+  final List<AxiDropdownOption<CalendarParticipantRole?>> roleOptions;
+  final List<AxiDropdownOption<CalendarParticipantStatus?>> statusOptions;
   final ValueChanged<CalendarAttendee> onChanged;
   final VoidCallback onRemove;
 
@@ -548,7 +552,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
 
   final String label;
   final T value;
-  final List<ShadOption<T>> options;
+  final List<AxiDropdownOption<T>> options;
   final String Function(T value) selectedLabel;
   final ValueChanged<T?> onChanged;
 
@@ -561,11 +565,12 @@ class _ParticipantSelectField<T> extends StatelessWidget {
       children: [
         Text(label.toUpperCase(), style: labelStyle),
         SizedBox(height: context.spacing.xxs),
-        AxiSelect<T>(
-          initialValue: value,
+        AxiDropdown<T>(
+          value: value,
+          widthBehavior: AxiButtonWidth.expand,
           onChanged: onChanged,
           options: options,
-          selectedOptionBuilder: (context, selected) => Text(
+          selectedBuilder: (context, selected) => Text(
             selected == null ? _attendeeDefaultLabel : selectedLabel(selected),
           ),
           decoration: ShadDecoration(

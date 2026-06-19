@@ -53,24 +53,26 @@ class BlocklistAddButton extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        AxiSelect<MessageTransport>(
-                          initialValue: transport,
+                        AxiDropdown<MessageTransport>(
+                          value: transport,
                           enabled: state is! BlocklistLoading,
+                          widthBehavior: AxiButtonWidth.expand,
                           onChanged: (value) {
-                            if (value == null) return;
                             setState(() => transport = value);
                           },
                           options: [
-                            ShadOption(
+                            AxiDropdownOption<MessageTransport>(
                               value: MessageTransport.xmpp,
+                              label: l10n.authEndpointXmppLabel,
                               child: Text(l10n.authEndpointXmppLabel),
                             ),
-                            ShadOption(
+                            AxiDropdownOption<MessageTransport>(
                               value: MessageTransport.email,
+                              label: l10n.sessionCapabilityEmail,
                               child: Text(l10n.sessionCapabilityEmail),
                             ),
                           ],
-                          selectedOptionBuilder: (_, value) => Text(
+                          selectedBuilder: (_, value) => Text(
                             value == MessageTransport.xmpp
                                 ? l10n.authEndpointXmppLabel
                                 : l10n.sessionCapabilityEmail,

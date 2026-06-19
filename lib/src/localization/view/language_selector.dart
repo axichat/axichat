@@ -8,7 +8,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum LanguageLabelStyle { full, compact }
 
@@ -30,22 +29,21 @@ class LanguageSelector extends StatelessWidget {
         final maxWidth = compact ? 200.0 : 280.0;
         return ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
-          child: AxiSelect<AppLanguage>(
-            initialValue: language,
-            shrinkWrap: true,
-            onChanged: (value) {
-              if (value == null) return;
-              context.read<SettingsCubit>().updateLanguage(value);
-            },
+          child: AxiDropdown<AppLanguage>(
+            value: language,
+            onChanged: (value) =>
+                context.read<SettingsCubit>().updateLanguage(value),
+            maxWidth: maxWidth,
             options: AppLanguage.values
                 .map(
-                  (entry) => ShadOption<AppLanguage>(
+                  (entry) => AxiDropdownOption<AppLanguage>(
                     value: entry,
+                    label: entry.label(context.l10n),
                     child: _LanguageLabel(language: entry, style: labelStyle),
                   ),
                 )
                 .toList(),
-            selectedOptionBuilder: (context, value) => _LanguageLabel(
+            selectedBuilder: (context, value) => _LanguageLabel(
               language: value,
               style: labelStyle,
               resolveSystemLanguage: true,

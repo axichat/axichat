@@ -212,14 +212,12 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                 style: context.textTheme.small,
               ),
               SizedBox(height: spacing.s),
-              AxiSelect<EmailContactImportFormat>(
-                initialValue: _format,
+              AxiDropdown<EmailContactImportFormat>(
+                value: _format,
+                widthBehavior: AxiButtonWidth.expand,
                 onChanged: loading
                     ? null
                     : (value) {
-                        if (value == null) {
-                          return;
-                        }
                         setState(() {
                           _format = value;
                           _selectedFile = null;
@@ -228,13 +226,14 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                       },
                 options: EmailContactImportFormat.values
                     .map(
-                      (format) => ShadOption<EmailContactImportFormat>(
+                      (format) => AxiDropdownOption<EmailContactImportFormat>(
                         value: format,
+                        label: format.label(l10n),
                         child: Text(format.label(l10n), style: selectTextStyle),
                       ),
                     )
                     .toList(),
-                selectedOptionBuilder: (context, format) =>
+                selectedBuilder: (context, format) =>
                     Text(format.label(l10n), style: selectTextStyle),
               ),
               SizedBox(height: spacing.m),
