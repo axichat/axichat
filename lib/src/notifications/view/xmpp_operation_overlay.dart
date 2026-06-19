@@ -21,15 +21,18 @@ class XmppOperationOverlay extends StatefulWidget {
   State<XmppOperationOverlay> createState() => _XmppOperationOverlayState();
 }
 
-class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
+class _XmppOperationOverlayState extends State<XmppOperationOverlay>
+    with TickerProviderStateMixin {
   static const _completionExitDelay = Duration(seconds: 1);
   static const _reconciliationInterval = Duration(seconds: 1);
   static const _toastSlideOffset = Offset(0.22, 0.0);
 
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<_ToastEntry> _entries = <_ToastEntry>[];
+  final List<_ToastEntry> _removingEntries = <_ToastEntry>[];
   final List<XmppOperation> _pendingInsertions = <XmppOperation>[];
   final Map<String, Timer> _exitTimers = <String, Timer>{};
+  final Map<String, Timer> _removalDisposalTimers = <String, Timer>{};
   Timer? _insertCooldownTimer;
   bool _isInsertAnimating = false;
   final List<String> _pendingRemovals = <String>[];
@@ -65,9 +68,21 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       timer.cancel();
     }
     _exitTimers.clear();
+    for (final timer in _removalDisposalTimers.values.toList(growable: false)) {
+      timer.cancel();
+    }
+    _removalDisposalTimers.clear();
     _insertCooldownTimer?.cancel();
     _removalCooldownTimer?.cancel();
     _reconciliationTimer?.cancel();
+    for (final entry in _entries) {
+      entry.dispose();
+    }
+    _entries.clear();
+    for (final entry in _removingEntries) {
+      entry.dispose();
+    }
+    _removingEntries.clear();
     super.dispose();
   }
 
@@ -114,6 +129,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       if (statusChanged) {
         entry.operation = updated;
         shouldRebuild = true;
+      } else {
+        entry.operation = updated;
       }
       if (updated.status == XmppOperationStatus.inProgress) {
         _cancelExitTimer(updated.id);
@@ -151,7 +168,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       return false;
     }
     final index = _entries.length;
-    _entries.add(_ToastEntry(operation: operation));
+    _entries.add(_ToastEntry(operation: operation, vsync: this));
     listState.insertItem(index, duration: _resolveAnimationDuration());
     return true;
   }
@@ -307,18 +324,27 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     final removedEntry = _entries.removeAt(index);
     final listState = _listKey.currentState;
     if (!animated || listState == null) {
+      removedEntry.dispose();
       setState(() {});
       return;
     }
+    final duration = _resolveAnimationDuration();
+    _removingEntries.add(removedEntry);
     listState.removeItem(
       index,
       (context, animation) => _AnimatedToastListItem(
         operation: removedEntry.operation,
         animation: animation,
+        spinnerController: removedEntry.spinnerController,
         removing: true,
       ),
-      duration: _resolveAnimationDuration(),
+      duration: duration,
     );
+    _removalDisposalTimers[removedEntry.operation.id] = Timer(duration, () {
+      _removalDisposalTimers.remove(removedEntry.operation.id);
+      _removingEntries.remove(removedEntry);
+      removedEntry.dispose();
+    });
   }
 
   Duration _resolveAnimationDuration() {
@@ -372,6 +398,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
                     key: ValueKey<String>(entry.operation.id),
                     operation: entry.operation,
                     animation: animation,
+                    spinnerController: entry.spinnerController,
                   );
                 },
               ),
@@ -436,9 +463,13 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
 }
 
 class _XmppOperationToast extends StatelessWidget {
-  const _XmppOperationToast({required this.operation});
+  const _XmppOperationToast({
+    required this.operation,
+    required this.spinnerController,
+  });
 
   final XmppOperation operation;
+  final AnimationController spinnerController;
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +492,10 @@ class _XmppOperationToast extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _OperationStatusIcon(status: operation.status),
+            _OperationStatusIcon(
+              status: operation.status,
+              spinnerController: spinnerController,
+            ),
             SizedBox(width: context.spacing.s),
             Flexible(
               child: Text(
@@ -477,9 +511,13 @@ class _XmppOperationToast extends StatelessWidget {
 }
 
 class _OperationStatusIcon extends StatelessWidget {
-  const _OperationStatusIcon({required this.status});
+  const _OperationStatusIcon({
+    required this.status,
+    required this.spinnerController,
+  });
 
   final XmppOperationStatus status;
+  final AnimationController spinnerController;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +525,7 @@ class _OperationStatusIcon extends StatelessWidget {
     return switch (status) {
       XmppOperationStatus.inProgress => AxiProgressIndicator(
         color: colorScheme.primary,
+        controller: spinnerController,
       ),
       XmppOperationStatus.success => Icon(
         Icons.check_circle_rounded,
@@ -503,15 +542,37 @@ class _OperationStatusIcon extends StatelessWidget {
 }
 
 class _ToastEntry {
-  _ToastEntry({required this.operation});
+  _ToastEntry({required this.operation, required TickerProvider vsync})
+    : spinnerController = AnimationController(
+        duration: CircularProgressIndicator.defaultAnimationDuration,
+        vsync: vsync,
+      ) {
+    spinnerController
+      ..value = _initialSpinnerPhaseFor(operation)
+      ..repeat();
+  }
 
   XmppOperation operation;
+  final AnimationController spinnerController;
+
+  void dispose() {
+    spinnerController.dispose();
+  }
+
+  static double _initialSpinnerPhaseFor(XmppOperation operation) {
+    var hash = 0;
+    for (final codeUnit in operation.id.codeUnits) {
+      hash = (hash * 31 + codeUnit) & 0x7fffffff;
+    }
+    return hash / 0x7fffffff;
+  }
 }
 
 class _AnimatedToastListItem extends StatelessWidget {
   const _AnimatedToastListItem({
     required this.operation,
     required this.animation,
+    required this.spinnerController,
     this.removing = false,
     super.key,
   });
@@ -524,14 +585,23 @@ class _AnimatedToastListItem extends StatelessWidget {
 
   final XmppOperation operation;
   final Animation<double> animation;
+  final AnimationController spinnerController;
   final bool removing;
 
   @override
   Widget build(BuildContext context) {
     if (removing) {
-      return _RemovingToastListItem(operation: operation, animation: animation);
+      return _RemovingToastListItem(
+        operation: operation,
+        animation: animation,
+        spinnerController: spinnerController,
+      );
     }
-    return _EnteringToastListItem(operation: operation, animation: animation);
+    return _EnteringToastListItem(
+      operation: operation,
+      animation: animation,
+      spinnerController: spinnerController,
+    );
   }
 }
 
@@ -539,10 +609,12 @@ class _EnteringToastListItem extends StatelessWidget {
   const _EnteringToastListItem({
     required this.operation,
     required this.animation,
+    required this.spinnerController,
   });
 
   final XmppOperation operation;
   final Animation<double> animation;
+  final AnimationController spinnerController;
 
   @override
   Widget build(BuildContext context) {
@@ -565,7 +637,10 @@ class _EnteringToastListItem extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: AnimatedBuilder(
           animation: curve,
-          child: _XmppOperationToast(operation: operation),
+          child: _XmppOperationToast(
+            operation: operation,
+            spinnerController: spinnerController,
+          ),
           builder: (context, child) {
             return Align(
               alignment: Alignment.bottomLeft,
@@ -588,10 +663,12 @@ class _RemovingToastListItem extends StatelessWidget {
   const _RemovingToastListItem({
     required this.operation,
     required this.animation,
+    required this.spinnerController,
   });
 
   final XmppOperation operation;
   final Animation<double> animation;
+  final AnimationController spinnerController;
 
   @override
   Widget build(BuildContext context) {
@@ -630,7 +707,10 @@ class _RemovingToastListItem extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: AnimatedBuilder(
           animation: removalProgress,
-          child: _XmppOperationToast(operation: operation),
+          child: _XmppOperationToast(
+            operation: operation,
+            spinnerController: spinnerController,
+          ),
           builder: (context, child) {
             return Align(
               alignment: Alignment.bottomLeft,

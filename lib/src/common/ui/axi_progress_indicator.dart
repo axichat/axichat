@@ -5,10 +5,16 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
 class AxiProgressIndicator extends StatelessWidget {
-  const AxiProgressIndicator({super.key, this.color, this.semanticsLabel});
+  const AxiProgressIndicator({
+    super.key,
+    this.color,
+    this.semanticsLabel,
+    this.controller,
+  });
 
   final Color? color;
   final String? semanticsLabel;
+  final AnimationController? controller;
 
   @override
   Widget build(BuildContext context) {
@@ -18,6 +24,7 @@ class AxiProgressIndicator extends StatelessWidget {
         dimension: context.sizing.progressIndicatorSize,
         child: CircularProgressIndicator(
           color: color ?? context.colorScheme.foreground,
+          controller: controller,
           semanticsLabel: semanticsLabel,
           strokeWidth: context.sizing.progressIndicatorStrokeWidth,
         ),
