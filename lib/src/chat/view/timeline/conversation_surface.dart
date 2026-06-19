@@ -1,5 +1,14 @@
 part of '../chat.dart';
 
+enum _ChatTimelineLoadingPhase {
+  loadingMessages,
+  waitingForInitialReadiness,
+  ready;
+
+  bool get paintsTimeline => this != _ChatTimelineLoadingPhase.loadingMessages;
+  bool get showsOverlay => this != _ChatTimelineLoadingPhase.ready;
+}
+
 class _ChatTimelineViewport extends StatelessWidget {
   const _ChatTimelineViewport({
     required this.loadingMessages,
@@ -41,12 +50,11 @@ class _ChatTimelineViewport extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loadingMessages) {
-      return const Align(
-        alignment: Alignment.center,
-        child: AxiProgressIndicator(),
-      );
-    }
+    final loadingPhase = loadingMessages
+        ? _ChatTimelineLoadingPhase.loadingMessages
+        : hideTimelineUntilInitialReadiness
+        ? _ChatTimelineLoadingPhase.waitingForInitialReadiness
+        : _ChatTimelineLoadingPhase.ready;
     final spacing = context.spacing;
     return KeyedSubtree(
       key: messageListKey,
@@ -58,8 +66,8 @@ class _ChatTimelineViewport extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            messageList,
-            if (typingVisible)
+            if (loadingPhase.paintsTimeline) messageList,
+            if (loadingPhase.paintsTimeline && typingVisible)
               Positioned(
                 left: 0,
                 right: 0,
@@ -92,32 +100,62 @@ class _ChatTimelineViewport extends StatelessWidget {
                   ),
                 ),
               ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _ComposerBottomOverlay(
-                quotedMessage: quotedMessage,
-                quotedSenderLabel: quotedSenderLabel,
-                quotedIsSelf: quotedIsSelf,
-                onClearQuote: onClearQuote,
-                notices: notices,
-                banner: banner,
-                animationDuration: overlayAnimationDuration,
-              ),
-            ),
-            if (hideTimelineUntilInitialReadiness)
-              Positioned.fill(
-                child: AbsorbPointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: context.colorScheme.background,
-                    ),
-                    child: const Center(child: AxiProgressIndicator()),
-                  ),
+            if (loadingPhase.paintsTimeline)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _ComposerBottomOverlay(
+                  quotedMessage: quotedMessage,
+                  quotedSenderLabel: quotedSenderLabel,
+                  quotedIsSelf: quotedIsSelf,
+                  onClearQuote: onClearQuote,
+                  notices: notices,
+                  banner: banner,
+                  animationDuration: overlayAnimationDuration,
                 ),
               ),
+            _ChatTimelineLoadingOverlay(
+              phase: loadingPhase,
+              backgroundColor: context.colorScheme.background,
+            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatTimelineLoadingOverlay extends StatelessWidget {
+  const _ChatTimelineLoadingOverlay({
+    required this.phase,
+    required this.backgroundColor,
+  }) : super(key: const ValueKey<String>('chat-timeline-loading-overlay'));
+
+  final _ChatTimelineLoadingPhase phase;
+  final Color backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Visibility(
+        visible: phase.showsOverlay,
+        maintainState: true,
+        maintainAnimation: true,
+        maintainSize: true,
+        child: TickerMode(
+          enabled: phase.showsOverlay,
+          child: AbsorbPointer(
+            absorbing: phase.showsOverlay,
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: backgroundColor),
+              child: const Center(
+                child: AxiProgressIndicator(
+                  key: ValueKey<String>('chat-timeline-loading-spinner'),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -328,6 +328,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required NotificationService notificationService,
     required MucService mucService,
     required ChatSettingsSnapshot settings,
+    Duration initialLoadDelay = Duration.zero,
     EmailService? emailService,
     OmemoService? omemoService,
   }) : _messageService = messageService,
@@ -500,7 +501,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .listen(
             (transport) => add(_ChatSavedTransportOverrideUpdated(transport)),
           );
-      add(const _ChatStarted());
+      if (initialLoadDelay == Duration.zero) {
+        add(const _ChatStarted());
+      } else {
+        unawaited(_startChatAfterDelay(initialLoadDelay));
+      }
     }
     _emailSyncSubscription = _emailService?.syncStateStream.listen(
       (syncState) => add(_EmailSyncStateChanged(syncState)),
@@ -527,6 +532,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _handleLifecycleResumed();
       },
     );
+  }
+
+  Future<void> _startChatAfterDelay(Duration delay) async {
+    await Future<void>.delayed(delay);
+    if (_isClosing) {
+      return;
+    }
+    add(const _ChatStarted());
   }
 
   static const messageBatchSize = 50;
@@ -578,6 +591,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Set<String> _trackedFileMetadataIds = const <String>{};
   var _fileMetadataRetryAttempts = _emptyMessageCount;
   var _fileMetadataSubscriptionCancelling = false;
+  var _chatStarted = false;
+  var _initialChatSideEffectsStarted = false;
   var _isClosing = false;
   String? _retainedMucRoomJid;
   AppLifecycleListener? _lifecycleListener;
@@ -1503,15 +1518,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatStarted event,
     Emitter<ChatState> emit,
   ) async {
-    if (jid == null) {
+    if (_chatStarted || _isClosing || jid == null) {
       return;
     }
-    await _subscribeToMessages(
-      limit: messageBatchSize,
-      filter: state.viewFilter,
-    );
+    _chatStarted = true;
     await _initializeViewFilter(emit);
+    if (_isClosing || emit.isDone) return;
     await _initializeSavedTransportOverride(emit);
+    if (_isClosing || emit.isDone) return;
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    final nextViewFilter = chat.defaultTransport.isEmail
+        ? MessageTimelineFilter.allWithContact
+        : state.viewFilter;
+    await _runStartedChatSideEffects(
+      chat,
+      emit,
+      firstChatSideEffects: true,
+      typingContextChanged: true,
+      pinnedContextChanged: true,
+      showXmppCapabilities: _xmppAllowedForChat(chat),
+      nextViewFilter: nextViewFilter,
+    );
   }
 
   void _assertOwnsChat(Chat chat) {
@@ -2030,6 +2060,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final transportChanged =
         state.chat?.defaultTransport != event.chat.defaultTransport;
+    final initialChatSideEffectsStarting =
+        _chatStarted && !_initialChatSideEffectsStarted;
     final paginationContextChanged =
         chatWasUninitialized ||
         state.chat?.jid != event.chat.jid ||
@@ -2039,14 +2071,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? null
         : _resolvePinnedMessagesChatJid(state.chat!);
     final nextPinnedSourceKey = _resolvePinnedMessagesChatJid(event.chat);
-    final typingContextChanged = chatWasUninitialized || transportChanged;
+    final typingContextChanged =
+        chatWasUninitialized ||
+        transportChanged ||
+        initialChatSideEffectsStarting;
     final pinnedSourceChanged =
         (_pinnedMessagesSourceKey ?? previousPinnedSourceKey) !=
         nextPinnedSourceKey;
     final pinnedContextChanged =
         chatWasUninitialized ||
         pinnedSourceChanged ||
-        (nextPinnedSourceKey != null && _pinnedSubscription == null);
+        (nextPinnedSourceKey != null && _pinnedSubscription == null) ||
+        initialChatSideEffectsStarting;
     final resetPinnedMessages =
         !chatWasUninitialized && previousPinnedSourceKey != nextPinnedSourceKey;
     final capabilitiesShouldReset = chatWasUninitialized || transportChanged;
@@ -2123,13 +2159,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         unreadBoundaryStanzaId: state.unreadBoundaryStanzaId,
       ),
     );
-    _retainMucPresence(event.chat);
-    if (chatWasUninitialized) {
-      _messageService.resetChatArchiveSession(
-        sessionId: _chatArchiveSessionId,
-        chat: event.chat,
-      );
-    }
     if (chatWasUninitialized) {
       _needsUnreadBootstrap =
           seededUnreadCount != null && seededUnreadCount > _emptyMessageCount;
@@ -2141,6 +2170,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _pendingUnreadBoundaryCount = stagedUnreadCount;
         _needsUnreadBootstrap = true;
       }
+    }
+    if (!_chatStarted) {
+      return;
+    }
+    await _runStartedChatSideEffects(
+      event.chat,
+      emit,
+      firstChatSideEffects:
+          chatWasUninitialized || initialChatSideEffectsStarting,
+      typingContextChanged: typingContextChanged,
+      pinnedContextChanged: pinnedContextChanged,
+      showXmppCapabilities: showXmppCapabilities,
+      nextViewFilter: nextViewFilter,
+    );
+  }
+
+  Future<void> _runStartedChatSideEffects(
+    Chat chat,
+    Emitter<ChatState> emit, {
+    required bool firstChatSideEffects,
+    required bool typingContextChanged,
+    required bool pinnedContextChanged,
+    required bool showXmppCapabilities,
+    required MessageTimelineFilter nextViewFilter,
+  }) async {
+    final runFirstChatSideEffects =
+        firstChatSideEffects && !_initialChatSideEffectsStarted;
+    _retainMucPresence(chat);
+    if (runFirstChatSideEffects) {
+      _messageService.resetChatArchiveSession(
+        sessionId: _chatArchiveSessionId,
+        chat: chat,
+      );
     }
     final roomSubscription = _roomSubscription;
     _roomSubscription = null;
@@ -2154,37 +2216,38 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final roomSelfAvatarSubscription = _roomSelfAvatarSubscription;
     _roomSelfAvatarSubscription = null;
     await _detachAndCancelSubscription(roomSelfAvatarSubscription);
-    if (emit.isDone) return;
-    if (event.chat.type == ChatType.groupChat) {
+    if (_isClosing || emit.isDone) return;
+    if (chat.type == ChatType.groupChat) {
       _subscribeRoomMemberSources();
     } else {
       _roomRosterItems = const <RosterItem>[];
       _roomChatsAvatarSnapshot = null;
       _roomSelfAvatarPath = null;
     }
-    if (chatWasUninitialized) {
+    if (runFirstChatSideEffects) {
       await _subscribeToMessages(
         limit: messageBatchSize,
         filter: nextViewFilter,
       );
-      if (emit.isDone) return;
-      await _prefetchPeerAvatar(event.chat);
-      if (emit.isDone) return;
+      _initialChatSideEffectsStarted = true;
+      if (_isClosing || emit.isDone) return;
+      await _prefetchPeerAvatar(chat);
+      if (_isClosing || emit.isDone) return;
     }
     final pendingUnreadBoundaryCount = _pendingUnreadBoundaryCount;
-    if (event.chat.isEmailBacked &&
+    if (chat.isEmailBacked &&
         pendingUnreadBoundaryCount != null &&
         pendingUnreadBoundaryCount > _emptyMessageCount &&
         _emailUnreadBoundaryUnreadCount != pendingUnreadBoundaryCount) {
       await _resolveEmailUnreadBoundaryDeltaId(
-        event.chat,
+        chat,
         unreadCount: pendingUnreadBoundaryCount,
       );
-      if (emit.isDone) return;
+      if (_isClosing || emit.isDone) return;
     }
     if (state.items.isNotEmpty) {
       final rawBoundary = _resolveStickyUnreadBoundaryStanzaId(
-        chat: event.chat,
+        chat: chat,
         messages: state.items,
         emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
         previousBoundaryStanzaId: _sessionUnreadBoundaryResolved
@@ -2223,48 +2286,46 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     if (typingContextChanged) {
-      await _subscribeToTypingParticipants(event.chat);
-      if (emit.isDone) return;
+      await _subscribeToTypingParticipants(chat);
+      if (_isClosing || emit.isDone) return;
     }
     if (pinnedContextChanged) {
-      await _subscribeToPinnedMessages(event.chat);
-      if (emit.isDone) return;
+      await _subscribeToPinnedMessages(chat);
+      if (_isClosing || emit.isDone) return;
     }
-    if (_canPageXmppHistory(event.chat)) {
-      await _hydrateLatestFromMam(event.chat);
-      if (emit.isDone) return;
+    if (_canPageXmppHistory(chat)) {
+      await _hydrateLatestFromMam(chat);
+      if (_isClosing || emit.isDone) return;
       if (state.messagesLoaded) {
-        await _verifyStaleUnackedMessagesFromMam(event.chat);
-        if (emit.isDone) return;
+        await _verifyStaleUnackedMessagesFromMam(chat);
+        if (_isClosing || emit.isDone) return;
       } else {
-        await _publishVerifiedInitialMessagesForChat(event.chat, emit);
-        if (emit.isDone) return;
+        await _publishVerifiedInitialMessagesForChat(chat, emit);
+        if (_isClosing || emit.isDone) return;
       }
     }
     if (showXmppCapabilities) {
-      final capabilities = await _resolvePeerCapabilities(event.chat);
-      if (emit.isDone) return;
+      final capabilities = await _resolvePeerCapabilities(chat);
+      if (_isClosing || emit.isDone) return;
       if (capabilities != null) {
         emit(state.copyWith(xmppCapabilities: capabilities));
       }
     }
-    if (emit.isDone) return;
-    if (event.chat.type == ChatType.groupChat) {
-      _roomSubscription = _mucService.roomStateStream(event.chat.jid).listen((
-        room,
-      ) {
+    if (_isClosing || emit.isDone) return;
+    if (chat.type == ChatType.groupChat) {
+      _roomSubscription = _mucService.roomStateStream(chat.jid).listen((room) {
         add(_RoomStateUpdated(room));
       });
       final shouldPrimeRoomState =
-          chatWasUninitialized || state.roomState == null;
+          runFirstChatSideEffects || state.roomState == null;
       if (shouldPrimeRoomState) {
-        await _primeRoomState(event.chat, emit);
-        if (emit.isDone) return;
+        await _primeRoomState(chat, emit);
+        if (_isClosing || emit.isDone) return;
       }
-      await _ensureMucMembership(event.chat);
-      if (emit.isDone) return;
-      if (chatWasUninitialized) {
-        await _mucService.refreshRoomAvatar(event.chat.jid);
+      await _ensureMucMembership(chat);
+      if (_isClosing || emit.isDone) return;
+      if (runFirstChatSideEffects) {
+        await _mucService.refreshRoomAvatar(chat.jid);
       }
     }
   }
@@ -4669,7 +4730,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final chat = state.chat;
-    if (event.state != ConnectionState.connected || chat == null) {
+    if (!_chatStarted ||
+        event.state != ConnectionState.connected ||
+        chat == null) {
       return;
     }
     if (chat.type == ChatType.groupChat) {

@@ -2118,13 +2118,13 @@ class _HomeContent extends StatelessWidget {
                 }) {
                   final Widget chatPane = Align(
                     alignment: Alignment.topLeft,
-                    child: _HomeSecondaryChatPane(
-                      key: ValueKey(pane.scopeKey),
+                    child: _HomeSecondaryChatPaneTransitionGate(
                       pane: pane,
                       settings: settings,
                       emailEnabled: emailEnabled,
                       active: homeBranchActive && !showChatCalendar,
                       chatCalendarActive: chatCalendarActive,
+                      transitionDuration: animationDuration,
                     ),
                   );
                   final Widget content = Row(
@@ -2372,6 +2372,59 @@ class _HomeBlocScope extends StatelessWidget {
   }
 }
 
+class _HomeSecondaryChatPaneTransitionGate extends StatefulWidget {
+  const _HomeSecondaryChatPaneTransitionGate({
+    required this.pane,
+    required this.settings,
+    required this.emailEnabled,
+    required this.active,
+    required this.chatCalendarActive,
+    required this.transitionDuration,
+  });
+
+  final HomeSecondaryPane pane;
+  final SettingsState settings;
+  final bool emailEnabled;
+  final bool active;
+  final bool chatCalendarActive;
+  final Duration transitionDuration;
+
+  @override
+  State<_HomeSecondaryChatPaneTransitionGate> createState() =>
+      _HomeSecondaryChatPaneTransitionGateState();
+}
+
+class _HomeSecondaryChatPaneTransitionGateState
+    extends State<_HomeSecondaryChatPaneTransitionGate> {
+  var _delayInitialLoad = false;
+
+  @override
+  void didUpdateWidget(_HomeSecondaryChatPaneTransitionGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _delayInitialLoad =
+        widget.active &&
+        widget.transitionDuration != Duration.zero &&
+        widget.pane.kind == HomeSecondaryPaneKind.openChat &&
+        widget.pane.hasChatPane &&
+        !oldWidget.pane.hasChatPane;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _HomeSecondaryChatPane(
+      key: ValueKey(widget.pane.scopeKey),
+      pane: widget.pane,
+      settings: widget.settings,
+      emailEnabled: widget.emailEnabled,
+      active: widget.active,
+      chatCalendarActive: widget.chatCalendarActive,
+      initialLoadDelay: _delayInitialLoad
+          ? widget.transitionDuration
+          : Duration.zero,
+    );
+  }
+}
+
 class _HomeSecondaryChatPane extends StatelessWidget {
   const _HomeSecondaryChatPane({
     super.key,
@@ -2380,6 +2433,7 @@ class _HomeSecondaryChatPane extends StatelessWidget {
     required this.emailEnabled,
     required this.active,
     required this.chatCalendarActive,
+    required this.initialLoadDelay,
   });
 
   final HomeSecondaryPane pane;
@@ -2387,6 +2441,7 @@ class _HomeSecondaryChatPane extends StatelessWidget {
   final bool emailEnabled;
   final bool active;
   final bool chatCalendarActive;
+  final Duration initialLoadDelay;
 
   @override
   Widget build(BuildContext context) {
@@ -2400,6 +2455,7 @@ class _HomeSecondaryChatPane extends StatelessWidget {
       settings: settings,
       emailService: emailEnabled ? locate<EmailService>() : null,
       locate: locate,
+      initialLoadDelay: initialLoadDelay,
       child: Chat(
         active: active,
         syncWithOpenChatRoute: pane.syncWithOpenChatRoute,

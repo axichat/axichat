@@ -19,6 +19,7 @@ class ChatSessionProviders extends StatelessWidget {
     required this.emailService,
     required this.locate,
     required this.child,
+    this.initialLoadDelay = Duration.zero,
   });
 
   final String jid;
@@ -26,6 +27,7 @@ class ChatSessionProviders extends StatelessWidget {
   final EmailService? emailService;
   final T Function<T>() locate;
   final Widget child;
+  final Duration initialLoadDelay;
 
   ChatSettingsSnapshot get _settingsSnapshot => ChatSettingsSnapshot(
     language: settings.language,
@@ -52,6 +54,7 @@ class ChatSessionProviders extends StatelessWidget {
             notificationService: locate<NotificationService>(),
             emailService: emailService,
             settings: _settingsSnapshot,
+            initialLoadDelay: initialLoadDelay,
           ),
         ),
         BlocProvider(

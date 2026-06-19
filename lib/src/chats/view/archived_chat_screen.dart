@@ -113,6 +113,9 @@ class ArchivedChatScreen extends StatelessWidget {
           settings: settings,
           emailService: emailService,
           locate: locate,
+          initialLoadDelay: settings.lowMotion
+              ? Duration.zero
+              : baseAnimationDuration,
           child: const _ArchivedChatBody(),
         ),
       ),
