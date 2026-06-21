@@ -3496,6 +3496,10 @@ pre, code {
           _appendLineBreak(buffer);
           continue;
         }
+        if (tag == 'a') {
+          _appendPlainTextAnchor(buffer, node, budget, depth + 1);
+          continue;
+        }
         final isBlock = _blockTags.contains(tag);
         if (isBlock) {
           _appendLineBreak(buffer);
@@ -3510,6 +3514,49 @@ pre, code {
         _appendPlainText(buffer, node.nodes, budget, depth + 1);
       }
     }
+  }
+
+  static void _appendPlainTextAnchor(
+    StringBuffer buffer,
+    dom.Element node,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    final labelBuffer = StringBuffer();
+    _appendPlainText(labelBuffer, node.nodes, budget, depth);
+    final label = labelBuffer.toString();
+    buffer.write(label);
+    final href = node.attributes[_hrefAttribute];
+    if (href == null) {
+      return;
+    }
+    final safeHref = _sanitizeUriValue(href, _sanitizedLinkSchemes);
+    if (safeHref == null ||
+        _plainTextAnchorLabelContainsHref(label, safeHref)) {
+      return;
+    }
+    _appendPlainTextInlineSeparator(buffer);
+    buffer.write(safeHref);
+  }
+
+  static bool _plainTextAnchorLabelContainsHref(String label, String href) {
+    final normalizedLabel = _normalizePlainText(label).toLowerCase();
+    if (normalizedLabel.isEmpty) {
+      return false;
+    }
+    return normalizedLabel.contains(href.toLowerCase());
+  }
+
+  static void _appendPlainTextInlineSeparator(StringBuffer buffer) {
+    if (buffer.isEmpty) {
+      return;
+    }
+    final text = buffer.toString();
+    final last = text.codeUnitAt(text.length - 1);
+    if (last == 0x09 || last == 0x0a || last == 0x0d || last == 0x20) {
+      return;
+    }
+    buffer.write(' ');
   }
 
   static void _collectImageSources(
