@@ -114,8 +114,28 @@ class _MessageHtmlBody extends StatefulWidget {
 }
 
 class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
+  static const int _maxDocumentCacheEntries = 128;
+  static const int _maxDocumentCacheBytes = 16 * 1024 * 1024;
+  static final LinkedHashMap<
+    String,
+    ({html_dom.Document document, int retainedBytes})
+  >
+  _documentCacheByDigest =
+      LinkedHashMap<
+        String,
+        ({html_dom.Document document, int retainedBytes})
+      >();
+  static int _documentCacheBytes = 0;
+
   html_dom.Document? _document;
   String? _documentHtml;
+  GlobalKey _htmlAnchorKey = GlobalKey();
+  List<html_widget.HtmlExtension>? _extensions;
+  Map<String, html_widget.Style>? _styles;
+  bool? _extensionsShouldLoadImages;
+  double? _styleFallbackFontSize;
+  Color? _styleTextColor;
+  Color? _styleLinkColor;
 
   @override
   void initState() {
@@ -133,7 +153,133 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
 
   void _refreshDocument() {
     _documentHtml = widget.html;
-    _document = html_parser.parse(widget.html);
+    _document = _documentForHtml(widget.html);
+    _htmlAnchorKey = GlobalKey();
+  }
+
+  static html_dom.Document _documentForHtml(String html) {
+    final key = _documentCacheKey(html);
+    final cached = _cachedDocumentForKey(key);
+    if (cached != null) {
+      try {
+        return cached.clone(true);
+      } on Exception {
+        _removeCachedDocument(key);
+      }
+    }
+    try {
+      final document = html_parser.parse(html);
+      _putCachedDocument(key, document, _documentRetainedBytes(key, html));
+      return document.clone(true);
+    } on Exception {
+      return html_parser.parse(html);
+    }
+  }
+
+  static html_dom.Document? _cachedDocumentForKey(String key) {
+    final cached = _documentCacheByDigest.remove(key);
+    if (cached == null) {
+      return null;
+    }
+    _documentCacheByDigest[key] = cached;
+    return cached.document;
+  }
+
+  static void _putCachedDocument(
+    String key,
+    html_dom.Document document,
+    int retainedBytes,
+  ) {
+    final replaced = _documentCacheByDigest.remove(key);
+    if (replaced != null) {
+      _documentCacheBytes -= replaced.retainedBytes;
+    }
+    _documentCacheByDigest[key] = (
+      document: document,
+      retainedBytes: retainedBytes,
+    );
+    _documentCacheBytes += retainedBytes;
+    while (_documentCacheByDigest.length > _maxDocumentCacheEntries ||
+        _documentCacheBytes > _maxDocumentCacheBytes) {
+      final removed = _documentCacheByDigest.remove(
+        _documentCacheByDigest.keys.first,
+      );
+      if (removed == null) {
+        break;
+      }
+      _documentCacheBytes -= removed.retainedBytes;
+    }
+  }
+
+  static void _removeCachedDocument(String key) {
+    final removed = _documentCacheByDigest.remove(key);
+    if (removed != null) {
+      _documentCacheBytes -= removed.retainedBytes;
+    }
+  }
+
+  static String _documentCacheKey(String html) {
+    final digest = sha256.convert(utf8.encode(html));
+    return '${html.length}:$digest';
+  }
+
+  static int _documentRetainedBytes(String key, String html) =>
+      key.length + utf8.encode(html).length;
+
+  @visibleForTesting
+  static void resetDocumentCacheForTesting() {
+    _documentCacheByDigest.clear();
+    _documentCacheBytes = 0;
+  }
+
+  @visibleForTesting
+  static int get documentCacheEntryCountForTesting =>
+      _documentCacheByDigest.length;
+
+  @visibleForTesting
+  static bool documentCacheClonesAreIndependentForTesting(String html) {
+    resetDocumentCacheForTesting();
+    final first = _documentForHtml(html);
+    final second = _documentForHtml(html);
+    first.body?.append(html_dom.Element.tag('span')..text = 'mutated');
+    return !identical(first, second) &&
+        second.body?.text.contains('mutated') != true;
+  }
+
+  void _refreshRenderInputs(double fallbackFontSize) {
+    var parserInputsChanged = false;
+    var extensionsChanged = false;
+    void refreshExtensions() {
+      _extensionsShouldLoadImages = widget.shouldLoadImages;
+      _extensions = createEmailHtmlExtensions(
+        shouldLoadImages: widget.shouldLoadImages,
+      );
+      extensionsChanged = true;
+    }
+
+    if (_extensionsShouldLoadImages != widget.shouldLoadImages) {
+      refreshExtensions();
+      parserInputsChanged = true;
+    }
+    if (_styleFallbackFontSize != fallbackFontSize ||
+        _styleTextColor != widget.textColor ||
+        _styleLinkColor != widget.linkColor) {
+      _styleFallbackFontSize = fallbackFontSize;
+      _styleTextColor = widget.textColor;
+      _styleLinkColor = widget.linkColor;
+      _styles = createEmailHtmlStyles(
+        fallbackFontSize: fallbackFontSize,
+        textColor: widget.textColor,
+        linkColor: widget.linkColor,
+      );
+      parserInputsChanged = true;
+    }
+    if (parserInputsChanged) {
+      if (!extensionsChanged) {
+        refreshExtensions();
+      }
+      _htmlAnchorKey = GlobalKey();
+    }
   }
 
   @override
@@ -144,21 +290,17 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         textTheme.p.fontSize ??
         textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
+    _refreshRenderInputs(fallbackFontSize);
     return Align(
       alignment: Alignment.centerLeft,
       child: SizedBox(
         width: double.infinity,
         child: html_widget.Html.fromDom(
+          anchorKey: _htmlAnchorKey,
           document: _document,
           shrinkWrap: false,
-          extensions: createEmailHtmlExtensions(
-            shouldLoadImages: widget.shouldLoadImages,
-          ),
-          style: createEmailHtmlStyles(
-            fallbackFontSize: fallbackFontSize,
-            textColor: widget.textColor,
-            linkColor: widget.linkColor,
-          ),
+          extensions: _extensions!,
+          style: _styles!,
           onLinkTap: (url, _, _) {
             if (url == null) {
               return;
@@ -169,6 +311,23 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
       ),
     );
   }
+}
+
+@visibleForTesting
+void resetMessageHtmlDocumentCacheForTesting() {
+  _MessageHtmlBodyState.resetDocumentCacheForTesting();
+}
+
+@visibleForTesting
+int messageHtmlDocumentCacheEntryCountForTesting() {
+  return _MessageHtmlBodyState.documentCacheEntryCountForTesting;
+}
+
+@visibleForTesting
+bool messageHtmlDocumentCacheClonesAreIndependentForTesting(String html) {
+  return _MessageHtmlBodyState.documentCacheClonesAreIndependentForTesting(
+    html,
+  );
 }
 
 class _MessageHtmlWebViewBody extends StatelessWidget {

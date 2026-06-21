@@ -185,6 +185,11 @@ Map<String, Style> createEmailHtmlStyles({
     'body': rootStyle(),
     'span': inlineStyle(color: textColor, fontSize: baseFontSize),
     'blockquote': quoteStyle,
+    'hr': Style(
+      display: Display.none,
+      margin: Margins.zero,
+      padding: HtmlPaddings.zero,
+    ),
     'strong': inlineStyle(
       color: textColor,
       fontSize: baseFontSize,

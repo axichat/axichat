@@ -2,9 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:async/async.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/common/email_html_logging.dart';
@@ -244,25 +247,20 @@ List<BoxShadow> _scaleShadows(List<BoxShadow> shadows, double factor) => shadows
     .toList();
 
 bool _emailHtmlHasVisibleTimelineContent({
-  required String? normalizedHtmlBody,
   required String? normalizedHtmlText,
   EmailHtmlDerivation? derivation,
-}) {
-  if ((derivation?.visibleBodyText ?? normalizedHtmlText)?.trim().isNotEmpty ==
-      true) {
-    return true;
-  }
-  if (normalizedHtmlBody == null) {
-    return false;
-  }
-  if (derivation?.containsRemoteImages ??
-      HtmlContentCodec.containsRenderableRemoteImages(normalizedHtmlBody)) {
-    return true;
-  }
-  return HtmlContentCodec.imageSources(
-    normalizedHtmlBody,
-  ).any((source) => source.trim().toLowerCase().startsWith('data:'));
-}
+}) =>
+    (derivation?.visibleBodyText ?? normalizedHtmlText)?.trim().isNotEmpty ==
+    true;
+
+@visibleForTesting
+bool emailHtmlHasVisibleTimelineContentForTesting({
+  required String? normalizedHtmlText,
+  EmailHtmlDerivation? derivation,
+}) => _emailHtmlHasVisibleTimelineContent(
+  normalizedHtmlText: normalizedHtmlText,
+  derivation: derivation,
+);
 
 @visibleForTesting
 bool shouldUseSelectedInlineEmailWebViewForTesting({
@@ -445,7 +443,6 @@ bool shouldShowEmailWebViewTipForTesting({
   }
   final hasSelectedWebViewContent =
       _emailHtmlHasVisibleTimelineContent(
-        normalizedHtmlBody: normalizedHtmlBody,
         normalizedHtmlText: emailDerivation.visibleBodyText,
         derivation: emailDerivation,
       ) ||
@@ -2556,7 +2553,6 @@ class _ChatState extends State<Chat> {
         !emailPlainTextBubbleExperiment &&
         preparedHtmlBody.trim().isNotEmpty &&
         _emailHtmlHasVisibleTimelineContent(
-          normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: normalizedHtmlText,
           derivation: emailDerivation,
         );
@@ -3099,7 +3095,6 @@ class _ChatState extends State<Chat> {
     final hasVisibleEmailHtmlContent =
         emailDerivation != null &&
         _emailHtmlHasVisibleTimelineContent(
-          normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: visibleSanitizedHtmlText,
           derivation: emailDerivation,
         );

@@ -705,7 +705,6 @@ class _PinnedMessageTile extends StatelessWidget {
     final hasVisibleEmailHtmlContent =
         emailDerivation != null &&
         _emailHtmlHasVisibleTimelineContent(
-          normalizedHtmlBody: normalizedHtmlBody,
           normalizedHtmlText: normalizedHtmlText,
           derivation: emailDerivation,
         );

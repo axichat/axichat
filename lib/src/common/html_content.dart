@@ -583,8 +583,8 @@ pre, code {
     }
   }
 
-  static const int _maxEmailDerivationEntries = 64;
-  static const int _maxEmailDerivationCacheBytes = 1024 * 1024;
+  static const int _maxEmailDerivationEntries = 256;
+  static const int _maxEmailDerivationCacheBytes = 4 * 1024 * 1024;
   static final LinkedHashMap<
     String,
     ({EmailHtmlDerivation derivation, int retainedBytes})
@@ -883,10 +883,11 @@ pre, code {
       for (final styleElement in document.querySelectorAll('style')) {
         styleElement.remove();
       }
-      final bodyHtml = document.body?.innerHtml.trim();
-      final sourceHtml = bodyHtml != null && bodyHtml.isNotEmpty
-          ? bodyHtml
-          : document.outerHtml;
+      final body = document.body;
+      if (body != null) {
+        return body.innerHtml.trim();
+      }
+      final sourceHtml = document.outerHtml.trim();
       if (sourceHtml.isNotEmpty) {
         return sourceHtml;
       }
@@ -1002,6 +1003,9 @@ pre, code {
       allowRemoteImages: allowRemoteImages,
     );
     _flattenFlutterTableLayout(document.nodes);
+    _removeFlutterPreviewVisualNodes(document.nodes);
+    _trimEmptyFlutterHtmlNodes(document.nodes);
+    _normalizeFlutterPreviewBreaks(document.nodes);
     _trimEmptyFlutterHtmlNodes(document.nodes);
     return document;
   }
@@ -2458,14 +2462,237 @@ pre, code {
     return tag == 'br' || tag == 'hr';
   }
 
+  static void _removeFlutterPreviewVisualNodes(List<dom.Node> nodes) {
+    _promoteFlutterPreviewSeparatorWrappers(nodes);
+    var index = 0;
+    while (index < nodes.length) {
+      final node = nodes[index];
+      if (node is! dom.Element) {
+        index++;
+        continue;
+      }
+      final tag = (node.localName ?? '').toLowerCase();
+      if (tag == 'img') {
+        if (_removeFlutterPreviewNode(nodes, index, useBreakSeparator: false)) {
+          index++;
+        }
+        continue;
+      }
+      if (tag == 'hr') {
+        if (_removeFlutterPreviewNode(nodes, index, useBreakSeparator: true)) {
+          index++;
+        }
+        continue;
+      }
+      if (node.nodes.isNotEmpty) {
+        _removeFlutterPreviewVisualNodes(node.nodes);
+      }
+      index++;
+    }
+  }
+
+  static bool _removeFlutterPreviewNode(
+    List<dom.Node> nodes,
+    int index, {
+    required bool useBreakSeparator,
+  }) {
+    if (_hasMeaningfulFlutterPreviewSibling(nodes, index, -1) &&
+        _hasMeaningfulFlutterPreviewSibling(nodes, index, 1)) {
+      if (useBreakSeparator) {
+        nodes[index] = dom.Element.tag('br');
+      } else {
+        _trimFlutterPreviewAdjacentTextBoundary(nodes, index, -1);
+        _trimFlutterPreviewAdjacentTextBoundary(nodes, index, 1);
+        nodes[index] = dom.Text(' ');
+      }
+      return true;
+    }
+    nodes[index].remove();
+    return false;
+  }
+
+  static void _trimFlutterPreviewAdjacentTextBoundary(
+    List<dom.Node> nodes,
+    int index,
+    int step,
+  ) {
+    final siblingIndex = index + step;
+    if (siblingIndex < 0 || siblingIndex >= nodes.length) {
+      return;
+    }
+    final sibling = nodes[siblingIndex];
+    if (sibling is! dom.Text) {
+      return;
+    }
+    final text = sibling.text;
+    final trimmed = step < 0
+        ? text.replaceFirst(RegExp(r'[\s\u00A0]+$'), '')
+        : text.replaceFirst(RegExp(r'^[\s\u00A0]+'), '');
+    if (trimmed == text) {
+      return;
+    }
+    nodes[siblingIndex] = dom.Text(trimmed);
+  }
+
+  static bool _hasMeaningfulFlutterPreviewSibling(
+    List<dom.Node> nodes,
+    int index,
+    int step,
+  ) {
+    var siblingIndex = index + step;
+    while (siblingIndex >= 0 && siblingIndex < nodes.length) {
+      final sibling = nodes[siblingIndex];
+      if (_isFlutterPreviewIgnorableNode(sibling) ||
+          _isFlutterPreviewBreakNode(sibling)) {
+        siblingIndex += step;
+        continue;
+      }
+      if (_isMeaningfulFlutterPreviewNode(sibling)) {
+        return true;
+      }
+      siblingIndex += step;
+    }
+    return false;
+  }
+
+  static bool _isMeaningfulFlutterPreviewNode(dom.Node node) {
+    if (node is dom.Text) {
+      return node.text.replaceAll('\u00A0', ' ').trim().isNotEmpty;
+    }
+    if (node is! dom.Element) {
+      return false;
+    }
+    final tag = (node.localName ?? '').toLowerCase();
+    if (tag == 'img' || tag == 'hr' || tag == 'br') {
+      return false;
+    }
+    return _compactFlutterTablePreviewHasContent(node.nodes);
+  }
+
+  static void _normalizeFlutterPreviewBreaks(List<dom.Node> nodes) {
+    _promoteFlutterPreviewSeparatorWrappers(nodes);
+    for (final node in nodes.toList()) {
+      if (node.nodes.isNotEmpty) {
+        _normalizeFlutterPreviewBreaks(node.nodes);
+      }
+    }
+    _trimFlutterPreviewBoundaryBreaks(nodes);
+    var consecutiveBreaks = 0;
+    for (final node in nodes.toList()) {
+      if (_isFlutterPreviewBreakNode(node)) {
+        consecutiveBreaks += 1;
+        if (consecutiveBreaks > 2) {
+          node.remove();
+        }
+        continue;
+      }
+      if (_isFlutterPreviewIgnorableNode(node)) {
+        continue;
+      }
+      consecutiveBreaks = 0;
+    }
+    _trimFlutterPreviewBoundaryBreaks(nodes);
+  }
+
+  static void _promoteFlutterPreviewSeparatorWrappers(List<dom.Node> nodes) {
+    for (var index = 0; index < nodes.length; index += 1) {
+      final node = nodes[index];
+      if (node is! dom.Element ||
+          !_isFlutterPreviewSeparatorWrapper(node) ||
+          !_hasMeaningfulFlutterPreviewSibling(nodes, index, -1) ||
+          !_hasMeaningfulFlutterPreviewSibling(nodes, index, 1)) {
+        continue;
+      }
+      nodes[index] = dom.Element.tag('br');
+    }
+  }
+
+  static bool _isFlutterPreviewSeparatorWrapper(dom.Element element) {
+    final tag = (element.localName ?? '').toLowerCase();
+    if (tag == 'html' ||
+        tag == 'body' ||
+        tag == 'br' ||
+        element.nodes.isEmpty) {
+      return false;
+    }
+    return element.nodes.every(_isFlutterPreviewSeparatorContentNode) &&
+        element.nodes.any(_hasFlutterPreviewBreakContent);
+  }
+
+  static bool _isFlutterPreviewSeparatorContentNode(dom.Node node) {
+    if (_isFlutterPreviewIgnorableNode(node) ||
+        _isFlutterPreviewSeparatorBreakNode(node)) {
+      return true;
+    }
+    if (node is! dom.Element) {
+      return false;
+    }
+    return node.nodes.isEmpty ||
+        node.nodes.every(_isFlutterPreviewSeparatorContentNode);
+  }
+
+  static bool _hasFlutterPreviewBreakContent(dom.Node node) {
+    if (_isFlutterPreviewSeparatorBreakNode(node)) {
+      return true;
+    }
+    if (node is! dom.Element) {
+      return false;
+    }
+    return node.nodes.any(_hasFlutterPreviewBreakContent);
+  }
+
+  static bool _isFlutterPreviewSeparatorBreakNode(dom.Node node) {
+    if (node is! dom.Element) {
+      return false;
+    }
+    final tag = (node.localName ?? '').toLowerCase();
+    return tag == 'br' || tag == 'hr';
+  }
+
+  static void _trimFlutterPreviewBoundaryBreaks(List<dom.Node> nodes) {
+    while (nodes.isNotEmpty &&
+        (_isFlutterPreviewBreakNode(nodes.first) ||
+            _isFlutterPreviewIgnorableNode(nodes.first))) {
+      nodes.first.remove();
+    }
+    while (nodes.isNotEmpty &&
+        (_isFlutterPreviewBreakNode(nodes.last) ||
+            _isFlutterPreviewIgnorableNode(nodes.last))) {
+      nodes.last.remove();
+    }
+  }
+
+  static bool _isFlutterPreviewBreakNode(dom.Node node) {
+    if (node is! dom.Element) {
+      return false;
+    }
+    return (node.localName ?? '').toLowerCase() == 'br';
+  }
+
+  static bool _isFlutterPreviewIgnorableNode(dom.Node node) {
+    if (node is dom.Comment) {
+      return true;
+    }
+    return node is dom.Text &&
+        node.text.replaceAll('\u00A0', ' ').trim().isEmpty;
+  }
+
   static void _normalizeFlutterHtmlNodes(
     List<dom.Node> nodes, {
     required bool allowRemoteImages,
   }) {
-    for (final node in List<dom.Node>.from(nodes)) {
+    var index = 0;
+    while (index < nodes.length) {
+      final node = nodes[index];
       if (node is dom.Element) {
         if (_isBlockedWebViewElement(node)) {
-          node.remove();
+          if (_removeFlutterPreviewNode(
+            nodes,
+            index,
+            useBreakSeparator: false,
+          )) {
+            index++;
+          }
           continue;
         }
         final tag = (node.localName ?? '').toLowerCase();
@@ -2474,10 +2701,17 @@ pre, code {
             node.text,
           );
           if (sanitizedStyleText == null) {
-            node.remove();
+            if (_removeFlutterPreviewNode(
+              nodes,
+              index,
+              useBreakSeparator: false,
+            )) {
+              index++;
+            }
             continue;
           }
           node.text = sanitizedStyleText;
+          index++;
           continue;
         }
         var removeNode = false;
@@ -2536,7 +2770,13 @@ pre, code {
           }
         }
         if (removeNode) {
-          node.remove();
+          if (_removeFlutterPreviewNode(
+            nodes,
+            index,
+            useBreakSeparator: false,
+          )) {
+            index++;
+          }
           continue;
         }
       }
@@ -2546,6 +2786,7 @@ pre, code {
           allowRemoteImages: allowRemoteImages,
         );
       }
+      index++;
     }
   }
 
