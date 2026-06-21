@@ -292,11 +292,11 @@ class _ChatsListBody extends StatelessWidget {
 
 class _AnimatedChatTile extends StatelessWidget {
   const _AnimatedChatTile({
+    super.key,
     required this.chat,
     required this.contactsByAddressKey,
     required this.animation,
-    required this.entering,
-    required this.fromTop,
+    required this.showContent,
     required this.archivedContext,
     required this.onArchivedTap,
     required this.selectionActive,
@@ -310,8 +310,7 @@ class _AnimatedChatTile extends StatelessWidget {
   final Chat chat;
   final Map<String, ContactDirectoryEntry> contactsByAddressKey;
   final Animation<double> animation;
-  final bool entering;
-  final bool fromTop;
+  final bool showContent;
   final bool archivedContext;
   final Future<void> Function(Chat chat)? onArchivedTap;
   final bool selectionActive;
@@ -323,32 +322,43 @@ class _AnimatedChatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const distance = 0.1666667;
-    final offset = fromTop ? Offset(0, -distance) : Offset(0, distance);
-    final slideAnimation = CurvedAnimation(
-      parent: entering ? animation : ReverseAnimation(animation),
-      curve: Curves.easeOutCubic,
+    Widget child = _ChatTileSlot(
+      chat: chat,
+      contactsByAddressKey: contactsByAddressKey,
+      archivedContext: archivedContext,
+      onArchivedTap: onArchivedTap,
+      selectionActive: selectionActive,
+      isSelected: isSelected,
+      isOpen: isOpen,
+      timestampNowListenable: timestampNowListenable,
+      calendarStorage: calendarStorage,
+      selfIdentity: selfIdentity,
     );
-    final tween = entering
-        ? Tween<Offset>(begin: offset, end: Offset.zero)
-        : Tween<Offset>(begin: Offset.zero, end: offset);
-    return FadeTransition(
-      opacity: animation,
-      child: SlideTransition(
-        position: tween.animate(slideAnimation),
-        child: _ChatTileSlot(
-          chat: chat,
-          contactsByAddressKey: contactsByAddressKey,
-          archivedContext: archivedContext,
-          onArchivedTap: onArchivedTap,
-          selectionActive: selectionActive,
-          isSelected: isSelected,
-          isOpen: isOpen,
-          timestampNowListenable: timestampNowListenable,
-          calendarStorage: calendarStorage,
-          selfIdentity: selfIdentity,
-        ),
-      ),
+    if (showContent) {
+      child = FadeTransition(opacity: animation, child: child);
+    } else {
+      child = Visibility(
+        visible: false,
+        maintainAnimation: true,
+        maintainSize: true,
+        maintainState: true,
+        child: child,
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final transitionChild = constraints.hasBoundedWidth
+            ? SizedBox(width: constraints.maxWidth, child: child)
+            : child;
+        return SizeTransition(
+          sizeFactor: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeInOutCubic,
+          ),
+          axisAlignment: -1,
+          child: transitionChild,
+        );
+      },
     );
   }
 }
@@ -721,15 +731,19 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
 
     Widget removedBuilder(
       Chat removedChat,
-      int removedIndex,
       Animation<double> animation,
+      bool showContent,
     ) {
       return _AnimatedChatTile(
+        key: ValueKey<String>(
+          showContent
+              ? 'chat-list-removed-${removedChat.jid}'
+              : 'chat-list-moved-${removedChat.jid}',
+        ),
         chat: removedChat,
         contactsByAddressKey: widget.contactsByAddressKey,
         animation: animation,
-        entering: false,
-        fromTop: removedIndex == 0,
+        showContent: showContent,
         archivedContext: false,
         onArchivedTap: null,
         selectionActive: widget.selectedJids.isNotEmpty,
@@ -744,6 +758,13 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
     bool mutated = false;
     bool metadataChanged = false;
     const largeAnimatedDeltaItemCount = 20;
+    if (listEquals(_displayedItems, newItems)) {
+      return;
+    }
+    if (widget.animationDuration == Duration.zero) {
+      _resetDisplayedItems(newItems);
+      return;
+    }
     final currentJids = _displayedItems.map((chat) => chat.jid).toSet();
     final Set<String> newJids = newItems.map((chat) => chat.jid).toSet();
     var retainedCount = 0;
@@ -752,11 +773,14 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         retainedCount += 1;
       }
     }
-    final changedCount =
-        (_displayedItems.length - retainedCount) +
-        newItems.where((chat) => !currentJids.contains(chat.jid)).length;
-    if (changedCount > largeAnimatedDeltaItemCount ||
-        _hasRelativeOrderChanged(newItems, newJids, currentJids)) {
+    final removedCount = _displayedItems.length - retainedCount;
+    final insertedCount = newItems
+        .where((chat) => !currentJids.contains(chat.jid))
+        .length;
+    final stableRetainedJids = _stableRetainedJids(newItems);
+    final movedCount = retainedCount - stableRetainedJids.length;
+    if (removedCount + insertedCount + movedCount >
+        largeAnimatedDeltaItemCount) {
       _resetDisplayedItems(newItems);
       return;
     }
@@ -769,7 +793,21 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
       final Chat removedChat = _displayedItems.removeAt(i);
       listState.removeItem(
         i,
-        (context, animation) => removedBuilder(removedChat, i, animation),
+        (context, animation) => removedBuilder(removedChat, animation, true),
+        duration: widget.animationDuration,
+      );
+      mutated = true;
+    }
+
+    for (int i = _displayedItems.length - 1; i >= 0; i--) {
+      final Chat chat = _displayedItems[i];
+      if (stableRetainedJids.contains(chat.jid)) {
+        continue;
+      }
+      final Chat movedChat = _displayedItems.removeAt(i);
+      listState.removeItem(
+        i,
+        (context, animation) => removedBuilder(movedChat, animation, false),
         duration: widget.animationDuration,
       );
       mutated = true;
@@ -779,7 +817,11 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
       final Chat nextChat = newItems[targetIndex];
       if (targetIndex >= _displayedItems.length ||
           _displayedItems[targetIndex].jid != nextChat.jid) {
-        if (currentJids.contains(nextChat.jid)) {
+        final existingIndex = _displayedItems.indexWhere(
+          (chat) => chat.jid == nextChat.jid,
+          targetIndex + 1,
+        );
+        if (existingIndex != -1) {
           _resetDisplayedItems(newItems);
           return;
         }
@@ -795,32 +837,70 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
       }
     }
 
+    if (_displayedItems.length != newItems.length) {
+      _resetDisplayedItems(newItems);
+      return;
+    }
     if (mutated || metadataChanged) {
       setState(() {});
     }
   }
 
-  bool _hasRelativeOrderChanged(
-    List<Chat> newItems,
-    Set<String> newJids,
-    Set<String> currentJids,
-  ) {
-    var currentIndex = 0;
-    for (final newChat in newItems) {
-      if (!currentJids.contains(newChat.jid)) {
+  Set<String> _stableRetainedJids(List<Chat> newItems) {
+    final oldIndexByJid = <String, int>{};
+    for (var index = 0; index < _displayedItems.length; index++) {
+      oldIndexByJid[_displayedItems[index].jid] = index;
+    }
+    final retainedJids = <String>[];
+    final retainedOldIndexes = <int>[];
+    for (final chat in newItems) {
+      final oldIndex = oldIndexByJid[chat.jid];
+      if (oldIndex == null) {
         continue;
       }
-      while (currentIndex < _displayedItems.length &&
-          !newJids.contains(_displayedItems[currentIndex].jid)) {
-        currentIndex += 1;
-      }
-      if (currentIndex >= _displayedItems.length ||
-          _displayedItems[currentIndex].jid != newChat.jid) {
-        return true;
-      }
-      currentIndex += 1;
+      retainedJids.add(chat.jid);
+      retainedOldIndexes.add(oldIndex);
     }
-    return false;
+    final stablePositions = _longestIncreasingSubsequencePositions(
+      retainedOldIndexes,
+    );
+    return {for (final position in stablePositions) retainedJids[position]};
+  }
+
+  List<int> _longestIncreasingSubsequencePositions(List<int> values) {
+    if (values.isEmpty) {
+      return const <int>[];
+    }
+    final previousIndexes = List<int>.filled(values.length, -1);
+    final tailPositions = <int>[];
+    for (var index = 0; index < values.length; index++) {
+      var low = 0;
+      var high = tailPositions.length;
+      while (low < high) {
+        final mid = (low + high) >> 1;
+        if (values[tailPositions[mid]] < values[index]) {
+          low = mid + 1;
+        } else {
+          high = mid;
+        }
+      }
+      if (low > 0) {
+        previousIndexes[index] = tailPositions[low - 1];
+      }
+      if (low == tailPositions.length) {
+        tailPositions.add(index);
+      } else {
+        tailPositions[low] = index;
+      }
+    }
+
+    final positions = <int>[];
+    var index = tailPositions.last;
+    while (index != -1) {
+      positions.add(index);
+      index = previousIndexes[index];
+    }
+    return positions.reversed.toList(growable: false);
   }
 
   void _resetDisplayedItems(List<Chat> newItems) {
@@ -860,11 +940,11 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         itemBuilder: (context, index, animation) {
           final chat = _displayedItems[index];
           return _AnimatedChatTile(
+            key: ValueKey<String>('chat-list-row-${chat.jid}'),
             chat: chat,
             contactsByAddressKey: widget.contactsByAddressKey,
             animation: animation,
-            entering: true,
-            fromTop: index == 0,
+            showContent: true,
             archivedContext: false,
             onArchivedTap: null,
             selectionActive: widget.selectedJids.isNotEmpty,
