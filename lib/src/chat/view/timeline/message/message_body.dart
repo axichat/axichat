@@ -78,7 +78,7 @@ class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
     final textKey = widget.contentKey == null
         ? null
         : ValueKey(widget.contentKey);
-    final inlineText = DynamicInlineText(
+    return DynamicInlineText(
       key: textKey,
       text: _parsed.body,
       details: widget.details,
@@ -87,7 +87,6 @@ class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
       onLinkTap: handleLinkTap,
       onLinkLongPress: handleLinkLongPress,
     );
-    return inlineText;
   }
 }
 

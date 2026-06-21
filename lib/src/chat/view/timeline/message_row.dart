@@ -163,7 +163,7 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
     final messageColumnAlignment = self
         ? CrossAxisAlignment.end
         : CrossAxisAlignment.start;
-    final selectableBubble = MouseRegion(
+    final interactiveBubble = MouseRegion(
       cursor: readOnly ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -173,6 +173,7 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
         child: bubble,
       ),
     );
+    final selectableBubble = SelectionArea(child: interactiveBubble);
     final bubbleStack = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,

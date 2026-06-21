@@ -2,13 +2,15 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:axichat/src/common/ui/squircle_border.dart';
-import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/foundation.dart' show ChangeNotifier, mapEquals;
 import 'package:flutter/gestures.dart'
     show LongPressGestureRecognizer, TapGestureRecognizer;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show ParagraphBoundary;
 
 typedef LinkTapCallback = void Function(String url);
 
@@ -68,6 +70,8 @@ class DynamicInlineText extends LeafRenderObjectWidget {
         textDirection: Directionality.of(context),
         textScaler:
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+        selectionRegistrar: SelectionContainer.maybeOf(context),
+        selectionColor: DefaultSelectionStyle.of(context).selectionColor,
         links: links,
         onLinkTap: onLinkTap,
         onLinkLongPress: onLinkLongPress,
@@ -86,13 +90,16 @@ class DynamicInlineText extends LeafRenderObjectWidget {
       ..textDirection = Directionality.of(context)
       ..textScaler =
           MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling
+      ..registrar = SelectionContainer.maybeOf(context)
+      ..selectionColor = DefaultSelectionStyle.of(context).selectionColor
       ..links = links
       ..onLinkTap = onLinkTap
       ..onLinkLongPress = onLinkLongPress;
   }
 }
 
-class DynamicInlineTextRenderObject extends RenderBox {
+class DynamicInlineTextRenderObject extends RenderBox
+    with ChangeNotifier, Selectable, SelectionRegistrant {
   DynamicInlineTextRenderObject({
     required TextSpan text,
     required List<InlineSpan> details,
@@ -100,6 +107,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
     required Map<int, double> detailOpticalOffsetFactors,
     required TextDirection textDirection,
     required TextScaler textScaler,
+    required SelectionRegistrar? selectionRegistrar,
+    required Color? selectionColor,
     List<DynamicTextLink> links = const [],
     LinkTapCallback? onLinkTap,
     LinkTapCallback? onLinkLongPress,
@@ -111,9 +120,12 @@ class DynamicInlineTextRenderObject extends RenderBox {
        ),
        _textDirection = textDirection,
        _textScaler = textScaler,
+       _selectionColor = selectionColor,
        _links = List.unmodifiable(links),
        _onLinkTap = onLinkTap,
-       _onLinkLongPress = onLinkLongPress;
+       _onLinkLongPress = onLinkLongPress {
+    registrar = selectionRegistrar;
+  }
 
   TextSpan get text => _text;
   TextSpan _text;
@@ -121,6 +133,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
   set text(TextSpan value) {
     if (value == _text) return;
     _text = value;
+    _textLayoutReady = false;
+    _clearSelection();
     markNeedsLayout();
     markNeedsSemanticsUpdate();
   }
@@ -158,6 +172,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
       return;
     }
     _textDirection = value;
+    _textLayoutReady = false;
     markNeedsSemanticsUpdate();
     markNeedsLayout();
   }
@@ -170,8 +185,37 @@ class DynamicInlineTextRenderObject extends RenderBox {
       return;
     }
     _textScaler = value;
+    _textLayoutReady = false;
     markNeedsLayout();
   }
+
+  Color? _selectionColor;
+
+  set selectionColor(Color? value) {
+    if (value == _selectionColor) {
+      return;
+    }
+    _selectionColor = value;
+    markNeedsPaint();
+  }
+
+  TextPosition? _selectionStart;
+  TextPosition? _selectionEnd;
+  LayerLink? _startHandleLayerLink;
+  LayerLink? _endHandleLayerLink;
+  SelectionGeometry _selectionGeometry = const SelectionGeometry(
+    status: SelectionStatus.none,
+    hasContent: false,
+  );
+
+  @override
+  SelectionGeometry get value => _selectionGeometry;
+
+  bool get _hasHandleLayers =>
+      _startHandleLayerLink != null || _endHandleLayerLink != null;
+
+  @override
+  bool get alwaysNeedsCompositing => _hasHandleLayers;
 
   List<DynamicTextLink> _links;
 
@@ -268,6 +312,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
   void performLayout() {
     final unconstrainedSize = _layout(constraints.maxWidth);
     size = constraints.constrain(unconstrainedSize);
+    _updateSelectionGeometry();
   }
 
   double _maxLineWidth = 0;
@@ -284,6 +329,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
   late List<TextPainter> _detailPainters;
   late List<double> _detailWidths;
   late List<double> _detailHeights;
+  var _textLayoutReady = false;
 
   DynamicTextLink? _linkTapTarget;
   DynamicTextLink? _linkLongPressTarget;
@@ -377,6 +423,483 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _onLinkLongPress?.call(target.url);
   }
 
+  String get _plainText => _textLayoutReady
+      ? _textPainter.text?.toPlainText(includeSemanticsLabels: false) ?? ''
+      : _text.toPlainText(includeSemanticsLabels: false);
+
+  Rect get _bodyTextRect {
+    if (!_textLayoutReady || _plainText.isEmpty || _textPainter.height <= 0) {
+      return Rect.zero;
+    }
+    return Rect.fromLTWH(0, 0, _maxLineWidth, _textPainter.height);
+  }
+
+  TextPosition _textPositionForGlobalOffset(Offset globalPosition) {
+    final transform = getTransformTo(null)..invert();
+    final localPosition = MatrixUtils.transformPoint(transform, globalPosition);
+    final adjustedOffset = SelectionUtils.adjustDragOffset(
+      _bodyTextRect,
+      localPosition,
+      direction: _textDirection,
+    );
+    final position = _textPainter.getPositionForOffset(adjustedOffset);
+    return TextPosition(offset: position.offset.clamp(0, contentLength));
+  }
+
+  void _setSelectionPosition(TextPosition? position, {required bool isEnd}) {
+    if (isEnd) {
+      _selectionEnd = position;
+    } else {
+      _selectionStart = position;
+    }
+  }
+
+  void _clearSelection() {
+    if (_selectionStart == null && _selectionEnd == null) {
+      _updateSelectionGeometry();
+      return;
+    }
+    _selectionStart = null;
+    _selectionEnd = null;
+    markNeedsPaint();
+    _updateSelectionGeometry();
+  }
+
+  SelectionResult _setSelectionOffset(int offset, {required bool isEnd}) {
+    if (contentLength == 0) {
+      _setSelectionPosition(null, isEnd: isEnd);
+      _updateSelectionGeometry();
+      return SelectionResult.none;
+    }
+    final position = TextPosition(offset: offset.clamp(0, contentLength));
+    _setSelectionPosition(position, isEnd: isEnd);
+    markNeedsPaint();
+    _updateSelectionGeometry();
+    if (position.offset == contentLength) {
+      return SelectionResult.next;
+    }
+    if (position.offset == 0) {
+      return SelectionResult.previous;
+    }
+    return SelectionResult.end;
+  }
+
+  TextRange _wordBoundaryNear(int offset, {required bool forward}) {
+    final position = TextPosition(offset: offset.clamp(0, contentLength));
+    final boundary = _textPainter.getWordBoundary(position);
+    if (boundary.start != boundary.end) {
+      return boundary;
+    }
+    final nextOffset = (offset + (forward ? 1 : -1)).clamp(0, contentLength);
+    return _textPainter.getWordBoundary(TextPosition(offset: nextOffset));
+  }
+
+  int _paragraphBoundaryOffset(int offset, {required bool forward}) {
+    final boundary = ParagraphBoundary(_plainText);
+    final nextOffset = forward
+        ? boundary.getTrailingTextBoundaryAt(offset)
+        : boundary.getLeadingTextBoundaryAt(offset - 1);
+    return (nextOffset ?? (forward ? contentLength : 0)).clamp(
+      0,
+      contentLength,
+    );
+  }
+
+  SelectionResult _handleSelectionEdgeUpdate(
+    SelectionEdgeUpdateEvent event, {
+    required bool isEnd,
+  }) {
+    if (contentLength == 0) {
+      _setSelectionPosition(null, isEnd: isEnd);
+      _updateSelectionGeometry();
+      return SelectionResult.none;
+    }
+    final position = _textPositionForGlobalOffset(event.globalPosition);
+    switch (event.granularity) {
+      case TextGranularity.character:
+        _setSelectionPosition(position, isEnd: isEnd);
+      case TextGranularity.word:
+        final boundary = _wordBoundaryNear(position.offset, forward: isEnd);
+        _setSelectionPosition(
+          TextPosition(offset: isEnd ? boundary.end : boundary.start),
+          isEnd: isEnd,
+        );
+      case TextGranularity.paragraph:
+      case TextGranularity.line:
+      case TextGranularity.document:
+        return SelectionResult.none;
+    }
+    markNeedsPaint();
+    _updateSelectionGeometry();
+    if (position.offset == contentLength) {
+      return SelectionResult.next;
+    }
+    if (position.offset == 0) {
+      return SelectionResult.previous;
+    }
+    return SelectionUtils.getResultBasedOnRect(
+      _bodyTextRect,
+      MatrixUtils.transformPoint(
+        getTransformTo(null)..invert(),
+        event.globalPosition,
+      ),
+    );
+  }
+
+  SelectionResult _selectWordAt(Offset globalPosition) {
+    if (contentLength == 0) {
+      return SelectionResult.none;
+    }
+    final position = _textPositionForGlobalOffset(globalPosition);
+    final boundary = _textPainter.getWordBoundary(position);
+    final start = boundary.start.clamp(0, contentLength);
+    final end = boundary.end.clamp(0, contentLength);
+    _selectionStart = TextPosition(offset: start);
+    _selectionEnd = TextPosition(offset: end);
+    markNeedsPaint();
+    _updateSelectionGeometry();
+    return SelectionResult.end;
+  }
+
+  SelectionResult _selectParagraphAt(Offset globalPosition) {
+    if (contentLength == 0) {
+      return SelectionResult.none;
+    }
+    final transform = getTransformTo(null)..invert();
+    final localPosition = MatrixUtils.transformPoint(transform, globalPosition);
+    final result = SelectionUtils.getResultBasedOnRect(
+      _bodyTextRect,
+      localPosition,
+    );
+    if (result != SelectionResult.end) {
+      return result;
+    }
+    _selectionStart = const TextPosition(offset: 0);
+    _selectionEnd = TextPosition(offset: contentLength);
+    markNeedsPaint();
+    _updateSelectionGeometry();
+    return SelectionResult.end;
+  }
+
+  SelectionResult _selectAll() {
+    if (contentLength == 0) {
+      return SelectionResult.none;
+    }
+    _selectionStart = const TextPosition(offset: 0);
+    _selectionEnd = TextPosition(offset: contentLength);
+    markNeedsPaint();
+    _updateSelectionGeometry();
+    return SelectionResult.none;
+  }
+
+  int _selectionEdgeOffset({required bool isEnd, required bool forward}) {
+    final current = isEnd ? _selectionEnd : _selectionStart;
+    return current?.offset ?? (forward ? 0 : contentLength);
+  }
+
+  SelectionResult _extendSelection(
+    bool forward, {
+    required bool isEnd,
+    required TextGranularity granularity,
+  }) {
+    final offset = _selectionEdgeOffset(isEnd: isEnd, forward: forward);
+    switch (granularity) {
+      case TextGranularity.character:
+        return _setSelectionOffset(offset + (forward ? 1 : -1), isEnd: isEnd);
+      case TextGranularity.word:
+        final boundary = _wordBoundaryNear(offset, forward: forward);
+        return _setSelectionOffset(
+          forward ? boundary.end : boundary.start,
+          isEnd: isEnd,
+        );
+      case TextGranularity.paragraph:
+        return _setSelectionOffset(
+          _paragraphBoundaryOffset(offset, forward: forward),
+          isEnd: isEnd,
+        );
+      case TextGranularity.document:
+        return _setSelectionOffset(forward ? contentLength : 0, isEnd: isEnd);
+      case TextGranularity.line:
+        return SelectionResult.none;
+    }
+  }
+
+  SelectionResult _extendSelectionByLine({
+    required bool forward,
+    required bool isEnd,
+    required double globalDx,
+  }) {
+    if (contentLength == 0 || !_textLayoutReady) {
+      return SelectionResult.none;
+    }
+    final offset = _selectionEdgeOffset(isEnd: isEnd, forward: forward);
+    final caretOffset = _textPainter.getOffsetForCaret(
+      TextPosition(offset: offset.clamp(0, contentLength)),
+      Rect.zero,
+    );
+    final targetY =
+        caretOffset.dy + (forward ? 1 : -1) * _textPainter.preferredLineHeight;
+    if (targetY < 0) {
+      return _setSelectionOffset(0, isEnd: isEnd);
+    }
+    if (targetY > _textPainter.height) {
+      return _setSelectionOffset(contentLength, isEnd: isEnd);
+    }
+    final localOrigin = localToGlobal(Offset.zero);
+    final localDx = globalToLocal(Offset(globalDx, localOrigin.dy)).dx;
+    final position = _textPainter.getPositionForOffset(
+      Offset(localDx.clamp(0, _maxLineWidth), targetY),
+    );
+    return _setSelectionOffset(position.offset, isEnd: isEnd);
+  }
+
+  SelectionResult _extendSelectionDirectionally(
+    DirectionallyExtendSelectionEvent event,
+  ) {
+    switch (event.direction) {
+      case SelectionExtendDirection.forward:
+        return _extendSelection(
+          true,
+          isEnd: event.isEnd,
+          granularity: TextGranularity.character,
+        );
+      case SelectionExtendDirection.backward:
+        return _extendSelection(
+          false,
+          isEnd: event.isEnd,
+          granularity: TextGranularity.character,
+        );
+      case SelectionExtendDirection.previousLine:
+        return _extendSelectionByLine(
+          forward: false,
+          isEnd: event.isEnd,
+          globalDx: event.dx,
+        );
+      case SelectionExtendDirection.nextLine:
+        return _extendSelectionByLine(
+          forward: true,
+          isEnd: event.isEnd,
+          globalDx: event.dx,
+        );
+    }
+  }
+
+  @override
+  SelectionResult dispatchSelectionEvent(SelectionEvent event) {
+    switch (event.type) {
+      case SelectionEventType.startEdgeUpdate:
+        return _handleSelectionEdgeUpdate(
+          event as SelectionEdgeUpdateEvent,
+          isEnd: false,
+        );
+      case SelectionEventType.endEdgeUpdate:
+        return _handleSelectionEdgeUpdate(
+          event as SelectionEdgeUpdateEvent,
+          isEnd: true,
+        );
+      case SelectionEventType.clear:
+        _clearSelection();
+        return SelectionResult.none;
+      case SelectionEventType.selectAll:
+        return _selectAll();
+      case SelectionEventType.selectWord:
+        return _selectWordAt(
+          (event as SelectWordSelectionEvent).globalPosition,
+        );
+      case SelectionEventType.selectParagraph:
+        return _selectParagraphAt(
+          (event as SelectParagraphSelectionEvent).globalPosition,
+        );
+      case SelectionEventType.granularlyExtendSelection:
+        final granularEvent = event as GranularlyExtendSelectionEvent;
+        return _extendSelection(
+          granularEvent.forward,
+          isEnd: granularEvent.isEnd,
+          granularity: granularEvent.granularity,
+        );
+      case SelectionEventType.directionallyExtendSelection:
+        return _extendSelectionDirectionally(
+          event as DirectionallyExtendSelectionEvent,
+        );
+    }
+  }
+
+  @override
+  SelectedContent? getSelectedContent() {
+    if (_selectionStart == null || _selectionEnd == null) {
+      return null;
+    }
+    final start = min(_selectionStart!.offset, _selectionEnd!.offset);
+    final end = max(_selectionStart!.offset, _selectionEnd!.offset);
+    if (start == end) {
+      return null;
+    }
+    return SelectedContent(plainText: _plainText.substring(start, end));
+  }
+
+  @override
+  SelectedContentRange? getSelection() {
+    if (_selectionStart == null || _selectionEnd == null) {
+      return null;
+    }
+    return SelectedContentRange(
+      startOffset: _selectionStart!.offset,
+      endOffset: _selectionEnd!.offset,
+    );
+  }
+
+  @override
+  int get contentLength => _plainText.length;
+
+  @override
+  List<Rect> get boundingBoxes {
+    if (!_textLayoutReady || contentLength == 0) {
+      return const <Rect>[];
+    }
+    final boxes = _textPainter.getBoxesForSelection(
+      TextSelection(baseOffset: 0, extentOffset: contentLength),
+      boxHeightStyle: ui.BoxHeightStyle.max,
+    );
+    if (boxes.isEmpty) {
+      return <Rect>[_bodyTextRect];
+    }
+    return <Rect>[for (final box in boxes) box.toRect()];
+  }
+
+  @override
+  void pushHandleLayers(LayerLink? startHandle, LayerLink? endHandle) {
+    if (_startHandleLayerLink == startHandle &&
+        _endHandleLayerLink == endHandle) {
+      return;
+    }
+    final hadHandleLayers = _hasHandleLayers;
+    _startHandleLayerLink = startHandle;
+    _endHandleLayerLink = endHandle;
+    if (hadHandleLayers != _hasHandleLayers) {
+      markNeedsCompositingBitsUpdate();
+    }
+    markNeedsPaint();
+  }
+
+  void _updateSelectionGeometry() {
+    final newGeometry = _selectionGeometryForCurrentSelection();
+    if (newGeometry == _selectionGeometry) {
+      return;
+    }
+    _selectionGeometry = newGeometry;
+    notifyListeners();
+  }
+
+  SelectionGeometry _selectionGeometryForCurrentSelection() {
+    if (contentLength == 0) {
+      return const SelectionGeometry(
+        status: SelectionStatus.none,
+        hasContent: false,
+      );
+    }
+    if (!_textLayoutReady) {
+      return const SelectionGeometry(
+        status: SelectionStatus.none,
+        hasContent: false,
+      );
+    }
+    if (_selectionStart == null || _selectionEnd == null) {
+      return const SelectionGeometry(
+        status: SelectionStatus.none,
+        hasContent: true,
+      );
+    }
+    final selectionStart = _selectionStart!.offset;
+    final selectionEnd = _selectionEnd!.offset;
+    final selection = TextSelection(
+      baseOffset: selectionStart,
+      extentOffset: selectionEnd,
+    );
+    final selectionRects = <Rect>[
+      for (final box in _textPainter.getBoxesForSelection(selection))
+        box.toRect(),
+    ];
+    final selectionCollapsed = selectionStart == selectionEnd;
+    final selectionReversed = selectionStart > selectionEnd;
+    final flipHandles =
+        selectionReversed != (_textDirection == TextDirection.rtl);
+    final startHandleType = selectionCollapsed
+        ? TextSelectionHandleType.collapsed
+        : flipHandles
+        ? TextSelectionHandleType.right
+        : TextSelectionHandleType.left;
+    final endHandleType = selectionCollapsed
+        ? TextSelectionHandleType.collapsed
+        : flipHandles
+        ? TextSelectionHandleType.left
+        : TextSelectionHandleType.right;
+    return SelectionGeometry(
+      startSelectionPoint: SelectionPoint(
+        localPosition: _textPainter.getOffsetForCaret(
+          TextPosition(offset: selectionStart),
+          Rect.zero,
+        ),
+        lineHeight: _textPainter.preferredLineHeight,
+        handleType: startHandleType,
+      ),
+      endSelectionPoint: SelectionPoint(
+        localPosition: _textPainter.getOffsetForCaret(
+          TextPosition(offset: selectionEnd),
+          Rect.zero,
+        ),
+        lineHeight: _textPainter.preferredLineHeight,
+        handleType: endHandleType,
+      ),
+      selectionRects: selectionRects,
+      status: selectionCollapsed
+          ? SelectionStatus.collapsed
+          : SelectionStatus.uncollapsed,
+      hasContent: true,
+    );
+  }
+
+  void _paintSelection(PaintingContext context, Offset offset) {
+    final selectionColor = _selectionColor;
+    if (selectionColor == null ||
+        _selectionStart == null ||
+        _selectionEnd == null) {
+      return;
+    }
+    final selection = TextSelection(
+      baseOffset: _selectionStart!.offset,
+      extentOffset: _selectionEnd!.offset,
+    );
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = selectionColor;
+    for (final box in _textPainter.getBoxesForSelection(selection)) {
+      context.canvas.drawRect(box.toRect().shift(offset), paint);
+    }
+  }
+
+  void _paintSelectionHandles(PaintingContext context, Offset offset) {
+    if (_startHandleLayerLink != null && value.startSelectionPoint != null) {
+      context.pushLayer(
+        LeaderLayer(
+          link: _startHandleLayerLink!,
+          offset: offset + value.startSelectionPoint!.localPosition,
+        ),
+        (context, offset) {},
+        Offset.zero,
+      );
+    }
+    if (_endHandleLayerLink != null && value.endSelectionPoint != null) {
+      context.pushLayer(
+        LeaderLayer(
+          link: _endHandleLayerLink!,
+          offset: offset + value.endSelectionPoint!.localPosition,
+        ),
+        (context, offset) {},
+        Offset.zero,
+      );
+    }
+  }
+
   @override
   void detach() {
     _cancelLinkLongPress();
@@ -395,6 +918,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   Size _layout(double maxWidth) {
     _debugAssertNoWidgetSpans();
+    _textLayoutReady = false;
     final plainText = text.toPlainText();
     final hasBodyText = plainText.isNotEmpty;
     assert(maxWidth > 0);
@@ -418,6 +942,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
     );
 
     _textPainter.layout(maxWidth: maxWidth);
+    _textLayoutReady = true;
     final textLines = _textPainter.computeLineMetrics();
     _textLineMetrics = textLines;
 
@@ -510,10 +1035,14 @@ class DynamicInlineTextRenderObject extends RenderBox {
     final hasBodyText = _textPainter.text?.toPlainText().isNotEmpty == true;
     final double baseTextHeight = hasBodyText ? _textPainter.height : 0.0;
     if (hasBodyText) {
+      _paintSelection(context, offset);
       _textPainter.paint(context.canvas, offset);
     }
 
-    if (_detailPainters.isEmpty) return;
+    if (_detailPainters.isEmpty) {
+      _paintSelectionHandles(context, offset);
+      return;
+    }
 
     final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
     final detailStartGap = hasBodyText ? _detailStartGap : 0.0;
@@ -574,6 +1103,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
         dx += _detailSpacing;
       }
     }
+    _paintSelectionHandles(context, offset);
   }
 
   int? _detailActionIndexAtOffset(Offset position) {
