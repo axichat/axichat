@@ -70,6 +70,43 @@ class MessageDeltaSnapshot {
   final bool displayed;
 }
 
+final class _LegacyReplyReferenceMessage {
+  const _LegacyReplyReferenceMessage({
+    required this.id,
+    required this.stanzaId,
+    required this.chatJid,
+    this.body,
+    this.htmlBody,
+    this.fileMetadataId,
+    this.originId,
+    this.mucStanzaId,
+    this.deltaAccountId,
+    this.deltaChatId,
+  });
+
+  final String id;
+  final String stanzaId;
+  final String chatJid;
+  final String? body;
+  final String? htmlBody;
+  final String? fileMetadataId;
+  final String? originId;
+  final String? mucStanzaId;
+  final int? deltaAccountId;
+  final int? deltaChatId;
+
+  String? get trimmedStanzaId => _trimmedReferenceValue(stanzaId);
+
+  String? get trimmedOriginId => _trimmedReferenceValue(originId);
+
+  String? get trimmedMucStanzaId => _trimmedReferenceValue(mucStanzaId);
+
+  bool get hasStableContent =>
+      body?.trim().isNotEmpty == true ||
+      htmlBody?.trim().isNotEmpty == true ||
+      fileMetadataId?.trim().isNotEmpty == true;
+}
+
 enum MessageSaveChange { inserted, upserted, merged, unchanged, ignored }
 
 final class MessageSaveResult {
@@ -2726,6 +2763,9 @@ WHERE transport IS NULL
             )) {
           await m.addColumn(drafts, drafts.autosaveEnabled);
         }
+        if (from < 73) {
+          await _ensureMessageColumnsReadByMigrationDataRepairs(m);
+        }
         if (from < 58) {
           await _rebuildEmailChatAccountsForMultipleDeltaChats();
         }
@@ -2763,36 +2803,14 @@ WHERE transport IS NULL
           await retireDerivedEmailOriginIds();
         }
         if (from < 66) {
-          if (!await _tableHasColumn(
-            messages.actualTableName,
-            'rfc822_body_status',
-          )) {
-            await m.addColumn(messages, messages.rfc822BodyStatus);
-          }
+          await _ensureMessageRfc822BodyStatusColumn(m);
           await _migrateEmailRfc822BodyStatusFromPseudoData();
         }
         if (from < 67) {
           await _createCurrentSchemaIndexes();
         }
         if (from < 69) {
-          if (!await _tableHasColumn(
-            messages.actualTableName,
-            'reply_stanza_id',
-          )) {
-            await m.addColumn(messages, messages.replyStanzaId);
-          }
-          if (!await _tableHasColumn(
-            messages.actualTableName,
-            'reply_origin_id',
-          )) {
-            await m.addColumn(messages, messages.replyOriginId);
-          }
-          if (!await _tableHasColumn(
-            messages.actualTableName,
-            'reply_muc_stanza_id',
-          )) {
-            await m.addColumn(messages, messages.replyMucStanzaId);
-          }
+          await _ensureMessageReplyColumns(m);
           if (!await _tableHasColumn(
             drafts.actualTableName,
             'quoting_origin_id',
@@ -2836,13 +2854,6 @@ WHERE transport IS NULL
         }
         if (from < 72) {
           await _createLocalPromptStatesTable();
-        }
-        if (from < 73 &&
-            !(await _tableHasColumn(
-              messages.actualTableName,
-              'delta_seen_synced',
-            ))) {
-          await m.addColumn(messages, messages.deltaSeenSynced);
         }
         if (from < 74) {
           await _createEmailHistoryImportJournalTable();
@@ -2943,40 +2954,34 @@ WHERE quoting IS NOT NULL AND trim(quoting) != ''
     ),
   );
 
-  Future<Message?> _messageForLegacyWireReference(
+  Future<_LegacyReplyReferenceMessage?> _messageForLegacyWireReference(
     String value, {
     required String chatJid,
   }) async {
     final deltaMsgId = deltaMsgIdFromDeviceLocalStanzaId(value);
     if (deltaMsgId != null) {
-      final rows =
-          await (select(messages)
-                ..where(
-                  (tbl) =>
-                      tbl.chatJid.equals(chatJid) &
-                      tbl.deltaMsgId.equals(deltaMsgId),
-                )
-                ..orderBy([
-                  (tbl) => OrderingTerm.asc(tbl.timestamp),
-                  (tbl) => OrderingTerm.asc(tbl.stanzaID),
-                ]))
-              .get();
+      final rows = await _legacyReplyReferenceMessagesByDeltaMsgId(
+        chatJid: chatJid,
+        deltaMsgId: deltaMsgId,
+      );
       if (rows.length == 1) {
         return rows.single;
       }
       if (rows.length > 1) {
-        return await _preferredSingleContextDeltaMessage(rows);
+        return await _preferredLegacyReplyReferenceDeltaMessage(rows);
       }
     }
-    return getMessageByReferenceId(value, chatJid: chatJid);
+    return _legacyReplyReferenceMessageByReferenceId(value, chatJid: chatJid);
   }
 
   ({String? stanzaId, String? originId, String? mucStanzaId})?
-  _stableReplyFieldsForLegacyWireReference(Message? message) {
+  _stableReplyFieldsForLegacyWireReference(
+    _LegacyReplyReferenceMessage? message,
+  ) {
     if (message == null) {
       return null;
     }
-    final originId = genuineEmailMessageId(message.originID);
+    final originId = genuineEmailMessageId(message.originId);
     if (originId != null) {
       return (stanzaId: null, originId: originId, mucStanzaId: null);
     }
@@ -2990,6 +2995,205 @@ WHERE quoting IS NOT NULL AND trim(quoting) != ''
       return (stanzaId: stanzaId, originId: null, mucStanzaId: null);
     }
     return null;
+  }
+
+  Future<List<_LegacyReplyReferenceMessage>>
+  _legacyReplyReferenceMessagesByDeltaMsgId({
+    required String chatJid,
+    required int deltaMsgId,
+  }) async {
+    final rows = await customSelect(
+      '''
+SELECT id, stanza_i_d, chat_jid, timestamp, body, html_body,
+       file_metadata_i_d, origin_i_d, muc_stanza_id, delta_account_id,
+       delta_chat_id
+FROM messages
+WHERE chat_jid = ? AND delta_msg_id = ?
+ORDER BY timestamp ASC, stanza_i_d ASC
+''',
+      variables: [Variable<String>(chatJid), Variable<int>(deltaMsgId)],
+      readsFrom: {messages},
+    ).get();
+    return rows
+        .map(_legacyReplyReferenceMessageFromRow)
+        .toList(growable: false);
+  }
+
+  Future<_LegacyReplyReferenceMessage?>
+  _legacyReplyReferenceMessageByReferenceId(
+    String value, {
+    required String chatJid,
+  }) async {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final rows = await customSelect(
+      '''
+SELECT id, stanza_i_d, chat_jid, timestamp, body, html_body,
+       file_metadata_i_d, origin_i_d, muc_stanza_id, delta_account_id,
+       delta_chat_id
+FROM messages
+WHERE chat_jid = ?
+  AND (stanza_i_d = ? OR origin_i_d = ? OR muc_stanza_id = ?)
+ORDER BY timestamp ASC, stanza_i_d ASC
+LIMIT 1
+''',
+      variables: [
+        Variable<String>(chatJid),
+        Variable<String>(normalized),
+        Variable<String>(normalized),
+        Variable<String>(normalized),
+      ],
+      readsFrom: {messages},
+    ).get();
+    return rows.firstOrNull == null
+        ? null
+        : _legacyReplyReferenceMessageFromRow(rows.first);
+  }
+
+  _LegacyReplyReferenceMessage _legacyReplyReferenceMessageFromRow(
+    QueryRow row,
+  ) {
+    return _LegacyReplyReferenceMessage(
+      id: row.read<String>('id'),
+      stanzaId: row.read<String>('stanza_i_d'),
+      chatJid: row.read<String>('chat_jid'),
+      body: row.read<String?>('body'),
+      htmlBody: row.read<String?>('html_body'),
+      fileMetadataId: row.read<String?>('file_metadata_i_d'),
+      originId: row.read<String?>('origin_i_d'),
+      mucStanzaId: row.read<String?>('muc_stanza_id'),
+      deltaAccountId: row.read<int?>('delta_account_id'),
+      deltaChatId: row.read<int?>('delta_chat_id'),
+    );
+  }
+
+  Future<_LegacyReplyReferenceMessage?>
+  _preferredLegacyReplyReferenceDeltaMessage(
+    List<_LegacyReplyReferenceMessage> rows,
+  ) async {
+    return await _preferredLegacyReplyReferenceDeltaMessageBy(
+          rows,
+          _legacyReplyReferenceMatchesStoredChatAccount,
+        ) ??
+        await _preferredLegacyReplyReferenceDeltaMessageBy(
+          rows,
+          _legacyReplyReferenceMatchesSingleContextChatAccount,
+        ) ??
+        await _preferredLegacyReplyReferenceDeltaMessageBy(
+          rows,
+          _legacyReplyReferenceChatDeltaIdMatchesMessage,
+        ) ??
+        _uniqueLegacyReplyReferenceMessageBy(
+          rows,
+          (row) => row.deltaAccountId == DeltaAccountDefaults.singleContextId,
+        ) ??
+        _uniqueLegacyReplyReferenceMessageBy(
+          rows,
+          (row) => genuineEmailMessageId(row.originId) != null,
+        );
+  }
+
+  Future<_LegacyReplyReferenceMessage?>
+  _preferredLegacyReplyReferenceDeltaMessageBy(
+    List<_LegacyReplyReferenceMessage> rows,
+    Future<bool> Function(_LegacyReplyReferenceMessage row) predicate,
+  ) async {
+    final matches = <_LegacyReplyReferenceMessage>[];
+    for (final row in rows) {
+      if (await predicate(row)) {
+        matches.add(row);
+      }
+    }
+    if (matches.isEmpty) {
+      return null;
+    }
+    return _preferredDuplicateLegacyReplyReferenceRow(matches);
+  }
+
+  _LegacyReplyReferenceMessage? _uniqueLegacyReplyReferenceMessageBy(
+    List<_LegacyReplyReferenceMessage> rows,
+    bool Function(_LegacyReplyReferenceMessage row) predicate,
+  ) {
+    _LegacyReplyReferenceMessage? match;
+    for (final row in rows) {
+      if (!predicate(row)) {
+        continue;
+      }
+      if (match != null) {
+        return null;
+      }
+      match = row;
+    }
+    return match;
+  }
+
+  _LegacyReplyReferenceMessage _preferredDuplicateLegacyReplyReferenceRow(
+    List<_LegacyReplyReferenceMessage> rows,
+  ) {
+    return _uniqueLegacyReplyReferenceMessageBy(
+          rows,
+          (row) => row.deltaAccountId == DeltaAccountDefaults.singleContextId,
+        ) ??
+        _uniqueLegacyReplyReferenceMessageBy(
+          rows,
+          (row) => genuineEmailMessageId(row.originId) != null,
+        ) ??
+        _uniqueLegacyReplyReferenceMessageBy(
+          rows,
+          (row) => row.hasStableContent,
+        ) ??
+        rows.first;
+  }
+
+  Future<bool> _legacyReplyReferenceMatchesStoredChatAccount(
+    _LegacyReplyReferenceMessage row,
+  ) async {
+    final deltaChatId = row.deltaChatId;
+    final deltaAccountId = row.deltaAccountId;
+    if (deltaChatId == null || deltaAccountId == null) {
+      return false;
+    }
+    final mapped = await _emailChatAccountJid(
+      deltaAccountId: deltaAccountId,
+      deltaChatId: deltaChatId,
+    );
+    return mapped == row.chatJid;
+  }
+
+  Future<bool> _legacyReplyReferenceMatchesSingleContextChatAccount(
+    _LegacyReplyReferenceMessage row,
+  ) async {
+    final deltaChatId = row.deltaChatId;
+    if (deltaChatId == null) {
+      return false;
+    }
+    final mapped = await _emailChatAccountJid(
+      deltaAccountId: DeltaAccountDefaults.singleContextId,
+      deltaChatId: deltaChatId,
+    );
+    return mapped == row.chatJid;
+  }
+
+  Future<bool> _legacyReplyReferenceChatDeltaIdMatchesMessage(
+    _LegacyReplyReferenceMessage row,
+  ) async {
+    final deltaChatId = row.deltaChatId;
+    if (deltaChatId == null) {
+      return false;
+    }
+    final chatRows = await customSelect(
+      '''
+SELECT delta_chat_id
+FROM chats
+WHERE jid = ?
+LIMIT 1
+''',
+      variables: [Variable<String>(row.chatJid)],
+      readsFrom: {chats},
+    ).get();
+    return chatRows.firstOrNull?.read<int?>('delta_chat_id') == deltaChatId;
   }
 
   Future<void> _migrateDraftQuoteFieldsFromLegacyQuoting() async {
@@ -10097,20 +10301,22 @@ WHERE jid = ?
   Future<int> _normalizeMessageRowsForSingleContext(
     Set<String> affectedChatJids,
   ) async {
-    final rows =
-        await (select(messages)..where(
-              (tbl) =>
-                  (tbl.deltaMsgId.isNotNull() | tbl.deltaChatId.isNotNull()) &
-                  tbl.deltaAccountId.isNotValue(
-                    DeltaAccountDefaults.singleContextId,
-                  ),
-            ))
-            .get();
+    final rows = await customSelect(
+      '''
+SELECT stanza_i_d, chat_jid
+FROM messages
+WHERE (delta_msg_id IS NOT NULL OR delta_chat_id IS NOT NULL)
+  AND delta_account_id != ?
+''',
+      variables: [Variable<int>(DeltaAccountDefaults.singleContextId)],
+      readsFrom: {messages},
+    ).get();
     for (final row in rows) {
-      affectedChatJids.add(row.chatJid);
+      final stanzaId = row.read<String>('stanza_i_d');
+      affectedChatJids.add(row.read<String>('chat_jid'));
       await (update(
         messages,
-      )..where((tbl) => tbl.stanzaID.equals(row.stanzaID))).write(
+      )..where((tbl) => tbl.stanzaID.equals(stanzaId))).write(
         const MessagesCompanion(
           deltaAccountId: Value(DeltaAccountDefaults.singleContextId),
         ),
@@ -12999,6 +13205,43 @@ WHERE reply_stanza_id IS NOT NULL AND trim(reply_stanza_id) != ''
     return false;
   }
 
+  Future<void> _ensureMessageDeltaSeenSyncedColumn(Migrator m) async {
+    if (await _tableHasColumn(messages.actualTableName, 'delta_seen_synced')) {
+      return;
+    }
+    await m.addColumn(messages, messages.deltaSeenSynced);
+  }
+
+  Future<void> _ensureMessageColumnsReadByMigrationDataRepairs(
+    Migrator m,
+  ) async {
+    await _ensureMessageRfc822BodyStatusColumn(m);
+    await _ensureMessageReplyColumns(m);
+    await _ensureMessageDeltaSeenSyncedColumn(m);
+  }
+
+  Future<void> _ensureMessageRfc822BodyStatusColumn(Migrator m) async {
+    if (await _tableHasColumn(messages.actualTableName, 'rfc822_body_status')) {
+      return;
+    }
+    await m.addColumn(messages, messages.rfc822BodyStatus);
+  }
+
+  Future<void> _ensureMessageReplyColumns(Migrator m) async {
+    if (!await _tableHasColumn(messages.actualTableName, 'reply_stanza_id')) {
+      await m.addColumn(messages, messages.replyStanzaId);
+    }
+    if (!await _tableHasColumn(messages.actualTableName, 'reply_origin_id')) {
+      await m.addColumn(messages, messages.replyOriginId);
+    }
+    if (!await _tableHasColumn(
+      messages.actualTableName,
+      'reply_muc_stanza_id',
+    )) {
+      await m.addColumn(messages, messages.replyMucStanzaId);
+    }
+  }
+
   Future<void> _createLocalPromptStatesTable() async {
     await customStatement('''
 CREATE TABLE IF NOT EXISTS local_prompt_states (
@@ -13864,6 +14107,14 @@ Set<String> _contactAddressKeysForChat(Chat chat) {
 }
 
 String? _trimmedContactValue(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
+}
+
+String? _trimmedReferenceValue(String? value) {
   final trimmed = value?.trim();
   if (trimmed == null || trimmed.isEmpty) {
     return null;
