@@ -160,6 +160,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get homeSearchOnDeviceMessagesPlaceholder =>
+      'Search on-device messages';
+
+  @override
   String homeSearchFilterLabel(Object filter) {
     return 'Filter: $filter';
   }
@@ -210,6 +214,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatSearchMessages => 'Search messages';
 
   @override
+  String get chatSearchOnDeviceEmailPlaceholder => 'Search on-device email';
+
+  @override
   String get chatSearchSortNewestFirst => 'Newest first';
 
   @override
@@ -247,6 +254,11 @@ class AppLocalizationsEn extends AppLocalizations {
       one: '# match shown below.',
     );
     return '$_temp0';
+  }
+
+  @override
+  String emailSearchOnDeviceHistoryHint(String location) {
+    return 'Run email history import from $location to include older email.';
   }
 
   @override
@@ -412,6 +424,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get attachmentGallerySortSizeDescLabel => 'Size large to small';
+
+  @override
+  String get attachmentGalleryOnDeviceSearchPlaceholder =>
+      'Search on-device attachments';
 
   @override
   String get chatOpenLinkTitle => 'Open external link?';

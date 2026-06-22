@@ -159,9 +159,13 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         final effectiveFilterId = filters.isEmpty
             ? null
             : (selectedFilterId ?? filters.first.id);
-        final placeholder = searchPresentation.label == null
-            ? l10n.homeSearchPlaceholderTabs
-            : l10n.homeSearchPlaceholderForTab(searchPresentation.label!);
+        final placeholder =
+            searchPresentation.placeholder ??
+            (searchPresentation.label == null
+                ? l10n.homeSearchPlaceholderTabs
+                : l10n.homeSearchPlaceholderForTab(searchPresentation.label!));
+        final historyLocation =
+            '${l10n.profileTitle} > ${l10n.settingsSectionData}';
         return AnimatedCrossFade(
           crossFadeState: active
               ? CrossFadeState.showSecond
@@ -280,6 +284,20 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     ],
                   ),
                 ),
+                if (searchPresentation.showEmailHistorySearchHint) ...[
+                  SizedBox(height: spacing.s),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: AxiHighlightedSubstringText(
+                      text: l10n.emailSearchOnDeviceHistoryHint(
+                        historyLocation,
+                      ),
+                      substring: historyLocation,
+                      style: context.textTheme.muted,
+                      highlightStyle: context.textTheme.muted.strong,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

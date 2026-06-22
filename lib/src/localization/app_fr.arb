@@ -51,6 +51,7 @@
       "tab": {}
     }
   },
+  "homeSearchOnDeviceMessagesPlaceholder": "Rechercher les messages sur cet appareil",
   "homeSearchFilterLabel": "Filtre : {filter}",
   "@homeSearchFilterLabel": {
     "placeholders": {
@@ -72,6 +73,7 @@
   "chatFilterDirectOnly": "Direct uniquement",
   "chatFilterAllWithContact": "Tout avec contact",
   "chatSearchMessages": "Rechercher des messages",
+  "chatSearchOnDeviceEmailPlaceholder": "Rechercher les e-mails sur cet appareil",
   "chatSearchSortNewestFirst": "Plus récents en premier",
   "chatSearchSortOldestFirst": "Plus anciens en premier",
   "chatSearchAnySubject": "N'importe quel objet",
@@ -81,6 +83,14 @@
   "chatSearchEmptyPrompt": "Les résultats apparaîtront dans la conversation.",
   "chatSearchNoMatches": "Aucun résultat. Ajustez les filtres ou essayez une autre requête.",
   "chatSearchMatchCount": "{count, plural, one {# résultat affiché ci-dessous.} other {# résultats affichés ci-dessous.}}",
+  "emailSearchOnDeviceHistoryHint": "Importez l’historique e-mail depuis {location} pour inclure les e-mails plus anciens.",
+  "@emailSearchOnDeviceHistoryHint": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
   "filterTooltip": "Filtrer • {label}",
   "chatSearchClose": "Fermer la recherche",
   "commonSearch": "Rechercher",
@@ -127,6 +137,7 @@
   "attachmentGallerySortNameDescLabel": "Nom Z-A",
   "attachmentGallerySortSizeAscLabel": "Taille du plus petit au plus grand",
   "attachmentGallerySortSizeDescLabel": "Taille du plus grand au plus petit",
+  "attachmentGalleryOnDeviceSearchPlaceholder": "Rechercher les pièces jointes sur cet appareil",
   "chatOpenLinkTitle": "Ouvrir un lien externe ?",
   "chatOpenLinkMessage": "Tu es sur le point d'ouvrir :\n{url}\n\nN'appuie sur OK que si tu fais confiance au site (hôte : {host}).",
   "chatOpenLinkWarningMessage": "Tu es sur le point d'ouvrir :\n{url}\n\nCe lien contient des caractères inhabituels ou invisibles. Vérifie attentivement l'adresse (hôte : {host}).",

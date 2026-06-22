@@ -82,6 +82,7 @@ export 'fade_scale_dialog.dart';
 export 'fade_scale_effect.dart';
 export 'feedback_toast.dart';
 export 'focus_extensions.dart';
+export 'highlighted_substring_text.dart';
 export 'in_bounds_fade_scale.dart';
 export 'inline_details.dart';
 export 'jid_input.dart';

@@ -51,6 +51,7 @@
       "tab": {}
     }
   },
+  "homeSearchOnDeviceMessagesPlaceholder": "搜尋此裝置上的訊息",
   "homeSearchFilterLabel": "篩選：{filter}",
   "@homeSearchFilterLabel": {
     "placeholders": {
@@ -72,6 +73,7 @@
   "chatFilterDirectOnly": "只限直接",
   "chatFilterAllWithContact": "全部（含聯絡人）",
   "chatSearchMessages": "搜尋訊息",
+  "chatSearchOnDeviceEmailPlaceholder": "搜尋此裝置上的電郵",
   "chatSearchSortNewestFirst": "最新優先",
   "chatSearchSortOldestFirst": "最早優先",
   "chatSearchAnySubject": "任何主題",
@@ -81,6 +83,14 @@
   "chatSearchEmptyPrompt": "配對結果會顯示在下方對話中。",
   "chatSearchNoMatches": "沒有配對。請調整篩選或再試其他關鍵字。",
   "chatSearchMatchCount": "{count, plural, one {顯示 # 個配對結果。} other {顯示 # 個配對結果。}}",
+  "emailSearchOnDeviceHistoryHint": "從「{location}」匯入電郵歷史，以包含較舊電郵。",
+  "@emailSearchOnDeviceHistoryHint": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
   "filterTooltip": "篩選 • {label}",
   "chatSearchClose": "關閉搜尋",
   "commonSearch": "搜尋",
@@ -127,6 +137,7 @@
   "attachmentGallerySortNameDescLabel": "名稱 Z-A",
   "attachmentGallerySortSizeAscLabel": "大小由小到大",
   "attachmentGallerySortSizeDescLabel": "大小由大到小",
+  "attachmentGalleryOnDeviceSearchPlaceholder": "搜尋此裝置上的附件",
   "chatOpenLinkTitle": "開啟外部連結？",
   "chatOpenLinkMessage": "你將要開啟：\n{url}\n\n只有在信任該網站時才按確定（主機：{host}）。",
   "chatOpenLinkWarningMessage": "你將要開啟：\n{url}\n\n該連結包含異常或不可見字元。請仔細核對地址（主機：{host}）。",

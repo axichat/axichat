@@ -51,6 +51,7 @@
       "tab": {}
     }
   },
+  "homeSearchOnDeviceMessagesPlaceholder": "搜索此设备上的消息",
   "homeSearchFilterLabel": "筛选：{filter}",
   "@homeSearchFilterLabel": {
     "placeholders": {
@@ -72,6 +73,7 @@
   "chatFilterDirectOnly": "仅直接",
   "chatFilterAllWithContact": "全部（含联系人）",
   "chatSearchMessages": "搜索消息",
+  "chatSearchOnDeviceEmailPlaceholder": "搜索此设备上的邮件",
   "chatSearchSortNewestFirst": "最新优先",
   "chatSearchSortOldestFirst": "最早优先",
   "chatSearchAnySubject": "任何主题",
@@ -81,6 +83,14 @@
   "chatSearchEmptyPrompt": "匹配结果会显示在下方对话中。",
   "chatSearchNoMatches": "没有匹配项。调整筛选或换个搜索词。",
   "chatSearchMatchCount": "{count, plural, one {显示 # 个匹配结果。} other {显示 # 个匹配结果。}}",
+  "emailSearchOnDeviceHistoryHint": "从“{location}”导入邮件历史，以包含较早邮件。",
+  "@emailSearchOnDeviceHistoryHint": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
   "filterTooltip": "筛选 • {label}",
   "chatSearchClose": "关闭搜索",
   "commonSearch": "搜索",
@@ -127,6 +137,7 @@
   "attachmentGallerySortNameDescLabel": "名称 Z-A",
   "attachmentGallerySortSizeAscLabel": "大小从小到大",
   "attachmentGallerySortSizeDescLabel": "大小从大到小",
+  "attachmentGalleryOnDeviceSearchPlaceholder": "搜索此设备上的附件",
   "chatOpenLinkTitle": "打开外部链接？",
   "chatOpenLinkMessage": "你将要打开：\n{url}\n\n仅在信任该站点时点击确定（主机：{host}）。",
   "chatOpenLinkWarningMessage": "你将要打开：\n{url}\n\n该链接包含异常或不可见字符。请仔细核对地址（主机：{host}）。",

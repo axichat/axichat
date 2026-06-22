@@ -323,6 +323,9 @@ class AttachmentGalleryControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final historyLocation =
+        '${l10n.profileTitle} > ${l10n.settingsSectionData}';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: context.spacing.s,
@@ -338,6 +341,12 @@ class AttachmentGalleryControls extends StatelessWidget {
           onTypeFilterChanged: onTypeFilterChanged,
           sourceFilter: sourceFilter,
           onSourceFilterChanged: onSourceFilterChanged,
+        ),
+        AxiHighlightedSubstringText(
+          text: l10n.emailSearchOnDeviceHistoryHint(historyLocation),
+          substring: historyLocation,
+          style: context.textTheme.muted,
+          highlightStyle: context.textTheme.muted.strong,
         ),
       ],
     );
@@ -361,7 +370,9 @@ class AttachmentGallerySearchRow extends StatelessWidget {
         Expanded(
           child: SearchInputField(
             controller: searchController,
-            placeholder: Text(context.l10n.commonSearch),
+            placeholder: Text(
+              context.l10n.attachmentGalleryOnDeviceSearchPlaceholder,
+            ),
             clearTooltip: context.l10n.commonClear,
             onClear: onClearSearch,
           ),

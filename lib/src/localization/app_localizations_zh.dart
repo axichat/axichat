@@ -152,6 +152,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get homeSearchOnDeviceMessagesPlaceholder => '搜索此设备上的消息';
+
+  @override
   String homeSearchFilterLabel(Object filter) {
     return '筛选：$filter';
   }
@@ -202,6 +205,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSearchMessages => '搜索消息';
 
   @override
+  String get chatSearchOnDeviceEmailPlaceholder => '搜索此设备上的邮件';
+
+  @override
   String get chatSearchSortNewestFirst => '最新优先';
 
   @override
@@ -237,6 +243,11 @@ class AppLocalizationsZh extends AppLocalizations {
       one: '显示 # 个匹配结果。',
     );
     return '$_temp0';
+  }
+
+  @override
+  String emailSearchOnDeviceHistoryHint(String location) {
+    return '从“$location”导入邮件历史，以包含较早邮件。';
   }
 
   @override
@@ -397,6 +408,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get attachmentGallerySortSizeDescLabel => '大小从大到小';
+
+  @override
+  String get attachmentGalleryOnDeviceSearchPlaceholder => '搜索此设备上的附件';
 
   @override
   String get chatOpenLinkTitle => '打开外部链接？';
@@ -7077,6 +7091,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
+  String get homeSearchOnDeviceMessagesPlaceholder => '搜尋此裝置上的訊息';
+
+  @override
   String homeSearchFilterLabel(Object filter) {
     return '篩選：$filter';
   }
@@ -7127,6 +7144,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatSearchMessages => '搜尋訊息';
 
   @override
+  String get chatSearchOnDeviceEmailPlaceholder => '搜尋此裝置上的電郵';
+
+  @override
   String get chatSearchSortNewestFirst => '最新優先';
 
   @override
@@ -7162,6 +7182,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
       one: '顯示 # 個配對結果。',
     );
     return '$_temp0';
+  }
+
+  @override
+  String emailSearchOnDeviceHistoryHint(String location) {
+    return '從「$location」匯入電郵歷史，以包含較舊電郵。';
   }
 
   @override
@@ -7315,6 +7340,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get attachmentGallerySortSizeDescLabel => '大小由大到小';
+
+  @override
+  String get attachmentGalleryOnDeviceSearchPlaceholder => '搜尋此裝置上的附件';
 
   @override
   String get chatOpenLinkTitle => '開啟外部連結？';

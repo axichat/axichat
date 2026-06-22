@@ -54,6 +54,7 @@
       "tab": {}
     }
   },
+  "homeSearchOnDeviceMessagesPlaceholder": "Search on-device messages",
   "homeSearchFilterLabel": "Filter: {filter}",
   "@homeSearchFilterLabel": {
     "placeholders": {
@@ -75,6 +76,7 @@
   "chatFilterDirectOnly": "Direct only",
   "chatFilterAllWithContact": "All with contact",
   "chatSearchMessages": "Search messages",
+  "chatSearchOnDeviceEmailPlaceholder": "Search on-device email",
   "chatSearchSortNewestFirst": "Newest first",
   "chatSearchSortOldestFirst": "Oldest first",
   "chatSearchAnySubject": "Any subject",
@@ -85,6 +87,14 @@
   "chatSearchEmptyPrompt": "Matches will appear in the conversation below.",
   "chatSearchNoMatches": "No matches. Adjust filters or try another query.",
   "chatSearchMatchCount": "{count, plural, one {# match shown below.} other {# matches shown below.}}",
+  "emailSearchOnDeviceHistoryHint": "Run email history import from {location} to include older email.",
+  "@emailSearchOnDeviceHistoryHint": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
   "filterTooltip": "Filter • {label}",
   "@filterTooltip": {
     "placeholders": {
@@ -170,6 +180,7 @@
   "attachmentGallerySortNameDescLabel": "Name Z-A",
   "attachmentGallerySortSizeAscLabel": "Size small to large",
   "attachmentGallerySortSizeDescLabel": "Size large to small",
+  "attachmentGalleryOnDeviceSearchPlaceholder": "Search on-device attachments",
   "chatOpenLinkTitle": "Open external link?",
   "chatOpenLinkMessage": "You are about to open:\n{url}\n\nOnly tap OK if you trust the site (host: {host}).",
   "@chatOpenLinkMessage": {

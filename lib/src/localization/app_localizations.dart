@@ -387,6 +387,12 @@ abstract class AppLocalizations {
   /// **'Search {tab}'**
   String homeSearchPlaceholderForTab(Object tab);
 
+  /// No description provided for @homeSearchOnDeviceMessagesPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Search on-device messages'**
+  String get homeSearchOnDeviceMessagesPlaceholder;
+
   /// No description provided for @homeSearchFilterLabel.
   ///
   /// In en, this message translates to:
@@ -483,6 +489,12 @@ abstract class AppLocalizations {
   /// **'Search messages'**
   String get chatSearchMessages;
 
+  /// No description provided for @chatSearchOnDeviceEmailPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Search on-device email'**
+  String get chatSearchOnDeviceEmailPlaceholder;
+
   /// No description provided for @chatSearchSortNewestFirst.
   ///
   /// In en, this message translates to:
@@ -542,6 +554,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, one {# match shown below.} other {# matches shown below.}}'**
   String chatSearchMatchCount(num count);
+
+  /// No description provided for @emailSearchOnDeviceHistoryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Run email history import from {location} to include older email.'**
+  String emailSearchOnDeviceHistoryHint(String location);
 
   /// No description provided for @filterTooltip.
   ///
@@ -830,6 +848,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Size large to small'**
   String get attachmentGallerySortSizeDescLabel;
+
+  /// No description provided for @attachmentGalleryOnDeviceSearchPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Search on-device attachments'**
+  String get attachmentGalleryOnDeviceSearchPlaceholder;
 
   /// No description provided for @chatOpenLinkTitle.
   ///

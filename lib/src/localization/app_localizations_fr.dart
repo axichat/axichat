@@ -168,6 +168,10 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get homeSearchOnDeviceMessagesPlaceholder =>
+      'Rechercher les messages sur cet appareil';
+
+  @override
   String homeSearchFilterLabel(Object filter) {
     return 'Filtre : $filter';
   }
@@ -218,6 +222,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatSearchMessages => 'Rechercher des messages';
 
   @override
+  String get chatSearchOnDeviceEmailPlaceholder =>
+      'Rechercher les e-mails sur cet appareil';
+
+  @override
   String get chatSearchSortNewestFirst => 'Plus récents en premier';
 
   @override
@@ -255,6 +263,11 @@ class AppLocalizationsFr extends AppLocalizations {
       one: '# résultat affiché ci-dessous.',
     );
     return '$_temp0';
+  }
+
+  @override
+  String emailSearchOnDeviceHistoryHint(String location) {
+    return 'Importez l’historique e-mail depuis $location pour inclure les e-mails plus anciens.';
   }
 
   @override
@@ -424,6 +437,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get attachmentGallerySortSizeDescLabel =>
       'Taille du plus grand au plus petit';
+
+  @override
+  String get attachmentGalleryOnDeviceSearchPlaceholder =>
+      'Rechercher les pièces jointes sur cet appareil';
 
   @override
   String get chatOpenLinkTitle => 'Ouvrir un lien externe ?';

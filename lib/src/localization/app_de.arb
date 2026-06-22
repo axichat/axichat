@@ -51,6 +51,7 @@
       "tab": {}
     }
   },
+  "homeSearchOnDeviceMessagesPlaceholder": "Nachrichten auf diesem Gerät suchen",
   "homeSearchFilterLabel": "Suchfilter: {filter}",
   "@homeSearchFilterLabel": {
     "placeholders": {
@@ -72,6 +73,7 @@
   "chatFilterDirectOnly": "Nur Direkt",
   "chatFilterAllWithContact": "Alles mit Kontakt",
   "chatSearchMessages": "Nachrichten durchsuchen",
+  "chatSearchOnDeviceEmailPlaceholder": "E-Mails auf diesem Gerät suchen",
   "chatSearchSortNewestFirst": "Neueste zuerst",
   "chatSearchSortOldestFirst": "Älteste zuerst",
   "chatSearchAnySubject": "Beliebiger Betreff",
@@ -81,6 +83,14 @@
   "chatSearchEmptyPrompt": "Treffer erscheinen unten im Gespräch.",
   "chatSearchNoMatches": "Keine Treffer. Filter anpassen oder neu suchen.",
   "chatSearchMatchCount": "{count, plural, one {# Treffer unten angezeigt.} other {# Treffer unten angezeigt.}}",
+  "emailSearchOnDeviceHistoryHint": "Importiere den E-Mail-Verlauf unter {location}, um ältere E-Mails einzubeziehen.",
+  "@emailSearchOnDeviceHistoryHint": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
   "filterTooltip": "Suchfilter • {label}",
   "chatSearchClose": "Suche schließen",
   "commonSearch": "Suchen",
@@ -127,6 +137,7 @@
   "attachmentGallerySortNameDescLabel": "Name Z bis A",
   "attachmentGallerySortSizeAscLabel": "Größe klein bis groß",
   "attachmentGallerySortSizeDescLabel": "Größe groß bis klein",
+  "attachmentGalleryOnDeviceSearchPlaceholder": "Anhänge auf diesem Gerät suchen",
   "chatOpenLinkTitle": "Externer Link öffnen?",
   "chatOpenLinkMessage": "Du bist dabei, zu öffnen:\n{url}\n\nTippe nur OK, wenn du der Seite vertraust (Host: {host}).",
   "chatOpenLinkWarningMessage": "Du bist dabei, zu öffnen:\n{url}\n\nDieser Link enthält ungewöhnliche oder unsichtbare Zeichen. Prüfe die Adresse sorgfältig (Host: {host}).",

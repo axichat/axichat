@@ -81,7 +81,6 @@ class _ChatBottomSafeAreaSpacer extends StatelessWidget {
       top: false,
       left: false,
       right: false,
-      minimum: EdgeInsets.only(bottom: context.spacing.s),
       child: const SizedBox.shrink(),
     );
   }
@@ -817,6 +816,9 @@ class _ChatScaffoldBody extends StatelessWidget {
                             : null,
                       );
                       bottomContent = const SizedBox.shrink();
+                    } else if (owner._chatRoute.isSearch) {
+                      owner._ensureRecipientBarHeightCleared();
+                      bottomContent = const _ChatBottomSafeAreaSpacer();
                     } else if (chatEntity?.isAxiImServerAnnouncementThread ==
                         true) {
                       owner._ensureRecipientBarHeightCleared();

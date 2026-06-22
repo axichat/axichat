@@ -271,6 +271,8 @@ typedef _HomeSearchPresentation = ({
   bool available,
   List<HomeSearchFilter> filters,
   String? label,
+  String? placeholder,
+  bool showEmailHistorySearchHint,
   _HomeSearchSortLabels sortLabels,
 });
 
@@ -326,10 +328,15 @@ _HomeSearchPresentation _resolveHomeSearchPresentationForState({
     final sortLabels = activeTab == HomeTab.contacts
         ? _HomeSearchSortLabels.alphabetical
         : _HomeSearchSortLabels.chronological;
+    final showEmailHistorySearchHint = entry?.id == HomeTab.chats;
     return (
       available: entry != null,
       filters: entry?.searchFilters ?? const <HomeSearchFilter>[],
       label: entry?.label,
+      placeholder: showEmailHistorySearchHint
+          ? l10n.homeSearchOnDeviceMessagesPlaceholder
+          : null,
+      showEmailHistorySearchHint: showEmailHistorySearchHint,
       sortLabels: sortLabels,
     );
   }
@@ -338,6 +345,8 @@ _HomeSearchPresentation _resolveHomeSearchPresentationForState({
       available: false,
       filters: const <HomeSearchFilter>[],
       label: entry?.label ?? l10n.homeTabFolders,
+      placeholder: null,
+      showEmailHistorySearchHint: false,
       sortLabels: _HomeSearchSortLabels.chronological,
     );
   }
@@ -346,6 +355,8 @@ _HomeSearchPresentation _resolveHomeSearchPresentationForState({
       available: true,
       filters: spamSearchFilters(l10n),
       label: l10n.homeTabSpam,
+      placeholder: l10n.homeSearchOnDeviceMessagesPlaceholder,
+      showEmailHistorySearchHint: true,
       sortLabels: _HomeSearchSortLabels.chronological,
     );
   }
@@ -353,6 +364,8 @@ _HomeSearchPresentation _resolveHomeSearchPresentationForState({
     available: true,
     filters: const <HomeSearchFilter>[],
     label: foldersSection.label(l10n),
+    placeholder: l10n.homeSearchOnDeviceMessagesPlaceholder,
+    showEmailHistorySearchHint: true,
     sortLabels: _HomeSearchSortLabels.chronological,
   );
 }
@@ -362,6 +375,8 @@ _HomeSearchPresentation _resolveHomeSearchPresentationForState({
   bool available,
   List<SearchFilterId> filterIds,
   String? label,
+  String? placeholder,
+  bool showEmailHistorySearchHint,
   bool alphabeticalSort,
 })
 resolveHomeSearchPresentationForState({
@@ -382,6 +397,8 @@ resolveHomeSearchPresentationForState({
         .map((filter) => filter.id)
         .toList(growable: false),
     label: presentation.label,
+    placeholder: presentation.placeholder,
+    showEmailHistorySearchHint: presentation.showEmailHistorySearchHint,
     alphabeticalSort:
         presentation.sortLabels == _HomeSearchSortLabels.alphabetical,
   );

@@ -51,6 +51,7 @@
       "tab": {}
     }
   },
+  "homeSearchOnDeviceMessagesPlaceholder": "Buscar mensajes en este dispositivo",
   "homeSearchFilterLabel": "Filtro: {filter}",
   "@homeSearchFilterLabel": {
     "placeholders": {
@@ -72,6 +73,7 @@
   "chatFilterDirectOnly": "Solo directos",
   "chatFilterAllWithContact": "Todo con el contacto",
   "chatSearchMessages": "Buscar mensajes",
+  "chatSearchOnDeviceEmailPlaceholder": "Buscar correo en este dispositivo",
   "chatSearchSortNewestFirst": "Más recientes primero",
   "chatSearchSortOldestFirst": "Más antiguos primero",
   "chatSearchAnySubject": "Cualquier asunto",
@@ -81,6 +83,14 @@
   "chatSearchEmptyPrompt": "Las coincidencias aparecerán en la conversación.",
   "chatSearchNoMatches": "Sin coincidencias. Ajusta filtros o intenta otra consulta.",
   "chatSearchMatchCount": "{count, plural, one {# coincidencia mostrada.} other {# coincidencias mostradas.}}",
+  "emailSearchOnDeviceHistoryHint": "Importa el historial de correo desde {location} para incluir correo más antiguo.",
+  "@emailSearchOnDeviceHistoryHint": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
   "filterTooltip": "Filtrar • {label}",
   "chatSearchClose": "Cerrar búsqueda",
   "commonSearch": "Buscar",
@@ -127,6 +137,7 @@
   "attachmentGallerySortNameDescLabel": "Nombre Z-A",
   "attachmentGallerySortSizeAscLabel": "Tamaño de menor a mayor",
   "attachmentGallerySortSizeDescLabel": "Tamaño de mayor a menor",
+  "attachmentGalleryOnDeviceSearchPlaceholder": "Buscar adjuntos en este dispositivo",
   "chatOpenLinkTitle": "¿Abrir enlace externo?",
   "chatOpenLinkMessage": "Vas a abrir:\n{url}\n\nToca Aceptar solo si confías en el sitio (host: {host}).",
   "chatOpenLinkWarningMessage": "Vas a abrir:\n{url}\n\nEste enlace contiene caracteres inusuales o invisibles. Verifica la dirección con cuidado (host: {host}).",
