@@ -152,22 +152,15 @@ final class _EmailFreshProjectionResult {
       syncedMessageCount > 0 || affectedChatCount > 0;
 }
 
-enum EmailChatNoticeSyncStatus {
-  freshCleared,
-  alreadyNoFresh,
-  partial,
-  unresolved,
-  failed,
-}
+enum EmailChatNoticeSyncStatus { freshCleared, partial, unresolved, failed }
 
 final class EmailChatNoticeSyncResult {
   const EmailChatNoticeSyncResult({
     required this.status,
     this.deltaAccountId,
     this.chatIds = const <int>[],
-    this.freshBeforeCount = 0,
-    this.freshAfterCount = 0,
-    this.reconciledMessageCount = 0,
+    this.noticeRequestCount = 0,
+    this.noticeAcceptedCount = 0,
     this.coreNoticeRequested = false,
     this.coreNoticeAccepted = false,
   });
@@ -175,25 +168,15 @@ final class EmailChatNoticeSyncResult {
   final EmailChatNoticeSyncStatus status;
   final int? deltaAccountId;
   final List<int> chatIds;
-  final int freshBeforeCount;
-  final int freshAfterCount;
-  final int reconciledMessageCount;
+  final int noticeRequestCount;
+  final int noticeAcceptedCount;
   final bool coreNoticeRequested;
   final bool coreNoticeAccepted;
 
-  bool get terminalSuccess =>
-      status == EmailChatNoticeSyncStatus.freshCleared ||
-      status == EmailChatNoticeSyncStatus.alreadyNoFresh;
+  bool get terminalSuccess => status == EmailChatNoticeSyncStatus.freshCleared;
 }
 
-enum EmailMessageSeenSyncStatus {
-  sent,
-  alreadySeen,
-  notFreshButNotSeen,
-  pending,
-  unresolved,
-  failed,
-}
+enum EmailMessageSeenSyncStatus { sent, pending, unresolved, failed }
 
 final class EmailMessageSeenSyncResult {
   const EmailMessageSeenSyncResult({
@@ -210,9 +193,7 @@ final class EmailMessageSeenSyncResult {
   final int unresolvedCount;
   final int transportAcceptedCount;
 
-  bool get terminalSuccess =>
-      status == EmailMessageSeenSyncStatus.sent ||
-      status == EmailMessageSeenSyncStatus.alreadySeen;
+  bool get terminalSuccess => status == EmailMessageSeenSyncStatus.sent;
 }
 
 final class EmailContentJobKey {
@@ -11295,85 +11276,29 @@ class EmailService {
           );
           return;
         }
-        final freshBeforeByChat = await _localFreshMessageIdsByChatIds(
-          accountId: account.deltaAccountId,
-          chatIds: chatIds,
-          selfJid: _xmppSelfJidProvider?.call(),
-          emailSelfJid: account.address,
-        );
-        final freshBeforeCount = freshBeforeByChat.values.fold<int>(
-          0,
-          (sum, ids) => sum + ids.length,
-        );
-        final consumer = _deltaConsumerForAccount(account.deltaAccountId);
-
-        if (freshBeforeCount == 0) {
-          await _trackAppDatabaseOperation(() async {
-            final db = await _databaseBuilder();
-            await db.repairUnreadCountForChat(
-              resolvedChat.jid,
-              selfJid: _xmppSelfJidProvider?.call(),
-              emailSelfJid: account.address,
-            );
-          });
-          syncResult = EmailChatNoticeSyncResult(
-            status: EmailChatNoticeSyncStatus.alreadyNoFresh,
-            deltaAccountId: account.deltaAccountId,
-            chatIds: chatIds,
-            freshBeforeCount: 0,
-            freshAfterCount: 0,
-          );
-          return;
-        }
-        var coreNoticeRequested = false;
-        var coreNoticeAccepted = false;
-        var reconciledMessageCount = 0;
+        var acceptedNoticeCount = 0;
         for (final chatId in chatIds) {
-          final freshIds = freshBeforeByChat[chatId] ?? const <int>[];
-          if (freshIds.isNotEmpty) {
-            coreNoticeRequested = true;
-            final result = await _transport.markNoticedChat(
-              chatId,
-              accountId: account.deltaAccountId,
-            );
-            if (result) {
-              coreNoticeAccepted = true;
-              reconciledMessageCount += await consumer
-                  .projectNoticedDeltaMessages(
-                    chatId: chatId,
-                    messageIds: freshIds,
-                  );
-            }
+          final result = await _transport.markNoticedChat(
+            chatId,
+            accountId: account.deltaAccountId,
+          );
+          if (result) {
+            acceptedNoticeCount += 1;
           }
         }
-        final freshAfterByChat = await _localFreshMessageIdsByChatIds(
-          accountId: account.deltaAccountId,
-          chatIds: chatIds,
-          selfJid: _xmppSelfJidProvider?.call(),
-          emailSelfJid: account.address,
-        );
-        final freshAfterCount = freshAfterByChat.values.fold<int>(
-          0,
-          (sum, ids) => sum + ids.length,
-        );
-        final status = freshBeforeCount == 0
-            ? EmailChatNoticeSyncStatus.alreadyNoFresh
-            : freshAfterCount == 0
-            ? coreNoticeAccepted
-                  ? EmailChatNoticeSyncStatus.freshCleared
-                  : EmailChatNoticeSyncStatus.failed
-            : freshAfterCount < freshBeforeCount
+        final status = acceptedNoticeCount == chatIds.length
+            ? EmailChatNoticeSyncStatus.freshCleared
+            : acceptedNoticeCount > 0
             ? EmailChatNoticeSyncStatus.partial
             : EmailChatNoticeSyncStatus.failed;
         syncResult = EmailChatNoticeSyncResult(
           status: status,
           deltaAccountId: account.deltaAccountId,
           chatIds: chatIds,
-          freshBeforeCount: freshBeforeCount,
-          freshAfterCount: freshAfterCount,
-          reconciledMessageCount: reconciledMessageCount,
-          coreNoticeRequested: coreNoticeRequested,
-          coreNoticeAccepted: coreNoticeAccepted,
+          noticeRequestCount: chatIds.length,
+          noticeAcceptedCount: acceptedNoticeCount,
+          coreNoticeRequested: true,
+          coreNoticeAccepted: acceptedNoticeCount > 0,
         );
       });
       return syncResult;
@@ -11537,56 +11462,6 @@ class EmailService {
     return null;
   }
 
-  Future<Map<int, List<int>>> _localFreshMessageIdsByChatIds({
-    required int accountId,
-    required Iterable<int> chatIds,
-    required String? selfJid,
-    required String? emailSelfJid,
-  }) async {
-    final chatIdSet = chatIds.where((id) => id > 0).toSet();
-    if (chatIdSet.isEmpty) {
-      return const <int, List<int>>{};
-    }
-    final db = await _databaseBuilder();
-    final result = <int, List<int>>{};
-    const pageStep = 100;
-    for (final chatId in chatIdSet) {
-      var limit = pageStep;
-      final ids = <int>{};
-      while (true) {
-        final rows = await db.getUndisplayedMessagesByDeltaChat(
-          deltaAccountId: accountId,
-          deltaChatId: chatId,
-          limit: limit,
-        );
-        for (final row in rows) {
-          final deltaMsgId = row.deltaMsgId;
-          if (deltaMsgId == null || deltaMsgId <= DeltaMessageId.none) {
-            continue;
-          }
-          if (!row.countsTowardUnread(
-            selfJid: row.isEmailBacked ? emailSelfJid ?? selfJid : selfJid,
-            isGroupChat: false,
-            myOccupantJid: null,
-          )) {
-            continue;
-          }
-          ids.add(deltaMsgId);
-        }
-        if (rows.length < limit) {
-          if (ids.isNotEmpty) result[chatId] = ids.toList(growable: false);
-          break;
-        }
-        limit += pageStep;
-      }
-    }
-    return {
-      for (final entry in result.entries)
-        if (entry.value.isNotEmpty)
-          entry.key: List<int>.unmodifiable(entry.value),
-    };
-  }
-
   Future<List<Message>> _seenMessageCandidatesForMessages({
     required XmppDatabase db,
     required List<Message> messages,
@@ -11668,11 +11543,8 @@ class EmailService {
         accountId: accountId,
         chat: null,
       );
-      if (!message.countsTowardUnread(
-        selfJid: emailSelfJid,
-        isGroupChat: false,
-        myOccupantJid: null,
-      )) {
+      if (message.isFromAccount(emailSelfJid) ||
+          message.isFromAccount(_xmppSelfJidProvider?.call())) {
         continue;
       }
       idsByAccount.putIfAbsent(accountId, LinkedHashSet<int>.new).add(deltaId);
@@ -11690,6 +11562,9 @@ class EmailService {
   ) {
     final deltaId = message.deltaMsgId;
     if (deltaId == null || deltaId <= _deltaEventMessageUnset) {
+      return;
+    }
+    if (!message.displayed) {
       return;
     }
     if (message.deltaSeenSynced) {

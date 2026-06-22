@@ -488,9 +488,7 @@ const DeltaMessageDeliveryStatus _deltaOutgoingUnknownStatus =
     DeltaMessageDeliveryStatus(acked: true, received: false, displayed: false);
 const DeltaMessageDeliveryStatus _deltaIncomingUnseenStatus =
     DeltaMessageDeliveryStatus(acked: false, received: true, displayed: false);
-// For incoming Delta email, local displayed means no longer locally fresh.
-// Delta InSeen is still verified separately before read receipt work completes.
-const DeltaMessageDeliveryStatus _deltaIncomingNoLongerFreshStatus =
+const DeltaMessageDeliveryStatus _deltaIncomingSeenStatus =
     DeltaMessageDeliveryStatus(acked: false, received: true, displayed: true);
 
 extension DeltaMessageStateChecks on DeltaMessage {
@@ -527,11 +525,6 @@ extension DeltaMessageStateChecks on DeltaMessage {
 
   bool get isIncomingSeen => !isOutgoing && state == DeltaMessageState.inSeen;
 
-  bool get isIncomingNoticed =>
-      !isOutgoing && state == DeltaMessageState.inNoticed;
-
-  bool get isIncomingNoLongerFresh => isIncomingNoticed || isIncomingSeen;
-
   DeltaMessageDeliveryStatus get deliveryStatus {
     if (isOutgoing) {
       if (!hasKnownState) {
@@ -545,8 +538,8 @@ extension DeltaMessageStateChecks on DeltaMessage {
       }
       return _deltaOutgoingPendingStatus;
     }
-    if (isIncomingNoLongerFresh) {
-      return _deltaIncomingNoLongerFreshStatus;
+    if (isIncomingSeen) {
+      return _deltaIncomingSeenStatus;
     }
     return _deltaIncomingUnseenStatus;
   }
@@ -568,11 +561,6 @@ extension DeltaMessageStatusStateChecks on DeltaMessageStatus {
 
   bool get isIncomingSeen => !isOutgoing && state == DeltaMessageState.inSeen;
 
-  bool get isIncomingNoticed =>
-      !isOutgoing && state == DeltaMessageState.inNoticed;
-
-  bool get isIncomingNoLongerFresh => isIncomingNoticed || isIncomingSeen;
-
   DeltaMessageDeliveryStatus get deliveryStatus {
     if (isOutgoing) {
       if (!hasKnownState) {
@@ -586,8 +574,8 @@ extension DeltaMessageStatusStateChecks on DeltaMessageStatus {
       }
       return _deltaOutgoingPendingStatus;
     }
-    if (isIncomingNoLongerFresh) {
-      return _deltaIncomingNoLongerFreshStatus;
+    if (isIncomingSeen) {
+      return _deltaIncomingSeenStatus;
     }
     return _deltaIncomingUnseenStatus;
   }
@@ -1805,136 +1793,6 @@ class DeltaEventConsumer {
     if (chatId <= _deltaChatLastSpecialId) {
       return;
     }
-  }
-
-  // Historical compatibility name: read-state reconciliation is intentionally
-  // Drift-only. Delta/Core is only told about notice/seen state by the service.
-  Future<int> reconcileChatReadStateFromCore(int chatId) async {
-    if (chatId <= _deltaChatLastSpecialId) {
-      return 0;
-    }
-    final db = await _db();
-    final rows = await db.getMessagesByDeltaChat(
-      deltaAccountId: _deltaAccountId,
-      deltaChatId: chatId,
-    );
-    return reconcileDeltaMessageReadStateFromCore(
-      chatId: chatId,
-      messageIds: _deltaMessageIdsForReadStateReconcile(rows),
-    );
-  }
-
-  Future<int> reconcileUndisplayedChatReadStateFromCore(
-    int chatId, {
-    bool repairUnreadWhenNoTargets = false,
-  }) async {
-    if (chatId <= _deltaChatLastSpecialId) {
-      return 0;
-    }
-    final db = await _db();
-    const pageStep = 100;
-    var limit = pageStep;
-    var targetIds = const <int>[];
-    while (true) {
-      final rows = await db.getUndisplayedMessagesByDeltaChat(
-        deltaAccountId: _deltaAccountId,
-        deltaChatId: chatId,
-        limit: limit,
-      );
-      targetIds = _deltaMessageIdsForReadStateReconcile(rows);
-      if (targetIds.isNotEmpty || rows.length < limit) {
-        break;
-      }
-      limit += pageStep;
-    }
-    if (targetIds.isEmpty) {
-      if (repairUnreadWhenNoTargets) {
-        await _updateUnreadCount(chatId);
-      }
-      return 0;
-    }
-    return reconcileDeltaMessageReadStateFromCore(
-      chatId: chatId,
-      messageIds: targetIds,
-    );
-  }
-
-  Future<int> reconcileDeltaMessageReadStateFromCore({
-    required int chatId,
-    required Iterable<int> messageIds,
-  }) async {
-    return _markDeltaMessagesDisplayed(chatId: chatId, messageIds: messageIds);
-  }
-
-  Future<int> projectNoticedDeltaMessages({
-    required int chatId,
-    required Iterable<int> messageIds,
-  }) async {
-    return _markDeltaMessagesDisplayed(chatId: chatId, messageIds: messageIds);
-  }
-
-  Future<int> _markDeltaMessagesDisplayed({
-    required int chatId,
-    required Iterable<int> messageIds,
-  }) async {
-    if (chatId <= _deltaChatLastSpecialId) {
-      return 0;
-    }
-    final ids = <int>{};
-    for (final messageId in messageIds) {
-      if (messageId > _deltaMessageIdUnset &&
-          !_isDeltaMessageMarkerId(messageId)) {
-        ids.add(messageId);
-      }
-    }
-    if (ids.isEmpty) {
-      return 0;
-    }
-    final db = await _db();
-    final rows = await db.getMessagesByDeltaIds(
-      ids,
-      deltaAccountId: _deltaAccountId,
-    );
-    var reconciled = 0;
-    final repairedChatJids = <String>{};
-    for (final row in rows) {
-      if (row.deltaChatId != chatId ||
-          row.displayed ||
-          row.isFromAccount(_selfJid) ||
-          row.isFromAccount(_xmppSelfJid)) {
-        continue;
-      }
-      await db.updateMessage(row.copyWith(received: true, displayed: true));
-      repairedChatJids.add(row.chatJid);
-      reconciled += 1;
-    }
-    for (final chatJid in repairedChatJids) {
-      await db.repairUnreadCountForChat(
-        chatJid,
-        selfJid: _xmppSelfJid,
-        emailSelfJid: _selfJid,
-      );
-    }
-    return reconciled;
-  }
-
-  List<int> _deltaMessageIdsForReadStateReconcile(Iterable<Message> rows) {
-    final ids = <int>[];
-    for (final row in rows) {
-      if (row.displayed ||
-          row.isFromAccount(_selfJid) ||
-          row.isFromAccount(_xmppSelfJid)) {
-        continue;
-      }
-      final deltaMsgId = row.deltaMsgId;
-      if (deltaMsgId == null ||
-          deltaMsgId <= _deltaMessageIdUnset ||
-          _isDeltaMessageMarkerId(deltaMsgId)) {
-        continue;
-      }
-      ids.add(deltaMsgId);
-    }
-    return ids;
   }
 
   Future<void> _handleChatDeleted(int chatId) async {

@@ -751,8 +751,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         'status': result.status.name,
         'requested': result.coreNoticeRequested,
         'accepted': result.coreNoticeAccepted,
-        'freshBeforeCount': result.freshBeforeCount,
-        'freshAfterCount': result.freshAfterCount,
+        'noticeRequestCount': result.noticeRequestCount,
+        'noticeAcceptedCount': result.noticeAcceptedCount,
         'elapsedMs': stopwatch.elapsedMilliseconds,
       },
     );
