@@ -1912,6 +1912,24 @@
   "contactEmailEncryptionImportFailed": "Import des öffentlichen Kontaktschlüssels fehlgeschlagen.",
   "contactEmailEncryptionRemoveFailed": "Entfernen des öffentlichen Kontaktschlüssels fehlgeschlagen.",
   "emailContactsImportTitle": "Kontakte importieren",
+  "emailHistoryImportTitle": "E-Mail-Verlauf importieren",
+  "emailHistoryImportBannerBody": "Wenn dieses Postfach bereits E-Mails enthält, importiere sie auf dieses Gerät. Lass die App geöffnet, bis der Import abgeschlossen ist. Große Postfächer können eine Weile dauern.",
+  "emailHistoryImportBannerAction": "Importieren",
+  "emailHistoryImportBannerRetry": "Erneut versuchen",
+  "emailHistoryImportBannerDismiss": "Nicht jetzt",
+  "emailHistoryImportCompletedTitle": "Prüfung des E-Mail-Verlaufs abgeschlossen",
+  "emailHistoryImportCompletedBody": "Axichat hat nach älteren E-Mails gesucht und die verfügbaren Nachrichten hinzugefügt. Wenn noch E-Mails fehlen, kannst du es unter {location} erneut versuchen.",
+  "@emailHistoryImportCompletedBody": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "emailHistoryImportFailedTitle": "E-Mail-Import nicht abgeschlossen",
+  "emailHistoryImportFailedBody": "Der Import konnte nicht abgeschlossen werden. Prüfe deine Verbindung, lass die App geöffnet und versuche es erneut.",
+  "emailHistoryImportStartedMessage": "Import des E-Mail-Verlaufs gestartet.",
+  "emailHistoryImportFailedMessage": "Import des E-Mail-Verlaufs konnte nicht gestartet werden.",
   "emailContactsImportSubtitle": "Gmail-, Outlook-, Yahoo-CSVs oder vCards.",
   "emailContactsImportFileAccessError": "Auf die ausgewählte Datei kann nicht zugegriffen werden.",
   "emailContactsImportAction": "Importieren",

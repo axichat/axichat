@@ -4914,6 +4914,47 @@ class AppLocalizationsFr extends AppLocalizations {
   String get emailContactsImportTitle => 'Importer des contacts';
 
   @override
+  String get emailHistoryImportTitle => 'Importer l’historique e-mail';
+
+  @override
+  String get emailHistoryImportBannerBody =>
+      'Si cette boîte aux lettres contient déjà des e-mails, importez-les sur cet appareil. Gardez l’app ouverte jusqu’à la fin de l’importation. Les grandes boîtes aux lettres peuvent prendre un certain temps.';
+
+  @override
+  String get emailHistoryImportBannerAction => 'Importer';
+
+  @override
+  String get emailHistoryImportBannerRetry => 'Réessayer';
+
+  @override
+  String get emailHistoryImportBannerDismiss => 'Pas maintenant';
+
+  @override
+  String get emailHistoryImportCompletedTitle =>
+      'Vérification de l’historique e-mail terminée';
+
+  @override
+  String emailHistoryImportCompletedBody(String location) {
+    return 'Axichat a terminé la recherche d’anciens e-mails et ajouté ce qui était disponible. S’il manque encore des e-mails, relancez-la depuis $location.';
+  }
+
+  @override
+  String get emailHistoryImportFailedTitle =>
+      'L’import e-mail n’est pas terminé';
+
+  @override
+  String get emailHistoryImportFailedBody =>
+      'L’importation n’a pas pu se terminer. Vérifiez la connexion, gardez l’app ouverte et réessayez.';
+
+  @override
+  String get emailHistoryImportStartedMessage =>
+      'Importation de l’historique e-mail démarrée.';
+
+  @override
+  String get emailHistoryImportFailedMessage =>
+      'Impossible de démarrer l’importation de l’historique e-mail.';
+
+  @override
   String get emailContactsImportSubtitle =>
       'CSVs Gmail, Outlook, Yahoo ou vCards.';
 

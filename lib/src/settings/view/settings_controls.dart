@@ -7,9 +7,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
 import 'package:axichat/src/email/bloc/email_encryption_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
 import 'package:axichat/src/email/view/email_contact_import_tile.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -34,6 +36,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/link.dart';
+import 'package:delta_ffi/delta_safe.dart';
 
 class SettingsSectionAnchors {
   SettingsSectionAnchors({
@@ -244,6 +247,22 @@ class SettingsControls extends StatelessWidget {
               onPressed: emailEnabled
                   ? () async => await _showEmailContactImportDialog(context)
                   : null,
+            ),
+            BlocBuilder<ConnectivityCubit, ConnectivityState>(
+              builder: (context, connectivityState) {
+                final importBusy = connectivityState
+                    .emailState
+                    .historyImportPromptStatus
+                    .isImporting;
+                return _SettingsActionButton(
+                  iconData: LucideIcons.inbox,
+                  label: context.l10n.emailHistoryImportTitle,
+                  loading: importBusy,
+                  onPressed: emailEnabled && !importBusy
+                      ? () async => await _handleEmailHistoryImport(context)
+                      : null,
+                );
+              },
             ),
             _SettingsActionButton(
               iconData: LucideIcons.messagesSquare,
@@ -830,6 +849,49 @@ class SettingsControls extends StatelessWidget {
       return;
     }
     await _handleExportResult(context, result);
+  }
+
+  Future<void> _handleEmailHistoryImport(BuildContext context) async {
+    try {
+      await context.read<ConnectivityCubit>().importExistingEmailHistory(
+        force: true,
+      );
+    } on EmailProvisioningException {
+      if (!context.mounted) {
+        return;
+      }
+      _showEmailHistoryImportFailed(context);
+      return;
+    } on EmailServiceException {
+      if (!context.mounted) {
+        return;
+      }
+      _showEmailHistoryImportFailed(context);
+      return;
+    } on EmailDeltaWorkerRuntimeException {
+      if (!context.mounted) {
+        return;
+      }
+      _showEmailHistoryImportFailed(context);
+      return;
+    } on DeltaSafeException {
+      if (!context.mounted) {
+        return;
+      }
+      _showEmailHistoryImportFailed(context);
+      return;
+    }
+  }
+
+  void _showEmailHistoryImportFailed(BuildContext context) {
+    if (!context.mounted) {
+      return;
+    }
+    ShadToaster.maybeOf(context)?.show(
+      FeedbackToast.error(
+        message: context.l10n.emailHistoryImportFailedMessage,
+      ),
+    );
   }
 
   Future<void> _handleXmppContactsExport(BuildContext context) async {
@@ -1842,12 +1904,14 @@ class _SettingsActionButton extends StatelessWidget {
     required this.onPressed,
     this.iconData,
     this.destructive = false,
+    this.loading = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final IconData? iconData;
   final bool destructive;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -1860,11 +1924,13 @@ class _SettingsActionButton extends StatelessWidget {
         ? AxiListButton.destructiveGhost(
             leading: leading,
             onPressed: onPressed,
+            loading: loading,
             child: Text(label),
           )
         : AxiListButton(
             leading: leading,
             onPressed: onPressed,
+            loading: loading,
             child: Text(label),
           );
     return Padding(

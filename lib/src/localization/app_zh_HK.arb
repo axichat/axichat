@@ -1905,6 +1905,24 @@
   "contactEmailEncryptionImportFailed": "聯絡人公開金鑰匯入失敗。",
   "contactEmailEncryptionRemoveFailed": "聯絡人公開金鑰移除失敗。",
   "emailContactsImportTitle": "匯入聯絡人",
+  "emailHistoryImportTitle": "匯入電郵歷史",
+  "emailHistoryImportBannerBody": "如果這個郵箱已有電郵，請將它們匯入到此裝置。匯入完成前請保持應用程式開啟。大型郵箱可能需要一段時間。",
+  "emailHistoryImportBannerAction": "匯入",
+  "emailHistoryImportBannerRetry": "重試",
+  "emailHistoryImportBannerDismiss": "暫不",
+  "emailHistoryImportCompletedTitle": "電郵歷史檢查完成",
+  "emailHistoryImportCompletedBody": "Axichat 已完成舊電郵檢查，並加入了可用電郵。如果你仍覺得缺少電郵，可以在「{location}」中再次執行。",
+  "@emailHistoryImportCompletedBody": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "emailHistoryImportFailedTitle": "電郵匯入未完成",
+  "emailHistoryImportFailedBody": "匯入無法完成。請檢查連線，保持應用程式開啟，然後重試。",
+  "emailHistoryImportStartedMessage": "電郵歷史匯入已開始。",
+  "emailHistoryImportFailedMessage": "無法開始匯入電郵歷史。",
   "emailContactsImportSubtitle": "Gmail、Outlook、Yahoo 的 CSV 或 vCard。",
   "emailContactsImportFileAccessError": "無法存取所選檔案。",
   "emailContactsImportAction": "匯入",

@@ -1908,6 +1908,24 @@
   "contactEmailEncryptionImportFailed": "Échec de l’importation de la clé publique du contact.",
   "contactEmailEncryptionRemoveFailed": "Échec de la suppression de la clé publique du contact.",
   "emailContactsImportTitle": "Importer des contacts",
+  "emailHistoryImportTitle": "Importer l’historique e-mail",
+  "emailHistoryImportBannerBody": "Si cette boîte aux lettres contient déjà des e-mails, importez-les sur cet appareil. Gardez l’app ouverte jusqu’à la fin de l’importation. Les grandes boîtes aux lettres peuvent prendre un certain temps.",
+  "emailHistoryImportBannerAction": "Importer",
+  "emailHistoryImportBannerRetry": "Réessayer",
+  "emailHistoryImportBannerDismiss": "Pas maintenant",
+  "emailHistoryImportCompletedTitle": "Vérification de l’historique e-mail terminée",
+  "emailHistoryImportCompletedBody": "Axichat a terminé la recherche d’anciens e-mails et ajouté ce qui était disponible. S’il manque encore des e-mails, relancez-la depuis {location}.",
+  "@emailHistoryImportCompletedBody": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "emailHistoryImportFailedTitle": "L’import e-mail n’est pas terminé",
+  "emailHistoryImportFailedBody": "L’importation n’a pas pu se terminer. Vérifiez la connexion, gardez l’app ouverte et réessayez.",
+  "emailHistoryImportStartedMessage": "Importation de l’historique e-mail démarrée.",
+  "emailHistoryImportFailedMessage": "Impossible de démarrer l’importation de l’historique e-mail.",
   "emailContactsImportSubtitle": "CSVs Gmail, Outlook, Yahoo ou vCards.",
   "emailContactsImportFileAccessError": "Impossible d’accéder au fichier sélectionné.",
   "emailContactsImportAction": "Importer",

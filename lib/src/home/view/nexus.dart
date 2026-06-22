@@ -5,6 +5,8 @@ part of 'package:axichat/src/home/view/home_screen.dart';
 
 enum _HomeDemoPhase { idle, triggered }
 
+enum _EmailHistoryImportBannerAction { import, dismiss }
+
 class Nexus extends StatefulWidget {
   const Nexus({
     super.key,
@@ -351,8 +353,233 @@ class _NexusHeaderBody extends StatelessWidget {
             forceCollapsed: false,
           ),
         ),
+        const _EmailHistoryImportBannerHost(),
         _HomeSearchPanel(tabs: tabs),
       ],
+    );
+  }
+}
+
+class _EmailHistoryImportBannerHost extends StatelessWidget {
+  const _EmailHistoryImportBannerHost();
+
+  @override
+  Widget build(BuildContext context) {
+    final status = context
+        .select<ConnectivityCubit, EmailHistoryImportPromptStatus>(
+          (cubit) => cubit.state.emailState.historyImportPromptStatus,
+        );
+    final animationDuration = context.select<SettingsCubit, Duration>(
+      (cubit) => cubit.animationDuration,
+    );
+    return AnimatedSize(
+      duration: animationDuration,
+      curve: Curves.easeInOut,
+      alignment: Alignment.topCenter,
+      child: status.isVisible
+          ? _EmailHistoryImportBanner(status: status)
+          : const SizedBox.shrink(),
+    );
+  }
+}
+
+class _EmailHistoryImportBanner extends StatefulWidget {
+  const _EmailHistoryImportBanner({required this.status});
+
+  final EmailHistoryImportPromptStatus status;
+
+  @override
+  State<_EmailHistoryImportBanner> createState() =>
+      _EmailHistoryImportBannerState();
+}
+
+class _EmailHistoryImportBannerState extends State<_EmailHistoryImportBanner> {
+  _EmailHistoryImportBannerAction? _pendingAction;
+
+  Future<void> _handleImport(BuildContext context) async {
+    setState(() => _pendingAction = _EmailHistoryImportBannerAction.import);
+    try {
+      await context.read<ConnectivityCubit>().importExistingEmailHistory();
+    } on EmailProvisioningException {
+      if (context.mounted) {
+        _showEmailHistoryImportFailed(context);
+      }
+    } on EmailServiceException {
+      if (context.mounted) {
+        _showEmailHistoryImportFailed(context);
+      }
+    } on EmailDeltaWorkerRuntimeException {
+      if (context.mounted) {
+        _showEmailHistoryImportFailed(context);
+      }
+    } on DeltaSafeException {
+      if (context.mounted) {
+        _showEmailHistoryImportFailed(context);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _pendingAction = null);
+      }
+    }
+  }
+
+  Future<void> _handleDismiss(BuildContext context) async {
+    setState(() => _pendingAction = _EmailHistoryImportBannerAction.dismiss);
+    try {
+      await context
+          .read<ConnectivityCubit>()
+          .dismissExistingEmailHistoryImportPrompt();
+    } finally {
+      if (mounted) {
+        setState(() => _pendingAction = null);
+      }
+    }
+  }
+
+  void _showEmailHistoryImportFailed(BuildContext context) {
+    ShadToaster.maybeOf(context)?.show(
+      FeedbackToast.error(
+        message: context.l10n.emailHistoryImportFailedMessage,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final colorScheme = context.colorScheme;
+    final importBusy =
+        widget.status.isImporting ||
+        _pendingAction == _EmailHistoryImportBannerAction.import;
+    final actionsDisabled =
+        importBusy || _pendingAction == _EmailHistoryImportBannerAction.dismiss;
+    final completedLocation =
+        '${l10n.profileTitle} > ${l10n.settingsSectionData}';
+    final title = switch (widget.status) {
+      EmailHistoryImportPromptStatus.completed =>
+        l10n.emailHistoryImportCompletedTitle,
+      EmailHistoryImportPromptStatus.failed =>
+        l10n.emailHistoryImportFailedTitle,
+      _ => l10n.emailHistoryImportTitle,
+    };
+    final body = switch (widget.status) {
+      EmailHistoryImportPromptStatus.completed =>
+        l10n.emailHistoryImportCompletedBody(completedLocation),
+      EmailHistoryImportPromptStatus.failed =>
+        l10n.emailHistoryImportFailedBody,
+      _ => l10n.emailHistoryImportBannerBody,
+    };
+    final importLabel = widget.status.isFailed
+        ? l10n.emailHistoryImportBannerRetry
+        : l10n.emailHistoryImportBannerAction;
+    final iconColor = widget.status.isFailed
+        ? colorScheme.destructive
+        : colorScheme.primary;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.card,
+        border: Border(bottom: context.borderSide),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: sizing.chatTileMinHeight),
+        child: Padding(
+          padding: EdgeInsets.all(spacing.m),
+          child: Builder(
+            builder: (context) {
+              final actions = Wrap(
+                spacing: spacing.s,
+                runSpacing: spacing.xs,
+                children: [
+                  if (widget.status.isCompleted)
+                    AxiButton.primary(
+                      onPressed: actionsDisabled
+                          ? null
+                          : () async => await _handleDismiss(context),
+                      child: Text(l10n.commonDone),
+                    )
+                  else ...[
+                    AxiButton.primary(
+                      loading: importBusy,
+                      leading: importBusy
+                          ? null
+                          : Icon(
+                              LucideIcons.download,
+                              size: sizing.iconButtonIconSize,
+                            ),
+                      onPressed: actionsDisabled
+                          ? null
+                          : () async => await _handleImport(context),
+                      child: Text(importLabel),
+                    ),
+                    AxiButton.ghost(
+                      onPressed: actionsDisabled
+                          ? null
+                          : () async => await _handleDismiss(context),
+                      child: Text(l10n.emailHistoryImportBannerDismiss),
+                    ),
+                  ],
+                ],
+              );
+              final message = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(top: spacing.xs),
+                    child: Icon(
+                      LucideIcons.inbox,
+                      size: sizing.iconButtonIconSize,
+                      color: iconColor,
+                    ),
+                  ),
+                  SizedBox(width: spacing.s),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(title, style: context.textTheme.p.strong),
+                        SizedBox(height: spacing.xs),
+                        widget.status.isCompleted
+                            ? _EmailHistoryImportCompletedBody(
+                                body: body,
+                                location: completedLocation,
+                              )
+                            : Text(body, style: context.textTheme.small),
+                        SizedBox(height: spacing.m),
+                        Align(alignment: Alignment.centerLeft, child: actions),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+              return message;
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmailHistoryImportCompletedBody extends StatelessWidget {
+  const _EmailHistoryImportCompletedBody({
+    required this.body,
+    required this.location,
+  });
+
+  final String body;
+  final String location;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = context.textTheme;
+    return AxiHighlightedSubstringText(
+      text: body,
+      substring: location,
+      style: textTheme.small,
+      highlightStyle: textTheme.small.strong,
     );
   }
 }

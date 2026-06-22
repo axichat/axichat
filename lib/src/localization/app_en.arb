@@ -2081,6 +2081,24 @@
   "contactEmailEncryptionImportFailed": "Contact public key import failed.",
   "contactEmailEncryptionRemoveFailed": "Contact public key removal failed.",
   "emailContactsImportTitle": "Import contacts",
+  "emailHistoryImportTitle": "Import email history",
+  "emailHistoryImportBannerBody": "If this mailbox already has email, import it onto this device. Keep the app open until the import finishes. Large mailboxes can take a while.",
+  "emailHistoryImportBannerAction": "Import",
+  "emailHistoryImportBannerRetry": "Try again",
+  "emailHistoryImportBannerDismiss": "Not now",
+  "emailHistoryImportCompletedTitle": "Email history check finished",
+  "emailHistoryImportCompletedBody": "Axichat finished checking for older mail and added what was available. If email still seems missing, run it again from {location}.",
+  "@emailHistoryImportCompletedBody": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "emailHistoryImportFailedTitle": "Email import did not finish",
+  "emailHistoryImportFailedBody": "Import could not finish. Check your connection, keep the app open, and try again.",
+  "emailHistoryImportStartedMessage": "Email history import started.",
+  "emailHistoryImportFailedMessage": "Could not start email history import.",
   "emailContactsImportSubtitle": "Gmail, Outlook, Yahoo CSVs, or vCards.",
   "emailContactsImportFileAccessError": "Unable to access the selected file.",
   "emailContactsImportAction": "Import",

@@ -44,6 +44,7 @@ import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/transport/email_delta_worker_runtime.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/folders/bloc/folders_cubit.dart';
 import 'package:axichat/src/folders/view/folder_messages_list.dart';
@@ -65,6 +66,7 @@ import 'package:axichat/src/storage/models.dart' as m;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:animations/animations.dart';
 import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
+import 'package:delta_ffi/delta_safe.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
 import 'package:flutter/services.dart';
@@ -1541,6 +1543,24 @@ HomeSecondaryPane resolveHomeSecondaryPane({
   return HomeSecondaryPane.welcomeFallback(welcomeJid);
 }
 
+@visibleForTesting
+Duration resolveHomeChatInitialLoadDelay({
+  required HomeSecondaryPane? previousPane,
+  required HomeSecondaryPane pane,
+  required bool active,
+  required Duration transitionDuration,
+}) {
+  if (!active ||
+      transitionDuration == Duration.zero ||
+      previousPane == null ||
+      previousPane.hasChatPane ||
+      pane.kind != HomeSecondaryPaneKind.openChat ||
+      !pane.hasChatPane) {
+    return Duration.zero;
+  }
+  return transitionDuration;
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -2133,44 +2153,52 @@ class _HomeContent extends StatelessWidget {
                   required bool showChatCalendar,
                   required bool chatCalendarActive,
                 }) {
-                  final Widget chatPane = Align(
-                    alignment: Alignment.topLeft,
-                    child: _HomeSecondaryChatPaneTransitionGate(
-                      pane: pane,
-                      settings: settings,
-                      emailEnabled: emailEnabled,
-                      active: homeBranchActive && !showChatCalendar,
-                      chatCalendarActive: chatCalendarActive,
-                      transitionDuration: animationDuration,
-                    ),
-                  );
-                  final Widget content = Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: AxiAdaptiveLayout(
-                          invertPriority: pane.hasChatPane,
-                          showPrimary: !showChatCalendar,
-                          centerSecondary: false,
-                          centerPrimary: false,
-                          animatePaneChanges: true,
-                          primaryAlignment: Alignment.topLeft,
-                          secondaryAlignment: Alignment.topLeft,
-                          primaryChild: Nexus(
-                            badgeCounts: badgeCounts.tabs,
-                            tabs: tabs,
-                            navPlacement: navPlacement,
-                            showNavigationRail:
-                                navPlacement != NavPlacement.rail,
-                            navRailCollapsed: railCollapsed,
-                            onToggleNavRail: onToggleNavRail,
-                          ),
-                          secondaryChild: chatPane,
+                  final chatPaneActive = homeBranchActive && !showChatCalendar;
+                  return _HomeChatInitialLoadDelayGate(
+                    pane: pane,
+                    active: chatPaneActive,
+                    transitionDuration: animationDuration,
+                    builder: (context, initialLoadDelay) {
+                      final Widget chatPane = Align(
+                        alignment: Alignment.topLeft,
+                        child: _HomeSecondaryChatPane(
+                          key: ValueKey(pane.scopeKey),
+                          pane: pane,
+                          settings: settings,
+                          emailEnabled: emailEnabled,
+                          active: chatPaneActive,
+                          chatCalendarActive: chatCalendarActive,
+                          initialLoadDelay: initialLoadDelay,
                         ),
-                      ),
-                    ],
+                      );
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: AxiAdaptiveLayout(
+                              invertPriority: pane.hasChatPane,
+                              showPrimary: !showChatCalendar,
+                              centerSecondary: false,
+                              centerPrimary: false,
+                              animatePaneChanges: true,
+                              primaryAlignment: Alignment.topLeft,
+                              secondaryAlignment: Alignment.topLeft,
+                              primaryChild: Nexus(
+                                badgeCounts: badgeCounts.tabs,
+                                tabs: tabs,
+                                navPlacement: navPlacement,
+                                showNavigationRail:
+                                    navPlacement != NavPlacement.rail,
+                                navRailCollapsed: railCollapsed,
+                                onToggleNavRail: onToggleNavRail,
+                              ),
+                              secondaryChild: chatPane,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   );
-                  return content;
                 }
 
                 Widget calendarLayout({
@@ -2389,57 +2417,42 @@ class _HomeBlocScope extends StatelessWidget {
   }
 }
 
-class _HomeSecondaryChatPaneTransitionGate extends StatefulWidget {
-  const _HomeSecondaryChatPaneTransitionGate({
+class _HomeChatInitialLoadDelayGate extends StatefulWidget {
+  const _HomeChatInitialLoadDelayGate({
     required this.pane,
-    required this.settings,
-    required this.emailEnabled,
     required this.active,
-    required this.chatCalendarActive,
     required this.transitionDuration,
+    required this.builder,
   });
 
   final HomeSecondaryPane pane;
-  final SettingsState settings;
-  final bool emailEnabled;
   final bool active;
-  final bool chatCalendarActive;
   final Duration transitionDuration;
+  final Widget Function(BuildContext, Duration) builder;
 
   @override
-  State<_HomeSecondaryChatPaneTransitionGate> createState() =>
-      _HomeSecondaryChatPaneTransitionGateState();
+  State<_HomeChatInitialLoadDelayGate> createState() =>
+      _HomeChatInitialLoadDelayGateState();
 }
 
-class _HomeSecondaryChatPaneTransitionGateState
-    extends State<_HomeSecondaryChatPaneTransitionGate> {
-  var _delayInitialLoad = false;
+class _HomeChatInitialLoadDelayGateState
+    extends State<_HomeChatInitialLoadDelayGate> {
+  var _initialLoadDelay = Duration.zero;
 
   @override
-  void didUpdateWidget(_HomeSecondaryChatPaneTransitionGate oldWidget) {
+  void didUpdateWidget(_HomeChatInitialLoadDelayGate oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _delayInitialLoad =
-        widget.active &&
-        widget.transitionDuration != Duration.zero &&
-        widget.pane.kind == HomeSecondaryPaneKind.openChat &&
-        widget.pane.hasChatPane &&
-        !oldWidget.pane.hasChatPane;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _HomeSecondaryChatPane(
-      key: ValueKey(widget.pane.scopeKey),
+    _initialLoadDelay = resolveHomeChatInitialLoadDelay(
+      previousPane: oldWidget.pane,
       pane: widget.pane,
-      settings: widget.settings,
-      emailEnabled: widget.emailEnabled,
       active: widget.active,
-      chatCalendarActive: widget.chatCalendarActive,
-      initialLoadDelay: _delayInitialLoad
-          ? widget.transitionDuration
-          : Duration.zero,
+      transitionDuration: widget.transitionDuration,
     );
   }
+
+  @override
+  Widget build(BuildContext context) =>
+      widget.builder(context, _initialLoadDelay);
 }
 
 class _HomeSecondaryChatPane extends StatelessWidget {
@@ -2655,12 +2668,82 @@ class _VisibleHomeOperationOverlays extends StatelessWidget {
               ),
               Material(
                 type: MaterialType.transparency,
+                child: _EmailHistoryImportOperationOverlay(),
+              ),
+              Material(
+                type: MaterialType.transparency,
                 child: XmppOperationOverlay(),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _EmailHistoryImportOperationOverlay extends StatelessWidget {
+  const _EmailHistoryImportOperationOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    final importing = context.select<ConnectivityCubit, bool>(
+      (cubit) => cubit.state.emailState.historyImportPromptStatus.isImporting,
+    );
+    if (!importing) {
+      return const SizedBox.shrink();
+    }
+    final mediaQuery = MediaQuery.of(context);
+    final openJid = context.select<ChatsCubit, String?>(
+      (cubit) => cubit.state.openJid,
+    );
+    final compactDevice =
+        mediaQuery.size.shortestSide < compactDeviceBreakpoint;
+    final compactLayout = compactDevice || mediaQuery.size.width < smallScreen;
+    final chatOpenOverlayFloorInset = openJid == null || !compactLayout
+        ? 0.0
+        : context.spacing.xl;
+    return IgnorePointer(
+      ignoring: true,
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: context.spacing.m,
+            right: context.spacing.m,
+            bottom:
+                context.spacing.l +
+                mediaQuery.viewInsets.bottom +
+                chatOpenOverlayFloorInset,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: context.sizing.menuMaxWidth),
+            child: InBoundsFadeScale(
+              child: AxiModalSurface(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.spacing.m,
+                    vertical: context.spacing.s,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AxiProgressIndicator(color: context.colorScheme.primary),
+                      SizedBox(width: context.spacing.s),
+                      Flexible(
+                        child: Text(
+                          context.l10n.emailSyncMessageHistorySyncing,
+                          style: context.textTheme.p,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

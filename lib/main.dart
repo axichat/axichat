@@ -93,8 +93,6 @@ Future<void> main(List<String> args) async {
   final AuthBootstrap authBootstrap = AuthBootstrap(
     hasStoredLoginCredentials: hasStoredLoginCredentials,
   );
-  _installFrameTimingLogger(binding);
-  _installEventLoopDriftLogger(binding);
   final Widget app = _PhoneOrientationPolicy(
     child: capability.canForegroundService
         ? WithForegroundTask(
@@ -223,7 +221,7 @@ void _configureLogging() {
         if (!SafeLogging.shouldEmitProfileRecord(record)) {
           return;
         }
-        print(SafeLogging.formatRecord(record));
+        print(SafeLogging.formatProfileRecord(record));
       });
     return;
   }
@@ -257,86 +255,6 @@ void _installProfileErrorLogging() {
     return previousPlatformDispatcherOnError?.call(error, stackTrace) ?? false;
   };
 }
-
-void _installFrameTimingLogger(WidgetsBinding binding) {
-  if (!kProfileMode) {
-    return;
-  }
-  final log = Logger(SafeLogging.profileFrameTimingLoggerName);
-  var lastSlowReport = DateTime.fromMillisecondsSinceEpoch(0);
-  binding.addTimingsCallback((timings) {
-    final now = DateTime.now();
-    final slowTimings = timings
-        .where(_isSlowFrameTiming)
-        .toList(growable: false);
-    if (slowTimings.isEmpty) {
-      return;
-    }
-    if (now.difference(lastSlowReport) < const Duration(seconds: 2)) {
-      return;
-    }
-    lastSlowReport = now;
-    final worst = slowTimings.reduce(
-      (current, next) => current.totalSpan >= next.totalSpan ? current : next,
-    );
-    log.warning(
-      'Slow frame batch count=${slowTimings.length} '
-      'worstTotal=${_formatFrameDuration(worst.totalSpan)} '
-      'build=${_formatFrameDuration(worst.buildDuration)} '
-      'raster=${_formatFrameDuration(worst.rasterDuration)} '
-      'vsync=${_formatFrameDuration(worst.vsyncOverhead)} '
-      'estimatedDroppedFrames=${_estimatedDroppedFrames(worst.totalSpan)}',
-    );
-  });
-}
-
-void _installEventLoopDriftLogger(WidgetsBinding binding) {
-  if (!kProfileMode) {
-    return;
-  }
-  const interval = Duration(seconds: 1);
-  const threshold = Duration(milliseconds: 250);
-  const throttle = Duration(seconds: 2);
-  var expected = DateTime.timestamp().add(interval);
-  var lastReport = DateTime.fromMillisecondsSinceEpoch(0);
-  Timer.periodic(interval, (_) {
-    final now = DateTime.timestamp();
-    final drift = now.difference(expected);
-    expected = now.add(interval);
-    if (drift < threshold || now.difference(lastReport) < throttle) {
-      return;
-    }
-    lastReport = now;
-    SafeLogging.profileTrace(
-      'app.eventLoopDrift',
-      'lag',
-      fields: <String, Object?>{
-        'driftMs': drift.inMilliseconds,
-        'schedulerPhase': binding.schedulerPhase.name,
-        'transientCallbackCount': binding.transientCallbackCount,
-      },
-    );
-  });
-}
-
-bool _isSlowFrameTiming(ui.FrameTiming timing) =>
-    timing.totalSpan >= const Duration(milliseconds: 100) ||
-    timing.buildDuration >= const Duration(milliseconds: 50) ||
-    timing.rasterDuration >= const Duration(milliseconds: 50);
-
-int _estimatedDroppedFrames(Duration frameSpan) {
-  const frameBudget = Duration(microseconds: 16667);
-  final occupiedFrames =
-      (frameSpan.inMicroseconds + frameBudget.inMicroseconds - 1) ~/
-      frameBudget.inMicroseconds;
-  if (occupiedFrames <= 1) {
-    return 0;
-  }
-  return occupiedFrames - 1;
-}
-
-String _formatFrameDuration(Duration duration) =>
-    '${(duration.inMicroseconds / Duration.microsecondsPerMillisecond).toStringAsFixed(1)}ms';
 
 void _registerThirdPartyLicenses() {
   const deltaLicenseAsset = 'assets/licenses/delta_chat_core_mpl.txt';

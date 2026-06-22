@@ -8563,6 +8563,72 @@ abstract class AppLocalizations {
   /// **'Import contacts'**
   String get emailContactsImportTitle;
 
+  /// No description provided for @emailHistoryImportTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import email history'**
+  String get emailHistoryImportTitle;
+
+  /// No description provided for @emailHistoryImportBannerBody.
+  ///
+  /// In en, this message translates to:
+  /// **'If this mailbox already has email, import it onto this device. Keep the app open until the import finishes. Large mailboxes can take a while.'**
+  String get emailHistoryImportBannerBody;
+
+  /// No description provided for @emailHistoryImportBannerAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get emailHistoryImportBannerAction;
+
+  /// No description provided for @emailHistoryImportBannerRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get emailHistoryImportBannerRetry;
+
+  /// No description provided for @emailHistoryImportBannerDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get emailHistoryImportBannerDismiss;
+
+  /// No description provided for @emailHistoryImportCompletedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email history check finished'**
+  String get emailHistoryImportCompletedTitle;
+
+  /// No description provided for @emailHistoryImportCompletedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat finished checking for older mail and added what was available. If email still seems missing, run it again from {location}.'**
+  String emailHistoryImportCompletedBody(String location);
+
+  /// No description provided for @emailHistoryImportFailedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Email import did not finish'**
+  String get emailHistoryImportFailedTitle;
+
+  /// No description provided for @emailHistoryImportFailedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Import could not finish. Check your connection, keep the app open, and try again.'**
+  String get emailHistoryImportFailedBody;
+
+  /// No description provided for @emailHistoryImportStartedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Email history import started.'**
+  String get emailHistoryImportStartedMessage;
+
+  /// No description provided for @emailHistoryImportFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start email history import.'**
+  String get emailHistoryImportFailedMessage;
+
   /// No description provided for @emailContactsImportSubtitle.
   ///
   /// In en, this message translates to:

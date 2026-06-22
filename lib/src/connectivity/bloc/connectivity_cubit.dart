@@ -181,6 +181,22 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
     );
   }
 
+  Future<void> importExistingEmailHistory({bool force = false}) async {
+    final emailService = _emailService;
+    if (!_emailEnabled || emailService == null) {
+      throw const EmailProvisioningAccountUnavailableException();
+    }
+    await emailService.importExistingEmailHistory(force: force);
+  }
+
+  Future<void> dismissExistingEmailHistoryImportPrompt() async {
+    final emailService = _emailService;
+    if (!_emailEnabled || emailService == null) {
+      return;
+    }
+    await emailService.dismissExistingEmailHistoryImportPrompt();
+  }
+
   @override
   Future<void> close() async {
     await _connectivitySubscription.cancel();

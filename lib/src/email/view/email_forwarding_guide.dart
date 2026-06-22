@@ -217,7 +217,7 @@ class AccountWelcomeDialog extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: AxiButton.outline(
                       onPressed: () => _dismiss(context),
-                      child: Text(l10n.emailForwardingGuideSkipLabel),
+                      child: Text(l10n.commonDone),
                     ),
                   ),
                 ],

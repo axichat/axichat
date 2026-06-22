@@ -4810,6 +4810,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emailContactsImportTitle => 'Import contacts';
 
   @override
+  String get emailHistoryImportTitle => 'Import email history';
+
+  @override
+  String get emailHistoryImportBannerBody =>
+      'If this mailbox already has email, import it onto this device. Keep the app open until the import finishes. Large mailboxes can take a while.';
+
+  @override
+  String get emailHistoryImportBannerAction => 'Import';
+
+  @override
+  String get emailHistoryImportBannerRetry => 'Try again';
+
+  @override
+  String get emailHistoryImportBannerDismiss => 'Not now';
+
+  @override
+  String get emailHistoryImportCompletedTitle => 'Email history check finished';
+
+  @override
+  String emailHistoryImportCompletedBody(String location) {
+    return 'Axichat finished checking for older mail and added what was available. If email still seems missing, run it again from $location.';
+  }
+
+  @override
+  String get emailHistoryImportFailedTitle => 'Email import did not finish';
+
+  @override
+  String get emailHistoryImportFailedBody =>
+      'Import could not finish. Check your connection, keep the app open, and try again.';
+
+  @override
+  String get emailHistoryImportStartedMessage =>
+      'Email history import started.';
+
+  @override
+  String get emailHistoryImportFailedMessage =>
+      'Could not start email history import.';
+
+  @override
   String get emailContactsImportSubtitle =>
       'Gmail, Outlook, Yahoo CSVs, or vCards.';
 

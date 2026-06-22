@@ -4625,6 +4625,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emailContactsImportTitle => '导入联系人';
 
   @override
+  String get emailHistoryImportTitle => '导入邮件历史';
+
+  @override
+  String get emailHistoryImportBannerBody =>
+      '如果这个邮箱已有邮件，请将它们导入到此设备。导入完成前请保持应用打开。大型邮箱可能需要一些时间。';
+
+  @override
+  String get emailHistoryImportBannerAction => '导入';
+
+  @override
+  String get emailHistoryImportBannerRetry => '重试';
+
+  @override
+  String get emailHistoryImportBannerDismiss => '暂不';
+
+  @override
+  String get emailHistoryImportCompletedTitle => '邮件历史检查完成';
+
+  @override
+  String emailHistoryImportCompletedBody(String location) {
+    return 'Axichat 已完成旧邮件检查，并添加了可用邮件。如果你仍觉得缺少邮件，可以在“$location”中再次运行。';
+  }
+
+  @override
+  String get emailHistoryImportFailedTitle => '邮件导入未完成';
+
+  @override
+  String get emailHistoryImportFailedBody => '导入无法完成。请检查连接，保持应用打开，然后重试。';
+
+  @override
+  String get emailHistoryImportStartedMessage => '邮件历史导入已开始。';
+
+  @override
+  String get emailHistoryImportFailedMessage => '无法开始导入邮件历史。';
+
+  @override
   String get emailContactsImportSubtitle =>
       'Gmail、Outlook、Yahoo 的 CSV 或 vCard。';
 
@@ -11558,6 +11594,42 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get emailContactsImportTitle => '匯入聯絡人';
+
+  @override
+  String get emailHistoryImportTitle => '匯入電郵歷史';
+
+  @override
+  String get emailHistoryImportBannerBody =>
+      '如果這個郵箱已有電郵，請將它們匯入到此裝置。匯入完成前請保持應用程式開啟。大型郵箱可能需要一段時間。';
+
+  @override
+  String get emailHistoryImportBannerAction => '匯入';
+
+  @override
+  String get emailHistoryImportBannerRetry => '重試';
+
+  @override
+  String get emailHistoryImportBannerDismiss => '暫不';
+
+  @override
+  String get emailHistoryImportCompletedTitle => '電郵歷史檢查完成';
+
+  @override
+  String emailHistoryImportCompletedBody(String location) {
+    return 'Axichat 已完成舊電郵檢查，並加入了可用電郵。如果你仍覺得缺少電郵，可以在「$location」中再次執行。';
+  }
+
+  @override
+  String get emailHistoryImportFailedTitle => '電郵匯入未完成';
+
+  @override
+  String get emailHistoryImportFailedBody => '匯入無法完成。請檢查連線，保持應用程式開啟，然後重試。';
+
+  @override
+  String get emailHistoryImportStartedMessage => '電郵歷史匯入已開始。';
+
+  @override
+  String get emailHistoryImportFailedMessage => '無法開始匯入電郵歷史。';
 
   @override
   String get emailContactsImportSubtitle =>
