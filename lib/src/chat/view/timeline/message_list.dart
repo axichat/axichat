@@ -218,64 +218,53 @@ class _ChatMessageListState extends State<_ChatMessageList> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final viewportExtent = constraints.hasBoundedHeight
-                      ? constraints.maxHeight
-                      : MediaQuery.sizeOf(context).height;
-                  return NotificationListener<ScrollNotification>(
-                    onNotification: _handleScrollNotification,
-                    child: Listener(
-                      onPointerSignal: _handlePointerSignal,
-                      child: ListView.builder(
-                        cacheExtent: viewportExtent,
-                        physics: messageListOptions.scrollPhysics,
-                        padding: EdgeInsets.zero,
-                        controller: _scrollController,
-                        reverse: true,
-                        itemCount:
-                            items.length +
-                            (shouldShowLoadEarlierSpinner ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == items.length) {
-                            return messageListOptions.loadEarlierBuilder ??
-                                Padding(
-                                  padding: EdgeInsets.all(context.spacing.m),
-                                  child: const Center(
-                                    child: AxiProgressIndicator(),
-                                  ),
-                                );
-                          }
-                          final ChatTimelineItem? previousItem =
-                              index < items.length - 1
-                              ? items[index + 1]
-                              : null;
-                          final ChatTimelineItem? nextItem = index > 0
-                              ? items[index - 1]
-                              : null;
-                          final visualOrder = items.length - index;
-                          return RepaintBoundary(
-                            key: ValueKey<String>(items[index].id),
-                            child: _ChatMessageListRow(
-                              item: items[index],
-                              previousItem: previousItem,
-                              nextItem: nextItem,
-                              visualOrder: visualOrder,
-                              itemBuilder: itemBuilder,
-                              messageListOptions: messageListOptions,
-                              onTimelineItemMounted:
-                                  widget.onTimelineItemMounted,
-                              onTimelineItemUnmounted:
-                                  widget.onTimelineItemUnmounted,
-                              onMessageRowMounted: _handleMessageRowMounted,
-                              onMessageRowUnmounted: _handleMessageRowUnmounted,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                },
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _handleScrollNotification,
+                child: Listener(
+                  onPointerSignal: _handlePointerSignal,
+                  child: ListView.builder(
+                    scrollCacheExtent: const ScrollCacheExtent.viewport(3),
+                    physics: messageListOptions.scrollPhysics,
+                    padding: EdgeInsets.zero,
+                    controller: _scrollController,
+                    reverse: true,
+                    itemCount:
+                        items.length + (shouldShowLoadEarlierSpinner ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == items.length) {
+                        return messageListOptions.loadEarlierBuilder ??
+                            Padding(
+                              padding: EdgeInsets.all(context.spacing.m),
+                              child: const Center(
+                                child: AxiProgressIndicator(),
+                              ),
+                            );
+                      }
+                      final ChatTimelineItem? previousItem =
+                          index < items.length - 1 ? items[index + 1] : null;
+                      final ChatTimelineItem? nextItem = index > 0
+                          ? items[index - 1]
+                          : null;
+                      final visualOrder = items.length - index;
+                      return RepaintBoundary(
+                        key: ValueKey<String>(items[index].id),
+                        child: _ChatMessageListRow(
+                          item: items[index],
+                          previousItem: previousItem,
+                          nextItem: nextItem,
+                          visualOrder: visualOrder,
+                          itemBuilder: itemBuilder,
+                          messageListOptions: messageListOptions,
+                          onTimelineItemMounted: widget.onTimelineItemMounted,
+                          onTimelineItemUnmounted:
+                              widget.onTimelineItemUnmounted,
+                          onMessageRowMounted: _handleMessageRowMounted,
+                          onMessageRowUnmounted: _handleMessageRowUnmounted,
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
             if (messageListOptions.chatFooterBuilder != null)

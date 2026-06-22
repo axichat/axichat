@@ -123,7 +123,8 @@ import 'package:flutter/rendering.dart'
         PipelineOwner,
         RenderBox,
         RenderBoxContainerDefaultsMixin,
-        RenderProxyBox;
+        RenderProxyBox,
+        ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:html/dom.dart' as html_dom;
