@@ -648,6 +648,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Set<String> thresholdIds,
     bool allowSend,
     bool syncEmailSeen,
+    bool deferForUnreadBootstrap,
   })?
   _pendingReadStateSyncRequest;
   Future<void> _readStateSyncQueue = Future<void>.value();
@@ -773,22 +774,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _queueReadStateSync(
       allowSend:
           SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed,
+      deferForUnreadBootstrap: false,
     );
   }
 
   Future<void> _queueReadStateSync({
     required bool allowSend,
     bool syncEmailSeen = true,
+    bool deferForUnreadBootstrap = true,
   }) {
     final chat = state.chat;
     if (chat == null) {
       return Future<void>.value();
     }
+    final previousRequest = _pendingReadStateSyncRequest;
+    final shouldDeferForUnreadBootstrap =
+        deferForUnreadBootstrap &&
+        (previousRequest == null ||
+            previousRequest.chatJid != chat.jid ||
+            previousRequest.deferForUnreadBootstrap);
     _pendingReadStateSyncRequest = (
       chatJid: chat.jid,
       thresholdIds: Set<String>.unmodifiable(_readThresholdMessageIds),
       allowSend: allowSend,
       syncEmailSeen: syncEmailSeen,
+      deferForUnreadBootstrap: shouldDeferForUnreadBootstrap,
     );
     final nextQueue = _readStateSyncQueue.then(
       (_) => _drainReadStateSyncQueue(),
@@ -809,6 +819,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         thresholdIds: request.thresholdIds,
         allowSend: request.allowSend,
         syncEmailSeen: request.syncEmailSeen,
+        deferForUnreadBootstrap: request.deferForUnreadBootstrap,
       );
     }
   }
@@ -818,12 +829,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Set<String> thresholdIds,
     required bool allowSend,
     bool syncEmailSeen = true,
+    bool deferForUnreadBootstrap = true,
   }) async {
     final chat = state.chat;
     if (!_chatStarted ||
         chat == null ||
         chat.jid != chatJid ||
-        _mustDeferAutomaticReadStateSync) {
+        deferForUnreadBootstrap && _mustDeferAutomaticReadStateSync) {
       return;
     }
     await _syncReadStateForActiveChat(
@@ -4074,16 +4086,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (pendingCount == null || pendingCount <= _emptyMessageCount) {
       return null;
     }
+    final storedBoundary = storedBoundaryStanzaId?.trim();
+    if (storedBoundary != null && storedBoundary.isNotEmpty) {
+      return storedBoundary;
+    }
     final countBoundary = _resolveUnreadBoundaryFromCount(
       messages: messages,
       unreadCount: pendingCount,
     );
     if (countBoundary != null && countBoundary.isNotEmpty) {
       return countBoundary;
-    }
-    final storedBoundary = storedBoundaryStanzaId?.trim();
-    if (storedBoundary != null && storedBoundary.isNotEmpty) {
-      return storedBoundary;
     }
     return null;
   }
