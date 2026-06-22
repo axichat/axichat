@@ -548,9 +548,10 @@ emailHtmlWebViewLoadingLayoutForTesting({
 _resolveEmailHtmlWebViewVisibility({
   required bool hasWebView,
   required bool paintWebView,
+  bool paintContent = true,
 }) => (
   includeWebView: hasWebView,
-  visible: hasWebView && paintWebView,
+  visible: hasWebView && paintWebView && paintContent,
   maintainState: hasWebView,
 );
 
@@ -559,9 +560,11 @@ _resolveEmailHtmlWebViewVisibility({
 emailHtmlWebViewVisibilityForTesting({
   required bool hasWebView,
   required bool paintWebView,
+  bool paintContent = true,
 }) => _resolveEmailHtmlWebViewVisibility(
   hasWebView: hasWebView,
   paintWebView: paintWebView,
+  paintContent: paintContent,
 );
 
 bool _emailHtmlWebViewShouldScheduleLoadMeasurements({
@@ -1651,6 +1654,7 @@ class EmailHtmlWebView extends StatefulWidget {
     this.diagnosticContentKey,
     this.diagnosticRawHtml,
     this.diagnosticFlutterHtml,
+    this.paintContent = true,
   }) : _mode = _EmailHtmlWebViewMode.embedded,
        maxHeight = null;
 
@@ -1674,6 +1678,7 @@ class EmailHtmlWebView extends StatefulWidget {
     this.diagnosticContentKey,
     this.diagnosticRawHtml,
     this.diagnosticFlutterHtml,
+    this.paintContent = true,
   }) : _mode = _EmailHtmlWebViewMode.scrollable;
 
   final String html;
@@ -1694,6 +1699,7 @@ class EmailHtmlWebView extends StatefulWidget {
   final Object? diagnosticContentKey;
   final String? diagnosticRawHtml;
   final String? diagnosticFlutterHtml;
+  final bool paintContent;
   final _EmailHtmlWebViewMode _mode;
 
   bool get _usesInternalScroll => _mode == _EmailHtmlWebViewMode.scrollable;
@@ -3420,6 +3426,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     final webViewVisibility = _resolveEmailHtmlWebViewVisibility(
       hasWebView: webView != null,
       paintWebView: loadingLayout.paintWebView,
+      paintContent: widget.paintContent,
     );
     final webViewStack = Stack(
       children: [

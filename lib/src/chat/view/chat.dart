@@ -732,6 +732,7 @@ class _ChatState extends State<Chat> {
   bool _chatCalendarCanHandleBack = false;
   bool _pinnedPanelVisible = false;
   String? _selectedMessageId;
+  String? _selectedInlineEmailWebViewExitMessageId;
   String? _lastTappedMessageId;
   String? _previousTappedMessageId;
   String? _pendingWebViewAutoScrollMessageId;
@@ -2599,7 +2600,7 @@ class _ChatState extends State<Chat> {
         },
       );
     }
-    final shouldUseSelectedInlineEmailWebView =
+    final shouldRenderSelectedInlineEmailWebView =
         shouldUseSelectedInlineEmailWebViewForTesting(
           isSingleSelection: isSingleSelection,
           shouldRenderHtmlBody: shouldRenderHtmlBody,
@@ -2663,7 +2664,7 @@ class _ChatState extends State<Chat> {
         onViewOriginal: onViewOriginal,
       );
       bubbleTextChildren.add(
-        shouldUseSelectedInlineEmailWebView
+        shouldRenderSelectedInlineEmailWebView
             ? _MessageHtmlWebViewBody(
                 key: ValueKey<String>('${bubbleContentKey}_webview'),
                 html: normalizedHtmlBody,
@@ -2686,6 +2687,8 @@ class _ChatState extends State<Chat> {
                   messageId: messageStanzaId,
                   height: height,
                 ),
+                paintContent:
+                    _selectedInlineEmailWebViewExitMessageId != messageStanzaId,
               )
             : _MessageHtmlBody(
                 key: ValueKey<Object>(bubbleContentKey),
@@ -6294,8 +6297,20 @@ class _ChatState extends State<Chat> {
       ),
       targetMounted: _isTimelineMessageMounted(clearedMessageId),
     );
+    if (_messageCanRenderSelectedInlineEmailWebView(clearedMessageId)) {
+      setState(() {
+        _selectedInlineEmailWebViewExitMessageId = clearedMessageId;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted ||
+          _selectedMessageId != clearedMessageId ||
+          _selectedInlineEmailWebViewExitMessageId != clearedMessageId) {
+        return;
+      }
+    }
     setState(() {
       _selectedMessageId = null;
+      _selectedInlineEmailWebViewExitMessageId = null;
     });
     if (needsCloseFallback) {
       _schedulePendingWebViewCloseAutoScrollFallback(
@@ -6591,9 +6606,11 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _selectMessage(String messageId) async {
-    if (_selectedMessageId != messageId) {
+    if (_selectedMessageId != messageId ||
+        _selectedInlineEmailWebViewExitMessageId != null) {
       setState(() {
         _selectedMessageId = messageId;
+        _selectedInlineEmailWebViewExitMessageId = null;
       });
     }
   }

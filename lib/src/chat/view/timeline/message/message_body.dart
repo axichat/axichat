@@ -346,6 +346,7 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
     required this.initialContentHeight,
     required this.onLinkTap,
     required this.onContentHeightChanged,
+    this.paintContent = true,
   });
 
   final String html;
@@ -362,6 +363,7 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
   final double? initialContentHeight;
   final ValueChanged<String> onLinkTap;
   final ValueChanged<double> onContentHeightChanged;
+  final bool paintContent;
 
   @override
   Widget build(BuildContext context) {
@@ -374,6 +376,7 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
         diagnosticContentKey: diagnosticContentKey,
         diagnosticRawHtml: rawHtml,
         diagnosticFlutterHtml: loadingHtml,
+        paintContent: paintContent,
         minHeight: sizing.attachmentPreviewExtent,
         backgroundColor: backgroundColor,
         textColor: textColor,
