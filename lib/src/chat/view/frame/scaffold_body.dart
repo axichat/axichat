@@ -64,7 +64,7 @@ class _ChatTopPanelTransition extends StatelessWidget {
         ).animate(animation),
         child: SizeTransition(
           sizeFactor: animation,
-          axisAlignment: -1.0,
+          alignment: AlignmentDirectional.topStart,
           child: child,
         ),
       ),

@@ -2998,17 +2998,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (oldIndex < 0 || oldIndex >= visibleOrder.length) {
       return;
     }
-    int targetIndex = newIndex;
-    if (newIndex > oldIndex) {
-      targetIndex -= 1;
-    }
-    if (targetIndex < 0 || targetIndex > visibleOrder.length) {
+    if (newIndex < 0 || newIndex >= visibleOrder.length) {
       return;
     }
     setState(() {
       final List<String> nextVisibleOrder = List<String>.from(visibleOrder);
       final String moved = nextVisibleOrder.removeAt(oldIndex);
-      nextVisibleOrder.insert(targetIndex, moved);
+      nextVisibleOrder.insert(newIndex, moved);
 
       final Set<String> visibleIds = nextVisibleOrder.toSet();
       final Iterator<String> replacements = nextVisibleOrder.iterator;
@@ -5499,7 +5495,7 @@ class _SidebarTaskList extends StatelessWidget {
                     vertical: context.spacing.xxs,
                   ),
                   itemCount: tasks.length,
-                  onReorder: onReorder!,
+                  onReorderItem: onReorder!,
                   proxyDecorator: (child, _, _) {
                     return Material(color: Colors.transparent, child: child);
                   },
@@ -6330,7 +6326,7 @@ class _AdvancedOptionsTransitionState extends State<_AdvancedOptionsTransition>
         opacity: _animation,
         child: SizeTransition(
           sizeFactor: _animation,
-          axisAlignment: -1,
+          alignment: AlignmentDirectional.topStart,
           child: child,
         ),
       ),

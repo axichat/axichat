@@ -792,22 +792,22 @@ class SettingsControls extends StatelessWidget {
             _SettingsLinkButton(
               label: context.l10n.settingsGitlabLabel,
               link: gitlabUrl,
-              iconData: FontAwesomeIcons.gitlab,
+              faIconData: FontAwesomeIcons.gitlab,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsGithubLabel,
               link: githubUrl,
-              iconData: FontAwesomeIcons.github,
+              faIconData: FontAwesomeIcons.github,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsMastodonLabel,
               link: mastodonUrl,
-              iconData: FontAwesomeIcons.mastodon,
+              faIconData: FontAwesomeIcons.mastodon,
             ),
             _SettingsLinkButton(
               label: context.l10n.settingsDonateLabel,
               link: donateUrl,
-              iconData: FontAwesomeIcons.heart,
+              faIconData: FontAwesomeIcons.heart,
             ),
             SizedBox(height: spacing.xxl),
           ],
@@ -1902,6 +1902,7 @@ class _SettingsActionButton extends StatelessWidget {
   const _SettingsActionButton({
     required this.label,
     required this.onPressed,
+    this.leading,
     this.iconData,
     this.destructive = false,
     this.loading = false,
@@ -1909,6 +1910,7 @@ class _SettingsActionButton extends StatelessWidget {
 
   final String label;
   final VoidCallback? onPressed;
+  final Widget? leading;
   final IconData? iconData;
   final bool destructive;
   final bool loading;
@@ -1917,18 +1919,20 @@ class _SettingsActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final Widget? leading = iconData == null
-        ? null
-        : Icon(iconData, size: sizing.menuItemIconSize);
+    final Widget? resolvedLeading =
+        leading ??
+        (iconData == null
+            ? null
+            : Icon(iconData, size: sizing.menuItemIconSize));
     final button = destructive
         ? AxiListButton.destructiveGhost(
-            leading: leading,
+            leading: resolvedLeading,
             onPressed: onPressed,
             loading: loading,
             child: Text(label),
           )
         : AxiListButton(
-            leading: leading,
+            leading: resolvedLeading,
             onPressed: onPressed,
             loading: loading,
             child: Text(label),
@@ -1945,18 +1949,24 @@ class _SettingsLinkButton extends StatelessWidget {
     required this.label,
     required this.link,
     this.iconData,
+    this.faIconData,
   });
 
   final String label;
   final String link;
   final IconData? iconData;
+  final FaIconData? faIconData;
 
   @override
   Widget build(BuildContext context) {
+    final sizing = context.sizing;
     return Link(
       uri: Uri.parse(link),
       builder: (_, followLink) => _SettingsActionButton(
         label: label,
+        leading: faIconData == null
+            ? null
+            : FaIcon(faIconData, size: sizing.menuItemIconSize),
         iconData: iconData,
         onPressed: followLink,
       ),

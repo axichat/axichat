@@ -139,7 +139,7 @@ class TaskChecklistController extends ChangeNotifier {
         oldIndex < 0 ||
         newIndex < 0 ||
         oldIndex >= _items.length ||
-        newIndex > _items.length) {
+        newIndex >= _items.length) {
       return;
     }
     final List<TaskChecklistItem> updated = List<TaskChecklistItem>.from(
@@ -147,8 +147,7 @@ class TaskChecklistController extends ChangeNotifier {
       growable: true,
     );
     final TaskChecklistItem moved = updated.removeAt(oldIndex);
-    final int targetIndex = newIndex > oldIndex ? newIndex - 1 : newIndex;
-    updated.insert(targetIndex, moved);
+    updated.insert(newIndex, moved);
     if (listEquals(updated, _items)) {
       return;
     }

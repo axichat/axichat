@@ -179,7 +179,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           buildDefaultDragHandles: false,
-                          onReorder: widget.controller.reorder,
+                          onReorderItem: widget.controller.reorder,
                           itemCount: items.length,
                           itemBuilder: (context, index) {
                             final item = items[index];

@@ -378,8 +378,8 @@ class CriticalPathPanel extends StatelessWidget {
 
   void _handleReorder(CalendarCriticalPath path, int oldIndex, int newIndex) {
     final List<String> ordered = List<String>.from(path.taskIds);
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
+    if (newIndex < 0 || newIndex >= ordered.length) {
+      return;
     }
     final String moved = ordered.removeAt(oldIndex);
     ordered.insert(newIndex, moved);
@@ -814,7 +814,7 @@ class _FocusedPathTasks extends StatelessWidget {
             padding: EdgeInsets.zero,
             itemCount: tasks.length,
             buildDefaultDragHandles: false,
-            onReorder: onReorder,
+            onReorderItem: onReorder,
             proxyDecorator: (child, _, _) {
               return Material(color: Colors.transparent, child: child);
             },

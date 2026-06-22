@@ -355,7 +355,7 @@ class _AnimatedChatTile extends StatelessWidget {
             parent: animation,
             curve: Curves.easeInOutCubic,
           ),
-          axisAlignment: -1,
+          alignment: AlignmentDirectional.topStart,
           child: transitionChild,
         );
       },

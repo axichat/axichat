@@ -382,7 +382,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
           ClipRect(
             child: SizeTransition(
               sizeFactor: _collapseAnimation,
-              axisAlignment: -1,
+              alignment: AlignmentDirectional.topStart,
               child: AnimatedSize(
                 duration: chipsBarAnimationDuration,
                 curve: Curves.easeInOutCubic,

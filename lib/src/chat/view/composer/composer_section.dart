@@ -36,7 +36,7 @@ class _ComposerModeTransition extends StatelessWidget {
           opacity: curved,
           child: SizeTransition(
             sizeFactor: curved,
-            axisAlignment: 1,
+            alignment: AlignmentDirectional.bottomStart,
             child: ScaleTransition(
               scale: scale,
               alignment: Alignment.bottomCenter,
@@ -1857,7 +1857,7 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
               ).animate(curved),
               child: SizeTransition(
                 sizeFactor: curved,
-                axisAlignment: 1.0,
+                alignment: AlignmentDirectional.bottomStart,
                 child: child,
               ),
             ),

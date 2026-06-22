@@ -405,7 +405,6 @@ class _AxiListButtonState extends State<AxiListButton> {
     );
     const collapsedKey = ValueKey('axi_list_button_collapsed');
     const expandedKey = ValueKey('axi_list_button_expanded');
-    const axisAlignment = 1.0;
     return AnimatedSwitcher(
       duration: animationDuration,
       switchInCurve: Curves.easeInOutCubic,
@@ -415,7 +414,7 @@ class _AxiListButtonState extends State<AxiListButton> {
       transitionBuilder: (child, animation) => SizeTransition(
         sizeFactor: animation,
         axis: Axis.horizontal,
-        axisAlignment: axisAlignment,
+        alignment: AlignmentDirectional.topEnd,
         child: child,
       ),
       child: canCollapse

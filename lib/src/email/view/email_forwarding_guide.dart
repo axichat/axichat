@@ -47,7 +47,7 @@ extension EmailForwardingProviderMetadata on EmailForwardingProvider {
     }
   }
 
-  IconData get iconData {
+  FaIconData get iconData {
     switch (this) {
       case EmailForwardingProvider.gmail:
         return FontAwesomeIcons.google;
