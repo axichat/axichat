@@ -26,7 +26,14 @@ Options:
 
 Examples:
   ./tool/release_android.sh
+  ./tool/release_android.sh --artifact apk -- --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken
   ./tool/release_android.sh --builder flutter --artifact apk -- --dart-define=FOO=bar
+
+Notes:
+  Shorebird defaults Android releases to app bundles. Axichat APK releases must
+  pass an APK artifact explicitly. Use --artifact apk with this wrapper; the
+  wrapper passes --artifact=apk to Shorebird. Flutter build args go after the
+  second --.
 EOF
 }
 
