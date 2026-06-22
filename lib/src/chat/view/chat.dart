@@ -467,6 +467,68 @@ bool shouldDeferReadThresholdSyncForTesting({
   required bool initialTimelineReadinessPending,
 }) => !messagesLoaded || initialTimelineReadinessPending;
 
+@visibleForTesting
+bool emailMessageRenderSettledForTesting({
+  required Message message,
+  List<String> attachmentIds = const <String>[],
+  Map<int, String> emailFullHtmlByDeltaId = const <int, String>{},
+  Set<int> emailFullHtmlUnavailable = const <int>{},
+}) => _emailMessageRenderSettled(
+  message: message,
+  attachmentIds: attachmentIds,
+  emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+  emailFullHtmlUnavailable: emailFullHtmlUnavailable,
+);
+
+bool _emailMessageRenderSettled({
+  required Message message,
+  required List<String> attachmentIds,
+  required Map<int, String> emailFullHtmlByDeltaId,
+  required Set<int> emailFullHtmlUnavailable,
+}) {
+  if (!message.isEmailBacked) {
+    return true;
+  }
+  if (message.error.isNotNone || message.retracted) {
+    return true;
+  }
+  if (!message.rfc822BodyStatus.isPendingDownload &&
+      _hasRenderableEmailBodyText(message.body)) {
+    return true;
+  }
+  if (message.subject?.trim().isNotEmpty == true) {
+    return true;
+  }
+  if (HtmlContentCodec.normalizeHtml(message.htmlBody) != null) {
+    return true;
+  }
+  if (message.hasRfc822BodyContent || message.rfc822BodyContentUnavailable) {
+    return true;
+  }
+  if (message.fileMetadataID?.trim().isNotEmpty == true) {
+    return true;
+  }
+  for (final attachmentId in attachmentIds) {
+    if (attachmentId.trim().isNotEmpty) {
+      return true;
+    }
+  }
+  final deltaMessageId = message.deltaMsgId;
+  if (deltaMessageId == null || deltaMessageId <= 0) {
+    return false;
+  }
+  return emailFullHtmlByDeltaId.containsKey(deltaMessageId) ||
+      emailFullHtmlUnavailable.contains(deltaMessageId);
+}
+
+bool _hasRenderableEmailBodyText(String? body) {
+  final text = body?.trim();
+  if (text == null || text.isEmpty) {
+    return false;
+  }
+  return true;
+}
+
 double _bubbleCornerClearance(BorderRadius baseRadius) =>
     math.max(baseRadius.topLeft.x, baseRadius.topLeft.y);
 
@@ -568,6 +630,11 @@ final class _RenderedMessageHydrationSnapshot {
     required this.stanzaId,
     required this.deltaMessageId,
     required this.displayed,
+    required this.rfc822BodyStatus,
+    required this.bodyHash,
+    required this.htmlBodyHash,
+    required this.subjectHash,
+    required this.fileMetadataId,
   });
 
   factory _RenderedMessageHydrationSnapshot.fromMessage(Message message) {
@@ -575,23 +642,47 @@ final class _RenderedMessageHydrationSnapshot {
       stanzaId: message.stanzaID,
       deltaMessageId: message.deltaMsgId,
       displayed: message.displayed,
+      rfc822BodyStatus: message.rfc822BodyStatus,
+      bodyHash: message.body?.hashCode,
+      htmlBodyHash: message.htmlBody?.hashCode,
+      subjectHash: message.subject?.hashCode,
+      fileMetadataId: message.fileMetadataID?.trim(),
     );
   }
 
   final String stanzaId;
   final int? deltaMessageId;
   final bool displayed;
+  final EmailRfc822BodyStatus rfc822BodyStatus;
+  final int? bodyHash;
+  final int? htmlBodyHash;
+  final int? subjectHash;
+  final String? fileMetadataId;
 
   @override
   bool operator ==(Object other) {
     return other is _RenderedMessageHydrationSnapshot &&
         other.stanzaId == stanzaId &&
         other.deltaMessageId == deltaMessageId &&
-        other.displayed == displayed;
+        other.displayed == displayed &&
+        other.rfc822BodyStatus == rfc822BodyStatus &&
+        other.bodyHash == bodyHash &&
+        other.htmlBodyHash == htmlBodyHash &&
+        other.subjectHash == subjectHash &&
+        other.fileMetadataId == fileMetadataId;
   }
 
   @override
-  int get hashCode => Object.hash(stanzaId, deltaMessageId, displayed);
+  int get hashCode => Object.hash(
+    stanzaId,
+    deltaMessageId,
+    displayed,
+    rfc822BodyStatus,
+    bodyHash,
+    htmlBodyHash,
+    subjectHash,
+    fileMetadataId,
+  );
 }
 
 enum _WebViewAutoScrollTransition {
@@ -659,10 +750,9 @@ class _ChatState extends State<Chat> {
   var _completedUnreadDividerScrollRequestId = 0;
   var _initialEmailViewportWarmupStatus =
       _InitialEmailViewportWarmupStatus.pending;
-  Set<int> _initialEmailViewportDeltaIds = const <int>{};
+  Set<String> _initialEmailViewportStanzaIds = const <String>{};
   var _initialEmailViewportWarmupRequestId = 0;
   _RenderedHydrationSnapshot? _lastRenderedHydrationSnapshot;
-  _RenderedHydrationSnapshot? _lastRenderedPrewarmSnapshot;
   List<RosterItem>? _cachedRosterItems;
   List<chat_models.Chat>? _cachedChatItems;
   String? _cachedSelfAvatarPath;
@@ -1855,81 +1945,28 @@ class _ChatState extends State<Chat> {
     return false;
   }
 
-  bool _initialEmailViewportFullHtmlSettled(ChatState state) {
-    for (final deltaMessageId in _initialEmailViewportDeltaIds) {
-      if (!state.emailFullHtmlByDeltaId.containsKey(deltaMessageId) &&
-          !state.emailFullHtmlUnavailable.contains(deltaMessageId)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  bool _initialEmailViewportReadinessPending(ChatState state) {
-    if (!state.messagesLoaded || !_chatHasEmailBackedMessages(state)) {
-      return false;
-    }
-    if (_initialEmailViewportWarmupStatus !=
-        _InitialEmailViewportWarmupStatus.warmed) {
-      return true;
-    }
-    return !_initialEmailViewportFullHtmlSettled(state);
-  }
-
   bool _initialTimelineReadinessPending(ChatState state) {
-    return state.messagesLoaded &&
-        (_unreadDividerScrollTargetPending(state) ||
-            _initialEmailViewportReadinessPending(state));
+    return state.messagesLoaded && _unreadDividerScrollTargetPending(state);
   }
 
   void _resetInitialTimelineReadiness() {
     _initialEmailViewportWarmupStatus =
         _InitialEmailViewportWarmupStatus.pending;
-    _initialEmailViewportDeltaIds = const <int>{};
+    _initialEmailViewportStanzaIds = const <String>{};
     _lastRenderedHydrationSnapshot = null;
-    _lastRenderedPrewarmSnapshot = null;
     _initialEmailViewportWarmupRequestId += 1;
   }
 
-  List<Message> _emailWarmWindowForRenderedMessages(
+  Set<String> _visibleEmailStanzaIdsForInitialReadiness(
     List<Message> renderedMessages,
   ) {
-    if (_cachedFilteredItems.isEmpty || renderedMessages.isEmpty) {
-      return renderedMessages;
-    }
-    int? minIndex;
-    int? maxIndex;
+    final ids = <String>{};
     for (final message in renderedMessages) {
-      final index = _cachedFilteredItemIndexByStanzaId[message.stanzaID];
-      if (index == null) {
-        continue;
-      }
-      minIndex = minIndex == null ? index : math.min(minIndex, index);
-      maxIndex = maxIndex == null ? index : math.max(maxIndex, index);
-    }
-    if (minIndex == null || maxIndex == null) {
-      return renderedMessages;
-    }
-    final margin = ChatBloc.messageBatchSize ~/ 2;
-    final start = math.max(0, minIndex - margin);
-    final end = math.min(_cachedFilteredItems.length, maxIndex + margin + 1);
-    return List<Message>.unmodifiable(_cachedFilteredItems.sublist(start, end));
-  }
-
-  Set<int> _visibleEmailDeltaIdsForInitialReadiness(
-    List<Message> renderedMessages,
-  ) {
-    final ids = <int>{};
-    for (final message in renderedMessages) {
-      if (!message.isEmailBacked) {
-        continue;
-      }
-      final deltaMessageId = message.deltaMsgId;
-      if (deltaMessageId != null && deltaMessageId > 0) {
-        ids.add(deltaMessageId);
+      if (message.isEmailBacked) {
+        ids.add(message.stanzaID);
       }
     }
-    return Set<int>.unmodifiable(ids);
+    return Set<String>.unmodifiable(ids);
   }
 
   _RenderedHydrationSnapshot _renderedHydrationSnapshot(
@@ -1959,41 +1996,27 @@ class _ChatState extends State<Chat> {
       renderedMessages,
       chatState,
     );
-    final shouldPrewarm = hydrationSnapshot != _lastRenderedPrewarmSnapshot;
-    final warmup = shouldPrewarm
-        ? _prewarmEmailHtmlDerivationsForMessages(
-            messages: _emailWarmWindowForRenderedMessages(renderedMessages),
-            emailFullHtmlByDeltaId: chatState.emailFullHtmlByDeltaId,
-          )
-        : Future<void>.value();
-    if (shouldPrewarm) {
-      _lastRenderedPrewarmSnapshot = hydrationSnapshot;
-    }
     if (hydrationSnapshot != _lastRenderedHydrationSnapshot) {
       _lastRenderedHydrationSnapshot = hydrationSnapshot;
       chatBloc.add(ChatRenderedMessagesHydrationRequested(renderedMessages));
     }
     if (!_initialEmailViewportWarmupApplies(chatState)) {
-      unawaited(warmup);
       return;
     }
-    final visibleEmailDeltaIds = _visibleEmailDeltaIdsForInitialReadiness(
+    final visibleEmailStanzaIds = _visibleEmailStanzaIdsForInitialReadiness(
       renderedMessages,
     );
     if (_initialEmailViewportWarmupStatus ==
             _InitialEmailViewportWarmupStatus.warming &&
-        setEquals(visibleEmailDeltaIds, _initialEmailViewportDeltaIds)) {
-      if (shouldPrewarm) {
-        unawaited(warmup);
-      }
+        setEquals(visibleEmailStanzaIds, _initialEmailViewportStanzaIds)) {
       return;
     }
     final requestId = _initialEmailViewportWarmupRequestId + 1;
     _initialEmailViewportWarmupRequestId = requestId;
     _initialEmailViewportWarmupStatus =
         _InitialEmailViewportWarmupStatus.warming;
-    _initialEmailViewportDeltaIds = visibleEmailDeltaIds;
-    unawaited(_completeInitialEmailViewportWarmup(requestId, warmup));
+    _initialEmailViewportStanzaIds = visibleEmailStanzaIds;
+    unawaited(_completeInitialEmailViewportWarmup(requestId));
   }
 
   bool _initialEmailViewportWarmupApplies(ChatState state) {
@@ -2004,11 +2027,8 @@ class _ChatState extends State<Chat> {
             _InitialEmailViewportWarmupStatus.warmed;
   }
 
-  Future<void> _completeInitialEmailViewportWarmup(
-    int requestId,
-    Future<void> warmup,
-  ) async {
-    await warmup;
+  Future<void> _completeInitialEmailViewportWarmup(int requestId) async {
+    await Future<void>.delayed(Duration.zero);
     if (!mounted || requestId != _initialEmailViewportWarmupRequestId) {
       return;
     }
@@ -2474,7 +2494,6 @@ class _ChatState extends State<Chat> {
   void _appendCollapsedEmailPreviewBubbleContent({
     required BuildContext context,
     required String collapsedEmailPreviewText,
-    required Object bubbleContentKey,
     required TextStyle baseTextStyle,
     required List<InlineSpan> messageDetails,
     required Map<int, double> detailOpticalOffsetFactors,
@@ -2725,7 +2744,10 @@ class _ChatState extends State<Chat> {
       final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
         block.resolvedHtmlBody,
       );
-      final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+      final emailDerivation = emailHtmlDerivationForBody(
+        normalizedHtmlBody,
+        deriveIfMissing: false,
+      );
       final visibleSanitizedHtmlText = emailDerivation?.visibleBodyText;
       final normalizedHtmlText = visibleSanitizedHtmlText;
       final renderedText = block.plainText.trim().isNotEmpty
@@ -3081,9 +3103,13 @@ class _ChatState extends State<Chat> {
               resolvedEmailHtmlBodyForMessage(
                 message: messageModel,
                 emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+                deriveHtmlIfMissing: false,
               );
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
-    final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+    final emailDerivation = emailHtmlDerivationForBody(
+      normalizedHtmlBody,
+      deriveIfMissing: false,
+    );
     final originalEmailContentKey = isEmailMessage
         ? _emailOriginalContentKeyForMessage(messageModel)
         : null;
@@ -3219,7 +3245,6 @@ class _ChatState extends State<Chat> {
       _appendCollapsedEmailPreviewBubbleContent(
         context: context,
         collapsedEmailPreviewText: collapsedEmailPreviewText,
-        bubbleContentKey: bubbleContentKey,
         baseTextStyle: baseTextStyle,
         messageDetails: messageDetails,
         detailOpticalOffsetFactors: detailOpticalOffsetFactors,
@@ -3272,12 +3297,7 @@ class _ChatState extends State<Chat> {
       if (bubbleTextChildren.isNotEmpty) {
         bubbleTextChildren.add(SizedBox(height: context.spacing.xs));
       }
-      bubbleTextChildren.add(
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: AxiProgressIndicator(color: textColor),
-        ),
-      );
+      bubbleTextChildren.add(AxiProgressIndicator(color: textColor));
     }
     if (timelineMessageItem.retracted) {
       bubbleTextChildren.add(
@@ -3884,7 +3904,10 @@ class _ChatState extends State<Chat> {
       if (normalizedHtml == null) {
         return;
       }
-      final emailDerivation = emailHtmlDerivationForBody(normalizedHtml);
+      final emailDerivation = emailHtmlDerivationForBody(
+        normalizedHtml,
+        deriveIfMissing: false,
+      );
       stages['$prefix.raw'] = html;
       stages['$prefix.normalized'] = normalizedHtml;
       stages['$prefix.prepared-flutter-html'] =
@@ -3907,6 +3930,7 @@ class _ChatState extends State<Chat> {
         resolvedEmailHtmlBodyForMessage(
           message: message,
           emailFullHtmlByDeltaId: chatState.emailFullHtmlByDeltaId,
+          deriveHtmlIfMissing: false,
         );
     final messageDatabaseId = message.id;
     addStages(
@@ -6414,58 +6438,6 @@ class _ChatState extends State<Chat> {
     _cachedChatAvatarPathsByJid = chatAvatarPathsByJid;
   }
 
-  List<String> _emailHtmlDerivationPrewarmBodies({
-    required List<Message> messages,
-    required Map<int, String> emailFullHtmlByDeltaId,
-  }) {
-    final normalizedHtmlBodies = <String>[];
-    final seenHtmlBodies = <String>{};
-    void addHtml(String? html) {
-      final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
-      if (normalizedHtml == null ||
-          HtmlContentCodec.cachedEmailDerivations(normalizedHtml) != null ||
-          !seenHtmlBodies.add(normalizedHtml)) {
-        return;
-      }
-      normalizedHtmlBodies.add(normalizedHtml);
-    }
-
-    for (final message in messages) {
-      addHtml(message.htmlBody);
-      final deltaMessageId = message.deltaMsgId;
-      if (deltaMessageId != null) {
-        addHtml(emailFullHtmlByDeltaId[deltaMessageId]);
-      }
-    }
-    return normalizedHtmlBodies;
-  }
-
-  Future<void> _prewarmEmailHtmlDerivationsForMessages({
-    required List<Message> messages,
-    required Map<int, String> emailFullHtmlByDeltaId,
-  }) async {
-    final normalizedHtmlBodies = _emailHtmlDerivationPrewarmBodies(
-      messages: messages,
-      emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
-    );
-    if (normalizedHtmlBodies.isEmpty) {
-      return;
-    }
-    await _precacheEmailHtmlDerivations(normalizedHtmlBodies);
-  }
-
-  Future<bool> _precacheEmailHtmlDerivations(
-    List<String> normalizedHtmlBodies,
-  ) async {
-    try {
-      return await HtmlContentCodec.precacheEmailDerivations(
-        normalizedHtmlBodies,
-      );
-    } on Exception {
-      return false;
-    }
-  }
-
   void _ensureMessageCaches({
     required List<Message> items,
     required Map<String, Message> quotedMessagesById,
@@ -6748,7 +6720,11 @@ class _ChatState extends State<Chat> {
         block.resolvedHtmlBody,
       );
       if (normalizedHtmlBody != null &&
-          emailHtmlDerivationForBody(normalizedHtmlBody) != null) {
+          emailHtmlDerivationForBody(
+                normalizedHtmlBody,
+                deriveIfMissing: false,
+              ) !=
+              null) {
         return true;
       }
     }
@@ -6762,10 +6738,15 @@ class _ChatState extends State<Chat> {
           message: timelineItem.messageModel,
           emailFullHtmlByDeltaId:
               _cachedEmailFullHtmlByDeltaId ?? const <int, String>{},
+          deriveHtmlIfMissing: false,
         );
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
     return normalizedHtmlBody != null &&
-        emailHtmlDerivationForBody(normalizedHtmlBody) != null;
+        emailHtmlDerivationForBody(
+              normalizedHtmlBody,
+              deriveIfMissing: false,
+            ) !=
+            null;
   }
 
   List<String> _selectedInlineEmailWebViewHeightCacheKeys(String messageId) {
@@ -6821,7 +6802,10 @@ class _ChatState extends State<Chat> {
       final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
         block.resolvedHtmlBody,
       );
-      final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+      final emailDerivation = emailHtmlDerivationForBody(
+        normalizedHtmlBody,
+        deriveIfMissing: false,
+      );
       if (normalizedHtmlBody == null || emailDerivation == null) {
         continue;
       }
@@ -6847,9 +6831,13 @@ class _ChatState extends State<Chat> {
           message: timelineItem.messageModel,
           emailFullHtmlByDeltaId:
               _cachedEmailFullHtmlByDeltaId ?? const <int, String>{},
+          deriveHtmlIfMissing: false,
         );
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
-    final emailDerivation = emailHtmlDerivationForBody(normalizedHtmlBody);
+    final emailDerivation = emailHtmlDerivationForBody(
+      normalizedHtmlBody,
+      deriveIfMissing: false,
+    );
     if (normalizedHtmlBody == null || emailDerivation == null) {
       return const [];
     }

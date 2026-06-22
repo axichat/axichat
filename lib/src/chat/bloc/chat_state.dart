@@ -221,6 +221,7 @@ abstract class ChatState with _$ChatState {
     @Default(<String>[]) List<String> typingParticipants,
     @Default(true) bool showAlert,
     @Default(false) bool hasMoreLocalMessages,
+    @Default(RequestStatus.none) RequestStatus loadEarlierStatus,
     @Default(ChatHistoryPaginationSourceState.unavailable)
     ChatHistoryPaginationSourceState emailHistoryPaginationState,
     @Default(ChatHistoryPaginationSourceState.unavailable)
@@ -239,6 +240,8 @@ abstract class ChatState with _$ChatState {
     @Default(<int, String>{}) Map<int, String> emailFullHtmlByDeltaId,
     @Default(<int>{}) Set<int> emailFullHtmlLoading,
     @Default(<int>{}) Set<int> emailFullHtmlUnavailable,
+    @Default(<int>{}) Set<int> emailFullMessageLoading,
+    @Default(0) int emailContentPreparationRevision,
     @Default(<int, String>{}) Map<int, String> emailQuotedTextByDeltaId,
     @Default(<int>{}) Set<int> emailQuotedTextLoading,
     @Default(<int>{}) Set<int> emailQuotedTextUnavailable,
@@ -280,9 +283,8 @@ abstract class ChatState with _$ChatState {
 extension ChatStateHistoryPagination on ChatState {
   bool get canLoadEarlier {
     return messagesLoaded &&
-        (hasMoreLocalMessages ||
-            emailHistoryPaginationState.canAttempt ||
-            xmppHistoryPaginationState.canAttempt);
+        !loadEarlierStatus.isLoading &&
+        (hasMoreLocalMessages || xmppHistoryPaginationState.canAttempt);
   }
 }
 

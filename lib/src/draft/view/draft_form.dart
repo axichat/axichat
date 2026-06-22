@@ -310,10 +310,12 @@ class DraftFormState extends State<DraftForm> {
     if (normalizedHtml == null) {
       return false;
     }
+    final derivation = HtmlContentCodec.emailDerivations(normalizedHtml);
     return HtmlContentCodec.shouldRenderRichEmailHtml(
       normalizedHtmlBody: normalizedHtml,
-      normalizedHtmlText: HtmlContentCodec.toPlainText(normalizedHtml).trim(),
+      normalizedHtmlText: derivation.visibleBodyText,
       renderedText: block.originalPlainText,
+      derivation: derivation,
     );
   }
 

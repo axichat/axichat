@@ -999,10 +999,9 @@ class _PinnedMessageTile extends StatelessWidget {
                 senderEmail: chat.emailAddress,
               );
               if (!approved) return false;
-              await locate<ChatBloc>().downloadFullEmailMessage(
+              return locate<ChatBloc>().downloadFullEmailMessage(
                 effectiveMessage,
               );
-              return true;
             })
           : null;
       for (var index = 0; index < attachmentIds.length; index += 1) {

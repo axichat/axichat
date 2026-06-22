@@ -437,7 +437,6 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
   required String unreadDividerLabel,
   required String emptyStateItemId,
   required String emptyStateLabel,
-  String? pendingEmailContentLabel,
   String? unavailableEmailContentLabel,
   required String emailEncryptionStatusLabel,
   bool deriveEmailHtmlIfMissing = true,
@@ -460,6 +459,7 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
   required Map<String, List<chat_models.Chat>> shareReplies,
   required Map<int, String> emailFullHtmlByDeltaId,
   required Set<int> emailFullHtmlUnavailable,
+  Set<int> emailFullMessageLoading = const <int>{},
   required Set<String> revokedInviteTokens,
   required Set<String> acceptedInviteTokens,
   required String inviteRoomFallbackLabel,
@@ -542,13 +542,13 @@ List<ChatTimelineItem> buildMainChatTimelineItems({
       shareReplies: shareReplies,
       emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
       emailFullHtmlUnavailable: emailFullHtmlUnavailable,
+      emailFullMessageLoading: emailFullMessageLoading,
       revokedInviteTokens: revokedInviteTokens,
       acceptedInviteTokens: acceptedInviteTokens,
       inviteRoomFallbackLabel: inviteRoomFallbackLabel,
       inviteBodyLabel: inviteBodyLabel,
       inviteRevokedBodyLabel: inviteRevokedBodyLabel,
       inviteAcceptedBodyLabel: inviteAcceptedBodyLabel,
-      pendingEmailContentLabel: pendingEmailContentLabel,
       unavailableEmailContentLabel: unavailableEmailContentLabel,
       unknownAuthorLabel: unknownAuthorLabel,
       inviteActionLabel: inviteActionLabel,
@@ -767,13 +767,13 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   required Map<String, List<chat_models.Chat>> shareReplies,
   required Map<int, String> emailFullHtmlByDeltaId,
   required Set<int> emailFullHtmlUnavailable,
+  Set<int> emailFullMessageLoading = const <int>{},
   required Set<String> revokedInviteTokens,
   required Set<String> acceptedInviteTokens,
   required String inviteRoomFallbackLabel,
   required String inviteBodyLabel,
   required String inviteRevokedBodyLabel,
   required String inviteAcceptedBodyLabel,
-  String? pendingEmailContentLabel,
   String? unavailableEmailContentLabel,
   required String unknownAuthorLabel,
   required String Function(String roomDisplayName) inviteActionLabel,
@@ -880,6 +880,11 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   final emailFullHtmlIsUnavailable =
       deltaMessageId != null &&
       emailFullHtmlUnavailable.contains(deltaMessageId);
+  final emailFullMessageIsLoading = _emailFullMessageIsLoading(
+    message: message,
+    rfcEmailGroup: rfcEmailGroup,
+    emailFullMessageLoading: emailFullMessageLoading,
+  );
   final forwardedHtmlText = resolvedForwardHtml == null
       ? null
       : emailHtmlVisibleBodyText(
@@ -959,7 +964,6 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       bodyTextTrimmed == subjectText;
   final displayedBody = isSubjectOnlyBody ? '' : bodyText;
   final shouldReplaceInviteBody = isInvite || isInviteRevocation;
-  final normalizedPendingEmailContentLabel = pendingEmailContentLabel?.trim();
   final normalizedUnavailableEmailContentLabel = unavailableEmailContentLabel
       ?.trim();
   final hasRenderableEmailSourceContent =
@@ -981,18 +985,6 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       bodyTextTrimmed.isEmpty &&
       normalizedUnavailableEmailContentLabel != null &&
       normalizedUnavailableEmailContentLabel.isNotEmpty;
-  final shouldUsePendingEmailContentLabel =
-      isEmailMessage &&
-      message.error.isNone &&
-      !message.retracted &&
-      !hasAttachment &&
-      deltaMessageId != null &&
-      deltaMessageId > 0 &&
-      !hasRenderableEmailSourceContent &&
-      !emailFullHtmlIsUnavailable &&
-      bodyTextTrimmed.isEmpty &&
-      normalizedPendingEmailContentLabel != null &&
-      normalizedPendingEmailContentLabel.isNotEmpty;
   final emailSourceFallbackText =
       isEmailMessage &&
           hasRenderableEmailSourceContent &&
@@ -1012,8 +1004,6 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
       ? inviteLabel
       : shouldUseUnavailableEmailContentLabel
       ? normalizedUnavailableEmailContentLabel
-      : shouldUsePendingEmailContentLabel
-      ? normalizedPendingEmailContentLabel
       : message.error.isNotNone
       ? bodyText.isNotEmpty
             ? errorLabelWithBody(message.error, bodyTextTrimmed)
@@ -1071,6 +1061,7 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
         : resolvedRenderedText,
     isSelf: isSelf,
     isEmailMessage: isEmailMessage,
+    isEmailFullMessageLoading: emailFullMessageIsLoading,
     canSendAgain:
         staleUnackedCutoff != null &&
         message.isStaleUnackedXmppSendAgainCandidate(
@@ -1141,13 +1132,13 @@ ChatTimelineMessageItem? buildPreviewChatTimelineMessageItem({
   required Map<String, List<chat_models.Chat>> shareReplies,
   required Map<int, String> emailFullHtmlByDeltaId,
   required Set<int> emailFullHtmlUnavailable,
+  Set<int> emailFullMessageLoading = const <int>{},
   required Set<String> revokedInviteTokens,
   required Set<String> acceptedInviteTokens,
   required String inviteRoomFallbackLabel,
   required String inviteBodyLabel,
   required String inviteRevokedBodyLabel,
   required String inviteAcceptedBodyLabel,
-  String? pendingEmailContentLabel,
   String? unavailableEmailContentLabel,
   required String unknownAuthorLabel,
   required String Function(String roomDisplayName) inviteActionLabel,
@@ -1190,13 +1181,13 @@ ChatTimelineMessageItem? buildPreviewChatTimelineMessageItem({
     shareReplies: shareReplies,
     emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
     emailFullHtmlUnavailable: emailFullHtmlUnavailable,
+    emailFullMessageLoading: emailFullMessageLoading,
     revokedInviteTokens: revokedInviteTokens,
     acceptedInviteTokens: acceptedInviteTokens,
     inviteRoomFallbackLabel: inviteRoomFallbackLabel,
     inviteBodyLabel: inviteBodyLabel,
     inviteRevokedBodyLabel: inviteRevokedBodyLabel,
     inviteAcceptedBodyLabel: inviteAcceptedBodyLabel,
-    pendingEmailContentLabel: pendingEmailContentLabel,
     unavailableEmailContentLabel: unavailableEmailContentLabel,
     unknownAuthorLabel: unknownAuthorLabel,
     inviteActionLabel: inviteActionLabel,
@@ -1244,6 +1235,7 @@ ChatTimelineMessageItem _copyChatTimelineMessageItem(
     rowText: item.rowText,
     isSelf: item.isSelf,
     isEmailMessage: item.isEmailMessage,
+    isEmailFullMessageLoading: item.isEmailFullMessageLoading,
     canSendAgain: item.canSendAgain,
     error: item.error,
     trusted: item.trusted,
@@ -1351,6 +1343,32 @@ bool _hasRenderableEmailSourceContent({
   resolvedHtmlBody: resolvedHtmlBody,
   deriveHtmlIfMissing: deriveHtmlIfMissing,
 ).trim().isNotEmpty;
+
+bool _emailFullMessageIsLoading({
+  required Message message,
+  required RfcEmailGroup? rfcEmailGroup,
+  required Set<int> emailFullMessageLoading,
+}) {
+  if (_messageFullMessageIsLoading(message, emailFullMessageLoading)) {
+    return true;
+  }
+  if (rfcEmailGroup == null) {
+    return false;
+  }
+  return rfcEmailGroup.messages.any(
+    (source) => _messageFullMessageIsLoading(source, emailFullMessageLoading),
+  );
+}
+
+bool _messageFullMessageIsLoading(
+  Message message,
+  Set<int> emailFullMessageLoading,
+) {
+  final deltaMessageId = message.deltaMsgId;
+  return message.isEmailBacked &&
+      deltaMessageId != null &&
+      emailFullMessageLoading.contains(deltaMessageId);
+}
 
 List<ChatTimelineEmailBodyBlock> _rfcEmailBodyBlocksForGroup({
   required RfcEmailGroup group,

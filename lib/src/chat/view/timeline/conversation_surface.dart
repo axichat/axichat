@@ -640,6 +640,7 @@ class _ChatMainConversationSection extends StatelessWidget {
           shareReplies: shareReplies,
           emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
           emailFullHtmlUnavailable: state.emailFullHtmlUnavailable,
+          emailFullMessageLoading: state.emailFullMessageLoading,
           emailQuotedTextByDeltaId: state.emailQuotedTextByDeltaId,
           revokedInviteTokens: revokedInviteTokens,
           acceptedInviteTokens: acceptedInviteTokens,
@@ -943,6 +944,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
     required this.shareReplies,
     required this.emailFullHtmlByDeltaId,
     required this.emailFullHtmlUnavailable,
+    required this.emailFullMessageLoading,
     required this.emailQuotedTextByDeltaId,
     required this.revokedInviteTokens,
     required this.acceptedInviteTokens,
@@ -1020,6 +1022,7 @@ class _ChatPinnedPanelSection extends StatelessWidget {
   final Map<String, List<chat_models.Chat>> shareReplies;
   final Map<int, String> emailFullHtmlByDeltaId;
   final Set<int> emailFullHtmlUnavailable;
+  final Set<int> emailFullMessageLoading;
   final Map<int, String> emailQuotedTextByDeltaId;
   final Set<String> revokedInviteTokens;
   final Set<String> acceptedInviteTokens;
@@ -1097,13 +1100,13 @@ class _ChatPinnedPanelSection extends StatelessWidget {
           shareReplies: shareReplies,
           emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
           emailFullHtmlUnavailable: emailFullHtmlUnavailable,
+          emailFullMessageLoading: emailFullMessageLoading,
           revokedInviteTokens: revokedInviteTokens,
           acceptedInviteTokens: acceptedInviteTokens,
           inviteRoomFallbackLabel: l10n.chatInviteRoomFallbackLabel,
           inviteBodyLabel: l10n.chatInviteBodyLabel,
           inviteRevokedBodyLabel: l10n.chatInviteRevokedLabel,
           inviteAcceptedBodyLabel: l10n.chatInviteAcceptedLabel,
-          pendingEmailContentLabel: l10n.accessibilityLoadingLabel,
           unavailableEmailContentLabel: l10n.messageErrorServiceUnavailable,
           unknownAuthorLabel: l10n.commonUnknownLabel,
           inviteActionLabel: l10n.chatInviteActionLabel,

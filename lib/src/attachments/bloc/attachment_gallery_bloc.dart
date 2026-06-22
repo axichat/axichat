@@ -230,8 +230,10 @@ class AttachmentGalleryBloc
   Future<bool> downloadEmailMessage(Message message) async {
     final service = _emailService;
     if (service == null) return false;
-    await service.downloadFullMessage(message);
-    return true;
+    return service.requestEmailContentPreparation(
+      message,
+      priority: EmailContentPreparationPriority.manual,
+    );
   }
 
   Future<void> _onItemsUpdated(

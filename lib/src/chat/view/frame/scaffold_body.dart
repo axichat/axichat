@@ -438,8 +438,6 @@ class _ChatScaffoldBody extends StatelessWidget {
                 emptyStateLabel: searchFiltering
                     ? context.l10n.chatEmptySearch
                     : context.l10n.chatEmptyMessages,
-                pendingEmailContentLabel:
-                    context.l10n.accessibilityLoadingLabel,
                 unavailableEmailContentLabel:
                     context.l10n.messageErrorServiceUnavailable,
                 emailEncryptionStatusLabel:
@@ -466,6 +464,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                 shareReplies: shareReplies,
                 emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
                 emailFullHtmlUnavailable: state.emailFullHtmlUnavailable,
+                emailFullMessageLoading: state.emailFullMessageLoading,
                 revokedInviteTokens: inviteLifecycle.revokedInviteTokens,
                 acceptedInviteTokens: inviteLifecycle.acceptedInviteTokens,
                 inviteRoomFallbackLabel:
@@ -663,11 +662,7 @@ class _ChatScaffoldBody extends StatelessWidget {
                               !state.canLoadEarlier
                           ? null
                           : () async {
-                              final completer = Completer<void>();
-                              locate<ChatBloc>().add(
-                                ChatLoadEarlier(completer: completer),
-                              );
-                              await completer.future;
+                              locate<ChatBloc>().add(const ChatLoadEarlier());
                             },
                       loadEarlierBuilder: Padding(
                         padding: EdgeInsets.all(context.spacing.m),

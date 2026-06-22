@@ -21,11 +21,8 @@ final class RfcEmailGroup {
 
   Message get leader =>
       bodySources.where((message) => !hasAttachments(message)).firstOrNull ??
-      _nonGeneratedCaptionMessages
-          .where((message) => !hasAttachments(message))
-          .firstOrNull ??
+      messages.where((message) => !hasAttachments(message)).firstOrNull ??
       bodySources.firstOrNull ??
-      _nonGeneratedCaptionMessages.firstOrNull ??
       messages.first;
 
   Message get quoteTarget =>
@@ -50,17 +47,13 @@ final class RfcEmailGroup {
   bool get hasAnyAttachments =>
       attachmentIdsByStanzaId.values.any((ids) => ids.isNotEmpty);
 
-  Iterable<Message> get _nonGeneratedCaptionMessages =>
-      messages.where((message) => !_isGeneratedAttachmentCaptionOnly(message));
-
   bool shouldHideTimelineMessage(Message message) =>
       !isLeader(message) &&
       !hasAttachments(message) &&
       (isBodySource(message) ||
           isDuplicateBodyMessage(message) ||
           message.body?.trim().isNotEmpty == true ||
-          message.htmlBody?.trim().isNotEmpty == true ||
-          _isGeneratedAttachmentCaptionOnly(message));
+          message.htmlBody?.trim().isNotEmpty == true);
 
   bool shouldSuppressTimelineText(Message message) =>
       !isLeader(message) &&
@@ -282,10 +275,6 @@ String rfcEmailBodyText({
   bool deriveHtmlIfMissing = true,
 }) {
   final body = _plainEmailBodyCandidate(message);
-  if (message.hasGeneratedEmailAttachmentCaption &&
-      _looksGeneratedEmailAttachmentCaption(body)) {
-    return '';
-  }
   if (body.isNotEmpty &&
       !(message.hasRfc822BodyContent &&
           HtmlContentCodec.looksLikeCssBodyText(body))) {
@@ -320,23 +309,6 @@ String _plainEmailBodyCandidate(Message message) {
         )
       : forwardedContent.body;
   return ChatSubjectCodec.previewBodyText(forwardedBody).trim();
-}
-
-bool _looksGeneratedEmailAttachmentCaption(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty || trimmed.startsWith('\u{1F4CE} ')) {
-    return true;
-  }
-  return RegExp(r'^[^\r\n]+\.[^\s./\\]{1,16}\s+\([^)]+\)$').hasMatch(trimmed);
-}
-
-bool _isGeneratedAttachmentCaptionOnly(Message message) {
-  if (!message.hasGeneratedEmailAttachmentCaption) {
-    return false;
-  }
-  return _looksGeneratedEmailAttachmentCaption(
-    _plainEmailBodyCandidate(message),
-  );
 }
 
 final class _RfcEmailBodyCandidate {

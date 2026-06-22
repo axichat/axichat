@@ -345,6 +345,12 @@ class _ChatTimelineItemView extends StatelessWidget {
   bool _shouldShowEmailWebViewTip({
     required ChatTimelineMessageItem timelineMessageItem,
   }) {
+    if (!timelineMessageItem.isEmailMessage ||
+        readOnly ||
+        multiSelectActive ||
+        selectedMessageId != null) {
+      return false;
+    }
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(
       timelineMessageItem.resolvedHtmlBody,
     );
@@ -355,7 +361,10 @@ class _ChatTimelineItemView extends StatelessWidget {
       isSingleSelection: selectedMessageId != null,
       normalizedHtmlBody: normalizedHtmlBody,
       renderedText: timelineMessageItem.renderedText,
-      emailDerivation: emailHtmlDerivationForBody(normalizedHtmlBody),
+      emailDerivation: emailHtmlDerivationForBody(
+        normalizedHtmlBody,
+        deriveIfMissing: false,
+      ),
     );
   }
 

@@ -119,6 +119,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 resolvedEmailHtmlBodyForMessage(
                   message: message,
                   emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+                  deriveHtmlIfMissing: false,
                 );
             final normalizedHtmlBody = resolvedHtmlBody?.trim();
             final hasHtmlBody =

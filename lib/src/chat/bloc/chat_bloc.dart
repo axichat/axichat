@@ -26,6 +26,7 @@ import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/request_status.dart';
@@ -64,7 +65,9 @@ import 'package:path/path.dart' as p;
 import 'package:stream_transform/stream_transform.dart';
 
 part 'chat_bloc.freezed.dart';
+
 part 'chat_event.dart';
+
 part 'chat_state.dart';
 
 const int _emailAttachmentBundleMinimumCount = 2;
@@ -179,6 +182,24 @@ final class _ChatEmailSendUnitResult {
 
   final bool succeeded;
   final Map<ComposerRecipientKey, FanOutRecipientState> recipientStatuses;
+}
+
+final class _EmailQuotedTextHydrationResult {
+  const _EmailQuotedTextHydrationResult({
+    required this.message,
+    required this.deltaMessageId,
+    required this.stopwatch,
+    required this.result,
+    this.quotedText,
+    this.unavailable = false,
+  });
+
+  final Message message;
+  final int deltaMessageId;
+  final Stopwatch stopwatch;
+  final String result;
+  final String? quotedText;
+  final bool unavailable;
 }
 
 enum ChatToastVariant { info, warning, destructive }
@@ -314,6 +335,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (timestampOrder != 0) {
         return timestampOrder;
       }
+      final aDeltaMsgId = a.message.deltaMsgId;
+      final bDeltaMsgId = b.message.deltaMsgId;
+      final deltaRankOrder = (bDeltaMsgId == null ? 0 : 1).compareTo(
+        aDeltaMsgId == null ? 0 : 1,
+      );
+      if (deltaRankOrder != 0) {
+        return deltaRankOrder;
+      }
+      if (aDeltaMsgId != null && bDeltaMsgId != null) {
+        final deltaOrder = bDeltaMsgId.compareTo(aDeltaMsgId);
+        if (deltaOrder != 0) {
+          return deltaOrder;
+        }
+      }
       return a.index.compareTo(b.index);
     });
     return [
@@ -356,10 +391,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatMessagesUpdated,
       transformer: restartable(),
     );
+    on<_ChatMessagePageEnrichmentRequested>(
+      _onChatMessagePageEnrichmentRequested,
+      transformer: restartable(),
+    );
     on<_ChatPresentationHydrationRequested>(
       _onChatPresentationHydrationRequested,
       transformer: sequential(),
     );
+    on<_ChatEmailContentPreparationUpdated>(
+      _onChatEmailContentPreparationUpdated,
+    );
+    on<_ChatEmailOriginalContentUpdated>(_onChatEmailOriginalContentUpdated);
     on<ChatRenderedMessagesHydrationRequested>(
       _onChatRenderedMessagesHydrationRequested,
     );
@@ -389,8 +432,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatReadThresholdChanged>(_onChatReadThresholdChanged);
     on<ChatEmailHeadersRequested>(_onChatEmailHeadersRequested);
-    on<ChatEmailFullHtmlRequested>(_onChatEmailFullHtmlRequested);
+    on<_ChatEmailOriginalContentRequested>(
+      _onChatEmailOriginalContentRequested,
+      transformer: sequential(),
+    );
     on<ChatEmailQuotedTextRequested>(_onChatEmailQuotedTextRequested);
+    on<_ChatEmailQuotedTextBatchRequested>(
+      _onChatEmailQuotedTextBatchRequested,
+      transformer: sequential(),
+    );
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
@@ -406,7 +456,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatNotificationPreviewSettingChanged,
     );
     on<ChatNotificationBehaviorChanged>(_onChatNotificationBehaviorChanged);
-    on<ChatLoadEarlier>(_onChatLoadEarlier);
+    on<ChatLoadEarlier>(_onChatLoadEarlier, transformer: droppable());
     on<ChatShareSignatureToggled>(_onChatShareSignatureToggled);
     on<ChatAttachmentAutoDownloadToggled>(_onChatAttachmentAutoDownloadToggled);
     on<ChatAttachmentAutoDownloadRequested>(
@@ -510,6 +560,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (initialSyncState != null) {
       add(_EmailSyncStateChanged(initialSyncState));
     }
+    final initialContentPreparationSnapshot =
+        _emailService?.contentPreparationSnapshot;
+    if (initialContentPreparationSnapshot != null) {
+      _emailContentPreparationSnapshot = initialContentPreparationSnapshot;
+      add(
+        _ChatEmailContentPreparationUpdated(initialContentPreparationSnapshot),
+      );
+    }
+    _emailContentPreparationSubscription = _emailService
+        ?.contentPreparationStream
+        .listen(
+          (snapshot) => add(_ChatEmailContentPreparationUpdated(snapshot)),
+        );
+    final initialOriginalContentSnapshot =
+        _emailService?.originalContentSnapshot;
+    if (initialOriginalContentSnapshot != null) {
+      _emailOriginalContentSnapshot = initialOriginalContentSnapshot;
+      add(_ChatEmailOriginalContentUpdated(initialOriginalContentSnapshot));
+    }
+    _emailOriginalContentSubscription = _emailService?.originalContentStream
+        .listen((snapshot) => add(_ChatEmailOriginalContentUpdated(snapshot)));
     _httpUploadSupportSubscription = _messageService.httpUploadSupportStream
         .listen((support) => add(_HttpUploadSupportUpdated(support.supported)));
     add(_HttpUploadSupportUpdated(_messageService.httpUploadSupport.supported));
@@ -539,6 +610,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   static const messageBatchSize = 50;
+  static const int _emailMessageBatchSize = 15;
+  static const int _emailUnreadBootstrapMaxWindow = _emailMessageBatchSize * 2;
+  static const int _emailHydrationResultChunkSize = 4;
   static const int _emptyMessageCount = 0;
   static const CalendarChatSupport _calendarFragmentPolicy =
       CalendarChatSupport();
@@ -567,6 +641,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _lastXmppSendSignature;
   List<Message>? _preChatInitialMessages;
   Set<String> _readThresholdMessageIds = const <String>{};
+  ({
+    String chatJid,
+    Set<String> thresholdIds,
+    bool allowSend,
+    bool syncEmailSeen,
+  })?
+  _pendingReadStateSyncRequest;
+  Future<void> _readStateSyncQueue = Future<void>.value();
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
@@ -580,6 +662,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<Avatar?>? _roomSelfAvatarSubscription;
   StreamSubscription<List<String>>? _typingParticipantsSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
+  StreamSubscription<EmailContentPreparationSnapshot>?
+  _emailContentPreparationSubscription;
+  StreamSubscription<EmailOriginalContentSnapshot>?
+  _emailOriginalContentSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
   StreamSubscription<MessageTransport?>? _transportPreferenceSubscription;
@@ -594,24 +680,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   ChatMessageKey? _emailSyncComposerMessage;
-  bool _emailHistoryLoading = false;
   final Set<String> _autoDownloadAttemptedMetadataIds = <String>{};
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
   final Set<String> _prefetchedPeerAvatarJids = <String>{};
-  final Set<int> _queuedEmailFullHtmlDeltaIds = <int>{};
   final Set<int> _queuedEmailQuotedTextDeltaIds = <int>{};
+  EmailContentPreparationSnapshot _emailContentPreparationSnapshot =
+      EmailContentPreparationSnapshot.empty;
+  EmailOriginalContentSnapshot _emailOriginalContentSnapshot =
+      EmailOriginalContentSnapshot.empty;
   Future<void> _autoDownloadQueue = Future<void>.value();
+  int _messageSubscriptionGeneration = 0;
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   Map<String, String>? _roomChatsAvatarSnapshot;
   String? _roomSelfAvatarPath;
-  int? _emailUnreadBoundaryDeltaId;
-  int? _emailUnreadBoundaryUnreadCount;
+  String? _unreadBoundaryStanzaId;
   bool _needsUnreadBootstrap = false;
   int? _pendingUnreadBoundaryCount;
   int? _unreadBootstrapRefreshLimit;
   bool _sessionUnreadBoundaryResolved = false;
   bool _unreadBoundaryScrollRequested = false;
-  Future<void> _loadEarlierQueue = Future<void>.value();
   String? _pendingScrollTargetMessageId;
   final String _chatArchiveSessionId;
 
@@ -621,17 +708,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   bool get _isEmailChat => state.chat?.defaultTransport.isEmail ?? false;
 
+  int _timelineBatchSizeForChat(Chat chat) =>
+      chat.isEmailBacked ? _emailMessageBatchSize : messageBatchSize;
+
   String? _bareJid(String? jid) {
     return bareAddress(jid);
   }
 
   Future<void> _handleLifecycleResumed() async {
     await _syncEmailChatNoticeForActiveChat();
-    await _syncReadStateForCurrentChat(allowSend: true);
+    await _queueReadStateSync(allowSend: true);
   }
 
   Future<void> _handleLifecycleShown() async {
-    await _syncReadStateForCurrentChat(allowSend: true, syncEmailSeen: false);
+    await _queueReadStateSync(allowSend: true, syncEmailSeen: false);
   }
 
   Future<void> _syncEmailChatNoticeForActiveChat() async {
@@ -642,7 +732,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailService == null ||
         !emailService.hasInMemoryReconnectContext ||
         _mustDeferAutomaticReadStateSync ||
-        !_hasEmailReadState(chat, state.items) ||
+        !_hasPendingEmailReadState(chat, state.items) ||
         kEnableDemoChats && _messageService.demoOfflineMode) {
       return;
     }
@@ -676,23 +766,66 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     _readThresholdMessageIds = nextIds;
-    await _syncReadStateForCurrentChat(
+    await _queueReadStateSync(
       allowSend:
           SchedulerBinding.instance.lifecycleState == AppLifecycleState.resumed,
     );
   }
 
+  Future<void> _queueReadStateSync({
+    required bool allowSend,
+    bool syncEmailSeen = true,
+  }) {
+    final chat = state.chat;
+    if (chat == null) {
+      return Future<void>.value();
+    }
+    _pendingReadStateSyncRequest = (
+      chatJid: chat.jid,
+      thresholdIds: Set<String>.unmodifiable(_readThresholdMessageIds),
+      allowSend: allowSend,
+      syncEmailSeen: syncEmailSeen,
+    );
+    final nextQueue = _readStateSyncQueue.then(
+      (_) => _drainReadStateSyncQueue(),
+    );
+    _readStateSyncQueue = nextQueue.onError<Exception>((_, _) {});
+    return nextQueue;
+  }
+
+  Future<void> _drainReadStateSyncQueue() async {
+    while (true) {
+      final request = _pendingReadStateSyncRequest;
+      if (request == null) {
+        return;
+      }
+      _pendingReadStateSyncRequest = null;
+      await _syncReadStateForCurrentChat(
+        chatJid: request.chatJid,
+        thresholdIds: request.thresholdIds,
+        allowSend: request.allowSend,
+        syncEmailSeen: request.syncEmailSeen,
+      );
+    }
+  }
+
   Future<void> _syncReadStateForCurrentChat({
+    required String chatJid,
+    required Set<String> thresholdIds,
     required bool allowSend,
     bool syncEmailSeen = true,
   }) async {
     final chat = state.chat;
-    if (!_chatStarted || chat == null || _mustDeferAutomaticReadStateSync) {
+    if (!_chatStarted ||
+        chat == null ||
+        chat.jid != chatJid ||
+        _mustDeferAutomaticReadStateSync) {
       return;
     }
     await _syncReadStateForActiveChat(
       chat: chat,
       items: state.items,
+      thresholdIds: thresholdIds,
       allowSend: allowSend,
       syncEmailSeen: syncEmailSeen,
     );
@@ -701,6 +834,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _syncReadStateForActiveChat({
     required Chat chat,
     required List<Message> items,
+    required Set<String> thresholdIds,
     required bool allowSend,
     required bool syncEmailSeen,
   }) async {
@@ -720,6 +854,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     var seenSkippedReason = 'none';
     var seenSyncStatus = 'notRequested';
     try {
+      final thresholdMessageIds = thresholdIds;
       final scopedItems = items
           .where((message) => message.chatJid == chat.jid)
           .toList(growable: false);
@@ -729,19 +864,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .toList(growable: false);
       unreadCount = unreadCandidates.length;
       final thresholdVisibleItems = scopedItems
-          .where(
-            (message) => _readThresholdMessageIds.contains(message.stanzaID),
-          )
+          .where((message) => thresholdMessageIds.contains(message.stanzaID))
           .toList(growable: false);
-      final thresholdOrderByMessageId = <String, int>{
-        for (var index = 0; index < _readThresholdMessageIds.length; index += 1)
-          _readThresholdMessageIds.elementAt(index): index,
-      };
+      final thresholdOrderByMessageId = <String, int>{};
+      var thresholdOrder = 0;
+      for (final messageId in thresholdMessageIds) {
+        thresholdOrderByMessageId[messageId] = thresholdOrder;
+        thresholdOrder += 1;
+      }
       thresholdVisibleCount = thresholdVisibleItems.length;
       final thresholdVisibleUnreadCandidates = unreadCandidates
-          .where(
-            (message) => _readThresholdMessageIds.contains(message.stanzaID),
-          )
+          .where((message) => thresholdMessageIds.contains(message.stanzaID))
           .toList(growable: false);
       thresholdUnreadCount = thresholdVisibleUnreadCandidates.length;
       final xmppVisibleCandidates = chat.defaultTransport.isEmail
@@ -787,17 +920,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 .toList(growable: false),
           );
       localEmailDisplayedCandidateCount = localEmailDisplayedCandidates.length;
-      final emailSeenCandidates = await _emailCandidatesWithRfcSiblings(
+      final remoteEmailSeenCandidates = await _emailCandidatesWithRfcSiblings(
         thresholdVisibleItems
             .where((message) => message.isEmailBacked)
             .where(_countsTowardUnread)
             .toList(growable: false),
         includeAlreadyDisplayed: true,
       );
-      final seenCandidates = emailSeenCandidates
-          .where((message) => message.deltaMsgId != null)
-          .where(_countsTowardUnread)
-          .toList(growable: false);
+      final seenCandidates = _emailSeenCandidatesWithDeltaIds(
+        remoteEmailSeenCandidates,
+      );
       seenCandidateCount = seenCandidates.length;
       Future<void> markLocalEmailDisplayedCandidates() {
         return _messageService.markMessagesDisplayedLocally(
@@ -829,11 +961,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         result = 'demoOffline';
         return;
       }
-      if (seenCandidates.isEmpty) {
-        seenSkippedReason = 'empty';
-        result = 'noSeenCandidates';
-        return;
-      }
       if (!emailService.hasInMemoryReconnectContext) {
         seenSkippedReason = 'noReconnectContext';
         result = 'noReconnectContextLocalDisplayed';
@@ -845,8 +972,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         sendReadReceipts:
             chat.emailReadReceiptsEnabled ??
             _settingsSnapshot.emailReadReceipts,
+        chatJidScope: chat.jid,
       );
       seenSyncStatus = seenResult.status.name;
+      if (seenCandidates.isEmpty) {
+        result = 'storedSeenDebtDrain';
+      }
     } finally {
       SafeLogging.profileTrace(
         'chat.readStateSync',
@@ -876,11 +1007,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  bool _hasEmailReadState(Chat chat, Iterable<Message> messages) {
-    if (chat.defaultTransport.isEmail) {
+  bool _hasPendingEmailReadState(Chat chat, Iterable<Message> messages) {
+    if (messages.any(
+      (message) => message.isEmailBacked && _isUnreadCandidate(message),
+    )) {
       return true;
     }
-    return messages.any((message) => message.isEmailBacked);
+    if (chat.defaultTransport.isEmail &&
+        chat.unreadCount > _emptyMessageCount) {
+      return true;
+    }
+    return false;
   }
 
   int _compareMessagesByThresholdOrder(
@@ -932,6 +1069,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return candidatesByStanzaId.values.toList(growable: false);
   }
 
+  List<Message> _emailSeenCandidatesWithDeltaIds(Iterable<Message> messages) {
+    final candidatesByDeltaId = <int, Message>{};
+    for (final message in messages) {
+      final deltaId = message.deltaMsgId;
+      if (deltaId == null || deltaId <= 0 || !_countsTowardUnread(message)) {
+        continue;
+      }
+      candidatesByDeltaId.putIfAbsent(deltaId, () => message);
+    }
+    return candidatesByDeltaId.values.toList(growable: false);
+  }
+
   bool get _mustDeferAutomaticReadStateSync =>
       _needsUnreadBootstrap || _unreadBootstrapRefreshLimit != null;
 
@@ -966,34 +1115,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _isLocalOnlyXmppTarget({required String? jid, Contact? target}) {
     return isAxichatWelcomeThreadJid(jid) ||
         target?.chat?.isAxichatWelcomeThread == true;
-  }
-
-  bool _canPageEmailHistory(Chat chat) {
-    return _canPageEmailHistoryWithState(chat, state.emailSyncState);
-  }
-
-  bool _canPageEmailHistoryWithState(Chat chat, EmailSyncState syncState) {
-    if (!chat.isEmailBacked) return false;
-    final status = syncState.status;
-    return status == EmailSyncStatus.ready ||
-        status == EmailSyncStatus.recovering;
-  }
-
-  ChatHistoryPaginationSourceState _emailPaginationStateFor(
-    Chat? chat, {
-    EmailSyncState? syncState,
-    ChatHistoryPaginationSourceState? previous,
-    bool reset = false,
-  }) {
-    final effectiveSyncState = syncState ?? state.emailSyncState;
-    if (chat == null ||
-        !_canPageEmailHistoryWithState(chat, effectiveSyncState)) {
-      return ChatHistoryPaginationSourceState.unavailable;
-    }
-    if (!reset && previous == ChatHistoryPaginationSourceState.exhausted) {
-      return ChatHistoryPaginationSourceState.exhausted;
-    }
-    return ChatHistoryPaginationSourceState.available;
   }
 
   ChatHistoryPaginationSourceState _xmppPaginationStateFor(
@@ -1140,71 +1261,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<int?> _loadEarlierFromEmail({
-    required int desiredWindow,
-    int? maxImportCount,
-  }) async {
-    if (_emailHistoryLoading) {
-      return null;
-    }
-    final chat = state.chat;
-    final emailService = _emailService;
-    if (chat == null || emailService == null) {
-      return null;
-    }
-    if (!_canPageEmailHistory(chat)) {
-      return null;
-    }
-    final items = state.items;
-    final oldest = items.isEmpty
-        ? null
-        : items.reversed.firstWhere(
-            (message) => message.deltaMsgId != null,
-            orElse: () => items.last,
-          );
-    _emailHistoryLoading = true;
-    try {
-      return await emailService.backfillChatHistory(
-        chat: chat,
-        desiredWindow: desiredWindow,
-        beforeMessageId: oldest?.deltaMsgId,
-        beforeTimestamp: oldest?.timestamp,
-        filter: state.viewFilter,
-        maxImportCount: maxImportCount,
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to backfill email history', error, stackTrace);
-      return null;
-    } finally {
-      _emailHistoryLoading = false;
-    }
-  }
-
   Future<Message?> _ensureEmailMessageAvailableLocally({
     required Chat chat,
     required String messageId,
-  }) async {
-    if (!_canPageEmailHistory(chat)) {
-      return null;
-    }
-    while (true) {
-      final previousCount = await _archivedMessageCount(chat);
-      await _loadEarlierFromEmail(
-        desiredWindow: previousCount + messageBatchSize,
-      );
-      final target = await _messageService.loadMessageByReferenceId(
-        messageId,
-        chatJid: chat.jid,
-      );
-      if (target != null) {
-        return target;
-      }
-      final nextCount = await _archivedMessageCount(chat);
-      if (nextCount <= previousCount) {
-        return null;
-      }
-    }
-  }
+  }) => _messageService.loadMessageByReferenceId(messageId, chatJid: chat.jid);
 
   bool _containsMessageId(Iterable<Message> messages, String messageId) {
     for (final message in messages) {
@@ -1287,7 +1347,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _refreshPinnedMessagesFromDatabase(chat);
       return target;
     }
-    if (_canPageEmailHistory(chat)) {
+    if (chat.isEmailBacked) {
       target = await _ensureEmailMessageAvailableLocally(
         chat: chat,
         messageId: messageId,
@@ -1334,7 +1394,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (target != null) {
       return target;
     }
-    if (_canPageEmailHistory(chat)) {
+    if (chat.isEmailBacked) {
       target = await _ensureEmailMessageAvailableLocally(
         chat: chat,
         messageId: messageId,
@@ -1368,6 +1428,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _subscribeThroughMessage({
     required Chat chat,
     required Message target,
+    int? maxLimit,
   }) async {
     final timestamp = target.timestamp;
     if (timestamp == null) {
@@ -1380,9 +1441,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       throughDeltaMsgId: target.deltaMsgId,
       filter: state.viewFilter,
     );
-    final desiredLimit = throughCount > _currentMessageLimit
+    var desiredLimit = throughCount > _currentMessageLimit
         ? throughCount
         : _currentMessageLimit;
+    if (maxLimit != null && desiredLimit > maxLimit) {
+      desiredLimit = maxLimit;
+    }
     await _subscribeToMessages(limit: desiredLimit, filter: state.viewFilter);
   }
 
@@ -1390,51 +1454,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required int desiredWindow,
     required int unreadTargetCount,
-    int? emailBoundaryDeltaId,
   }) async {
     if (unreadTargetCount <= _emptyMessageCount) {
       return;
     }
-    var localCount = await _archivedMessageCount(chat);
-    if (_canPageEmailHistory(chat)) {
-      Message? boundaryMessage;
-      if (emailBoundaryDeltaId != null) {
-        boundaryMessage = await _loadEmailMessageByDeltaId(
-          chat: chat,
-          deltaMessageId: emailBoundaryDeltaId,
-        );
-      }
-      var shouldAttemptNetwork = true;
-      while (localCount < desiredWindow ||
-          shouldAttemptNetwork ||
-          (emailBoundaryDeltaId != null && boundaryMessage == null)) {
-        shouldAttemptNetwork = false;
-        final nextDesiredWindow = emailBoundaryDeltaId == null
-            ? desiredWindow
-            : localCount < desiredWindow
-            ? desiredWindow
-            : localCount + messageBatchSize;
-        await _loadEarlierFromEmail(desiredWindow: nextDesiredWindow);
-        final refreshed = await _archivedMessageCount(chat);
-        if (emailBoundaryDeltaId != null) {
-          boundaryMessage = await _loadEmailMessageByDeltaId(
-            chat: chat,
-            deltaMessageId: emailBoundaryDeltaId,
-          );
-        }
-        if (refreshed <= localCount) {
-          if (emailBoundaryDeltaId == null || boundaryMessage == null) {
-            break;
-          }
-          continue;
-        }
-        localCount = refreshed;
-      }
-      if (chat.defaultTransport.isEmail) {
-        return;
-      }
-    }
-    if (!_xmppAllowedForChat(chat)) {
+    if (chat.defaultTransport.isEmail || !_xmppAllowedForChat(chat)) {
       return;
     }
     try {
@@ -1524,10 +1548,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       state.copyWith(
         viewFilter: filter,
         hasMoreLocalMessages: false,
-        emailHistoryPaginationState: _emailPaginationStateFor(
-          chat,
-          reset: true,
-        ),
         xmppHistoryPaginationState: _xmppPaginationStateFor(chat, reset: true),
       ),
     );
@@ -1884,14 +1904,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required int limit,
     required MessageTimelineFilter filter,
     bool forceXmppFallback = false,
+    int? generationOverride,
   }) async {
     final targetJid = state.chat?.jid ?? _chatLookupJid ?? jid;
-    if (targetJid == null) return;
+    if (targetJid == null ||
+        generationOverride != null &&
+            generationOverride != _messageSubscriptionGeneration) {
+      return;
+    }
     final previousSubscription = _messageSubscription;
     _messageSubscription = null;
     await _detachAndCancelSubscription(previousSubscription);
-    if (isClosed) return;
+    if (isClosed ||
+        generationOverride != null &&
+            generationOverride != _messageSubscriptionGeneration) {
+      return;
+    }
     _currentMessageLimit = limit;
+    final generation =
+        generationOverride ?? (_messageSubscriptionGeneration += 1);
     final chat = state.chat;
     final emailService = _emailService;
     final useEmailService =
@@ -1901,13 +1932,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _messageSubscription = emailService
           .messageStreamForChat(targetJid, end: queryLimit, filter: filter)
           .listen(
-            (items) => add(_ChatMessagesUpdated(items)),
+            (items) => add(_ChatMessagesUpdated(items, generation)),
             onError: (Object error, StackTrace stackTrace) async {
               _log.fine('Email message stream failed', error, stackTrace);
               await _subscribeToMessages(
                 limit: limit,
                 filter: filter,
                 forceXmppFallback: true,
+                generationOverride: generation,
               );
             },
           );
@@ -1915,7 +1947,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     _messageSubscription = _messageService
         .messageStreamForChat(targetJid, end: queryLimit, filter: filter)
-        .listen((items) => add(_ChatMessagesUpdated(items)));
+        .listen((items) => add(_ChatMessagesUpdated(items, generation)));
   }
 
   String? _resolvePinnedMessagesChatJid(Chat chat) {
@@ -2024,6 +2056,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   @override
   Future<void> close() async {
     _isClosing = true;
+    _clearVisibleEmailContentMessagesForCurrentChat();
     _restageUnresolvedUnreadBoundarySeed();
     _releaseRetainedMucPresence();
     await _detachAndCancelSubscription(_chatSubscription);
@@ -2051,6 +2084,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailSyncSubscription = _emailSyncSubscription;
     _emailSyncSubscription = null;
     await _detachAndCancelSubscription(emailSyncSubscription);
+    final emailContentPreparationSubscription =
+        _emailContentPreparationSubscription;
+    _emailContentPreparationSubscription = null;
+    await _detachAndCancelSubscription(emailContentPreparationSubscription);
+    final emailOriginalContentSubscription = _emailOriginalContentSubscription;
+    _emailOriginalContentSubscription = null;
+    await _detachAndCancelSubscription(emailOriginalContentSubscription);
     final connectivitySubscription = _connectivitySubscription;
     _connectivitySubscription = null;
     await _detachAndCancelSubscription(connectivitySubscription);
@@ -2105,7 +2145,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _assertOwnsChat(event.chat);
     final chatWasUninitialized = state.chat == null;
     if (chatWasUninitialized || state.chat?.jid != event.chat.jid) {
+      if (!chatWasUninitialized) {
+        _clearVisibleEmailContentMessagesForCurrentChat();
+      }
       _readThresholdMessageIds = const <String>{};
+      _pendingReadStateSyncRequest = null;
+      _unreadBoundaryStanzaId = null;
     }
     final transportChanged =
         state.chat?.defaultTransport != event.chat.defaultTransport;
@@ -2165,47 +2210,44 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _clearLastSeenPinnedMessageCache();
     }
     emit(
-      state.copyWith(
-        chat: event.chat,
-        showAlert: event.chat.alert != null && state.chat?.alert == null,
-        roomState: nextRoomState,
-        roomMemberSections: nextRoomState == null
-            ? const <RoomMemberSection>[]
-            : nextRoomMemberSections,
-        xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
-            ? null
-            : state.xmppCapabilities,
-        typingParticipants: typingShouldClear
-            ? const []
-            : state.typingParticipants,
-        typing: event.chat.defaultTransport.isEmail ? false : state.typing,
-        viewFilter: nextViewFilter,
-        hasMoreLocalMessages: paginationContextChanged
-            ? false
-            : state.hasMoreLocalMessages,
-        emailHistoryPaginationState: _emailPaginationStateFor(
-          event.chat,
-          previous: state.emailHistoryPaginationState,
-          reset: paginationContextChanged,
+      _withEmailContentPreparationProjection(
+        state.copyWith(
+          chat: event.chat,
+          showAlert: event.chat.alert != null && state.chat?.alert == null,
+          roomState: nextRoomState,
+          roomMemberSections: nextRoomState == null
+              ? const <RoomMemberSection>[]
+              : nextRoomMemberSections,
+          xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
+              ? null
+              : state.xmppCapabilities,
+          typingParticipants: typingShouldClear
+              ? const []
+              : state.typingParticipants,
+          typing: event.chat.defaultTransport.isEmail ? false : state.typing,
+          viewFilter: nextViewFilter,
+          hasMoreLocalMessages: paginationContextChanged
+              ? false
+              : state.hasMoreLocalMessages,
+          xmppHistoryPaginationState: _xmppPaginationStateFor(
+            event.chat,
+            previous: state.xmppHistoryPaginationState,
+            reset: paginationContextChanged,
+          ),
+          pinnedMessages: resetPinnedMessages
+              ? const <PinnedMessageItem>[]
+              : state.pinnedMessages,
+          pinnedMessagesStatus: resetPinnedMessages
+              ? ChatPinnedMessagesStatus.idle
+              : state.pinnedMessagesStatus,
+          latestPinnedMessageNotice: resetPinnedMessages
+              ? null
+              : state.latestPinnedMessageNotice,
+          lastSeenPinnedMessageAt: resetPinnedMessages
+              ? null
+              : state.lastSeenPinnedMessageAt,
+          unreadBoundaryStanzaId: state.unreadBoundaryStanzaId,
         ),
-        xmppHistoryPaginationState: _xmppPaginationStateFor(
-          event.chat,
-          previous: state.xmppHistoryPaginationState,
-          reset: paginationContextChanged,
-        ),
-        pinnedMessages: resetPinnedMessages
-            ? const <PinnedMessageItem>[]
-            : state.pinnedMessages,
-        pinnedMessagesStatus: resetPinnedMessages
-            ? ChatPinnedMessagesStatus.idle
-            : state.pinnedMessagesStatus,
-        latestPinnedMessageNotice: resetPinnedMessages
-            ? null
-            : state.latestPinnedMessageNotice,
-        lastSeenPinnedMessageAt: resetPinnedMessages
-            ? null
-            : state.lastSeenPinnedMessageAt,
-        unreadBoundaryStanzaId: state.unreadBoundaryStanzaId,
       ),
     );
     if (chatWasUninitialized) {
@@ -2275,7 +2317,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (runFirstChatSideEffects) {
       await _subscribeToMessages(
-        limit: messageBatchSize,
+        limit: _timelineBatchSizeForChat(chat),
         filter: nextViewFilter,
       );
       _chatsService.consumeOpenChatUnreadBoundarySeed(chat.jid);
@@ -2285,11 +2327,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (_isClosing || emit.isDone) return;
     }
     final pendingUnreadBoundaryCount = _pendingUnreadBoundaryCount;
-    if (chat.isEmailBacked &&
-        pendingUnreadBoundaryCount != null &&
-        pendingUnreadBoundaryCount > _emptyMessageCount &&
-        _emailUnreadBoundaryUnreadCount != pendingUnreadBoundaryCount) {
-      await _resolveEmailUnreadBoundaryDeltaId(
+    if (pendingUnreadBoundaryCount != null &&
+        pendingUnreadBoundaryCount > _emptyMessageCount) {
+      await _resolveUnreadBoundaryStanzaId(
         chat,
         unreadCount: pendingUnreadBoundaryCount,
       );
@@ -2299,7 +2339,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final rawBoundary = _resolveStickyUnreadBoundaryStanzaId(
         chat: chat,
         messages: state.items,
-        emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
+        storedBoundaryStanzaId: _unreadBoundaryStanzaId,
         previousBoundaryStanzaId: _sessionUnreadBoundaryResolved
             ? state.unreadBoundaryStanzaId
             : null,
@@ -2685,6 +2725,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _ChatMessagesUpdated event,
     Emitter<ChatState> emit,
   ) async {
+    if (event.generation != _messageSubscriptionGeneration) {
+      return;
+    }
     final stopwatch = Stopwatch()..start();
     var result = 'completed';
     var filteredCount = 0;
@@ -2726,49 +2769,51 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       },
     );
     _unreadBootstrapRefreshLimit = null;
-    final attachmentMaps = await _loadAttachmentMaps(event.items);
-    final filtered = await _filterInternalMessages(
-      messages: event.items,
-      attachmentsByMessageId: attachmentMaps.attachmentsByMessageId,
-      groupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
-    );
-    var filteredItems = _messagesWithAttachmentGroupQuoteFallback(
-      messages: filtered.messages,
-      groupQuotedReferenceByMessageId:
-          attachmentMaps.groupQuotedReferenceByMessageId,
-    );
-    filteredItems = _messagesNewestFirst(filteredItems);
-    final hasMoreLocalMessages =
-        event.items.length > _currentMessageLimit ||
-        filteredItems.length > _currentMessageLimit;
-    if (filteredItems.length > _currentMessageLimit) {
-      filteredItems = filteredItems
-          .take(_currentMessageLimit)
-          .toList(growable: false);
-    }
-    filteredCount = filteredItems.length;
     final chat = state.chat;
+    final shouldVerifyInitialStaleUnacked =
+        chat != null && !state.messagesLoaded;
+    final shouldAwaitPageEnrichment =
+        shouldVerifyInitialStaleUnacked || event.awaitPageEnrichment;
+    final pendingUnreadBoundaryCount = _pendingUnreadBoundaryCount;
+    var prepared = await _prepareVisibleChatMessagePage(
+      sourceItems: event.items,
+      chat: chat,
+      verifyInitialStaleUnacked: false,
+      loadAttachmentEnrichment: false,
+    );
+    var filteredItems = prepared.items;
+    var hasMoreLocalMessages = prepared.hasMoreLocalMessages;
+    var preparedSourceCount = prepared.sourceCount;
+    filteredCount = filteredItems.length;
     if (chat == null) {
       _preChatInitialMessages = filteredItems;
     } else {
       _preChatInitialMessages = null;
     }
-    if (chat != null && !state.messagesLoaded) {
-      filteredItems = await _verifyAndRefreshInitialStaleUnackedMessages(
-        chat: chat,
-        messages: filteredItems,
-      );
-      filteredItems = _messagesWithAttachmentGroupQuoteFallback(
-        messages: filteredItems,
-        groupQuotedReferenceByMessageId:
-            attachmentMaps.groupQuotedReferenceByMessageId,
-      );
-      filteredItems = _messagesNewestFirst(filteredItems);
-      if (emit.isDone) {
-        result = 'emitDoneAfterStaleRefresh';
-        traceEnd();
-        return;
-      }
+    if (emit.isDone) {
+      result = 'emitDoneAfterPrepare';
+      traceEnd();
+      return;
+    }
+    if (event.generation != _messageSubscriptionGeneration) {
+      result = 'staleGenerationAfterPrepare';
+      traceEnd();
+      return;
+    }
+    if (chat == null) {
+      _preChatInitialMessages = filteredItems;
+    } else {
+      _preChatInitialMessages = null;
+    }
+    if (emit.isDone) {
+      result = 'emitDoneAfterStaleRefresh';
+      traceEnd();
+      return;
+    }
+    if (event.generation != _messageSubscriptionGeneration) {
+      result = 'staleGenerationAfterStaleRefresh';
+      traceEnd();
+      return;
     }
     final referencedQuotes = <String, Message>{};
     final knownMessageIds = <String>{...state.quotedMessagesById.keys};
@@ -2784,11 +2829,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ...state.quotedMessagesById,
       ...referencedQuotes,
     };
-    final emailBoundaryDeltaId = _emailUnreadBoundaryDeltaId;
+    final storedBoundaryStanzaId = _unreadBoundaryStanzaId;
     final rawUnreadBoundary = _resolveStickyUnreadBoundaryStanzaId(
       chat: state.chat,
       messages: filteredItems,
-      emailBoundaryDeltaId: emailBoundaryDeltaId,
+      storedBoundaryStanzaId: storedBoundaryStanzaId,
       previousBoundaryStanzaId: _sessionUnreadBoundaryResolved
           ? state.unreadBoundaryStanzaId
           : null,
@@ -2797,20 +2842,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final unreadBoundary = _resolveVisibleUnreadBoundaryStanzaId(
       boundaryStanzaId: rawUnreadBoundary,
       messages: filteredItems,
-      groupLeaderByMessageId: filtered.groupLeaderByMessageId,
-      attachmentsByMessageId: filtered.attachmentsByMessageId,
+      groupLeaderByMessageId: prepared.groupLeaderByMessageId,
+      attachmentsByMessageId: prepared.attachmentsByMessageId,
       emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
     );
     if (unreadBoundary != null) {
       _pendingUnreadBoundaryCount = null;
       _sessionUnreadBoundaryResolved = true;
     }
-    final holdMessagesForUnreadBoundary =
-        chat != null &&
-        _needsUnreadBootstrap &&
-        unreadBoundary == null &&
-        _pendingUnreadBoundaryCount != null &&
-        _pendingUnreadBoundaryCount! > _emptyMessageCount;
     final shouldRequestUnreadScroll =
         unreadBoundary != null && !_unreadBoundaryScrollRequested;
     if (shouldRequestUnreadScroll) {
@@ -2818,7 +2857,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final nextMetadataIds = _metadataIdsForState(
       messages: filteredItems,
-      attachmentsByMessageId: filtered.attachmentsByMessageId,
+      attachmentsByMessageId: prepared.attachmentsByMessageId,
       pinnedMessages: state.pinnedMessages,
     );
     metadataCount = nextMetadataIds.length;
@@ -2842,22 +2881,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? pendingScrollTargetMessageId
         : state.scrollTargetMessageId;
     emit(
-      state.copyWith(
-        items: filteredItems,
-        messagesLoaded: chat != null && !holdMessagesForUnreadBoundary,
-        hasMoreLocalMessages: hasMoreLocalMessages,
-        attachmentMetadataIdsByMessageId: filtered.attachmentsByMessageId,
-        attachmentGroupLeaderByMessageId: filtered.groupLeaderByMessageId,
-        fileMetadataById: nextFileMetadataById,
-        quotedMessagesById: updatedQuotedMessages,
-        unreadBoundaryStanzaId: unreadBoundary,
-        scrollTargetMessageId: shouldRequestUnreadScroll
-            ? unreadDividerScrollTargetMessageId
-            : nextScrollTargetMessageId,
-        scrollTargetRequestId:
-            shouldRequestUnreadScroll || shouldEmitScrollTarget
-            ? state.scrollTargetRequestId + 1
-            : state.scrollTargetRequestId,
+      _withEmailContentPreparationProjection(
+        state.copyWith(
+          items: filteredItems,
+          messagesLoaded:
+              chat != null &&
+              (state.messagesLoaded || !shouldAwaitPageEnrichment),
+          hasMoreLocalMessages: hasMoreLocalMessages,
+          attachmentMetadataIdsByMessageId: prepared.attachmentsByMessageId,
+          attachmentGroupLeaderByMessageId: prepared.groupLeaderByMessageId,
+          fileMetadataById: nextFileMetadataById,
+          quotedMessagesById: updatedQuotedMessages,
+          unreadBoundaryStanzaId: unreadBoundary,
+          scrollTargetMessageId: shouldRequestUnreadScroll
+              ? unreadDividerScrollTargetMessageId
+              : nextScrollTargetMessageId,
+          scrollTargetRequestId:
+              shouldRequestUnreadScroll || shouldEmitScrollTarget
+              ? state.scrollTargetRequestId + 1
+              : state.scrollTargetRequestId,
+        ),
       ),
     );
     emittedState = true;
@@ -2871,16 +2914,46 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       traceEnd();
       return;
     }
-    _requestPresentationHydrationForMessages(
-      filteredItems,
-      missingQuoteIds: missingQuoteIds,
-      metadataIds: nextMetadataIds,
-      syncFileMetadata: true,
-    );
-    hydrationQueued = true;
+    if (shouldAwaitPageEnrichment) {
+      hydrationQueued = await _applyChatMessagePageEnrichment(
+        sourceItems: event.items,
+        generation: event.generation,
+        chatJid: chat.jid,
+        limit: _currentMessageLimit,
+        filter: state.viewFilter,
+        verifyInitialStaleUnacked: shouldVerifyInitialStaleUnacked,
+        pendingUnreadBoundaryCount: pendingUnreadBoundaryCount,
+        emit: emit,
+      );
+      if (!emit.isDone &&
+          event.awaitPageEnrichment &&
+          state.loadEarlierStatus.isLoading) {
+        emit(state.copyWith(loadEarlierStatus: RequestStatus.success));
+      }
+    } else {
+      add(
+        _ChatMessagePageEnrichmentRequested(
+          sourceItems: event.items,
+          generation: event.generation,
+          chatJid: chat.jid,
+          limit: _currentMessageLimit,
+          filter: state.viewFilter,
+          verifyInitialStaleUnacked: shouldVerifyInitialStaleUnacked,
+          pendingUnreadBoundaryCount: pendingUnreadBoundaryCount,
+        ),
+      );
+      _requestPresentationHydrationForMessages(
+        filteredItems,
+        missingQuoteIds: missingQuoteIds,
+        metadataIds: nextMetadataIds,
+        syncFileMetadata: true,
+      );
+      _reportVisibleEmailContentMessages(filteredItems);
+      hydrationQueued = true;
+    }
     await _maybeBootstrapUnreadWindow(
       chat: chat,
-      filteredOutCount: event.items.length - filteredItems.length,
+      filteredOutCount: preparedSourceCount - filteredItems.length,
       pseudoCount: filteredItems
           .where((message) => message.pseudoMessageType != null)
           .length,
@@ -2894,6 +2967,353 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     traceEnd();
+  }
+
+  Future<void> _onChatMessagePageEnrichmentRequested(
+    _ChatMessagePageEnrichmentRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    await _applyChatMessagePageEnrichment(
+      sourceItems: event.sourceItems,
+      generation: event.generation,
+      chatJid: event.chatJid,
+      limit: event.limit,
+      filter: event.filter,
+      verifyInitialStaleUnacked: event.verifyInitialStaleUnacked,
+      pendingUnreadBoundaryCount: event.pendingUnreadBoundaryCount,
+      emit: emit,
+    );
+  }
+
+  Future<bool> _applyChatMessagePageEnrichment({
+    required List<Message> sourceItems,
+    required int generation,
+    required String chatJid,
+    required int limit,
+    required MessageTimelineFilter filter,
+    required bool verifyInitialStaleUnacked,
+    required int? pendingUnreadBoundaryCount,
+    required Emitter<ChatState> emit,
+  }) async {
+    bool staleRequest() {
+      return generation != _messageSubscriptionGeneration ||
+          _currentMessageLimit != limit ||
+          state.chat?.jid != chatJid ||
+          state.viewFilter != filter;
+    }
+
+    if (staleRequest()) {
+      return false;
+    }
+    final chat = state.chat;
+    if (chat == null) {
+      return false;
+    }
+    final prepared = await _prepareVisibleChatMessagePage(
+      sourceItems: sourceItems,
+      chat: chat,
+      verifyInitialStaleUnacked: verifyInitialStaleUnacked,
+      loadAttachmentEnrichment: true,
+    );
+    if (emit.isDone || staleRequest()) {
+      return false;
+    }
+    final filteredItems = prepared.items;
+    final referencedQuotes = <String, Message>{};
+    final knownMessageIds = <String>{...state.quotedMessagesById.keys};
+    for (final message in filteredItems) {
+      _indexMessageByReference(referencedQuotes, message);
+    }
+    knownMessageIds.addAll(referencedQuotes.keys);
+    final missingQuoteIds = _quotedReferenceIdsForMessages(
+      filteredItems,
+    ).where((id) => !knownMessageIds.contains(id)).toSet();
+    final updatedQuotedMessages = <String, Message>{
+      ...state.quotedMessagesById,
+      ...referencedQuotes,
+    };
+    final enrichmentPendingUnreadBoundaryCount = pendingUnreadBoundaryCount;
+    final rawUnreadBoundary = _resolveStickyUnreadBoundaryStanzaId(
+      chat: state.chat,
+      messages: filteredItems,
+      storedBoundaryStanzaId: _unreadBoundaryStanzaId,
+      previousBoundaryStanzaId:
+          enrichmentPendingUnreadBoundaryCount == null &&
+              _sessionUnreadBoundaryResolved
+          ? state.unreadBoundaryStanzaId
+          : null,
+      pendingUnreadBoundaryCount:
+          enrichmentPendingUnreadBoundaryCount ?? _pendingUnreadBoundaryCount,
+    );
+    final unreadBoundary = _resolveVisibleUnreadBoundaryStanzaId(
+      boundaryStanzaId: rawUnreadBoundary,
+      messages: filteredItems,
+      groupLeaderByMessageId: prepared.groupLeaderByMessageId,
+      attachmentsByMessageId: prepared.attachmentsByMessageId,
+      emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+    );
+    if (unreadBoundary != null) {
+      _pendingUnreadBoundaryCount = null;
+      _sessionUnreadBoundaryResolved = true;
+    }
+    final shouldRequestUnreadScroll =
+        unreadBoundary != null && !_unreadBoundaryScrollRequested;
+    if (shouldRequestUnreadScroll) {
+      _unreadBoundaryScrollRequested = true;
+    }
+    final nextMetadataIds = _metadataIdsForState(
+      messages: filteredItems,
+      attachmentsByMessageId: prepared.attachmentsByMessageId,
+      pinnedMessages: state.pinnedMessages,
+    );
+    final nextFileMetadataById = _pruneFileMetadataById(
+      metadataIds: nextMetadataIds,
+      existing: state.fileMetadataById,
+    );
+    final pendingScrollTargetMessageId = _pendingScrollTargetMessageId;
+    final shouldEmitScrollTarget =
+        pendingScrollTargetMessageId != null &&
+        _containsMessageId(filteredItems, pendingScrollTargetMessageId);
+    if (shouldEmitScrollTarget) {
+      _pendingScrollTargetMessageId = null;
+    }
+    final nextScrollTargetMessageId = shouldEmitScrollTarget
+        ? pendingScrollTargetMessageId
+        : state.scrollTargetMessageId;
+    emit(
+      _withEmailContentPreparationProjection(
+        state.copyWith(
+          items: filteredItems,
+          messagesLoaded: true,
+          hasMoreLocalMessages: prepared.hasMoreLocalMessages,
+          attachmentMetadataIdsByMessageId: prepared.attachmentsByMessageId,
+          attachmentGroupLeaderByMessageId: prepared.groupLeaderByMessageId,
+          fileMetadataById: nextFileMetadataById,
+          quotedMessagesById: updatedQuotedMessages,
+          unreadBoundaryStanzaId: unreadBoundary,
+          scrollTargetMessageId: shouldRequestUnreadScroll
+              ? unreadDividerScrollTargetMessageId
+              : nextScrollTargetMessageId,
+          scrollTargetRequestId:
+              shouldRequestUnreadScroll || shouldEmitScrollTarget
+              ? state.scrollTargetRequestId + 1
+              : state.scrollTargetRequestId,
+        ),
+      ),
+    );
+    if (emit.isDone || staleRequest()) {
+      return true;
+    }
+    _requestPresentationHydrationForMessages(
+      filteredItems,
+      missingQuoteIds: missingQuoteIds,
+      metadataIds: nextMetadataIds,
+      syncFileMetadata: true,
+    );
+    _reportVisibleEmailContentMessages(filteredItems);
+    return true;
+  }
+
+  bool _reportVisibleEmailContentMessages(Iterable<Message> messages) {
+    final emailService = _emailService;
+    if (emailService == null) {
+      return false;
+    }
+    final chatJid = state.chat?.jid ?? _chatLookupJid;
+    if (chatJid == null || chatJid.trim().isEmpty) {
+      return false;
+    }
+    final visibleMessages = messages
+        .where(_messageBelongsToCurrentChat)
+        .toList(growable: false);
+    emailService.reportVisibleEmailContentMessages(
+      chatJid: chatJid,
+      messages: visibleMessages,
+    );
+    return visibleMessages.isNotEmpty;
+  }
+
+  void _clearVisibleEmailContentMessagesForCurrentChat() {
+    final chatJid = state.chat?.jid ?? _chatLookupJid;
+    if (chatJid == null || chatJid.trim().isEmpty) {
+      return;
+    }
+    _emailService?.clearVisibleEmailContentMessages(chatJid);
+  }
+
+  ChatState _withEmailContentPreparationProjection(ChatState base) {
+    final originalProjected = _withEmailOriginalContentProjection(base);
+    final loading = _emailFullMessageLoadingForState(base);
+    if (setEquals(loading, originalProjected.emailFullMessageLoading) &&
+        originalProjected.emailContentPreparationRevision ==
+            _emailContentPreparationSnapshot.revision) {
+      return originalProjected;
+    }
+    return originalProjected.copyWith(
+      emailFullMessageLoading: loading,
+      emailContentPreparationRevision:
+          _emailContentPreparationSnapshot.revision,
+    );
+  }
+
+  ChatState _withEmailOriginalContentProjection(ChatState base) {
+    final keysByDeltaId = <int, EmailContentJobKey>{};
+    for (final message in _emailContentMessagesForState(base)) {
+      final deltaMessageId = message.deltaMsgId;
+      final key = _emailContentJobKey(message);
+      if (deltaMessageId != null && key != null) {
+        keysByDeltaId[deltaMessageId] = key;
+      }
+    }
+    if (keysByDeltaId.isEmpty) {
+      if (base.emailFullHtmlByDeltaId.isEmpty &&
+          base.emailFullHtmlLoading.isEmpty &&
+          base.emailFullHtmlUnavailable.isEmpty) {
+        return base;
+      }
+      return base.copyWith(
+        emailFullHtmlByDeltaId: const <int, String>{},
+        emailFullHtmlLoading: const <int>{},
+        emailFullHtmlUnavailable: const <int>{},
+      );
+    }
+    final htmlByDeltaId = <int, String>{};
+    final loading = <int>{};
+    final unavailable = <int>{};
+    for (final entry in keysByDeltaId.entries) {
+      final key = entry.value;
+      final html = _emailOriginalContentSnapshot.htmlByKey[key];
+      if (html != null) {
+        htmlByDeltaId[entry.key] = html;
+      }
+      if (_emailOriginalContentSnapshot.loadingKeys.contains(key)) {
+        loading.add(entry.key);
+      }
+      if (_emailOriginalContentSnapshot.unavailableKeys.contains(key)) {
+        unavailable.add(entry.key);
+      }
+    }
+    if (mapEquals(htmlByDeltaId, base.emailFullHtmlByDeltaId) &&
+        setEquals(loading, base.emailFullHtmlLoading) &&
+        setEquals(unavailable, base.emailFullHtmlUnavailable)) {
+      return base;
+    }
+    return base.copyWith(
+      emailFullHtmlByDeltaId: Map<int, String>.unmodifiable(htmlByDeltaId),
+      emailFullHtmlLoading: Set<int>.unmodifiable(loading),
+      emailFullHtmlUnavailable: Set<int>.unmodifiable(unavailable),
+    );
+  }
+
+  Set<int> _emailFullMessageLoadingForState(ChatState base) {
+    final activeKeys = <EmailContentJobKey>{
+      ..._emailContentPreparationSnapshot.activeBodyHydrationKeys,
+      ..._emailContentPreparationSnapshot.activeHtmlDerivationKeys,
+    };
+    if (activeKeys.isEmpty) {
+      return const <int>{};
+    }
+    final loading = <int>{};
+    for (final message in _emailContentMessagesForState(base)) {
+      final key = _emailContentJobKey(message);
+      final deltaMessageId = message.deltaMsgId;
+      if (key != null && deltaMessageId != null && activeKeys.contains(key)) {
+        loading.add(deltaMessageId);
+      }
+    }
+    return Set<int>.unmodifiable(loading);
+  }
+
+  Iterable<Message> _emailContentMessagesForState(ChatState base) sync* {
+    yield* base.items;
+    final focused = base.focused;
+    if (focused != null) {
+      yield focused;
+    }
+    for (final item in base.pinnedMessages) {
+      final message = item.message;
+      if (message != null) {
+        yield message;
+      }
+    }
+  }
+
+  EmailContentJobKey? _emailContentJobKey(Message message) {
+    final deltaMessageId = message.deltaMsgId;
+    if (!message.isEmailBacked ||
+        deltaMessageId == null ||
+        deltaMessageId <= _deltaMessageIdUnset) {
+      return null;
+    }
+    return EmailContentJobKey(
+      deltaAccountId: message.deltaAccountId,
+      deltaChatId: message.deltaChatId ?? 0,
+      deltaMsgId: deltaMessageId,
+    );
+  }
+
+  Future<
+    ({
+      List<Message> items,
+      int sourceCount,
+      bool hasMoreLocalMessages,
+      Map<String, List<String>> attachmentsByMessageId,
+      Map<String, String> groupLeaderByMessageId,
+    })
+  >
+  _prepareVisibleChatMessagePage({
+    required List<Message> sourceItems,
+    required Chat? chat,
+    required bool verifyInitialStaleUnacked,
+    required bool loadAttachmentEnrichment,
+  }) async {
+    final attachmentMaps = loadAttachmentEnrichment
+        ? await _loadAttachmentMaps(sourceItems)
+        : _directAttachmentMaps(sourceItems);
+    final filtered = loadAttachmentEnrichment
+        ? await _filterInternalMessages(
+            messages: sourceItems,
+            attachmentsByMessageId: attachmentMaps.attachmentsByMessageId,
+            groupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
+          )
+        : _filterBodyInternalMessages(
+            messages: sourceItems,
+            attachmentsByMessageId: attachmentMaps.attachmentsByMessageId,
+            groupLeaderByMessageId: attachmentMaps.groupLeaderByMessageId,
+          );
+    var filteredItems = _messagesWithAttachmentGroupQuoteFallback(
+      messages: filtered.messages,
+      groupQuotedReferenceByMessageId:
+          attachmentMaps.groupQuotedReferenceByMessageId,
+    );
+    filteredItems = _messagesNewestFirst(filteredItems);
+    final hasMoreLocalMessages =
+        sourceItems.length > _currentMessageLimit ||
+        filteredItems.length > _currentMessageLimit;
+    if (filteredItems.length > _currentMessageLimit) {
+      filteredItems = filteredItems
+          .take(_currentMessageLimit)
+          .toList(growable: false);
+    }
+    if (chat != null && verifyInitialStaleUnacked) {
+      filteredItems = await _verifyAndRefreshInitialStaleUnackedMessages(
+        chat: chat,
+        messages: filteredItems,
+      );
+      filteredItems = _messagesWithAttachmentGroupQuoteFallback(
+        messages: filteredItems,
+        groupQuotedReferenceByMessageId:
+            attachmentMaps.groupQuotedReferenceByMessageId,
+      );
+      filteredItems = _messagesNewestFirst(filteredItems);
+    }
+    return (
+      items: filteredItems,
+      sourceCount: sourceItems.length,
+      hasMoreLocalMessages: hasMoreLocalMessages,
+      attachmentsByMessageId: filtered.attachmentsByMessageId,
+      groupLeaderByMessageId: filtered.groupLeaderByMessageId,
+    );
   }
 
   int _emailBackedMessageCount(Iterable<Message> messages) {
@@ -3015,6 +3435,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  void _onChatEmailContentPreparationUpdated(
+    _ChatEmailContentPreparationUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    _emailContentPreparationSnapshot = event.snapshot;
+    emit(_withEmailContentPreparationProjection(state));
+  }
+
+  void _onChatEmailOriginalContentUpdated(
+    _ChatEmailOriginalContentUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    _emailOriginalContentSnapshot = event.snapshot;
+    emit(_withEmailContentPreparationProjection(state));
+  }
+
   void _onChatRenderedMessagesHydrationRequested(
     ChatRenderedMessagesHydrationRequested event,
     Emitter<ChatState> _,
@@ -3032,10 +3468,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         'allowOffWindow': event.allowOffWindowEmailContentHydration,
       },
     );
-    final emailFullHtmlQueued = _maybeRequestVisibleEmailFullHtml(
-      messages,
-      allowOffWindow: event.allowOffWindowEmailContentHydration,
-    );
+    final emailContentReported = _reportVisibleEmailContentMessages(messages);
     final emailQuotedTextQueued = _maybeRequestVisibleEmailQuotedText(
       messages,
       allowOffWindow: event.allowOffWindowEmailContentHydration,
@@ -3048,7 +3481,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             ? null
             : SafeLogging.profileFingerprint(state.chat!.jid.trim()),
         'messageCount': messages.length,
-        'emailFullHtmlQueued': emailFullHtmlQueued,
+        'emailContentReported': emailContentReported,
         'emailQuotedTextQueued': emailQuotedTextQueued,
         'allowOffWindow': event.allowOffWindowEmailContentHydration,
       },
@@ -3120,7 +3553,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     var missingQuoteCount = 0;
     var loadedQuoteCount = 0;
     var metadataCount = 0;
-    var emailFullHtmlQueued = 0;
+    var emailContentReported = false;
     var emailQuotedTextQueued = 0;
     var shareHydrated = false;
     try {
@@ -3197,10 +3630,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return;
       }
       if (event.hydrateEmailContent) {
-        emailFullHtmlQueued = _maybeRequestVisibleEmailFullHtml(
-          messages,
-          allowOffWindow: event.allowOffWindowEmailContentHydration,
-        );
+        emailContentReported = _reportVisibleEmailContentMessages(messages);
         emailQuotedTextQueued = _maybeRequestVisibleEmailQuotedText(
           messages,
           allowOffWindow: event.allowOffWindowEmailContentHydration,
@@ -3242,7 +3672,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           'loadedQuoteCount': loadedQuoteCount,
           'metadataCount': metadataCount,
           'hydrateEmailContent': event.hydrateEmailContent,
-          'emailFullHtmlQueued': emailFullHtmlQueued,
+          'emailContentReported': emailContentReported,
           'emailQuotedTextQueued': emailQuotedTextQueued,
           'shareHydrated': shareHydrated,
           'elapsedMs': stopwatch.elapsedMilliseconds,
@@ -3254,7 +3684,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _resolveStickyUnreadBoundaryStanzaId({
     required Chat? chat,
     required List<Message> messages,
-    required int? emailBoundaryDeltaId,
+    required String? storedBoundaryStanzaId,
     required String? previousBoundaryStanzaId,
     required int? pendingUnreadBoundaryCount,
   }) {
@@ -3266,18 +3696,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (pendingCount == null || pendingCount <= _emptyMessageCount) {
       return null;
     }
-    if (chat?.isEmailBacked == true && emailBoundaryDeltaId != null) {
-      final boundaryMessage = _findMessageByDeltaId(
-        messages,
-        emailBoundaryDeltaId,
-      );
-      final stanzaId = boundaryMessage?.stanzaID.trim();
-      return stanzaId == null || stanzaId.isEmpty ? null : stanzaId;
-    }
-    return _resolveUnreadBoundaryFromCount(
+    final countBoundary = _resolveUnreadBoundaryFromCount(
       messages: messages,
       unreadCount: pendingCount,
     );
+    if (countBoundary != null && countBoundary.isNotEmpty) {
+      return countBoundary;
+    }
+    final storedBoundary = storedBoundaryStanzaId?.trim();
+    if (storedBoundary != null && storedBoundary.isNotEmpty) {
+      return storedBoundary;
+    }
+    return null;
   }
 
   String? _resolveUnreadBoundaryFromCount({
@@ -3331,7 +3761,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         resolvedHtmlBody: resolvedEmailHtmlBodyForMessage(
           message: message,
           emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+          deriveHtmlIfMissing: false,
         ),
+        deriveHtmlIfMissing: false,
       ),
       isAuthoritativeBody: (message) => message.hasRfc822BodyContent,
       requireMeaningfulBody: false,
@@ -3384,49 +3816,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return _chatsService.myJid;
   }
 
-  Future<int?> _resolveEmailUnreadBoundaryDeltaId(
+  Future<String?> _resolveUnreadBoundaryStanzaId(
     Chat? chat, {
     int? unreadCount,
   }) async {
-    if (chat == null || !chat.isEmailBacked) {
+    if (chat == null) {
       return null;
     }
     final targetUnreadCount = unreadCount ?? chat.unreadCount;
     if (targetUnreadCount <= _emptyMessageCount) {
-      _emailUnreadBoundaryDeltaId = null;
-      _emailUnreadBoundaryUnreadCount = null;
+      _unreadBoundaryStanzaId = null;
       return null;
     }
-    if (_emailUnreadBoundaryUnreadCount == targetUnreadCount) {
-      return _emailUnreadBoundaryDeltaId;
-    }
-    final emailService = _emailService;
-    if (emailService == null) {
-      return null;
-    }
-    final oldestDeltaId = await emailService.getOldestFreshMessageId(chat);
-    _emailUnreadBoundaryDeltaId = oldestDeltaId;
-    _emailUnreadBoundaryUnreadCount = targetUnreadCount;
-    return oldestDeltaId;
-  }
-
-  Message? _findMessageByDeltaId(List<Message> messages, int deltaMessageId) {
-    for (final message in messages) {
-      if (message.deltaMsgId == deltaMessageId) {
-        return message;
-      }
-    }
-    return null;
-  }
-
-  Future<Message?> _loadEmailMessageByDeltaId({
-    required Chat chat,
-    required int deltaMessageId,
-  }) async {
-    return _messageService.loadMessageByDeltaId(
-      deltaMessageId,
-      chatJid: chat.jid,
+    final oldestUnread = await _messageService.loadOldestUnreadMessageForChat(
+      chat,
+      selfJid: selfJid,
+      emailSelfJid: state.emailSelfJid,
+      myOccupantJid: state.roomState?.myOccupantJid,
+      filter: state.viewFilter,
     );
+    final oldestStanzaId = oldestUnread?.stanzaID.trim();
+    _unreadBoundaryStanzaId = oldestStanzaId == null || oldestStanzaId.isEmpty
+        ? null
+        : oldestStanzaId;
+    return _unreadBoundaryStanzaId;
   }
 
   Future<void> _maybeBootstrapUnreadWindow({
@@ -3444,40 +3857,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     _needsUnreadBootstrap = false;
     final desiredWindow = unreadTargetCount + filteredOutCount + pseudoCount;
-    final desiredLimit = desiredWindow > messageBatchSize
+    final batchSize = _timelineBatchSizeForChat(chat);
+    final unboundedDesiredLimit = desiredWindow > batchSize
         ? desiredWindow
-        : messageBatchSize;
-    final emailBoundaryDeltaId = _emailUnreadBoundaryDeltaId;
-    final canPageNetwork =
-        _canPageEmailHistory(chat) || _xmppAllowedForChat(chat);
-    Message? emailBoundaryMessage;
-    if (emailBoundaryDeltaId != null) {
-      emailBoundaryMessage = await _loadEmailMessageByDeltaId(
+        : batchSize;
+    final emailMaxLimit = chat.isEmailBacked
+        ? _emailUnreadBootstrapMaxWindow
+        : null;
+    final desiredLimit =
+        emailMaxLimit != null && unboundedDesiredLimit > emailMaxLimit
+        ? emailMaxLimit
+        : unboundedDesiredLimit;
+    final storedBoundaryStanzaId = _unreadBoundaryStanzaId;
+    Message? boundaryMessage;
+    if (storedBoundaryStanzaId != null) {
+      boundaryMessage = await _ensureImportantMessageAvailableLocally(
         chat: chat,
-        deltaMessageId: emailBoundaryDeltaId,
+        messageId: storedBoundaryStanzaId,
       );
     }
-    if (canPageNetwork) {
-      final archiveWindow = emailBoundaryDeltaId == null
-          ? desiredLimit
-          : messageBatchSize;
+    if (_xmppAllowedForChat(chat)) {
       await _ensureUnreadWindowLoaded(
         chat: chat,
-        desiredWindow: archiveWindow,
+        desiredWindow: desiredLimit,
         unreadTargetCount: unreadTargetCount,
-        emailBoundaryDeltaId: emailBoundaryDeltaId,
       );
     }
-    if (emailBoundaryDeltaId != null) {
-      emailBoundaryMessage ??= await _loadEmailMessageByDeltaId(
+    if (storedBoundaryStanzaId != null) {
+      boundaryMessage ??= await _ensureImportantMessageAvailableLocally(
         chat: chat,
-        deltaMessageId: emailBoundaryDeltaId,
+        messageId: storedBoundaryStanzaId,
       );
-      if (emailBoundaryMessage != null) {
-        await _subscribeThroughMessage(
-          chat: chat,
-          target: emailBoundaryMessage,
-        );
+      if (boundaryMessage != null) {
+        await _subscribeThroughMessage(chat: chat, target: boundaryMessage);
         return;
       }
     }
@@ -3875,7 +4287,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       state.copyWith(pinnedMessagesStatus: ChatPinnedMessagesStatus.hydrating),
     );
     if (chat.defaultTransport.isEmail) {
-      await _hydratePinnedMessagesFromEmail(chat, missing);
+      await _pruneResolvedPinnedMessages(missing);
+      await _refreshPinnedMessagesFromDatabase(chat);
     } else {
       await _hydratePinnedMessagesFromMam(chat, missing);
     }
@@ -4117,23 +4530,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (nextCount <= previousCount) {
         break;
       }
-    }
-  }
-
-  Future<void> _hydratePinnedMessagesFromEmail(
-    Chat chat,
-    Set<String> missingStanzaIds,
-  ) async {
-    for (
-      var attempt = 0;
-      attempt < _pinnedMessagesFetchPageLimit && missingStanzaIds.isNotEmpty;
-      attempt += 1
-    ) {
-      final localCount = await _archivedMessageCount(chat);
-      final desiredWindow = localCount + messageBatchSize;
-      await _loadEarlierFromEmail(desiredWindow: desiredWindow);
-      missingStanzaIds = await _pruneResolvedPinnedMessages(missingStanzaIds);
-      await _refreshPinnedMessagesFromDatabase(chat);
     }
   }
 
@@ -4699,20 +5095,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _applyEmailSyncState(EmailSyncState nextState, Emitter<ChatState> emit) {
-    final nextEmailPaginationState = _emailPaginationStateFor(
-      state.chat,
-      syncState: nextState,
-      previous: state.emailHistoryPaginationState,
-    );
     if (!_isEmailChat && !state.usesSavedEmailTransportOverride) {
-      if (state.emailSyncState != nextState ||
-          state.emailHistoryPaginationState != nextEmailPaginationState) {
-        emit(
-          state.copyWith(
-            emailSyncState: nextState,
-            emailHistoryPaginationState: nextEmailPaginationState,
-          ),
-        );
+      if (state.emailSyncState != nextState) {
+        emit(state.copyWith(emailSyncState: nextState));
       }
       return;
     }
@@ -4728,11 +5113,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       composerError = message;
     }
     emit(
-      state.copyWith(
-        emailSyncState: nextState,
-        composerError: composerError,
-        emailHistoryPaginationState: nextEmailPaginationState,
-      ),
+      state.copyWith(emailSyncState: nextState, composerError: composerError),
     );
   }
 
@@ -4833,13 +5214,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           fetched,
         ]);
         emit(state.copyWith(items: updatedItems, focused: fetched));
-        _requestEmailFullHtml(fetched);
+        _reportVisibleEmailContentMessages([fetched]);
+        _requestEmailOriginalContent(fetched);
         _maybeRequestEmailQuotedText(fetched);
         return;
       }
     }
     emit(state.copyWith(focused: target));
-    _requestEmailFullHtml(target);
+    if (target != null) {
+      _reportVisibleEmailContentMessages([target]);
+    }
+    _requestEmailOriginalContent(target);
     _maybeRequestEmailQuotedText(target);
   }
 
@@ -4911,236 +5296,238 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  Future<void> _onChatEmailFullHtmlRequested(
-    ChatEmailFullHtmlRequested event,
-    Emitter<ChatState> emit,
-  ) async {
-    final stopwatch = Stopwatch()..start();
-    final message = event.message;
-    final deltaMessageId = message.deltaMsgId;
-    void traceEnd(String result) {
-      if (deltaMessageId != null) {
-        _queuedEmailFullHtmlDeltaIds.remove(deltaMessageId);
-      }
-      final elapsedMs = stopwatch.elapsedMilliseconds;
-      if (elapsedMs < _emailContentProfileTraceSlowThreshold.inMilliseconds &&
-          (result == 'alreadyLoading' ||
-              result == 'cached' ||
-              result == 'notRelevant' ||
-              result == 'notRelevantAfterLoad' ||
-              result == 'stored')) {
-        return;
-      }
-      SafeLogging.profileTrace(
-        'chat.emailFullHtml',
-        'end',
-        fields: <String, Object?>{
-          'deltaMessageId': deltaMessageId,
-          'result': result,
-          'allowOffWindow': event.allowOffWindow,
-          'hasRfc822BodyContent': message.hasRfc822BodyContent,
-          'cached': deltaMessageId == null
-              ? false
-              : state.emailFullHtmlByDeltaId.containsKey(deltaMessageId),
-          'loading': deltaMessageId == null
-              ? false
-              : state.emailFullHtmlLoading.contains(deltaMessageId),
-          'unavailable': deltaMessageId == null
-              ? false
-              : state.emailFullHtmlUnavailable.contains(deltaMessageId),
-          'elapsedMs': elapsedMs,
-        },
-      );
-    }
-
-    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      traceEnd('invalidDeltaMessageId');
-      return;
-    }
-    if (!_isEmailDeltaMessageRelevant(
-      deltaMessageId,
-      offWindowMessage: event.allowOffWindow ? message : null,
-    )) {
-      traceEnd('notRelevant');
-      return;
-    }
-    if (state.emailFullHtmlByDeltaId.containsKey(deltaMessageId)) {
-      traceEnd('cached');
-      return;
-    }
-    if (state.emailFullHtmlLoading.contains(deltaMessageId)) {
-      traceEnd('alreadyLoading');
-      return;
-    }
-    final loading = Set<int>.from(state.emailFullHtmlLoading)
-      ..add(deltaMessageId);
-    final unavailable = Set<int>.from(state.emailFullHtmlUnavailable)
-      ..remove(deltaMessageId);
-    emit(
-      state.copyWith(
-        emailFullHtmlLoading: loading,
-        emailFullHtmlUnavailable: unavailable,
-      ),
-    );
+  void _onChatEmailOriginalContentRequested(
+    _ChatEmailOriginalContentRequested event,
+    Emitter<ChatState> _,
+  ) {
     final emailService = _emailService;
     if (emailService == null) {
-      final updatedLoading = Set<int>.from(state.emailFullHtmlLoading)
-        ..remove(deltaMessageId);
-      final updatedUnavailable = Set<int>.from(state.emailFullHtmlUnavailable)
-        ..add(deltaMessageId);
-      emit(
-        state.copyWith(
-          emailFullHtmlLoading: updatedLoading,
-          emailFullHtmlUnavailable: updatedUnavailable,
-        ),
-      );
-      traceEnd('noEmailService');
       return;
     }
-    String? fullHtml;
-    if (!message.hasRfc822BodyContent) {
-      ({String? html, bool settled}) rfc822Hydration = (
-        html: null,
-        settled: false,
-      );
-      try {
-        rfc822Hydration = await emailService.hydrateStoredRfc822BodyContent(
-          message,
-        );
-      } on Exception {
-        // Full HTML is still useful as a fallback when row hydration fails.
+    final requestedDeltaIds = <int>{};
+    for (final message in event.messages) {
+      final deltaMessageId = message.deltaMsgId;
+      if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
+        continue;
       }
-      final hydratedHtml = rfc822Hydration.html?.trim();
-      if (hydratedHtml != null && hydratedHtml.isNotEmpty) {
-        fullHtml = hydratedHtml;
+      if (!_isEmailDeltaMessageRelevant(
+        deltaMessageId,
+        offWindowMessage: event.allowOffWindow ? message : null,
+      )) {
+        continue;
       }
-    } else {
-      fullHtml = message.normalizedHtmlBody;
-    }
-    if (fullHtml == null || fullHtml.trim().isEmpty) {
-      try {
-        fullHtml = await emailService.getMessageFullHtml(message);
-      } on Exception {
-        fullHtml = null;
+      if (state.emailFullHtmlByDeltaId.containsKey(deltaMessageId) ||
+          state.emailFullHtmlLoading.contains(deltaMessageId) ||
+          state.emailFullHtmlUnavailable.contains(deltaMessageId) ||
+          !requestedDeltaIds.add(deltaMessageId)) {
+        continue;
       }
+      unawaited(emailService.requestEmailOriginalContentPreparation(message));
     }
-    final updatedLoading = Set<int>.from(state.emailFullHtmlLoading)
-      ..remove(deltaMessageId);
-    if (!_isEmailDeltaMessageRelevant(
-      deltaMessageId,
-      offWindowMessage: event.allowOffWindow ? message : null,
-    )) {
-      emit(state.copyWith(emailFullHtmlLoading: updatedLoading));
-      traceEnd('notRelevantAfterLoad');
-      return;
-    }
-    if (fullHtml == null || fullHtml.trim().isEmpty) {
-      final updatedUnavailable = Set<int>.from(state.emailFullHtmlUnavailable)
-        ..add(deltaMessageId);
-      emit(
-        state.copyWith(
-          emailFullHtmlLoading: updatedLoading,
-          emailFullHtmlUnavailable: updatedUnavailable,
-        ),
-      );
-      traceEnd('unavailable');
-      return;
-    }
-    final updatedHtml = Map<int, String>.from(state.emailFullHtmlByDeltaId)
-      ..[deltaMessageId] = fullHtml;
-    emit(
-      state.copyWith(
-        emailFullHtmlLoading: updatedLoading,
-        emailFullHtmlByDeltaId: updatedHtml,
-      ),
-    );
-    traceEnd('stored');
   }
 
   Future<void> _onChatEmailQuotedTextRequested(
     ChatEmailQuotedTextRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final stopwatch = Stopwatch()..start();
-    final message = event.message;
-    final deltaMessageId = message.deltaMsgId;
-    void traceEnd(String result) {
-      if (deltaMessageId != null) {
-        _queuedEmailQuotedTextDeltaIds.remove(deltaMessageId);
-      }
-      final elapsedMs = stopwatch.elapsedMilliseconds;
-      if (elapsedMs < _emailContentProfileTraceSlowThreshold.inMilliseconds &&
-          (result == 'alreadyLoading' ||
-              result == 'cached' ||
-              result == 'notRelevant' ||
-              result == 'notRelevantAfterLoad' ||
-              result == 'stored')) {
-        return;
-      }
-      SafeLogging.profileTrace(
-        'chat.emailQuotedText',
-        'end',
-        fields: <String, Object?>{
-          'deltaMessageId': deltaMessageId,
-          'result': result,
-          'allowOffWindow': event.allowOffWindow,
-          'cached': deltaMessageId == null
-              ? false
-              : state.emailQuotedTextByDeltaId.containsKey(deltaMessageId),
-          'loading': deltaMessageId == null
-              ? false
-              : state.emailQuotedTextLoading.contains(deltaMessageId),
-          'unavailable': deltaMessageId == null
-              ? false
-              : state.emailQuotedTextUnavailable.contains(deltaMessageId),
-          'elapsedMs': elapsedMs,
-        },
-      );
-    }
+    await _hydrateEmailQuotedTextBatch(
+      [event.message],
+      allowOffWindow: event.allowOffWindow,
+      emit: emit,
+    );
+  }
 
-    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      traceEnd('invalidDeltaMessageId');
+  Future<void> _onChatEmailQuotedTextBatchRequested(
+    _ChatEmailQuotedTextBatchRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    await _hydrateEmailQuotedTextBatch(
+      event.messages,
+      allowOffWindow: event.allowOffWindow,
+      emit: emit,
+    );
+  }
+
+  Future<void> _hydrateEmailQuotedTextBatch(
+    Iterable<Message> messages, {
+    required bool allowOffWindow,
+    required Emitter<ChatState> emit,
+  }) async {
+    final emailService = _emailService;
+    final entries =
+        <({Message message, int deltaMessageId, Stopwatch stopwatch})>[];
+    final entryDeltaIds = <int>{};
+    for (final message in messages) {
+      final stopwatch = Stopwatch()..start();
+      final deltaMessageId = message.deltaMsgId;
+      if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
+        _traceEmailQuotedTextEnd(
+          deltaMessageId: deltaMessageId,
+          result: 'invalidDeltaMessageId',
+          allowOffWindow: allowOffWindow,
+          stopwatch: stopwatch,
+        );
+        continue;
+      }
+      if (!_isEmailDeltaMessageRelevant(
+        deltaMessageId,
+        offWindowMessage: allowOffWindow ? message : null,
+      )) {
+        _traceEmailQuotedTextEnd(
+          deltaMessageId: deltaMessageId,
+          result: 'notRelevant',
+          allowOffWindow: allowOffWindow,
+          stopwatch: stopwatch,
+        );
+        continue;
+      }
+      if (state.emailQuotedTextByDeltaId.containsKey(deltaMessageId)) {
+        _traceEmailQuotedTextEnd(
+          deltaMessageId: deltaMessageId,
+          result: 'cached',
+          allowOffWindow: allowOffWindow,
+          stopwatch: stopwatch,
+        );
+        continue;
+      }
+      if (state.emailQuotedTextLoading.contains(deltaMessageId) ||
+          !entryDeltaIds.add(deltaMessageId)) {
+        _traceEmailQuotedTextEnd(
+          deltaMessageId: deltaMessageId,
+          result: 'alreadyLoading',
+          allowOffWindow: allowOffWindow,
+          stopwatch: stopwatch,
+        );
+        continue;
+      }
+      entries.add((
+        message: message,
+        deltaMessageId: deltaMessageId,
+        stopwatch: stopwatch,
+      ));
+    }
+    if (entries.isEmpty) {
       return;
     }
-    if (!_isEmailDeltaMessageRelevant(
-      deltaMessageId,
-      offWindowMessage: event.allowOffWindow ? message : null,
-    )) {
-      traceEnd('notRelevant');
-      return;
+    final loading = Set<int>.from(state.emailQuotedTextLoading);
+    final unavailable = Set<int>.from(state.emailQuotedTextUnavailable);
+    for (final entry in entries) {
+      loading.add(entry.deltaMessageId);
+      unavailable.remove(entry.deltaMessageId);
     }
-    if (state.emailQuotedTextByDeltaId.containsKey(deltaMessageId)) {
-      traceEnd('cached');
-      return;
-    }
-    if (state.emailQuotedTextLoading.contains(deltaMessageId)) {
-      traceEnd('alreadyLoading');
-      return;
-    }
-    final loading = Set<int>.from(state.emailQuotedTextLoading)
-      ..add(deltaMessageId);
-    final unavailable = Set<int>.from(state.emailQuotedTextUnavailable)
-      ..remove(deltaMessageId);
     emit(
       state.copyWith(
         emailQuotedTextLoading: loading,
         emailQuotedTextUnavailable: unavailable,
       ),
     );
-    final emailService = _emailService;
-    if (emailService == null) {
-      final updatedLoading = Set<int>.from(state.emailQuotedTextLoading)
-        ..remove(deltaMessageId);
-      final updatedUnavailable = Set<int>.from(state.emailQuotedTextUnavailable)
-        ..add(deltaMessageId);
-      emit(
-        state.copyWith(
-          emailQuotedTextLoading: updatedLoading,
-          emailQuotedTextUnavailable: updatedUnavailable,
-        ),
-      );
-      traceEnd('noEmailService');
+    final acceptedDeltaIds = {
+      for (final entry in entries) entry.deltaMessageId,
+    };
+    final pendingCleanupDeltaIds = Set<int>.from(acceptedDeltaIds);
+    try {
+      var nextEntryIndex = 0;
+      var nextToken = 0;
+      final active =
+          <
+            int,
+            Future<({int token, _EmailQuotedTextHydrationResult result})>
+          >{};
+
+      void startNextEntry() {
+        final entry = entries[nextEntryIndex];
+        final token = nextToken;
+        nextEntryIndex += 1;
+        nextToken += 1;
+        active[token] = _loadEmailQuotedText(
+          message: entry.message,
+          deltaMessageId: entry.deltaMessageId,
+          stopwatch: entry.stopwatch,
+          allowOffWindow: allowOffWindow,
+          emailService: emailService,
+        ).then((result) => (token: token, result: result));
+      }
+
+      void fillActiveQueue() {
+        while (nextEntryIndex < entries.length &&
+            active.length < _emailHydrationResultChunkSize) {
+          startNextEntry();
+        }
+      }
+
+      fillActiveQueue();
+      while (active.isNotEmpty) {
+        final completed = await Future.any(active.values);
+        active.remove(completed.token);
+        final result = completed.result;
+        _emitEmailQuotedTextHydrationResults([result], emit);
+        _traceEmailQuotedTextEnd(
+          deltaMessageId: result.deltaMessageId,
+          result: result.result,
+          allowOffWindow: allowOffWindow,
+          stopwatch: result.stopwatch,
+        );
+        pendingCleanupDeltaIds.remove(result.deltaMessageId);
+        fillActiveQueue();
+      }
+    } finally {
+      _queuedEmailQuotedTextDeltaIds.removeAll(acceptedDeltaIds);
+      if (!emit.isDone && pendingCleanupDeltaIds.isNotEmpty) {
+        final updatedLoading = Set<int>.from(state.emailQuotedTextLoading)
+          ..removeAll(pendingCleanupDeltaIds);
+        if (updatedLoading.length != state.emailQuotedTextLoading.length) {
+          emit(state.copyWith(emailQuotedTextLoading: updatedLoading));
+        }
+      }
+    }
+  }
+
+  void _emitEmailQuotedTextHydrationResults(
+    List<_EmailQuotedTextHydrationResult> results,
+    Emitter<ChatState> emit,
+  ) {
+    if (emit.isDone) {
       return;
+    }
+    final updatedLoading = Set<int>.from(state.emailQuotedTextLoading);
+    final updatedUnavailable = Set<int>.from(state.emailQuotedTextUnavailable);
+    final updatedQuotedText = Map<int, String>.from(
+      state.emailQuotedTextByDeltaId,
+    );
+    for (final result in results) {
+      updatedLoading.remove(result.deltaMessageId);
+      final quotedText = result.quotedText;
+      if (quotedText != null) {
+        updatedQuotedText[result.deltaMessageId] = quotedText;
+        updatedUnavailable.remove(result.deltaMessageId);
+      } else if (result.unavailable) {
+        updatedUnavailable.add(result.deltaMessageId);
+      }
+    }
+    emit(
+      state.copyWith(
+        emailQuotedTextLoading: updatedLoading,
+        emailQuotedTextUnavailable: updatedUnavailable,
+        emailQuotedTextByDeltaId: updatedQuotedText,
+      ),
+    );
+  }
+
+  Future<_EmailQuotedTextHydrationResult> _loadEmailQuotedText({
+    required Message message,
+    required int deltaMessageId,
+    required Stopwatch stopwatch,
+    required bool allowOffWindow,
+    required EmailService? emailService,
+  }) async {
+    if (emailService == null) {
+      return _EmailQuotedTextHydrationResult(
+        message: message,
+        deltaMessageId: deltaMessageId,
+        stopwatch: stopwatch,
+        result: 'noEmailService',
+        unavailable: true,
+      );
     }
     String? quotedText;
     try {
@@ -5151,87 +5538,105 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final sanitizedQuotedText = ChatSubjectCodec.previewBodyText(
       quotedText,
     ).trim();
-    final updatedLoading = Set<int>.from(state.emailQuotedTextLoading)
-      ..remove(deltaMessageId);
     if (!_isEmailDeltaMessageRelevant(
       deltaMessageId,
-      offWindowMessage: event.allowOffWindow ? message : null,
+      offWindowMessage: allowOffWindow ? message : null,
     )) {
-      emit(state.copyWith(emailQuotedTextLoading: updatedLoading));
-      traceEnd('notRelevantAfterLoad');
-      return;
+      return _EmailQuotedTextHydrationResult(
+        message: message,
+        deltaMessageId: deltaMessageId,
+        stopwatch: stopwatch,
+        result: 'notRelevantAfterLoad',
+      );
     }
     if (sanitizedQuotedText.isEmpty) {
-      final updatedUnavailable = Set<int>.from(state.emailQuotedTextUnavailable)
-        ..add(deltaMessageId);
-      emit(
-        state.copyWith(
-          emailQuotedTextLoading: updatedLoading,
-          emailQuotedTextUnavailable: updatedUnavailable,
-        ),
+      return _EmailQuotedTextHydrationResult(
+        message: message,
+        deltaMessageId: deltaMessageId,
+        stopwatch: stopwatch,
+        result: 'unavailable',
+        unavailable: true,
       );
-      traceEnd('unavailable');
+    }
+    return _EmailQuotedTextHydrationResult(
+      message: message,
+      deltaMessageId: deltaMessageId,
+      stopwatch: stopwatch,
+      result: 'stored',
+      quotedText: sanitizedQuotedText,
+    );
+  }
+
+  void _traceEmailQuotedTextEnd({
+    required int? deltaMessageId,
+    required String result,
+    required bool allowOffWindow,
+    required Stopwatch stopwatch,
+  }) {
+    if (deltaMessageId != null) {
+      _queuedEmailQuotedTextDeltaIds.remove(deltaMessageId);
+    }
+    final elapsedMs = stopwatch.elapsedMilliseconds;
+    if (elapsedMs < _emailContentProfileTraceSlowThreshold.inMilliseconds &&
+        (result == 'alreadyLoading' ||
+            result == 'cached' ||
+            result == 'notRelevant' ||
+            result == 'notRelevantAfterLoad' ||
+            result == 'stored')) {
       return;
     }
-    final updatedQuotedText = Map<int, String>.from(
-      state.emailQuotedTextByDeltaId,
-    )..[deltaMessageId] = sanitizedQuotedText;
-    emit(
-      state.copyWith(
-        emailQuotedTextLoading: updatedLoading,
-        emailQuotedTextByDeltaId: updatedQuotedText,
-      ),
+    SafeLogging.profileTrace(
+      'chat.emailQuotedText',
+      'end',
+      fields: <String, Object?>{
+        'deltaMessageId': deltaMessageId,
+        'result': result,
+        'allowOffWindow': allowOffWindow,
+        'cached': deltaMessageId == null
+            ? false
+            : state.emailQuotedTextByDeltaId.containsKey(deltaMessageId),
+        'loading': deltaMessageId == null
+            ? false
+            : state.emailQuotedTextLoading.contains(deltaMessageId),
+        'unavailable': deltaMessageId == null
+            ? false
+            : state.emailQuotedTextUnavailable.contains(deltaMessageId),
+        'elapsedMs': elapsedMs,
+      },
     );
-    traceEnd('stored');
   }
 
-  bool _requestEmailFullHtml(Message? message, {bool allowOffWindow = false}) {
+  Message? _emailOriginalContentRequestMessage(Message? message) {
     final deltaMessageId = message?.deltaMsgId;
     if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      return false;
+      return null;
     }
     if (state.emailFullHtmlByDeltaId.containsKey(deltaMessageId)) {
-      return false;
+      return null;
     }
     if (state.emailFullHtmlLoading.contains(deltaMessageId)) {
-      return false;
-    }
-    if (_queuedEmailFullHtmlDeltaIds.contains(deltaMessageId)) {
-      return false;
+      return null;
     }
     if (state.emailFullHtmlUnavailable.contains(deltaMessageId)) {
-      return false;
+      return null;
     }
-    _queuedEmailFullHtmlDeltaIds.add(deltaMessageId);
-    add(ChatEmailFullHtmlRequested(message!, allowOffWindow: allowOffWindow));
-    return true;
+    return message;
   }
 
-  int _maybeRequestVisibleEmailFullHtml(
-    List<Message> messages, {
+  bool _requestEmailOriginalContent(
+    Message? message, {
     bool allowOffWindow = false,
   }) {
-    var queued = 0;
-    for (final message in messages) {
-      if (_requestEmailFullHtml(message, allowOffWindow: allowOffWindow)) {
-        queued += 1;
-      }
+    final requestMessage = _emailOriginalContentRequestMessage(message);
+    if (requestMessage == null) {
+      return false;
     }
-    if (queued > 0) {
-      SafeLogging.profileTrace(
-        'chat.emailFullHtmlQueue',
-        'end',
-        fields: <String, Object?>{
-          'chatHash': state.chat == null
-              ? null
-              : SafeLogging.profileFingerprint(state.chat!.jid.trim()),
-          'messageCount': messages.length,
-          'queued': queued,
-          'allowOffWindow': allowOffWindow,
-        },
-      );
-    }
-    return queued;
+    add(
+      _ChatEmailOriginalContentRequested([
+        requestMessage,
+      ], allowOffWindow: allowOffWindow),
+    );
+    return true;
   }
 
   bool _isEmailDeltaMessageRelevant(
@@ -5260,35 +5665,47 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
+  Message? _queueEmailQuotedText(Message? message) {
+    if (_emailService == null) {
+      return null;
+    }
+    final deltaMessageId = message?.deltaMsgId;
+    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
+      return null;
+    }
+    final htmlBody = message?.htmlBody?.trim();
+    if (htmlBody != null && htmlBody.isNotEmpty) {
+      return null;
+    }
+    if (state.emailQuotedTextByDeltaId.containsKey(deltaMessageId)) {
+      return null;
+    }
+    if (state.emailQuotedTextLoading.contains(deltaMessageId)) {
+      return null;
+    }
+    if (_queuedEmailQuotedTextDeltaIds.contains(deltaMessageId)) {
+      return null;
+    }
+    if (state.emailQuotedTextUnavailable.contains(deltaMessageId)) {
+      return null;
+    }
+    _queuedEmailQuotedTextDeltaIds.add(deltaMessageId);
+    return message;
+  }
+
   bool _maybeRequestEmailQuotedText(
     Message? message, {
     bool allowOffWindow = false,
   }) {
-    if (_emailService == null) {
+    final queued = _queueEmailQuotedText(message);
+    if (queued == null) {
       return false;
     }
-    final deltaMessageId = message?.deltaMsgId;
-    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
-      return false;
-    }
-    final htmlBody = message?.htmlBody?.trim();
-    if (htmlBody != null && htmlBody.isNotEmpty) {
-      return false;
-    }
-    if (state.emailQuotedTextByDeltaId.containsKey(deltaMessageId)) {
-      return false;
-    }
-    if (state.emailQuotedTextLoading.contains(deltaMessageId)) {
-      return false;
-    }
-    if (_queuedEmailQuotedTextDeltaIds.contains(deltaMessageId)) {
-      return false;
-    }
-    if (state.emailQuotedTextUnavailable.contains(deltaMessageId)) {
-      return false;
-    }
-    _queuedEmailQuotedTextDeltaIds.add(deltaMessageId);
-    add(ChatEmailQuotedTextRequested(message!, allowOffWindow: allowOffWindow));
+    add(
+      _ChatEmailQuotedTextBatchRequested([
+        queued,
+      ], allowOffWindow: allowOffWindow),
+    );
     return true;
   }
 
@@ -5296,16 +5713,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     List<Message> messages, {
     bool allowOffWindow = false,
   }) {
-    var queued = 0;
+    final queuedMessages = <Message>[];
     for (final message in messages) {
-      if (_maybeRequestEmailQuotedText(
-        message,
-        allowOffWindow: allowOffWindow,
-      )) {
-        queued += 1;
+      final queued = _queueEmailQuotedText(message);
+      if (queued != null) {
+        queuedMessages.add(queued);
       }
     }
-    if (queued > 0) {
+    if (queuedMessages.isNotEmpty) {
+      add(
+        _ChatEmailQuotedTextBatchRequested(
+          queuedMessages,
+          allowOffWindow: allowOffWindow,
+        ),
+      );
       SafeLogging.profileTrace(
         'chat.emailQuotedTextQueue',
         'end',
@@ -5314,12 +5735,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? null
               : SafeLogging.profileFingerprint(state.chat!.jid.trim()),
           'messageCount': messages.length,
-          'queued': queued,
+          'queued': queuedMessages.length,
           'allowOffWindow': allowOffWindow,
         },
       );
     }
-    return queued;
+    return queuedMessages.length;
   }
 
   Future<void> _onChatTypingStarted(
@@ -6387,30 +6808,54 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailSub = _emailSyncSubscription;
     _emailSyncSubscription = null;
     await _detachAndCancelSubscription(emailSub);
+    final contentPreparationSub = _emailContentPreparationSubscription;
+    _emailContentPreparationSubscription = null;
+    await _detachAndCancelSubscription(contentPreparationSub);
+    final originalContentSub = _emailOriginalContentSubscription;
+    _emailOriginalContentSubscription = null;
+    await _detachAndCancelSubscription(originalContentSub);
     if (emit.isDone) return;
+    _clearVisibleEmailContentMessagesForCurrentChat();
     _emailService = emailService;
+    _emailContentPreparationSnapshot =
+        emailService?.contentPreparationSnapshot ??
+        EmailContentPreparationSnapshot.empty;
+    _emailOriginalContentSnapshot =
+        emailService?.originalContentSnapshot ??
+        EmailOriginalContentSnapshot.empty;
     final shouldResetEmailAvailability = emailService != null;
     emit(
-      state.copyWith(
-        emailServiceAvailable: emailService != null,
-        emailSelfJid: emailService?.selfSenderJid,
-        emailRawHeadersUnavailable: shouldResetEmailAvailability
-            ? const <int>{}
-            : state.emailRawHeadersUnavailable,
-        emailFullHtmlUnavailable: shouldResetEmailAvailability
-            ? const <int>{}
-            : state.emailFullHtmlUnavailable,
-        emailQuotedTextUnavailable: shouldResetEmailAvailability
-            ? const <int>{}
-            : state.emailQuotedTextUnavailable,
+      _withEmailContentPreparationProjection(
+        state.copyWith(
+          emailServiceAvailable: emailService != null,
+          emailSelfJid: emailService?.selfSenderJid,
+          emailRawHeadersUnavailable: shouldResetEmailAvailability
+              ? const <int>{}
+              : state.emailRawHeadersUnavailable,
+          emailFullHtmlUnavailable: shouldResetEmailAvailability
+              ? const <int>{}
+              : state.emailFullHtmlUnavailable,
+          emailQuotedTextUnavailable: shouldResetEmailAvailability
+              ? const <int>{}
+              : state.emailQuotedTextUnavailable,
+        ),
       ),
     );
     if (emailService != null) {
       _emailSyncSubscription = emailService.syncStateStream.listen(
         (syncState) => add(_EmailSyncStateChanged(syncState)),
       );
+      _emailContentPreparationSubscription = emailService
+          .contentPreparationStream
+          .listen(
+            (snapshot) => add(_ChatEmailContentPreparationUpdated(snapshot)),
+          );
+      _emailOriginalContentSubscription = emailService.originalContentStream
+          .listen(
+            (snapshot) => add(_ChatEmailOriginalContentUpdated(snapshot)),
+          );
       _applyEmailSyncState(emailService.syncState, emit);
-      _requestEmailFullHtml(state.focused);
+      _requestEmailOriginalContent(state.focused);
       _maybeRequestEmailQuotedText(state.focused);
       _requestPresentationHydrationForMessages(
         state.pinnedMessages.map((item) => item.message).whereType<Message>(),
@@ -6663,82 +7108,112 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatLoadEarlier event,
     Emitter<ChatState> emit,
   ) async {
+    if (state.loadEarlierStatus.isLoading) {
+      return;
+    }
+    emit(state.copyWith(loadEarlierStatus: RequestStatus.loading));
+    final status = await _enqueueLoadEarlier(emit);
+    if (emit.isDone || !state.loadEarlierStatus.isLoading) {
+      return;
+    }
+    emit(state.copyWith(loadEarlierStatus: status));
+  }
+
+  Future<RequestStatus> _enqueueLoadEarlier(Emitter<ChatState> emit) async {
     try {
-      await _enqueueLoadEarlier(emit);
-    } finally {
-      event.completer?.complete();
+      final chat = state.chat;
+      if (chat == null) {
+        return RequestStatus.success;
+      }
+      final chatJid = chat.jid;
+      final hadMoreLocalMessages = state.hasMoreLocalMessages;
+      final nextLimit = _currentMessageLimit + _timelineBatchSizeForChat(chat);
+      _currentMessageLimit = nextLimit;
+      _messageSubscriptionGeneration += 1;
+      final generation = _messageSubscriptionGeneration;
+      final loadedLocalWindow = await _loadLocalMessagesForCurrentWindow(
+        chat: chat,
+        generation: generation,
+        limit: nextLimit,
+        awaitPageEnrichment: hadMoreLocalMessages,
+        emit: emit,
+      );
+      if (!loadedLocalWindow) {
+        return RequestStatus.success;
+      }
+      unawaited(
+        fireAndForget(
+          () => _subscribeToMessages(
+            limit: nextLimit,
+            filter: state.viewFilter,
+            generationOverride: generation,
+          ),
+          operationName: 'rebind load earlier message stream',
+          loggerName: 'ChatBloc',
+        ),
+      );
+      if (state.chat?.jid != chatJid) {
+        return RequestStatus.success;
+      }
+      if (hadMoreLocalMessages) {
+        return RequestStatus.success;
+      }
+      final canPageXmpp = _canPageXmppHistory(chat);
+      if (!canPageXmpp) {
+        return RequestStatus.success;
+      }
+      if (!state.xmppHistoryPaginationState.canAttempt) {
+        return RequestStatus.success;
+      }
+      emit(
+        state.copyWith(
+          xmppHistoryPaginationState: ChatHistoryPaginationSourceState.loading,
+        ),
+      );
+      final mamResult = await _loadEarlierFromMam();
+      if (state.chat?.jid != chatJid) {
+        return RequestStatus.success;
+      }
+      emit(
+        state.copyWith(
+          xmppHistoryPaginationState: mamResult == null || mamResult.complete
+              ? ChatHistoryPaginationSourceState.exhausted
+              : _xmppPaginationStateFor(chat),
+        ),
+      );
+      return RequestStatus.success;
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine('Failed to load earlier', error, stackTrace);
+      return RequestStatus.failure;
     }
   }
 
-  Future<void> _enqueueLoadEarlier(Emitter<ChatState> emit) {
-    _loadEarlierQueue = _loadEarlierQueue.then((_) async {
-      try {
-        final chat = state.chat;
-        if (chat == null) {
-          return;
-        }
-        final chatJid = chat.jid;
-        final hadMoreLocalMessages = state.hasMoreLocalMessages;
-        final nextLimit = _currentMessageLimit + messageBatchSize;
-        await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
-        if (state.chat?.jid != chatJid) {
-          return;
-        }
-        if (hadMoreLocalMessages) {
-          return;
-        }
-        final canPageEmail = _canPageEmailHistory(chat);
-        final canPageXmpp = _canPageXmppHistory(chat);
-        if (!canPageEmail && !canPageXmpp) {
-          return;
-        }
-        if (canPageEmail && state.emailHistoryPaginationState.canAttempt) {
-          emit(
-            state.copyWith(
-              emailHistoryPaginationState:
-                  ChatHistoryPaginationSourceState.loading,
-            ),
-          );
-          final imported = await _loadEarlierFromEmail(
-            desiredWindow: nextLimit,
-            maxImportCount: messageBatchSize,
-          );
-          if (state.chat?.jid != chatJid) {
-            return;
-          }
-          emit(
-            state.copyWith(
-              emailHistoryPaginationState: imported == 0
-                  ? ChatHistoryPaginationSourceState.exhausted
-                  : _emailPaginationStateFor(chat, reset: imported == null),
-            ),
-          );
-        }
-        if (!canPageXmpp || !state.xmppHistoryPaginationState.canAttempt) {
-          return;
-        }
-        emit(
-          state.copyWith(
-            xmppHistoryPaginationState:
-                ChatHistoryPaginationSourceState.loading,
-          ),
-        );
-        final mamResult = await _loadEarlierFromMam();
-        if (state.chat?.jid != chatJid) {
-          return;
-        }
-        emit(
-          state.copyWith(
-            xmppHistoryPaginationState: mamResult == null || mamResult.complete
-                ? ChatHistoryPaginationSourceState.exhausted
-                : _xmppPaginationStateFor(chat),
-          ),
-        );
-      } on Exception catch (error, stackTrace) {
-        _log.safeFine('Failed to load earlier', error, stackTrace);
-      }
-    });
-    return _loadEarlierQueue;
+  Future<bool> _loadLocalMessagesForCurrentWindow({
+    required Chat chat,
+    required int generation,
+    required int limit,
+    required bool awaitPageEnrichment,
+    required Emitter<ChatState> emit,
+  }) async {
+    final items = await _messageService.loadChatMessagesPage(
+      chat.jid,
+      start: 0,
+      end: _messageProbeLimit(limit),
+      filter: state.viewFilter,
+    );
+    if (state.chat?.jid != chat.jid ||
+        generation != _messageSubscriptionGeneration) {
+      return false;
+    }
+    await _onChatMessagesUpdated(
+      _ChatMessagesUpdated(
+        items,
+        generation,
+        awaitPageEnrichment: awaitPageEnrichment,
+      ),
+      emit,
+    );
+    return true;
   }
 
   Future<void> _onChatAlertHidden(
@@ -7275,12 +7750,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return resolvedEmailHtmlBodyForMessage(
       message: message,
       emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+      deriveHtmlIfMissing: false,
     );
   }
 
   String _rfcEmailMessagePlainBody(Message message) => rfcEmailBodyText(
     message: message,
     resolvedHtmlBody: _resolvedEmailHtmlBodyForMessage(message),
+    deriveHtmlIfMissing: false,
   );
 
   String _rfcEmailGroupPlainBody(RfcEmailGroup group) {
@@ -7415,14 +7892,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final htmlBody = HtmlContentCodec.normalizeHtml(
       _resolvedEmailHtmlBodyForMessage(message),
     );
+    final htmlDerivation = htmlBody == null
+        ? null
+        : HtmlContentCodec.emailDerivations(htmlBody);
     final shouldForwardHtml =
         isEmailMessage &&
+        htmlDerivation != null &&
         HtmlContentCodec.shouldRenderRichEmailHtml(
           normalizedHtmlBody: htmlBody,
-          normalizedHtmlText: htmlBody == null
-              ? null
-              : HtmlContentCodec.toPlainText(htmlBody).trim(),
+          normalizedHtmlText: htmlDerivation.visibleBodyText,
           renderedText: renderedText,
+          derivation: htmlDerivation,
         );
     return (
       subject: originalSubject == null || originalSubject.isEmpty
@@ -9066,7 +9546,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<bool> downloadFullEmailMessage(Message message) async {
     final emailService = _emailService;
     if (emailService == null) return false;
-    return emailService.downloadFullMessage(message);
+    return emailService.requestEmailContentPreparation(
+      message,
+      priority: EmailContentPreparationPriority.manual,
+    );
   }
 
   Future<bool> downloadInboundAttachment({
@@ -9102,6 +9585,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       orderedIds.add(id);
     }
     return orderedIds.toList(growable: false);
+  }
+
+  ({
+    Map<String, List<String>> attachmentsByMessageId,
+    Map<String, String> groupLeaderByMessageId,
+    Map<String, String> groupQuotedReferenceByMessageId,
+  })
+  _directAttachmentMaps(List<Message> messages) {
+    if (messages.isEmpty) {
+      return (
+        attachmentsByMessageId: const <String, List<String>>{},
+        groupLeaderByMessageId: const <String, String>{},
+        groupQuotedReferenceByMessageId: const <String, String>{},
+      );
+    }
+    final attachmentByMessageId = <String, List<String>>{};
+    for (final message in messages) {
+      final fallback = message.fileMetadataID?.trim();
+      if (fallback == null || fallback.isEmpty) {
+        continue;
+      }
+      attachmentByMessageId[_messageKey(message)] = [fallback];
+    }
+    return (
+      attachmentsByMessageId: attachmentByMessageId,
+      groupLeaderByMessageId: const <String, String>{},
+      groupQuotedReferenceByMessageId: const <String, String>{},
+    );
   }
 
   Future<
@@ -9211,6 +9722,50 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return CalendarSyncMessage.looksLikeEnvelope(trimmed);
   }
 
+  ({
+    List<Message> messages,
+    Map<String, List<String>> attachmentsByMessageId,
+    Map<String, String> groupLeaderByMessageId,
+  })
+  _filterBodyInternalMessages({
+    required List<Message> messages,
+    required Map<String, List<String>> attachmentsByMessageId,
+    required Map<String, String> groupLeaderByMessageId,
+  }) {
+    if (messages.isEmpty) {
+      return (
+        messages: messages,
+        attachmentsByMessageId: attachmentsByMessageId,
+        groupLeaderByMessageId: groupLeaderByMessageId,
+      );
+    }
+    final retainedMessages = <Message>[];
+    var filtered = false;
+    for (final message in messages) {
+      if (_isCalendarSyncEnvelope(message.body)) {
+        filtered = true;
+        continue;
+      }
+      retainedMessages.add(message);
+    }
+    if (!filtered) {
+      return (
+        messages: messages,
+        attachmentsByMessageId: attachmentsByMessageId,
+        groupLeaderByMessageId: groupLeaderByMessageId,
+      );
+    }
+    final retainedKeys = retainedMessages.map(_messageKey).toSet();
+    return (
+      messages: retainedMessages,
+      attachmentsByMessageId: <String, List<String>>{
+        for (final entry in attachmentsByMessageId.entries)
+          if (retainedKeys.contains(entry.key)) entry.key: entry.value,
+      },
+      groupLeaderByMessageId: const <String, String>{},
+    );
+  }
+
   Future<Set<String>> _snapshotMetadataIdsFor(
     Map<String, List<String>> attachmentsByMessageId,
   ) async {
@@ -9224,14 +9779,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (allIds.isEmpty) {
       return const <String>{};
     }
+    final metadataRows = await _messageService.loadFileMetadataByIds(allIds);
     final snapshotIds = <String>{};
-    for (final metadataId in allIds) {
-      final metadata = await _messageService.loadFileMetadata(metadataId);
-      if (metadata == null) {
-        continue;
-      }
+    for (final metadata in metadataRows) {
       if (metadata.isCalendarSnapshot) {
-        snapshotIds.add(metadataId);
+        snapshotIds.add(metadata.id);
       }
     }
     return snapshotIds;

@@ -24,12 +24,49 @@ final class _ChatStarted extends ChatEvent {
 }
 
 final class _ChatMessagesUpdated extends ChatEvent {
-  const _ChatMessagesUpdated(this.items);
+  const _ChatMessagesUpdated(
+    this.items,
+    this.generation, {
+    this.awaitPageEnrichment = false,
+  });
 
   final List<Message> items;
+  final int generation;
+  final bool awaitPageEnrichment;
 
   @override
-  List<Object?> get props => [items];
+  List<Object?> get props => [items, generation, awaitPageEnrichment];
+}
+
+final class _ChatMessagePageEnrichmentRequested extends ChatEvent {
+  _ChatMessagePageEnrichmentRequested({
+    required Iterable<Message> sourceItems,
+    required this.generation,
+    required this.chatJid,
+    required this.limit,
+    required this.filter,
+    required this.verifyInitialStaleUnacked,
+    required this.pendingUnreadBoundaryCount,
+  }) : sourceItems = List<Message>.unmodifiable(sourceItems);
+
+  final List<Message> sourceItems;
+  final int generation;
+  final String chatJid;
+  final int limit;
+  final MessageTimelineFilter filter;
+  final bool verifyInitialStaleUnacked;
+  final int? pendingUnreadBoundaryCount;
+
+  @override
+  List<Object?> get props => [
+    sourceItems,
+    generation,
+    chatJid,
+    limit,
+    filter,
+    verifyInitialStaleUnacked,
+    pendingUnreadBoundaryCount,
+  ];
 }
 
 final class _ChatPresentationHydrationRequested extends ChatEvent {
@@ -64,6 +101,24 @@ final class _ChatPresentationHydrationRequested extends ChatEvent {
     allowOffWindowEmailContentHydration,
     syncFileMetadata,
   ];
+}
+
+final class _ChatEmailContentPreparationUpdated extends ChatEvent {
+  const _ChatEmailContentPreparationUpdated(this.snapshot);
+
+  final EmailContentPreparationSnapshot snapshot;
+
+  @override
+  List<Object?> get props => [snapshot];
+}
+
+final class _ChatEmailOriginalContentUpdated extends ChatEvent {
+  const _ChatEmailOriginalContentUpdated(this.snapshot);
+
+  final EmailOriginalContentSnapshot snapshot;
+
+  @override
+  List<Object?> get props => [snapshot];
 }
 
 final class ChatRenderedMessagesHydrationRequested extends ChatEvent {
@@ -268,14 +323,17 @@ final class ChatEmailHeadersRequested extends ChatEvent {
   List<Object?> get props => [message];
 }
 
-final class ChatEmailFullHtmlRequested extends ChatEvent {
-  const ChatEmailFullHtmlRequested(this.message, {this.allowOffWindow = false});
+final class _ChatEmailOriginalContentRequested extends ChatEvent {
+  _ChatEmailOriginalContentRequested(
+    Iterable<Message> messages, {
+    this.allowOffWindow = false,
+  }) : messages = List<Message>.unmodifiable(messages);
 
-  final Message message;
+  final List<Message> messages;
   final bool allowOffWindow;
 
   @override
-  List<Object?> get props => [message, allowOffWindow];
+  List<Object?> get props => [messages, allowOffWindow];
 }
 
 final class ChatEmailQuotedTextRequested extends ChatEvent {
@@ -289,6 +347,19 @@ final class ChatEmailQuotedTextRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [message, allowOffWindow];
+}
+
+final class _ChatEmailQuotedTextBatchRequested extends ChatEvent {
+  _ChatEmailQuotedTextBatchRequested(
+    Iterable<Message> messages, {
+    this.allowOffWindow = false,
+  }) : messages = List<Message>.unmodifiable(messages);
+
+  final List<Message> messages;
+  final bool allowOffWindow;
+
+  @override
+  List<Object?> get props => [messages, allowOffWindow];
 }
 
 final class _ChatTypingStopped extends ChatEvent {
@@ -484,12 +555,10 @@ final class ChatNotificationBehaviorChanged extends ChatEvent {
 }
 
 final class ChatLoadEarlier extends ChatEvent {
-  const ChatLoadEarlier({this.completer});
-
-  final Completer<void>? completer;
+  const ChatLoadEarlier();
 
   @override
-  List<Object?> get props => [completer];
+  List<Object?> get props => [];
 }
 
 final class ChatShareSignatureToggled extends ChatEvent {
