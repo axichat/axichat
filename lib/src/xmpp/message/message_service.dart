@@ -1420,6 +1420,25 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  Future<Message?> loadOldestUnreadMessageForChat(
+    Chat chat, {
+    String? selfJid,
+    String? emailSelfJid,
+    String? myOccupantJid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    return _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getOldestUnreadMessageForChat(
+        chat.jid,
+        selfJid: selfJid,
+        emailSelfJid: emailSelfJid,
+        isGroupChat: chat.type == ChatType.groupChat,
+        myOccupantJid: myOccupantJid,
+        filter: filter,
+      ),
+    );
+  }
+
   Future<List<String>> persistDraftAttachmentMetadata(
     Iterable<Attachment> attachments,
   ) async {

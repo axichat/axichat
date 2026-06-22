@@ -160,6 +160,14 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     _openChatUnreadBoundarySeedByJid[normalizedJid] = unreadCount;
   }
 
+  int? peekOpenChatUnreadBoundarySeed(String jid) {
+    final normalizedJid = normalizeAddress(jid);
+    if (normalizedJid == null || normalizedJid.isEmpty) {
+      return null;
+    }
+    return _openChatUnreadBoundarySeedByJid[normalizedJid];
+  }
+
   int? consumeOpenChatUnreadBoundarySeed(String jid) {
     final normalizedJid = normalizeAddress(jid);
     if (normalizedJid == null || normalizedJid.isEmpty) {
@@ -1580,6 +1588,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
           await db.updateChat(
             existing.copyWith(
               title: 'Saved Messages',
+              lastMessage: shouldUpdateTimestamp ? null : existing.lastMessage,
               lastChangeTimestamp: effectiveLastChange,
               muted: muted,
               favorited: pinned,
@@ -1588,7 +1597,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
             ),
           );
           if (shouldUpdateTimestamp) {
-            await db.repairChatSummaryPreservingTimestamp(peerJid);
+            await db.repairChatSummaryFromMessages(peerJid);
           }
           continue;
         }
@@ -1602,7 +1611,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
           contactJid: peerJid,
         );
         if (shouldUpdateTimestamp) {
-          await db.repairChatSummaryPreservingTimestamp(peerJid);
+          await db.repairChatSummaryFromMessages(peerJid);
         }
       }
     }, awaitDatabase: true);

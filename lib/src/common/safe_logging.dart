@@ -166,17 +166,7 @@ class SafeLogging {
     String operation,
     String phase, {
     Map<String, Object?> fields = const <String, Object?>{},
-  }) {
-    final buffer = StringBuffer('Lag probe op=$operation phase=$phase');
-    for (final entry in fields.entries) {
-      buffer
-        ..write(' ')
-        ..write(entry.key)
-        ..write('=')
-        ..write(_profileTraceValue(entry.value));
-    }
-    Logger(profileTraceLoggerName).info(buffer.toString());
-  }
+  }) {}
 
   static String profileFingerprint(String value) {
     var hash = 0x811c9dc5;
@@ -185,29 +175,6 @@ class SafeLogging {
       hash = (hash * 0x01000193) & 0xffffffff;
     }
     return hash.toRadixString(16).padLeft(8, '0');
-  }
-
-  static String _profileTraceValue(Object? value) {
-    if (value == null) {
-      return 'null';
-    }
-    if (value is Duration) {
-      return '${value.inMilliseconds}ms';
-    }
-    if (value is String) {
-      final collapsed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
-      if (RegExp(r'^[A-Za-z][A-Za-z0-9_]*$').hasMatch(collapsed) &&
-          collapsed.length >= _minSecretLength) {
-        return collapsed
-            .replaceAllMapped(
-              RegExp(r'([a-z0-9])([A-Z])'),
-              (match) => '${match.group(1)} ${match.group(2)}',
-            )
-            .replaceAll('_', ' ');
-      }
-      return collapsed;
-    }
-    return value.toString().trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 
   static bool shouldEmitDebugRecord(LogRecord record) {
@@ -254,17 +221,23 @@ class SafeLogging {
   }
 
   static bool shouldEmitProfileRecord(LogRecord record) {
-    if (record.loggerName == profileFrameTimingLoggerName ||
-        record.loggerName == profileTraceLoggerName) {
-      return true;
-    }
     if (record.error != null || record.stackTrace != null) {
       return true;
+    }
+    if (record.loggerName == profileTraceLoggerName) {
+      return record.level >= Level.INFO;
     }
     return record.level >= Level.SEVERE;
   }
 
   static String formatDebugRecord(LogRecord record) => formatRecord(record);
+
+  static String formatProfileRecord(LogRecord record) {
+    final formatted = formatRecord(record);
+    return record.loggerName.isEmpty
+        ? formatted
+        : '${record.loggerName}: $formatted';
+  }
 
   static String formatRecord(LogRecord record) {
     final sanitizedMessage = sanitizeMessage(record.message);

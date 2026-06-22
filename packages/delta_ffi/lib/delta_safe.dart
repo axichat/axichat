@@ -1613,6 +1613,47 @@ class DeltaContextHandle {
     }
   }
 
+  Future<int> maxMessageId() async {
+    _ensureState(_opened, 'get max message id');
+    return _bindings.axichat_dc_get_max_msg_id(_context);
+  }
+
+  Future<List<int>> messageIdsAfter({
+    required int afterId,
+    required int limit,
+  }) async {
+    _ensureState(_opened, 'get message ids after cursor');
+    if (limit <= _zeroValue) {
+      return const <int>[];
+    }
+    final raw = _cleanString(
+      _takeString(
+        _bindings.axichat_dc_get_msg_ids_after(_context, afterId, limit),
+        bindings: _bindings,
+      ),
+    );
+    if (raw == null || raw.isEmpty) {
+      throw DeltaOperationException('Failed to get message ids after cursor');
+    }
+    final result = _parseAxichatJsonResult(
+      raw,
+      operation: 'get message ids after cursor',
+    );
+    final decoded = result['ids'];
+    if (decoded is! List) {
+      throw DeltaOperationException(
+        'Failed to get message ids after cursor: invalid native ids',
+      );
+    }
+    final ids = <int>[];
+    for (final value in decoded) {
+      if (value is int && value > _zeroValue) {
+        ids.add(value);
+      }
+    }
+    return ids;
+  }
+
   int? _primaryContactIdForChat(int chatId) {
     final array = _bindings.dc_get_chat_contacts(_context, chatId);
     if (array == ffi.nullptr) {

@@ -215,10 +215,30 @@ abstract interface class XmppDatabase implements Database {
     required int deltaChatId,
   });
 
-  Future<List<Message>> getUndisplayedMessagesByDeltaChat({
-    required int deltaAccountId,
-    required int deltaChatId,
+  Future<Message?> getOldestUnreadEmailBackedMessageForChat(
+    String jid, {
+    String? selfJid,
+    String? emailSelfJid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
+  Future<Message?> getOldestUnreadMessageForChat(
+    String jid, {
+    String? selfJid,
+    String? emailSelfJid,
+    bool isGroupChat = false,
+    String? myOccupantJid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
+  Future<List<Message>> getDisplayedEmailMessagesPendingDeltaSeen({
+    Iterable<String> chatJids = const <String>[],
     int limit = 100,
+  });
+
+  Future<int> markDeltaMessagesSeenSynced({
+    required int deltaAccountId,
+    required Iterable<int> deltaMsgIds,
   });
 
   Future<void> clearMessageDeltaHandles(String stanzaID);
@@ -863,7 +883,10 @@ abstract interface class XmppDatabase implements Database {
     required bool archived,
   });
 
-  Future<void> repairChatSummaryPreservingTimestamp(String jid);
+  Future<void> repairChatSummaryFromMessages(
+    String jid, {
+    bool clearStaleLastMessage = false,
+  });
 
   Future<void> clearChatsEmailFromAddress(String address);
 
@@ -1157,6 +1180,63 @@ abstract interface class XmppDatabase implements Database {
   Future<void> deleteAll();
 
   Future<void> deleteFile();
+}
+
+abstract interface class LocalPromptStateStore {
+  Future<String?> getLocalPromptState({
+    required String accountJid,
+    required String promptId,
+  });
+
+  Future<void> saveLocalPromptState({
+    required String accountJid,
+    required String promptId,
+    required String status,
+  });
+}
+
+final class EmailHistoryImportJournal {
+  const EmailHistoryImportJournal({
+    required this.accountJid,
+    required this.deltaAccountId,
+    required this.status,
+    required this.watermarkDeltaMsgId,
+    required this.targetDeltaMsgId,
+    required this.lastProjectedDeltaMsgId,
+    required this.fetchCompleted,
+    required this.updatedAt,
+  });
+
+  final String accountJid;
+  final int deltaAccountId;
+  final String status;
+  final int watermarkDeltaMsgId;
+  final int targetDeltaMsgId;
+  final int lastProjectedDeltaMsgId;
+  final bool fetchCompleted;
+  final DateTime updatedAt;
+}
+
+abstract interface class EmailHistoryImportJournalStore {
+  Future<EmailHistoryImportJournal?> getEmailHistoryImportJournal({
+    required String accountJid,
+    required int deltaAccountId,
+  });
+
+  Future<void> saveEmailHistoryImportJournal({
+    required String accountJid,
+    required int deltaAccountId,
+    required String status,
+    required int watermarkDeltaMsgId,
+    required int targetDeltaMsgId,
+    required int lastProjectedDeltaMsgId,
+    required bool fetchCompleted,
+  });
+
+  Future<void> deleteEmailHistoryImportJournal({
+    required String accountJid,
+    required int deltaAccountId,
+  });
 }
 
 abstract class BaseAccessor<D, T extends TableInfo<Table, D>>
@@ -2123,7 +2203,11 @@ class EmailSpamlistAccessor
     EmailSpamlistAccessor,
   ],
 )
-class XmppDrift extends _$XmppDrift implements XmppDatabase {
+class XmppDrift extends _$XmppDrift
+    implements
+        XmppDatabase,
+        LocalPromptStateStore,
+        EmailHistoryImportJournalStore {
   // This marker preserves clear-all ordering even when newer individual pins keep
   // the visible aggregate active.
   static const String _pinnedMessageClearAllMarkerPinnerJid =
@@ -2187,13 +2271,15 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 71;
+  int get schemaVersion => 74;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (m) async {
         await m.createAll();
+        await _createLocalPromptStatesTable();
+        await _createEmailHistoryImportJournalTable();
         await _createMessageSearchInfrastructure();
         await _createRecipientAddressTriggers();
         await seedSystemMessageCollections();
@@ -2737,6 +2823,15 @@ WHERE transport IS NULL
             _log.info('Repaired $repaired legacy Delta stanza duplicate rows.');
           }
         }
+        if (from < 72) {
+          await _createLocalPromptStatesTable();
+        }
+        if (from < 73) {
+          await m.addColumn(messages, messages.deltaSeenSynced);
+        }
+        if (from < 74) {
+          await _createEmailHistoryImportJournalTable();
+        }
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
@@ -3203,6 +3298,7 @@ WHERE stanza_i_d = ?
       limit: limit,
       beforeTimestamp: beforeTimestamp,
       beforeRowId: beforeRowId,
+      beforeDeltaMsgId: beforeDeltaMsgId,
     ).get().then(_filterMessagesForDisplay);
   }
 
@@ -3265,6 +3361,38 @@ WHERE stanza_i_d = ?
     return true;
   }
 
+  String _timelineOrderSql(String alias, {required bool newestFirst}) {
+    final direction = newestFirst ? 'DESC' : 'ASC';
+    return '''
+      $alias.timestamp $direction,
+      CASE WHEN $alias.delta_msg_id IS NOT NULL THEN 1 ELSE 0 END $direction,
+      $alias.delta_msg_id $direction,
+      $alias.rowid $direction
+    ''';
+  }
+
+  List<OrderingTerm> _timelineOrdering({required bool newestFirst}) {
+    final mode = newestFirst ? OrderingMode.desc : OrderingMode.asc;
+    return [
+      OrderingTerm(expression: messages.timestamp, mode: mode),
+      OrderingTerm(expression: messages.deltaMsgId.isNotNull(), mode: mode),
+      OrderingTerm(expression: messages.deltaMsgId, mode: mode),
+      OrderingTerm(expression: messages.rowId, mode: mode),
+    ];
+  }
+
+  List<OrderingTerm Function($MessagesTable)> _timelineMessageOrdering({
+    required bool newestFirst,
+  }) {
+    final mode = newestFirst ? OrderingMode.desc : OrderingMode.asc;
+    return [
+      (tbl) => OrderingTerm(expression: tbl.timestamp, mode: mode),
+      (tbl) => OrderingTerm(expression: tbl.deltaMsgId.isNotNull(), mode: mode),
+      (tbl) => OrderingTerm(expression: tbl.deltaMsgId, mode: mode),
+      (tbl) => OrderingTerm(expression: tbl.rowId, mode: mode),
+    ];
+  }
+
   List<Message> _filterMessagesForDisplay(Iterable<Message> messages) {
     return messages.where(_shouldDisplayMessage).toList(growable: false);
   }
@@ -3282,14 +3410,29 @@ WHERE stanza_i_d = ?
       beforeStanzaId: throughStanzaId,
       beforeDeltaMsgId: throughDeltaMsgId,
     );
-    final rowCursor = throughRowId ?? 9223372036854775807;
+    final Expression<bool> sameTimestampThrough;
+    if (throughDeltaMsgId != null && throughDeltaMsgId > 0) {
+      final rowCursor = throughRowId ?? -1;
+      sameTimestampThrough =
+          messages.deltaMsgId.isNotNull() &
+          (messages.deltaMsgId.isBiggerThanValue(throughDeltaMsgId) |
+              (messages.deltaMsgId.equals(throughDeltaMsgId) &
+                  messages.rowId.isBiggerOrEqualValue(rowCursor)));
+    } else if (throughRowId != null) {
+      sameTimestampThrough =
+          messages.deltaMsgId.isNotNull() |
+          (messages.deltaMsgId.isNull() &
+              messages.rowId.isBiggerOrEqualValue(throughRowId));
+    } else {
+      sameTimestampThrough = const Constant(false);
+    }
     final countExpression = messages.rowId.count(distinct: true);
     final query = _chatMessagesCountJoin(jid: jid, filter: filter)
       ..addColumns([countExpression])
       ..where(
         messages.timestamp.isBiggerThanValue(throughTimestamp) |
             (messages.timestamp.equals(throughTimestamp) &
-                messages.rowId.isBiggerOrEqualValue(rowCursor)),
+                sameTimestampThrough),
       );
     final row = await query.getSingle();
     return row.read(countExpression) ?? 0;
@@ -3320,7 +3463,7 @@ WHERE stanza_i_d = ?
             (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
           END
         )
-      ORDER BY m.timestamp DESC, m.rowid DESC
+      ORDER BY ${_timelineOrderSql('m', newestFirst: true)}
       LIMIT ?
       OFFSET ?
       ''',
@@ -3361,18 +3504,29 @@ WHERE stanza_i_d = ?
     required int limit,
     required DateTime beforeTimestamp,
     required int? beforeRowId,
+    required int? beforeDeltaMsgId,
   }) {
-    final rowCursor = beforeRowId ?? -1;
+    final Expression<bool> sameTimestampBefore;
+    if (beforeDeltaMsgId != null && beforeDeltaMsgId > 0) {
+      final rowCursor = beforeRowId ?? -1;
+      sameTimestampBefore =
+          messages.deltaMsgId.isNull() |
+          messages.deltaMsgId.isSmallerThanValue(beforeDeltaMsgId) |
+          (messages.deltaMsgId.equals(beforeDeltaMsgId) &
+              messages.rowId.isSmallerThanValue(rowCursor));
+    } else if (beforeRowId != null) {
+      sameTimestampBefore =
+          messages.deltaMsgId.isNull() &
+          messages.rowId.isSmallerThanValue(beforeRowId);
+    } else {
+      sameTimestampBefore = const Constant(false);
+    }
     final query = _chatMessagesJoin(jid: jid, filter: filter)
       ..where(
         messages.timestamp.isSmallerThanValue(beforeTimestamp) |
-            (messages.timestamp.equals(beforeTimestamp) &
-                messages.rowId.isSmallerThanValue(rowCursor)),
+            (messages.timestamp.equals(beforeTimestamp) & sameTimestampBefore),
       )
-      ..orderBy([
-        OrderingTerm(expression: messages.timestamp, mode: OrderingMode.desc),
-        OrderingTerm(expression: messages.rowId, mode: OrderingMode.desc),
-      ])
+      ..orderBy(_timelineOrdering(newestFirst: true))
       ..limit(limit);
     return query.map((row) => row.readTable(messages));
   }
@@ -3479,8 +3633,7 @@ WHERE stanza_i_d = ?
         return rowId;
       }
     }
-    if (beforeDeltaMsgId == null ||
-        beforeDeltaMsgId <= DeltaAccountDefaults.legacyId) {
+    if (beforeDeltaMsgId == null || beforeDeltaMsgId <= 0) {
       return null;
     }
     final row =
@@ -3508,10 +3661,7 @@ WHERE stanza_i_d = ?
   }) async {
     final query = select(messages)
       ..where((tbl) => tbl.chatJid.equals(jid))
-      ..orderBy([
-        (tbl) =>
-            OrderingTerm(expression: tbl.timestamp, mode: OrderingMode.asc),
-      ]);
+      ..orderBy(_timelineMessageOrdering(newestFirst: false));
     final rows = await query.get();
     return _filterMessagesForDisplay(rows);
   }
@@ -3828,10 +3978,7 @@ WHERE stanza_i_d = ?
       query.where((tbl) => tbl.deltaChatId.isNull() & tbl.deltaMsgId.isNull());
     }
     query
-      ..orderBy([
-        (tbl) => OrderingTerm.desc(tbl.timestamp),
-        (tbl) => OrderingTerm.desc(tbl.rowId),
-      ])
+      ..orderBy(_timelineMessageOrdering(newestFirst: true))
       ..limit(1);
     return query.getSingleOrNull();
   }
@@ -3928,29 +4075,140 @@ WHERE stanza_i_d = ?
   }
 
   @override
-  Future<List<Message>> getUndisplayedMessagesByDeltaChat({
-    required int deltaAccountId,
-    required int deltaChatId,
+  Future<Message?> getOldestUnreadEmailBackedMessageForChat(
+    String jid, {
+    String? selfJid,
+    String? emailSelfJid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    final normalizedJid = jid.trim();
+    if (normalizedJid.isEmpty) {
+      return null;
+    }
+    const pageSize = 128;
+    var offset = 0;
+    while (true) {
+      final rows =
+          await (_chatMessagesJoin(jid: normalizedJid, filter: filter)
+                ..where(
+                  (messages.deltaChatId.isNotNull() |
+                          messages.deltaMsgId.isNotNull()) &
+                      messages.displayed.equals(false),
+                )
+                ..orderBy([..._timelineOrdering(newestFirst: false)])
+                ..limit(pageSize, offset: offset))
+              .map((row) => row.readTable(messages))
+              .get();
+      if (rows.isEmpty) {
+        return null;
+      }
+      for (final message in rows) {
+        if (message.countsTowardUnread(
+          selfJid: message.isEmailBacked ? emailSelfJid ?? selfJid : selfJid,
+          isGroupChat: false,
+          myOccupantJid: null,
+        )) {
+          return message;
+        }
+      }
+      if (rows.length < pageSize) {
+        return null;
+      }
+      offset += rows.length;
+    }
+  }
+
+  @override
+  Future<Message?> getOldestUnreadMessageForChat(
+    String jid, {
+    String? selfJid,
+    String? emailSelfJid,
+    bool isGroupChat = false,
+    String? myOccupantJid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    final normalizedJid = jid.trim();
+    if (normalizedJid.isEmpty) {
+      return null;
+    }
+    const pageSize = 128;
+    var offset = 0;
+    while (true) {
+      final rows =
+          await (_chatMessagesJoin(jid: normalizedJid, filter: filter)
+                ..where(messages.displayed.equals(false))
+                ..orderBy(_timelineOrdering(newestFirst: false))
+                ..limit(pageSize, offset: offset))
+              .map((row) => row.readTable(messages))
+              .get();
+      if (rows.isEmpty) {
+        return null;
+      }
+      for (final message in rows) {
+        if (message.countsTowardUnread(
+          selfJid: message.isEmailBacked ? emailSelfJid ?? selfJid : selfJid,
+          isGroupChat: !message.isEmailBacked && isGroupChat,
+          myOccupantJid: message.isEmailBacked ? null : myOccupantJid,
+        )) {
+          return message;
+        }
+      }
+      if (rows.length < pageSize) {
+        return null;
+      }
+      offset += rows.length;
+    }
+  }
+
+  @override
+  Future<List<Message>> getDisplayedEmailMessagesPendingDeltaSeen({
+    Iterable<String> chatJids = const <String>[],
     int limit = 100,
   }) {
-    if (deltaAccountId <= 0 || deltaChatId <= 0 || limit <= 0) {
+    if (limit <= 0) {
       return Future.value(const <Message>[]);
     }
-    return (select(messages)
-          ..where(
-            (tbl) =>
-                tbl.deltaAccountId.equals(deltaAccountId) &
-                tbl.deltaChatId.equals(deltaChatId) &
-                tbl.deltaMsgId.isNotNull() &
-                tbl.displayed.equals(false),
-          )
-          ..orderBy([
-            (tbl) => OrderingTerm.asc(tbl.timestamp),
-            (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
-            (tbl) => OrderingTerm.asc(tbl.stanzaID),
-          ])
-          ..limit(limit))
-        .get();
+    final scopedChatJids = chatJids
+        .map((jid) => jid.trim())
+        .where((jid) => jid.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.deltaMsgId.isNotNull() &
+            tbl.displayed.equals(true) &
+            tbl.deltaSeenSynced.equals(false),
+      );
+    if (scopedChatJids.isNotEmpty) {
+      query.where((tbl) => tbl.chatJid.isIn(scopedChatJids));
+    }
+    query
+      ..orderBy([
+        (tbl) => OrderingTerm.asc(tbl.timestamp),
+        (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
+        (tbl) => OrderingTerm.asc(tbl.stanzaID),
+      ])
+      ..limit(limit);
+    return query.get();
+  }
+
+  @override
+  Future<int> markDeltaMessagesSeenSynced({
+    required int deltaAccountId,
+    required Iterable<int> deltaMsgIds,
+  }) {
+    final ids = deltaMsgIds.where((id) => id > 0).toSet().toList();
+    if (deltaAccountId <= 0 || ids.isEmpty) {
+      return Future.value(0);
+    }
+    return (update(messages)..where(
+          (tbl) =>
+              tbl.deltaAccountId.equals(deltaAccountId) &
+              tbl.deltaMsgId.isIn(ids) &
+              tbl.deltaSeenSynced.equals(false),
+        ))
+        .write(const MessagesCompanion(deltaSeenSynced: Value(true)));
   }
 
   @override
@@ -4095,8 +4353,8 @@ WHERE stanza_i_d = ?
         selfJid: selfJid,
         emailSelfJid: emailSelfJid,
       );
-      await repairChatSummaryPreservingTimestamp(fromChatJid);
-      await repairChatSummaryPreservingTimestamp(chatJid);
+      await repairChatSummaryFromMessages(fromChatJid);
+      await repairChatSummaryFromMessages(chatJid);
       return updated;
     });
   }
@@ -4855,9 +5113,6 @@ WHERE stanza_i_d = ?
         : 0;
     final bool usesEmailUnreadCounter =
         currentChat?.defaultTransport.isEmail == true;
-    final bool shouldRepairSummaryAfterSave =
-        shouldUpdateChatSummary &&
-        currentChat?.lastChangeTimestamp.isAfter(messageTimestamp) == true;
     final DateTime? existingLastChangeTimestamp =
         currentChat?.lastChangeTimestamp;
     final DateTime resolvedLastChangeTimestamp = shouldUpdateChatSummary
@@ -4970,9 +5225,6 @@ WHERE stanza_i_d = ?
             lastMessage: lastMessagePreview,
           );
           chatSummaryChanged = true;
-          if (shouldRepairSummaryAfterSave) {
-            await repairChatSummaryPreservingTimestamp(message.chatJid);
-          }
         }
         return result(MessageSaveChange.upserted);
       }
@@ -4997,9 +5249,6 @@ WHERE stanza_i_d = ?
           lastMessage: lastMessagePreview,
         );
         chatSummaryChanged = true;
-        if (shouldRepairSummaryAfterSave) {
-          await repairChatSummaryPreservingTimestamp(message.chatJid);
-        }
       }
 
       final incomingBody = messageToSave.body?.trim();
@@ -5251,33 +5500,22 @@ WHERE stanza_i_d = ?
     required DateTime timestamp,
     required String? lastMessage,
   }) async {
-    final resolvedLastMessage = lastMessage ?? '';
-    final hasLastMessage = resolvedLastMessage.trim().isNotEmpty;
-    const int emptyMessageLength = 0;
+    final resolvedLastMessage = lastMessage?.trim().isEmpty == true
+        ? null
+        : lastMessage;
     await customUpdate(
       '''
 UPDATE chats
-SET last_change_timestamp = CASE
-      WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
-      ELSE last_change_timestamp
-    END,
-    last_message = CASE
-      WHEN ? = 0 THEN last_message
-      WHEN last_message IS NULL OR LENGTH(TRIM(last_message)) <= ? THEN ?
-      WHEN last_change_timestamp IS NULL OR last_change_timestamp <= ? THEN ?
-      ELSE last_message
-    END
+SET last_change_timestamp = ?,
+    last_message = ?
 WHERE jid = ?
+  AND (last_change_timestamp IS NULL OR last_change_timestamp < ?)
 ''',
       variables: [
         Variable<DateTime>(timestamp),
-        Variable<DateTime>(timestamp),
-        Variable<int>(hasLastMessage ? 1 : 0),
-        Variable<int>(emptyMessageLength),
-        Variable<String>(resolvedLastMessage),
-        Variable<DateTime>(timestamp),
         Variable<String>(resolvedLastMessage),
         Variable<String>(jid),
+        Variable<DateTime>(timestamp),
       ],
       updates: {chats},
     );
@@ -6878,6 +7116,172 @@ WHERE stanza_i_d = ?
     final normalizedId = _normalizedFileMetadataIdOrNull(id);
     if (normalizedId == null) return;
     await _deleteFileMetadataIfOrphaned(normalizedId);
+  }
+
+  @override
+  Future<String?> getLocalPromptState({
+    required String accountJid,
+    required String promptId,
+  }) async {
+    final normalizedAccountJid = accountJid.trim();
+    final normalizedPromptId = promptId.trim();
+    if (normalizedAccountJid.isEmpty || normalizedPromptId.isEmpty) {
+      return null;
+    }
+    final row = await customSelect(
+      '''
+SELECT status
+FROM local_prompt_states
+WHERE account_jid = ?
+  AND prompt_id = ?
+LIMIT 1
+''',
+      variables: [
+        Variable<String>(normalizedAccountJid),
+        Variable<String>(normalizedPromptId),
+      ],
+    ).getSingleOrNull();
+    return row?.read<String>('status').trim();
+  }
+
+  @override
+  Future<void> saveLocalPromptState({
+    required String accountJid,
+    required String promptId,
+    required String status,
+  }) async {
+    final normalizedAccountJid = accountJid.trim();
+    final normalizedPromptId = promptId.trim();
+    final normalizedStatus = status.trim();
+    if (normalizedAccountJid.isEmpty ||
+        normalizedPromptId.isEmpty ||
+        normalizedStatus.isEmpty) {
+      return;
+    }
+    await customStatement(
+      '''
+INSERT INTO local_prompt_states(account_jid, prompt_id, status, updated_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(account_jid, prompt_id) DO UPDATE SET
+  status = excluded.status,
+  updated_at = excluded.updated_at
+''',
+      [
+        normalizedAccountJid,
+        normalizedPromptId,
+        normalizedStatus,
+        DateTime.timestamp().millisecondsSinceEpoch,
+      ],
+    );
+  }
+
+  @override
+  Future<EmailHistoryImportJournal?> getEmailHistoryImportJournal({
+    required String accountJid,
+    required int deltaAccountId,
+  }) async {
+    final normalizedAccountJid = accountJid.trim();
+    if (normalizedAccountJid.isEmpty) {
+      return null;
+    }
+    final row = await customSelect(
+      '''
+SELECT account_jid, delta_account_id, status, watermark_delta_msg_id,
+       target_delta_msg_id, last_projected_delta_msg_id, fetch_completed,
+       updated_at
+FROM email_history_import_journal
+WHERE account_jid = ?
+  AND delta_account_id = ?
+LIMIT 1
+''',
+      variables: [
+        Variable<String>(normalizedAccountJid),
+        Variable<int>(deltaAccountId),
+      ],
+    ).getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    return EmailHistoryImportJournal(
+      accountJid: row.read<String>('account_jid'),
+      deltaAccountId: row.read<int>('delta_account_id'),
+      status: row.read<String>('status').trim(),
+      watermarkDeltaMsgId: row.read<int>('watermark_delta_msg_id'),
+      targetDeltaMsgId: row.read<int>('target_delta_msg_id'),
+      lastProjectedDeltaMsgId: row.read<int>('last_projected_delta_msg_id'),
+      fetchCompleted: row.read<int>('fetch_completed') != 0,
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(
+        row.read<int>('updated_at'),
+      ),
+    );
+  }
+
+  @override
+  Future<void> saveEmailHistoryImportJournal({
+    required String accountJid,
+    required int deltaAccountId,
+    required String status,
+    required int watermarkDeltaMsgId,
+    required int targetDeltaMsgId,
+    required int lastProjectedDeltaMsgId,
+    required bool fetchCompleted,
+  }) async {
+    final normalizedAccountJid = accountJid.trim();
+    final normalizedStatus = status.trim();
+    if (normalizedAccountJid.isEmpty || normalizedStatus.isEmpty) {
+      return;
+    }
+    await customStatement(
+      '''
+INSERT INTO email_history_import_journal(
+  account_jid,
+  delta_account_id,
+  status,
+  watermark_delta_msg_id,
+  target_delta_msg_id,
+  last_projected_delta_msg_id,
+  fetch_completed,
+  updated_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(account_jid, delta_account_id) DO UPDATE SET
+  status = excluded.status,
+  watermark_delta_msg_id = excluded.watermark_delta_msg_id,
+  target_delta_msg_id = excluded.target_delta_msg_id,
+  last_projected_delta_msg_id = excluded.last_projected_delta_msg_id,
+  fetch_completed = excluded.fetch_completed,
+  updated_at = excluded.updated_at
+''',
+      [
+        normalizedAccountJid,
+        deltaAccountId,
+        normalizedStatus,
+        watermarkDeltaMsgId,
+        targetDeltaMsgId,
+        lastProjectedDeltaMsgId,
+        fetchCompleted ? 1 : 0,
+        DateTime.timestamp().millisecondsSinceEpoch,
+      ],
+    );
+  }
+
+  @override
+  Future<void> deleteEmailHistoryImportJournal({
+    required String accountJid,
+    required int deltaAccountId,
+  }) async {
+    final normalizedAccountJid = accountJid.trim();
+    if (normalizedAccountJid.isEmpty) {
+      return;
+    }
+    await customStatement(
+      '''
+DELETE FROM email_history_import_journal
+WHERE account_jid = ?
+  AND delta_account_id = ?
+''',
+      [normalizedAccountJid, deltaAccountId],
+    );
   }
 
   String? _normalizedFileMetadataIdOrNull(String? id) {
@@ -8934,7 +9338,11 @@ WHERE transport = ?
       await customUpdate(
         '''
 UPDATE chats
-SET last_change_timestamp = CASE
+SET last_message = CASE
+      WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN NULL
+      ELSE last_message
+    END,
+    last_change_timestamp = CASE
       WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
       ELSE last_change_timestamp
     END,
@@ -8945,6 +9353,7 @@ SET last_change_timestamp = CASE
 WHERE jid = ?
 ''',
         variables: [
+          Variable<DateTime>(lastChangeTimestamp),
           Variable<DateTime>(lastChangeTimestamp),
           Variable<DateTime>(lastChangeTimestamp),
           Variable<bool>(muted),
@@ -8989,7 +9398,7 @@ WHERE jid = ?
     }
     for (final chatJid in affectedChatJids) {
       await repairUnreadCountForChat(chatJid);
-      await repairChatSummaryPreservingTimestamp(chatJid);
+      await repairChatSummaryFromMessages(chatJid);
     }
     return removed;
   }
@@ -9059,7 +9468,7 @@ WHERE jid = ?
       }
       for (final chatJid in affectedChatJids) {
         await repairUnreadCountForChat(chatJid);
-        await repairChatSummaryPreservingTimestamp(chatJid);
+        await repairChatSummaryFromMessages(chatJid);
       }
       return removed;
     });
@@ -9082,7 +9491,7 @@ WHERE jid = ?
       changed += await collapseDuplicateDeltaPairRows();
       for (final chatJid in affectedChatJids) {
         await repairUnreadCountForChat(chatJid);
-        await repairChatSummaryPreservingTimestamp(chatJid);
+        await repairChatSummaryFromMessages(chatJid);
       }
       return changed;
     });
@@ -9542,6 +9951,7 @@ WHERE jid = ?
       acked: keeper.acked || extra.acked,
       received: keeper.received || extra.received,
       displayed: keeper.displayed || extra.displayed,
+      deltaSeenSynced: keeper.deltaSeenSynced || extra.deltaSeenSynced,
       edited: keeper.edited || extra.edited,
       retracted: keeper.retracted || extra.retracted,
       isFileUploadNotification:
@@ -10525,7 +10935,7 @@ WHERE jid = ?
         await (select(messages)..where(
               (tbl) =>
                   tbl.fileMetadataID.isNotNull() &
-                  (tbl.body.isNotNull() | tbl.pseudoMessageData.isNotNull()),
+                  tbl.pseudoMessageData.isNotNull(),
             ))
             .get();
     final chatJids = <String>{};
@@ -10533,35 +10943,24 @@ WHERE jid = ?
       if (!message.isEmailBacked) {
         continue;
       }
-      final metadataId = message.fileMetadataID?.trim();
-      final metadata = metadataId == null || metadataId.isEmpty
-          ? null
-          : await fileMetadataAccessor.selectOne(metadataId);
-      final shouldClearBody = _shouldClearGeneratedEmailAttachmentCaptionBody(
-        message: message,
-        metadata: metadata,
-      );
-      if (!shouldClearBody && !message.hasGeneratedEmailAttachmentCaption) {
+      if (!message.hasGeneratedEmailAttachmentCaption) {
         continue;
       }
       await (update(
         messages,
       )..where((tbl) => tbl.stanzaID.equals(message.stanzaID))).write(
         MessagesCompanion(
-          body: shouldClearBody ? const Value(null) : const Value.absent(),
-          pseudoMessageData: message.hasGeneratedEmailAttachmentCaption
-              ? Value(
-                  _pseudoMessageDataWithoutGeneratedEmailAttachmentCaption(
-                    message.pseudoMessageData,
-                  ),
-                )
-              : const Value.absent(),
+          pseudoMessageData: Value(
+            _pseudoMessageDataWithoutGeneratedEmailAttachmentCaption(
+              message.pseudoMessageData,
+            ),
+          ),
         ),
       );
       chatJids.add(message.chatJid);
     }
     for (final chatJid in chatJids) {
-      await repairChatSummaryPreservingTimestamp(chatJid);
+      await repairChatSummaryFromMessages(chatJid);
     }
   }
 
@@ -10577,102 +10976,47 @@ WHERE jid = ?
     return updated.isEmpty ? null : updated;
   }
 
-  bool _shouldClearGeneratedEmailAttachmentCaptionBody({
-    required Message message,
-    required FileMetadataData? metadata,
-  }) {
-    final body = message.body?.trim();
-    if (body == null || body.isEmpty) {
-      return false;
-    }
-    if (message.hasGeneratedEmailAttachmentCaption) {
-      return body.startsWith('\u{1F4CE} ');
-    }
-    if (message.subject?.trim().isNotEmpty == true ||
-        message.normalizedHtmlBody?.trim().isNotEmpty == true) {
-      return false;
-    }
-    return _bodyMatchesGeneratedEmailAttachmentCaption(
-      body: body,
-      metadata: metadata,
-    );
-  }
-
-  bool _bodyMatchesGeneratedEmailAttachmentCaption({
-    required String body,
-    required FileMetadataData? metadata,
-  }) {
-    final filename = metadata?.filename.trim();
-    if (filename == null || filename.isEmpty) {
-      return false;
-    }
-    for (final sizeLabel in _generatedEmailAttachmentCaptionSizeLabels(
-      metadata?.sizeBytes,
-    )) {
-      final captions = [
-        '\u{1F4CE} $filename ($sizeLabel)',
-        '\u{1F4CE} Archivo: $filename ($sizeLabel)',
-        '\u{1F4CE} Datei: $filename ($sizeLabel)',
-        '\u{1F4CE} Fichier : $filename ($sizeLabel)',
-        '\u{1F4CE} $filename（$sizeLabel）',
-      ];
-      if (captions.contains(body)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  Set<String> _generatedEmailAttachmentCaptionSizeLabels(int? bytes) {
-    if (bytes == null || bytes <= 0) {
-      return const {
-        'Unknown size',
-        'Tama\u00F1o desconocido',
-        'Unbekannte Gr\u00F6\u00DFe',
-        'Taille inconnue',
-        '\u5927\u5C0F\u672A\u77E5',
-      };
-    }
-    var value = bytes.toDouble();
-    var unitIndex = 0;
-    const unitBase = 1024;
-    while (value >= unitBase && unitIndex < 4) {
-      value /= unitBase;
-      unitIndex++;
-    }
-    const precisionThreshold = 10;
-    final precision = value >= precisionThreshold || unitIndex == 0 ? 0 : 1;
-    const unitLabels = ['B', 'KB', 'MB', 'GB', 'TB'];
-    return {'${value.toStringAsFixed(precision)} ${unitLabels[unitIndex]}'};
-  }
-
   @override
-  Future<void> repairChatSummaryPreservingTimestamp(String jid) async {
+  Future<void> repairChatSummaryFromMessages(
+    String jid, {
+    bool clearStaleLastMessage = false,
+  }) async {
     const summaryFilter = MessageTimelineFilter.allWithContact;
     final chat = await getChat(jid);
     if (chat == null) {
       return;
     }
     final lastMessage = await getLastMessageForChat(jid, filter: summaryFilter);
+    if (lastMessage == null) {
+      if (clearStaleLastMessage && chat.lastMessage != null) {
+        await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+          const ChatsCompanion(lastMessage: Value(null)),
+        );
+      }
+      return;
+    }
+    final timestamp = lastMessage.timestamp;
+    if (timestamp == null || timestamp.isBefore(chat.lastChangeTimestamp)) {
+      if (clearStaleLastMessage && chat.lastMessage != null) {
+        await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+          const ChatsCompanion(lastMessage: Value(null)),
+        );
+      }
+      return;
+    }
     final lastMessagePreview = await _messagePreview(
-      trimmedBody: lastMessage?.body?.trim(),
-      subject: lastMessage?.subject,
-      deltaChatId: lastMessage?.deltaChatId,
-      deltaMsgId: lastMessage?.deltaMsgId,
-      fileMetadataId: lastMessage?.fileMetadataID,
-      hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
-      pseudoMessageType: lastMessage?.pseudoMessageType,
-      pseudoMessageData: lastMessage?.pseudoMessageData,
+      trimmedBody: lastMessage.body?.trim(),
+      subject: lastMessage.subject,
+      deltaChatId: lastMessage.deltaChatId,
+      deltaMsgId: lastMessage.deltaMsgId,
+      fileMetadataId: lastMessage.fileMetadataID,
+      hasAttachment: lastMessage.fileMetadataID?.isNotEmpty == true,
+      pseudoMessageType: lastMessage.pseudoMessageType,
+      pseudoMessageData: lastMessage.pseudoMessageData,
     );
-    final DateTime nextTimestamp = switch (lastMessage?.timestamp) {
-      final DateTime timestamp
-          when timestamp.isAfter(chat.lastChangeTimestamp) =>
-        timestamp,
-      _ => chat.lastChangeTimestamp,
-    };
     final updated = chat.copyWith(
       lastMessage: lastMessagePreview,
-      lastChangeTimestamp: nextTimestamp,
+      lastChangeTimestamp: timestamp,
     );
     if (updated != chat) {
       await chatsAccessor.updateOne(updated);
@@ -10700,24 +11044,8 @@ WHERE jid = ?
 
   @override
   Future<Chat?> openChat(String jid) async {
-    const summaryFilter = MessageTimelineFilter.allWithContact;
     final normalizedJid = jid.trim();
-    final lastMessage = await getLastMessageForChat(
-      normalizedJid,
-      filter: summaryFilter,
-    );
-    final lastMessagePreview = await _messagePreview(
-      trimmedBody: lastMessage?.body?.trim(),
-      subject: lastMessage?.subject,
-      deltaChatId: lastMessage?.deltaChatId,
-      deltaMsgId: lastMessage?.deltaMsgId,
-      fileMetadataId: lastMessage?.fileMetadataID,
-      hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
-      pseudoMessageType: lastMessage?.pseudoMessageType,
-      pseudoMessageData: lastMessage?.pseudoMessageData,
-    );
-
-    return await transaction(() async {
+    final closed = await transaction(() async {
       final closed = await closeChat();
       final existing = await getChat(normalizedJid);
       if (existing == null) {
@@ -10732,8 +11060,7 @@ WHERE jid = ?
             open: const Value(true),
             unreadCount: const Value(0),
             chatState: const Value(mox.ChatState.active),
-            lastMessage: Value(lastMessagePreview),
-            lastChangeTimestamp: lastMessage?.timestamp ?? emptyTimestamp,
+            lastChangeTimestamp: emptyTimestamp,
             contactJid: Value(normalizedJid),
           ),
         );
@@ -10750,6 +11077,19 @@ WHERE jid = ?
       );
       return closed;
     });
+    try {
+      await repairChatSummaryFromMessages(
+        normalizedJid,
+        clearStaleLastMessage: true,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Chat summary repair failed while opening chat.',
+        error,
+        stackTrace,
+      );
+    }
+    return closed;
   }
 
   @override
@@ -12539,6 +12879,14 @@ ON CONFLICT(address) DO UPDATE SET
       await m.createTable(messages);
       final targetColumns = copiedColumnNames.map((c) => '"$c"').toList();
       final sourceColumns = copiedColumnNames.map((c) => '"$c"').toList();
+      final hasDeltaSeenSynced = await _tableHasColumn(
+        tempTableName,
+        'delta_seen_synced',
+      );
+      if (hasDeltaSeenSynced) {
+        targetColumns.add('"delta_seen_synced"');
+        sourceColumns.add('"delta_seen_synced"');
+      }
       final hasLegacyQuoting = await _tableHasColumn(tempTableName, 'quoting');
       if (hasLegacyQuoting) {
         targetColumns.add('"reply_stanza_id"');
@@ -12588,6 +12936,34 @@ WHERE reply_stanza_id IS NOT NULL AND trim(reply_stanza_id) != ''
       }
     }
     return false;
+  }
+
+  Future<void> _createLocalPromptStatesTable() async {
+    await customStatement('''
+CREATE TABLE IF NOT EXISTS local_prompt_states (
+  account_jid TEXT NOT NULL,
+  prompt_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(account_jid, prompt_id)
+)
+''');
+  }
+
+  Future<void> _createEmailHistoryImportJournalTable() async {
+    await customStatement('''
+CREATE TABLE IF NOT EXISTS email_history_import_journal (
+  account_jid TEXT NOT NULL,
+  delta_account_id INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  watermark_delta_msg_id INTEGER NOT NULL,
+  target_delta_msg_id INTEGER NOT NULL,
+  last_projected_delta_msg_id INTEGER NOT NULL,
+  fetch_completed INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(account_jid, delta_account_id)
+)
+''');
   }
 
   Future<void> _rebuildEmailChatAccountsForMultipleDeltaChats() async {

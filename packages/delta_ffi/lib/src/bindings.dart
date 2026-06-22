@@ -287,6 +287,41 @@ class DeltaChatBindings {
       _axichat_dc_context_stop_background_fetchPtr
           .asFunction<int Function(ffi.Pointer<dc_context_t>)>();
 
+  int axichat_dc_get_max_msg_id(
+    ffi.Pointer<dc_context_t> ctx,
+  ) {
+    return _axichat_dc_get_max_msg_id(
+      ctx,
+    );
+  }
+
+  late final _axichat_dc_get_max_msg_idPtr = _lookup<
+          ffi.NativeFunction<ffi.Uint32 Function(ffi.Pointer<dc_context_t>)>>(
+      'axichat_dc_get_max_msg_id');
+  late final _axichat_dc_get_max_msg_id = _axichat_dc_get_max_msg_idPtr
+      .asFunction<int Function(ffi.Pointer<dc_context_t>)>();
+
+  ffi.Pointer<ffi.Char> axichat_dc_get_msg_ids_after(
+    ffi.Pointer<dc_context_t> ctx,
+    int after_id,
+    int limit,
+  ) {
+    return _axichat_dc_get_msg_ids_after(
+      ctx,
+      after_id,
+      limit,
+    );
+  }
+
+  late final _axichat_dc_get_msg_ids_afterPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_context_t>, ffi.Uint32,
+              ffi.Uint32)>>('axichat_dc_get_msg_ids_after');
+  late final _axichat_dc_get_msg_ids_after =
+      _axichat_dc_get_msg_ids_afterPtr.asFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_context_t>, int, int)>();
+
   ffi.Pointer<ffi.Char> axichat_dc_inspect_openpgp_key(
     ffi.Pointer<ffi.Char> armored,
     ffi.Pointer<ffi.Char> expected_addr,

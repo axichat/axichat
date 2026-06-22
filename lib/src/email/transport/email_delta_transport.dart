@@ -228,13 +228,8 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
   Future<void> notifyNetworkAvailable();
   Future<void> notifyNetworkLost();
   Future<bool> performBackgroundFetch(Duration timeout);
-  Future<void> backfillChatHistory({
-    required int chatId,
-    required String chatJid,
-    required int desiredWindow,
-    int? beforeMessageId,
-    DateTime? beforeTimestamp,
-    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  Future<bool> performExistingHistoryImportFetch(
+    Duration timeout, {
     int? accountId,
   });
   Future<String?> connectivityDetails({int? accountId});
@@ -319,7 +314,6 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
   Future<bool> unblockContact(String address, {int? accountId});
   Future<bool> markNoticedChat(int chatId, {int? accountId});
   Future<bool> markSeenMessages(List<int> messageIds, {int? accountId});
-  Future<int> getFreshMessageCount(int chatId, {int? accountId});
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(
     int chatId, {
     int? accountId,
@@ -327,6 +321,12 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
   Future<List<DeltaChatlistEntry>> getChatlist({int flags = 0, int? accountId});
   Future<DeltaChat?> getChat(int chatId, {int? accountId});
   Future<List<int>> getFreshMessageIds({int? accountId});
+  Future<int> maxMessageId({int? accountId});
+  Future<List<int>> messageIdsAfter({
+    required int afterId,
+    required int limit,
+    int? accountId,
+  });
   Future<bool> deleteMessages(List<int> messageIds, {int? accountId});
   Future<List<int>> searchMessages({
     required int chatId,
@@ -407,6 +407,8 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     Logger? logger,
     AppLocalizations Function()? localizationsProvider,
     String? Function()? xmppSelfJidProvider,
+    DeltaProjectionDeferralPredicate? shouldDeferProjectionForEvent,
+    DeltaProjectionDeferredCallback? onProjectionDeferred,
     bool persistEvents = true,
     bool useAccounts = false,
   }) : _databaseBuilder = databaseBuilder,
@@ -416,6 +418,8 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
        _log = logger ?? Logger('EmailDeltaTransport'),
        _localizationsProvider = localizationsProvider,
        _xmppSelfJidProvider = xmppSelfJidProvider,
+       _shouldDeferProjectionForEvent = shouldDeferProjectionForEvent,
+       _onProjectionDeferred = onProjectionDeferred,
        _persistEvents = persistEvents,
        _useAccounts = useAccounts;
 
@@ -427,6 +431,8 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   final Logger _log;
   final AppLocalizations Function()? _localizationsProvider;
   final String? Function()? _xmppSelfJidProvider;
+  final DeltaProjectionDeferralPredicate? _shouldDeferProjectionForEvent;
+  final DeltaProjectionDeferredCallback? _onProjectionDeferred;
   final bool _persistEvents;
   final bool _useAccounts;
 
@@ -1088,6 +1094,38 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     }
   }
 
+  @override
+  Future<bool> performExistingHistoryImportFetch(
+    Duration timeout, {
+    int? accountId,
+  }) async {
+    if (_eventDeliveryBlockedForLogout) {
+      return false;
+    }
+    await _ensureContextReady();
+    if (_eventDeliveryBlockedForLogout) {
+      return false;
+    }
+    final temporarySubscriptions =
+        await _attachBackgroundFetchEventSubscriptions();
+    if (temporarySubscriptions.blockedByLogout) {
+      return false;
+    }
+    try {
+      final sessions = await _resolveSessions(accountId: accountId);
+      if (sessions.isEmpty) {
+        return false;
+      }
+      var fetched = false;
+      for (final session in sessions) {
+        fetched = await session.context.backgroundFetch(timeout) || fetched;
+      }
+      return fetched;
+    } finally {
+      await _detachBackgroundFetchEventSubscriptions(temporarySubscriptions);
+    }
+  }
+
   Future<_DeltaBackgroundFetchEventSubscriptions>
   _attachBackgroundFetchEventSubscriptions() async {
     if (_eventDeliveryBlockedForLogout) {
@@ -1129,35 +1167,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       final subscription = _eventSubscriptions.remove(accountId);
       await subscription?.cancel();
     }
-  }
-
-  @override
-  Future<void> backfillChatHistory({
-    required int chatId,
-    required String chatJid,
-    required int desiredWindow,
-    int? beforeMessageId,
-    DateTime? beforeTimestamp,
-    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
-    int? accountId,
-  }) async {
-    if (_databasePrefix == null || _databasePassphrase == null) {
-      return;
-    }
-    await _ensureContextReady();
-    final session = await _ensureSession(accountId: accountId);
-    final consumer = session?.consumer;
-    if (consumer == null) {
-      return;
-    }
-    await consumer.backfillChatHistory(
-      chatId: chatId,
-      chatJid: chatJid,
-      desiredWindow: desiredWindow,
-      beforeMessageId: beforeMessageId,
-      beforeTimestamp: beforeTimestamp,
-      filter: filter,
-    );
   }
 
   @override
@@ -1641,6 +1650,8 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
               return normalized != null &&
                   _emailEncryptionBetaEnabledByAddress[normalized] == true;
             },
+            shouldDeferProjectionForEvent: _shouldDeferProjectionForEvent,
+            onProjectionDeferred: _onProjectionDeferred,
             logger: _log,
             databaseOperationTracker: _trackDatabaseOperation,
           )
@@ -2991,18 +3002,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     return context.markSeenMessages(messageIds);
   }
 
-  /// Returns the count of fresh (unread) messages in a chat.
-  @override
-  Future<int> getFreshMessageCount(int chatId, {int? accountId}) async {
-    await _ensureContextReady();
-    final session = await _ensureSession(accountId: accountId);
-    final context = session?.context;
-    if (context == null) {
-      return 0;
-    }
-    return context.getFreshMessageCount(chatId);
-  }
-
   @override
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(
     int chatId, {
@@ -3052,6 +3051,32 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       return const <int>[];
     }
     return context.getFreshMessageIds();
+  }
+
+  @override
+  Future<int> maxMessageId({int? accountId}) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      return 0;
+    }
+    return context.maxMessageId();
+  }
+
+  @override
+  Future<List<int>> messageIdsAfter({
+    required int afterId,
+    required int limit,
+    int? accountId,
+  }) async {
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) {
+      throw StateError('Delta context is unavailable.');
+    }
+    return context.messageIdsAfter(afterId: afterId, limit: limit);
   }
 
   /// Deletes messages from core and server.

@@ -354,6 +354,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     @Default(false) bool acked,
     @Default(false) bool received,
     @Default(false) bool displayed,
+    @Default(false) bool deltaSeenSynced,
     @Default(false) bool edited,
     @Default(false) bool retracted,
     @Default(false) bool isFileUploadNotification,
@@ -398,6 +399,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     required bool acked,
     required bool received,
     required bool displayed,
+    required bool deltaSeenSynced,
     required bool edited,
     required bool retracted,
     required bool isFileUploadNotification,
@@ -726,6 +728,7 @@ abstract class Message with _$Message implements Insertable<Message> {
       'acked': Variable<bool>(acked),
       'received': Variable<bool>(received),
       'displayed': Variable<bool>(displayed),
+      'delta_seen_synced': Variable<bool>(deltaSeenSynced),
       'edited': Variable<bool>(edited),
       'retracted': Variable<bool>(retracted),
       'is_file_upload_notification': Variable<bool>(isFileUploadNotification),
@@ -1710,6 +1713,9 @@ class Messages extends Table {
   BoolColumn get received => boolean().withDefault(const Constant(false))();
 
   BoolColumn get displayed => boolean().withDefault(const Constant(false))();
+
+  BoolColumn get deltaSeenSynced =>
+      boolean().withDefault(const Constant(false))();
 
   BoolColumn get edited => boolean().withDefault(const Constant(false))();
 

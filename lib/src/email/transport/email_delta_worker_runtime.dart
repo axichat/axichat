@@ -29,6 +29,8 @@ final class EmailDeltaWorkerRuntimeException implements Exception {
   String toString() => 'EmailDeltaWorkerRuntimeException: $message';
 }
 
+enum _RuntimeOwnerReleaseResult { released, missing, refused }
+
 Future<File> _deltaDatabaseFileFor(String databasePrefix) {
   return dbFileFor('${databasePrefix}_email');
 }
@@ -38,7 +40,28 @@ Future<File> _deltaDatabaseFileFor(String databasePrefix) {
 const String _emailDeltaRpcMethodPrefix = 'axichat.email.';
 const String _emailDeltaRpcEventMethod = 'axichat.email.event';
 const String _emailDeltaRpcTypeKey = r'$type';
+const String _emailDeltaRuntimeOwnerPrefix = 'axichat.emailDeltaRuntimeOwner.';
+const String _emailDeltaWorkerOwnerPrefix = 'axichat.emailDeltaWorkerOwner.';
+const Duration _emailDeltaRuntimeOwnerTimeout = Duration(seconds: 10);
+const Duration _emailDeltaWorkerDisposeTimeout = Duration(seconds: 5);
+const Duration _emailDeltaOwnerReleaseDisposeTimeout = Duration(seconds: 1);
 String _emailDeltaRpcMethod(String op) => '$_emailDeltaRpcMethodPrefix$op';
+
+String _emailDeltaRuntimeOwnerName(String databasePrefix) {
+  return '$_emailDeltaRuntimeOwnerPrefix${normalizeAppOwnedPathSegment(databasePrefix)}';
+}
+
+String _emailDeltaWorkerOwnerName(String databasePrefix) {
+  return '$_emailDeltaWorkerOwnerPrefix${normalizeAppOwnedPathSegment(databasePrefix)}';
+}
+
+@visibleForTesting
+String debugEmailDeltaRuntimeOwnerNameForTesting(String databasePrefix) =>
+    _emailDeltaRuntimeOwnerName(databasePrefix);
+
+@visibleForTesting
+String debugEmailDeltaWorkerOwnerNameForTesting(String databasePrefix) =>
+    _emailDeltaWorkerOwnerName(databasePrefix);
 
 Map<String, Object?> _emailDeltaWorkerConfigMessage({
   required SendPort mainPort,
@@ -51,6 +74,7 @@ Map<String, Object?> _emailDeltaWorkerConfigMessage({
   'mainPort': mainPort,
   'deltaDatabasePath': deltaDatabasePath,
   'databasePrefix': databasePrefix,
+  'workerOwnerName': _emailDeltaWorkerOwnerName(databasePrefix),
   'databasePassphrase': databasePassphrase,
   'emailEncryptionBetaEnabledByAddress': Map<String, bool>.from(
     emailEncryptionBetaEnabledByAddress,
@@ -311,6 +335,18 @@ Object? _encodeEmailDeltaRpcValue(Object? value) {
       'showPadlock': value.showPadlock,
     };
   }
+  if (value is DeltaMessageStatus) {
+    return {
+      _emailDeltaRpcTypeKey: 'DeltaMessageStatus',
+      'id': value.id,
+      'chatId': value.chatId,
+      'state': value.state,
+      'timestamp': _encodeEmailDeltaRpcValue(value.timestamp),
+      'isOutgoing': value.isOutgoing,
+      'error': value.error,
+      'showPadlock': value.showPadlock,
+    };
+  }
   if (value is DeltaMessageRfc822Body) {
     return {
       _emailDeltaRpcTypeKey: 'DeltaMessageRfc822Body',
@@ -466,6 +502,15 @@ Object? _decodeEmailDeltaRpcValue(Object? value) {
       error: _nullableStringValue(map['error']),
       showPadlock: map['showPadlock'] == true,
     ),
+    'DeltaMessageStatus' => DeltaMessageStatus(
+      id: _intValue(map['id']),
+      chatId: _intValue(map['chatId']),
+      state: _nullableIntValue(map['state']),
+      timestamp: map['timestamp'] as DateTime?,
+      isOutgoing: map['isOutgoing'] == true,
+      error: _nullableStringValue(map['error']),
+      showPadlock: map['showPadlock'] == true,
+    ),
     'DeltaMessageRfc822Body' => DeltaMessageRfc822Body(
       plainText: _nullableStringValue(map['plainText']),
       htmlBody: _nullableStringValue(map['htmlBody']),
@@ -552,6 +597,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     String? Function()? xmppSelfJidProvider,
     Logger? logger,
     @visibleForTesting Duration? debugRequestTimeout,
+    @visibleForTesting Duration? debugRuntimeOwnerTimeout,
     @visibleForTesting
     Future<SendPort> Function({
       required SendPort mainPort,
@@ -564,6 +610,8 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     debugWorkerStarter,
   }) : _xmppSelfJidProvider = xmppSelfJidProvider,
        _requestTimeout = debugRequestTimeout ?? _defaultRequestTimeout,
+       _runtimeOwnerTimeout =
+           debugRuntimeOwnerTimeout ?? _emailDeltaRuntimeOwnerTimeout,
        _debugWorkerStarter = debugWorkerStarter,
        _log = logger ?? Logger('EmailDeltaWorkerRuntime');
 
@@ -572,6 +620,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
 
   final String? Function()? _xmppSelfJidProvider;
   final Duration _requestTimeout;
+  final Duration _runtimeOwnerTimeout;
   final Future<SendPort> Function({
     required SendPort mainPort,
     required String deltaDatabasePath,
@@ -592,10 +641,12 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   ReceivePort? _receivePort;
   ReceivePort? _exitPort;
   ReceivePort? _errorPort;
+  ReceivePort? _runtimeOwnerPort;
   Isolate? _isolate;
   json_rpc.Peer? _peer;
   String? _databasePrefix;
   String? _databasePassphrase;
+  String? _runtimeOwnerName;
   bool _accountsSupported = true;
   bool _accountsActive = false;
   int _activeAccountId = DeltaAccountDefaults.legacyId;
@@ -694,6 +745,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     required String databasePassphrase,
   }) async {
     _disposed = false;
+    await _claimProcessRuntimeOwner(databasePrefix);
     await _ensureWorker(
       databasePrefix: databasePrefix,
       databasePassphrase: databasePassphrase,
@@ -701,6 +753,128 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     await _ensureWorkerInitialized();
     _consecutiveExitRecoveries = 0;
     await _refreshState();
+  }
+
+  Future<void> _claimProcessRuntimeOwner(String databasePrefix) async {
+    final ownerName = _emailDeltaRuntimeOwnerName(databasePrefix);
+    if (_runtimeOwnerName == ownerName) {
+      return;
+    }
+    _releaseProcessRuntimeOwner();
+
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final port = ReceivePort('email-delta-runtime-owner');
+      if (ui.IsolateNameServer.registerPortWithName(port.sendPort, ownerName)) {
+        _runtimeOwnerName = ownerName;
+        _runtimeOwnerPort = port;
+        port.listen(_handleProcessRuntimeOwnerMessage);
+        return;
+      }
+      port.close();
+
+      final existingOwner = ui.IsolateNameServer.lookupPortByName(ownerName);
+      if (existingOwner == null) {
+        ui.IsolateNameServer.removePortNameMapping(ownerName);
+        continue;
+      }
+      final released = await _requestPreviousProcessRuntimeOwnerRelease(
+        existingOwner,
+      );
+      if (released) {
+        continue;
+      }
+      final workerRelease = await _requestPreviousWorkerRuntimeOwnerRelease(
+        databasePrefix,
+      );
+      switch (workerRelease) {
+        case _RuntimeOwnerReleaseResult.released:
+          ui.IsolateNameServer.removePortNameMapping(ownerName);
+          continue;
+        case _RuntimeOwnerReleaseResult.missing:
+          throw const EmailDeltaWorkerRuntimeException(
+            'Previous Delta worker runtime did not release native ownership; '
+            'worker owner is not registered.',
+          );
+        case _RuntimeOwnerReleaseResult.refused:
+          throw const EmailDeltaWorkerRuntimeException(
+            'Previous Delta worker runtime did not release native ownership; '
+            'worker owner refused release.',
+          );
+      }
+    }
+
+    throw const EmailDeltaWorkerRuntimeException(
+      'Delta worker runtime ownership could not be claimed.',
+    );
+  }
+
+  Future<bool> _requestPreviousProcessRuntimeOwnerRelease(
+    SendPort existingOwner,
+  ) async {
+    final replyPort = ReceivePort('email-delta-runtime-owner-reply');
+    try {
+      existingOwner.send({'op': 'dispose', 'replyPort': replyPort.sendPort});
+      final response = await replyPort.first.timeout(_runtimeOwnerTimeout);
+      if (response is Map) {
+        return response['released'] == true;
+      }
+      return false;
+    } on TimeoutException {
+      return false;
+    } finally {
+      replyPort.close();
+    }
+  }
+
+  Future<_RuntimeOwnerReleaseResult> _requestPreviousWorkerRuntimeOwnerRelease(
+    String databasePrefix,
+  ) async {
+    final workerOwner = ui.IsolateNameServer.lookupPortByName(
+      _emailDeltaWorkerOwnerName(databasePrefix),
+    );
+    if (workerOwner == null) {
+      return _RuntimeOwnerReleaseResult.missing;
+    }
+    return await _requestPreviousProcessRuntimeOwnerRelease(workerOwner)
+        ? _RuntimeOwnerReleaseResult.released
+        : _RuntimeOwnerReleaseResult.refused;
+  }
+
+  void _handleProcessRuntimeOwnerMessage(Object? message) {
+    if (message is! Map || message['op'] != 'dispose') {
+      return;
+    }
+    final replyPort = message['replyPort'];
+    if (replyPort is! SendPort) {
+      return;
+    }
+    unawaited(_releaseForNextProcessRuntimeOwner(replyPort));
+  }
+
+  Future<void> _releaseForNextProcessRuntimeOwner(SendPort replyPort) async {
+    try {
+      _disposed = true;
+      _ioDesired = false;
+      await _stopWorker(
+        requestDispose: true,
+        disposeTimeout: _emailDeltaOwnerReleaseDisposeTimeout,
+        killPriority: Isolate.immediate,
+      );
+      _releaseProcessRuntimeOwner();
+      replyPort.send({'released': true});
+    } on Exception catch (error) {
+      replyPort.send({'released': false, 'error': error.toString()});
+    }
+  }
+
+  void _releaseProcessRuntimeOwner() {
+    final ownerName = _runtimeOwnerName;
+    _runtimeOwnerName = null;
+    _runtimeOwnerPort?.close();
+    _runtimeOwnerPort = null;
+    if (ownerName != null) {
+      ui.IsolateNameServer.removePortNameMapping(ownerName);
+    }
   }
 
   Future<void> _ensureWorker({
@@ -814,6 +988,8 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   Future<void> _stopWorker({
     bool clearInitialization = true,
     bool requestDispose = true,
+    Duration disposeTimeout = _emailDeltaWorkerDisposeTimeout,
+    int? killPriority,
   }) async {
     _workerInitializationFuture = null;
     _workerInitialized = false;
@@ -831,7 +1007,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
               _emailDeltaRpcMethod('dispose'),
               const <String, Object?>{},
             )
-            .timeout(const Duration(seconds: 5));
+            .timeout(disposeTimeout);
       } on Exception catch (error, stackTrace) {
         _log.fine('Delta worker dispose request failed.', error, stackTrace);
       }
@@ -840,7 +1016,7 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       _databasePrefix = null;
       _databasePassphrase = null;
     }
-    _isolate?.kill(priority: Isolate.beforeNextEvent);
+    _isolate?.kill(priority: killPriority ?? Isolate.beforeNextEvent);
     _isolate = null;
     if (peer != null && !peer.isClosed) {
       unawaited(
@@ -983,7 +1159,6 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
     );
     final activeRecovery = _exitRecovery;
     if (activeRecovery != null) {
-      await activeRecovery;
       return;
     }
     final recovery = () async {
@@ -1230,9 +1405,13 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   Future<void> dispose({bool requestWorkerDispose = true}) async {
     _disposed = true;
     _ioDesired = false;
-    await _stopWorker(requestDispose: requestWorkerDispose);
-    if (!_events.isClosed) {
-      await _events.close();
+    try {
+      await _stopWorker(requestDispose: requestWorkerDispose);
+    } finally {
+      _releaseProcessRuntimeOwner();
+      if (!_events.isClosed) {
+        await _events.close();
+      }
     }
   }
 
@@ -1260,23 +1439,14 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   );
 
   @override
-  Future<void> backfillChatHistory({
-    required int chatId,
-    required String chatJid,
-    required int desiredWindow,
-    int? beforeMessageId,
-    DateTime? beforeTimestamp,
-    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  Future<bool> performExistingHistoryImportFetch(
+    Duration timeout, {
     int? accountId,
-  }) => _invoke<void>('backfillChatHistory', {
-    'chatId': chatId,
-    'chatJid': chatJid,
-    'desiredWindow': desiredWindow,
-    'beforeMessageId': beforeMessageId,
-    'beforeTimestamp': beforeTimestamp,
-    'filter': filter,
-    'accountId': accountId,
-  });
+  }) => _invoke<bool>(
+    'performExistingHistoryImportFetch',
+    {'timeout': timeout, 'accountId': accountId},
+    timeout: timeout + _backgroundFetchRpcGracePeriod,
+  );
 
   @override
   Future<int?> connectivity({int? accountId}) =>
@@ -1526,13 +1696,6 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       });
 
   @override
-  Future<int> getFreshMessageCount(int chatId, {int? accountId}) =>
-      _invoke<int>('getFreshMessageCount', {
-        'chatId': chatId,
-        'accountId': accountId,
-      });
-
-  @override
   Future<DeltaFreshMessageCount> getFreshMessageCountSafe(
     int chatId, {
     int? accountId,
@@ -1563,6 +1726,21 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
   @override
   Future<List<int>> getFreshMessageIds({int? accountId}) =>
       _invoke<List<int>>('getFreshMessageIds', {'accountId': accountId});
+
+  @override
+  Future<int> maxMessageId({int? accountId}) =>
+      _invoke<int>('maxMessageId', {'accountId': accountId});
+
+  @override
+  Future<List<int>> messageIdsAfter({
+    required int afterId,
+    required int limit,
+    int? accountId,
+  }) => _invoke<List<int>>('messageIdsAfter', {
+    'afterId': afterId,
+    'limit': limit,
+    'accountId': accountId,
+  });
 
   @override
   Future<bool> deleteMessages(List<int> messageIds, {int? accountId}) =>
@@ -1683,6 +1861,15 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       });
 
   @override
+  Future<DeltaMessageStatus?> getMessageStatus(
+    int messageId, {
+    int? accountId,
+  }) => _invoke<DeltaMessageStatus?>('getMessageStatus', {
+    'messageId': messageId,
+    'accountId': accountId,
+  });
+
+  @override
   Future<List<DeltaMessage>> getMessages(
     List<int> messageIds, {
     int? accountId,
@@ -1692,6 +1879,18 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       'accountId': accountId,
     });
     return result.whereType<DeltaMessage>().toList(growable: false);
+  }
+
+  @override
+  Future<List<DeltaMessageStatus>> getMessageStatuses(
+    List<int> messageIds, {
+    int? accountId,
+  }) async {
+    final result = await _invoke<List<Object?>>('getMessageStatuses', {
+      'messageIds': messageIds,
+      'accountId': accountId,
+    });
+    return result.whereType<DeltaMessageStatus>().toList(growable: false);
   }
 
   @override
@@ -1783,6 +1982,7 @@ final class _EmailDeltaWorkerServer {
     : _mainPort = config['mainPort'] as SendPort,
       _deltaDatabasePath = config['deltaDatabasePath'] as String,
       _databasePrefix = config['databasePrefix'] as String,
+      _workerOwnerName = config['workerOwnerName'] as String,
       _emailEncryptionBetaEnabledByAddress = _boolMapValue(
         config['emailEncryptionBetaEnabledByAddress'],
       ),
@@ -1808,10 +2008,12 @@ final class _EmailDeltaWorkerServer {
   final SendPort _mainPort;
   final String _deltaDatabasePath;
   final String _databasePrefix;
+  final String _workerOwnerName;
   final Map<String, bool> _emailEncryptionBetaEnabledByAddress;
   final AppLocalizations _l10n;
   late final EmailDeltaTransport _transport;
   final String? _xmppSelfJid;
+  ReceivePort? _workerOwnerPort;
   json_rpc.Peer? _peer;
   int _activeRequests = 0;
   Completer<void>? _idleCompleter;
@@ -1829,11 +2031,70 @@ final class _EmailDeltaWorkerServer {
   };
 
   void start() {
+    _registerWorkerOwner();
     final channel = IsolateChannel<Object?>.connectSend(_mainPort);
     final peer = json_rpc.Peer.withoutJson(channel);
     peer.registerFallback(_handleRpc);
     _peer = peer;
     unawaited(peer.listen());
+  }
+
+  void _registerWorkerOwner() {
+    final port = ReceivePort('email-delta-worker-owner');
+    if (!ui.IsolateNameServer.registerPortWithName(
+      port.sendPort,
+      _workerOwnerName,
+    )) {
+      port.close();
+      return;
+    }
+    _workerOwnerPort = port;
+    port.listen(_handleWorkerOwnerMessage);
+  }
+
+  void _handleWorkerOwnerMessage(Object? message) {
+    if (message is! Map || message['op'] != 'dispose') {
+      return;
+    }
+    final replyPort = message['replyPort'];
+    if (replyPort is! SendPort) {
+      return;
+    }
+    unawaited(_releaseForNextRuntimeOwner(replyPort));
+  }
+
+  Future<void> _releaseForNextRuntimeOwner(SendPort replyPort) async {
+    try {
+      await _disposeForNextRuntimeOwner();
+      replyPort.send({'released': true});
+      await _peer?.close();
+    } on Exception catch (error) {
+      replyPort.send({'released': false, 'error': error.toString()});
+    }
+  }
+
+  Future<void> _disposeForNextRuntimeOwner() {
+    final previous = _exclusiveTail;
+    final run = () async {
+      await previous;
+      _exclusiveGateClosed = true;
+      try {
+        await _whenRequestsIdle();
+        await dispose();
+      } finally {
+        _exclusiveGateClosed = false;
+        _gateOpened?.complete();
+        _gateOpened = null;
+      }
+    }();
+    _exclusiveTail = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  void _releaseWorkerOwner() {
+    ui.IsolateNameServer.removePortNameMapping(_workerOwnerName);
+    _workerOwnerPort?.close();
+    _workerOwnerPort = null;
   }
 
   Future<XmppDatabase> _databaseBuilder() async {
@@ -1851,7 +2112,11 @@ final class _EmailDeltaWorkerServer {
   }
 
   Future<void> dispose() async {
-    await _transport.dispose();
+    try {
+      await _transport.dispose();
+    } finally {
+      _releaseWorkerOwner();
+    }
   }
 
   Future<Object?> _handleRpc(json_rpc.Parameters params) async {
@@ -1989,17 +2254,11 @@ final class _EmailDeltaWorkerServer {
         return _transport.performBackgroundFetch(
           payload['timeout'] as Duration,
         );
-      case 'backfillChatHistory':
-        await _transport.backfillChatHistory(
-          chatId: payload['chatId'] as int,
-          chatJid: payload['chatJid'] as String,
-          desiredWindow: payload['desiredWindow'] as int,
-          beforeMessageId: payload['beforeMessageId'] as int?,
-          beforeTimestamp: payload['beforeTimestamp'] as DateTime?,
-          filter: payload['filter'] as MessageTimelineFilter,
+      case 'performExistingHistoryImportFetch':
+        return _transport.performExistingHistoryImportFetch(
+          payload['timeout'] as Duration,
           accountId: payload['accountId'] as int?,
         );
-        return null;
       case 'connectivity':
         return _transport.connectivity(accountId: payload['accountId'] as int?);
       case 'connectivityDetails':
@@ -2149,11 +2408,6 @@ final class _EmailDeltaWorkerServer {
           (payload['messageIds'] as List).cast<int>(),
           accountId: payload['accountId'] as int?,
         );
-      case 'getFreshMessageCount':
-        return _transport.getFreshMessageCount(
-          payload['chatId'] as int,
-          accountId: payload['accountId'] as int?,
-        );
       case 'getFreshMessageCountSafe':
         return _transport.getFreshMessageCountSafe(
           payload['chatId'] as int,
@@ -2171,6 +2425,14 @@ final class _EmailDeltaWorkerServer {
         );
       case 'getFreshMessageIds':
         return _transport.getFreshMessageIds(
+          accountId: payload['accountId'] as int?,
+        );
+      case 'maxMessageId':
+        return _transport.maxMessageId(accountId: payload['accountId'] as int?);
+      case 'messageIdsAfter':
+        return _transport.messageIdsAfter(
+          afterId: payload['afterId'] as int,
+          limit: payload['limit'] as int,
           accountId: payload['accountId'] as int?,
         );
       case 'deleteMessages':
@@ -2245,8 +2507,18 @@ final class _EmailDeltaWorkerServer {
           payload['messageId'] as int,
           accountId: payload['accountId'] as int?,
         );
+      case 'getMessageStatus':
+        return _transport.getMessageStatus(
+          payload['messageId'] as int,
+          accountId: payload['accountId'] as int?,
+        );
       case 'getMessages':
         return _transport.getMessages(
+          (payload['messageIds'] as List).cast<int>(),
+          accountId: payload['accountId'] as int?,
+        );
+      case 'getMessageStatuses':
+        return _transport.getMessageStatuses(
           (payload['messageIds'] as List).cast<int>(),
           accountId: payload['accountId'] as int?,
         );

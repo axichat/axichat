@@ -37,6 +37,16 @@ WHERE source.id = ?
   AND related.hidden = 0
 ORDER BY related.timestamp ASC, related.id ASC
 "#;
+const MAX_MSG_ID_QUERY: &str = "SELECT COALESCE(MAX(id), 0) FROM msgs";
+const MSG_IDS_AFTER_QUERY: &str = r#"
+SELECT id
+FROM msgs
+WHERE id > ?
+  AND chat_id > ?
+  AND hidden = 0
+ORDER BY id ASC
+LIMIT ?
+"#;
 const MSG_DEBUG_INFO_QUERY: &str = r#"
 SELECT id, rfc724_mid, server_folder, server_uid, chat_id, from_id, to_id,
        timestamp, type, state, msgrmsg, bytes, hidden,
@@ -193,6 +203,28 @@ fn _read_msg_ids_by_rfc724_mid(context: &Context, msg_id: MsgId) -> Vec<u32> {
             }),
     )
     .unwrap_or_default()
+}
+
+fn _read_max_msg_id(context: &Context) -> u32 {
+    let max_id: Option<i64> = _block_on(context.sql().query_get_value(MAX_MSG_ID_QUERY, ()))
+        .ok()
+        .flatten();
+    max_id.unwrap_or_default().max(0) as u32
+}
+
+fn _read_msg_ids_after(context: &Context, after_id: u32, limit: u32) -> Result<Vec<u32>, String> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    _block_on(context.sql().query_map_vec(
+        MSG_IDS_AFTER_QUERY,
+        (after_id, DC_CHAT_ID_LAST_SPECIAL.to_u32(), limit),
+        |row| {
+            let msg_id: MsgId = row.get(0)?;
+            Ok(msg_id.to_u32())
+        },
+    ))
+    .map_err(|err| err.to_string())
 }
 
 fn _read_msg_debug_info(context: &Context, msg_id: MsgId) -> String {
@@ -935,6 +967,32 @@ pub unsafe extern "C" fn axichat_dc_get_msg_ids_by_rfc724_mid(
     let ctx = &*context;
     let ids = _read_msg_ids_by_rfc724_mid(ctx, MsgId::new(msg_id));
     _string_to_c(serde_json::to_string(&ids).unwrap_or_else(|_| "[]".to_string()))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_get_max_msg_id(context: *mut dc_context_t) -> u32 {
+    if context.is_null() {
+        return 0;
+    }
+    let ctx = &*context;
+    _read_max_msg_id(ctx)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_get_msg_ids_after(
+    context: *mut dc_context_t,
+    after_id: u32,
+    limit: u32,
+) -> *mut c_char {
+    if context.is_null() {
+        return _string_to_c(json!({"ok": false, "reason": "missing context"}).to_string());
+    }
+    let ctx = &*context;
+    let payload = match _read_msg_ids_after(ctx, after_id, limit) {
+        Ok(ids) => json!({"ok": true, "ids": ids}),
+        Err(reason) => json!({"ok": false, "reason": reason}),
+    };
+    _string_to_c(payload.to_string())
 }
 
 #[no_mangle]
