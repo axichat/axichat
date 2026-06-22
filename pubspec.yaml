@@ -14,7 +14,7 @@ issue_tracker: https://gitlab.com/axichat/axichat/-/issues
 
 environment:
   sdk: '>=3.8.0 <4.0.0'
-  flutter: '>=3.27.0'
+  flutter: '>=3.44.0'
 
 dependencies:
   bloc: ^9.2.0
@@ -102,7 +102,7 @@ dependencies:
   share_handler: ^0.0.25
   image: ^4.7.2
   shimmer: ^3.0.0
-  font_awesome_flutter: ^10.7.0
+  font_awesome_flutter: ^11.0.0
   cryptography: ^2.9.0
   flex_color_picker: ^3.8.0
   crop_your_image: ^2.0.0

@@ -19,7 +19,7 @@ param(
   [ValidateSet("shorebird", "flutter")]
   [string]$Builder = "shorebird",
   [string]$Flavor = "production",
-  [string]$FlutterVersion = "3.41.4",
+  [string]$FlutterVersion = "3.44.3",
   [string]$OutputDir = "dist",
   [string]$Version = "",
   [string]$EmailPublicToken = "",
