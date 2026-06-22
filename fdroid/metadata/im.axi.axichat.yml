@@ -18,7 +18,7 @@ Binaries:
 Builds:
   - versionName: 0.8.0
     versionCode: 2008
-    commit: 33884ebee82d7d99fb7925a0a27a84e0bd893420
+    commit: 6a55c7bd0179ed6ea0a21d3423d86262ccfcd1fb
     sudo:
       - apt-get update
       - apt-get install -y gcc make libc-dev pkg-config perl rustup

@@ -1,4 +1,3 @@
-import groovy.json.JsonSlurper
 import java.io.FileInputStream
 import java.util.Properties
 
@@ -127,68 +126,4 @@ dependencies {
 
 flutter {
     source = "../.."
-}
-
-fun Project.androidDevDependencyPluginNames(): Set<String> {
-    val dependenciesFile = rootProject.projectDir.parentFile.resolve(".flutter-plugins-dependencies")
-    if (!dependenciesFile.exists()) {
-        return emptySet()
-    }
-
-    val root = JsonSlurper().parse(dependenciesFile) as? Map<*, *> ?: return emptySet()
-    val plugins = root["plugins"] as? Map<*, *> ?: return emptySet()
-    val androidPlugins = plugins["android"] as? List<*> ?: return emptySet()
-
-    return androidPlugins.mapNotNull { entry ->
-        val plugin = entry as? Map<*, *> ?: return@mapNotNull null
-        val isDevDependency = plugin["dev_dependency"] as? Boolean ?: false
-        if (!isDevDependency) {
-            return@mapNotNull null
-        }
-        plugin["name"] as? String
-    }.toSet()
-}
-
-fun Project.stripDevOnlyPluginRegistrationsFromGeneratedRegistrant() {
-    val devDependencyPluginNames = androidDevDependencyPluginNames()
-    if (devDependencyPluginNames.isEmpty()) {
-        return
-    }
-
-    val registrantFile = projectDir.resolve("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
-    if (!registrantFile.exists()) {
-        return
-    }
-
-    val originalContents = registrantFile.readText()
-    val removedPluginNames = mutableSetOf<String>()
-
-    var sanitizedContents = originalContents
-    for (pluginName in devDependencyPluginNames) {
-        val registrationBlockPattern = Regex(
-            """(?ms)^    try \{\R      flutterEngine\.getPlugins\(\)\.add\(new .*?\);\R    \} catch \(Exception e\) \{\R      Log\.e\(TAG, "Error registering plugin ${Regex.escape(pluginName)}, .*?", e\);\R    \}\R?"""
-        )
-        val updatedContents = sanitizedContents.replace(registrationBlockPattern, "")
-        if (updatedContents != sanitizedContents) {
-            removedPluginNames += pluginName
-            sanitizedContents = updatedContents
-        }
-    }
-
-    if (sanitizedContents == originalContents) {
-        return
-    }
-
-    registrantFile.writeText(sanitizedContents)
-    logger.lifecycle(
-        "Removed dev-only plugins from GeneratedPluginRegistrant.java for release build: ${removedPluginNames.sorted().joinToString()}"
-    )
-}
-
-tasks.configureEach {
-    if (name.contains("Release") && name.endsWith("JavaWithJavac")) {
-        doFirst {
-            project.stripDevOnlyPluginRegistrationsFromGeneratedRegistrant()
-        }
-    }
 }
