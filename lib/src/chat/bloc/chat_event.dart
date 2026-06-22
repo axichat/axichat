@@ -121,6 +121,15 @@ final class _ChatEmailOriginalContentUpdated extends ChatEvent {
   List<Object?> get props => [snapshot];
 }
 
+final class _ChatEmailFullMessageDownloaded extends ChatEvent {
+  const _ChatEmailFullMessageDownloaded(this.stanzaId);
+
+  final String stanzaId;
+
+  @override
+  List<Object?> get props => [stanzaId];
+}
+
 final class ChatRenderedMessagesHydrationRequested extends ChatEvent {
   ChatRenderedMessagesHydrationRequested(
     Iterable<Message> messages, {
@@ -132,6 +141,24 @@ final class ChatRenderedMessagesHydrationRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [messages, allowOffWindowEmailContentHydration];
+}
+
+final class ChatUnreadDividerScrollCompleted extends ChatEvent {
+  const ChatUnreadDividerScrollCompleted(this.requestId);
+
+  final int requestId;
+
+  @override
+  List<Object?> get props => [requestId];
+}
+
+final class ChatUnreadDividerScrollAbandoned extends ChatEvent {
+  const ChatUnreadDividerScrollAbandoned(this.requestId);
+
+  final int requestId;
+
+  @override
+  List<Object?> get props => [requestId];
 }
 
 final class _PinnedMessagesUpdated extends ChatEvent {

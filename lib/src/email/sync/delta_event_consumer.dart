@@ -955,9 +955,11 @@ class DeltaEventConsumer {
     final chatId = entry.chatId;
     final chat = await _ensureChat(chatId);
     var updated = chat;
+    var changed = false;
     final isArchived = archivedChatIds.contains(chatId);
     if (updated.archived != isArchived) {
       updated = updated.copyWith(archived: isArchived);
+      changed = true;
     }
     DateTime? lastTimestamp;
     String? lastPreview;
@@ -981,13 +983,14 @@ class DeltaEventConsumer {
       }
     }
     if (lastTimestamp != null &&
-        lastTimestamp.isAfter(updated.lastChangeTimestamp)) {
+        !lastTimestamp.isBefore(updated.lastChangeTimestamp)) {
+      changed = true;
       updated = updated.copyWith(
         lastChangeTimestamp: lastTimestamp,
         lastMessage: lastPreview,
       );
     }
-    if (updated != chat) {
+    if (changed) {
       await db.updateChat(updated);
     }
   }
@@ -1215,7 +1218,7 @@ class DeltaEventConsumer {
           updated = updated.copyWith(archived: isArchived);
         }
         if (lastTimestamp != null) {
-          if (lastTimestamp.isAfter(updated.lastChangeTimestamp)) {
+          if (!lastTimestamp.isBefore(updated.lastChangeTimestamp)) {
             updated = updated.copyWith(
               lastChangeTimestamp: lastTimestamp,
               lastMessage: lastPreview,
@@ -1263,10 +1266,10 @@ class DeltaEventConsumer {
             merged = merged.copyWith(unreadCount: unreadCount);
           }
           if (lastTimestamp != null &&
-              updated.lastChangeTimestamp.isAfter(merged.lastChangeTimestamp)) {
+              !lastTimestamp.isBefore(merged.lastChangeTimestamp)) {
             merged = merged.copyWith(
-              lastChangeTimestamp: updated.lastChangeTimestamp,
-              lastMessage: updated.lastMessage,
+              lastChangeTimestamp: lastTimestamp,
+              lastMessage: lastPreview,
             );
           }
           if (merged != refreshed) {
@@ -1802,6 +1805,136 @@ class DeltaEventConsumer {
     if (chatId <= _deltaChatLastSpecialId) {
       return;
     }
+  }
+
+  // Historical compatibility name: read-state reconciliation is intentionally
+  // Drift-only. Delta/Core is only told about notice/seen state by the service.
+  Future<int> reconcileChatReadStateFromCore(int chatId) async {
+    if (chatId <= _deltaChatLastSpecialId) {
+      return 0;
+    }
+    final db = await _db();
+    final rows = await db.getMessagesByDeltaChat(
+      deltaAccountId: _deltaAccountId,
+      deltaChatId: chatId,
+    );
+    return reconcileDeltaMessageReadStateFromCore(
+      chatId: chatId,
+      messageIds: _deltaMessageIdsForReadStateReconcile(rows),
+    );
+  }
+
+  Future<int> reconcileUndisplayedChatReadStateFromCore(
+    int chatId, {
+    bool repairUnreadWhenNoTargets = false,
+  }) async {
+    if (chatId <= _deltaChatLastSpecialId) {
+      return 0;
+    }
+    final db = await _db();
+    const pageStep = 100;
+    var limit = pageStep;
+    var targetIds = const <int>[];
+    while (true) {
+      final rows = await db.getUndisplayedMessagesByDeltaChat(
+        deltaAccountId: _deltaAccountId,
+        deltaChatId: chatId,
+        limit: limit,
+      );
+      targetIds = _deltaMessageIdsForReadStateReconcile(rows);
+      if (targetIds.isNotEmpty || rows.length < limit) {
+        break;
+      }
+      limit += pageStep;
+    }
+    if (targetIds.isEmpty) {
+      if (repairUnreadWhenNoTargets) {
+        await _updateUnreadCount(chatId);
+      }
+      return 0;
+    }
+    return reconcileDeltaMessageReadStateFromCore(
+      chatId: chatId,
+      messageIds: targetIds,
+    );
+  }
+
+  Future<int> reconcileDeltaMessageReadStateFromCore({
+    required int chatId,
+    required Iterable<int> messageIds,
+  }) async {
+    return _markDeltaMessagesDisplayed(chatId: chatId, messageIds: messageIds);
+  }
+
+  Future<int> projectNoticedDeltaMessages({
+    required int chatId,
+    required Iterable<int> messageIds,
+  }) async {
+    return _markDeltaMessagesDisplayed(chatId: chatId, messageIds: messageIds);
+  }
+
+  Future<int> _markDeltaMessagesDisplayed({
+    required int chatId,
+    required Iterable<int> messageIds,
+  }) async {
+    if (chatId <= _deltaChatLastSpecialId) {
+      return 0;
+    }
+    final ids = <int>{};
+    for (final messageId in messageIds) {
+      if (messageId > _deltaMessageIdUnset &&
+          !_isDeltaMessageMarkerId(messageId)) {
+        ids.add(messageId);
+      }
+    }
+    if (ids.isEmpty) {
+      return 0;
+    }
+    final db = await _db();
+    final rows = await db.getMessagesByDeltaIds(
+      ids,
+      deltaAccountId: _deltaAccountId,
+    );
+    var reconciled = 0;
+    final repairedChatJids = <String>{};
+    for (final row in rows) {
+      if (row.deltaChatId != chatId ||
+          row.displayed ||
+          row.isFromAccount(_selfJid) ||
+          row.isFromAccount(_xmppSelfJid)) {
+        continue;
+      }
+      await db.updateMessage(row.copyWith(received: true, displayed: true));
+      repairedChatJids.add(row.chatJid);
+      reconciled += 1;
+    }
+    for (final chatJid in repairedChatJids) {
+      await db.repairUnreadCountForChat(
+        chatJid,
+        selfJid: _xmppSelfJid,
+        emailSelfJid: _selfJid,
+      );
+    }
+    return reconciled;
+  }
+
+  List<int> _deltaMessageIdsForReadStateReconcile(Iterable<Message> rows) {
+    final ids = <int>[];
+    for (final row in rows) {
+      if (row.displayed ||
+          row.isFromAccount(_selfJid) ||
+          row.isFromAccount(_xmppSelfJid)) {
+        continue;
+      }
+      final deltaMsgId = row.deltaMsgId;
+      if (deltaMsgId == null ||
+          deltaMsgId <= _deltaMessageIdUnset ||
+          _isDeltaMessageMarkerId(deltaMsgId)) {
+        continue;
+      }
+      ids.add(deltaMsgId);
+    }
+    return ids;
   }
 
   Future<void> _handleChatDeleted(int chatId) async {
@@ -4287,6 +4420,8 @@ class DeltaEventConsumer {
     }
     if (previous.rfc822BodyContentUnavailable) {
       return message.copyWith(
+        body: null,
+        htmlBody: null,
         rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
         pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
       );
@@ -4347,6 +4482,8 @@ class DeltaEventConsumer {
     }
     if (previous.rfc822BodyContentUnavailable && !msg.needsDownload) {
       return message.copyWith(
+        body: null,
+        htmlBody: null,
         rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
         pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
       );

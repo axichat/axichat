@@ -403,9 +403,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _onChatEmailContentPreparationUpdated,
     );
     on<_ChatEmailOriginalContentUpdated>(_onChatEmailOriginalContentUpdated);
+    on<_ChatEmailFullMessageDownloaded>(_onChatEmailFullMessageDownloaded);
     on<ChatRenderedMessagesHydrationRequested>(
       _onChatRenderedMessagesHydrationRequested,
     );
+    on<ChatUnreadDividerScrollCompleted>(_onChatUnreadDividerScrollCompleted);
+    on<ChatUnreadDividerScrollAbandoned>(_onChatUnreadDividerScrollAbandoned);
     on<_PinnedMessagesUpdated>(
       _onPinnedMessagesUpdated,
       transformer: restartable(),
@@ -611,7 +614,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   static const messageBatchSize = 50;
   static const int _emailMessageBatchSize = 15;
-  static const int _emailUnreadBootstrapMaxWindow = _emailMessageBatchSize * 2;
   static const int _emailHydrationResultChunkSize = 4;
   static const int _emptyMessageCount = 0;
   static const CalendarChatSupport _calendarFragmentPolicy =
@@ -688,6 +690,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       EmailContentPreparationSnapshot.empty;
   EmailOriginalContentSnapshot _emailOriginalContentSnapshot =
       EmailOriginalContentSnapshot.empty;
+  Map<EmailContentJobKey, Message> _pendingUnreadDividerEmailContentMessages =
+      const <EmailContentJobKey, Message>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
   int _messageSubscriptionGeneration = 0;
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
@@ -1082,7 +1086,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool get _mustDeferAutomaticReadStateSync =>
-      _needsUnreadBootstrap || _unreadBootstrapRefreshLimit != null;
+      _needsUnreadBootstrap ||
+      _unreadBootstrapRefreshLimit != null ||
+      state.initialUnreadBootstrapStatus.isLoading ||
+      state.scrollTargetMessageId == unreadDividerScrollTargetMessageId;
 
   bool _xmppAllowedForChat(Chat chat) {
     if (chat.defaultTransport.isEmail || chat.isAxichatWelcomeThread) {
@@ -2148,6 +2155,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (!chatWasUninitialized) {
         _clearVisibleEmailContentMessagesForCurrentChat();
       }
+      _clearPendingUnreadDividerEmailContentMessages();
       _readThresholdMessageIds = const <String>{};
       _pendingReadStateSyncRequest = null;
       _unreadBoundaryStanzaId = null;
@@ -2247,6 +2255,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? null
               : state.lastSeenPinnedMessageAt,
           unreadBoundaryStanzaId: state.unreadBoundaryStanzaId,
+          initialUnreadBootstrapStatus:
+              seededUnreadCount != null &&
+                  seededUnreadCount > _emptyMessageCount
+              ? ChatInitialUnreadBootstrapStatus.loading
+              : paginationContextChanged
+              ? ChatInitialUnreadBootstrapStatus.idle
+              : state.initialUnreadBootstrapStatus,
         ),
       ),
     );
@@ -2352,25 +2367,55 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
         emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
       );
+      _continueUnreadBootstrapIfNeeded(
+        rawBoundaryStanzaId: rawBoundary,
+        visibleBoundaryStanzaId: boundary,
+      );
+      final nextInitialUnreadBootstrapStatus =
+          _nextInitialUnreadBootstrapStatus(
+            rawBoundaryStanzaId: rawBoundary,
+            visibleBoundaryStanzaId: boundary,
+          );
       if (boundary != state.unreadBoundaryStanzaId) {
         final shouldRequestUnreadScroll =
             boundary != null && !_unreadBoundaryScrollRequested;
         if (shouldRequestUnreadScroll) {
           _unreadBoundaryScrollRequested = true;
+          _retainPendingUnreadDividerEmailContentMessages(
+            _unreadDividerEmailContentMessages(
+              messages: state.items,
+              unreadBoundaryStanzaId: boundary,
+              groupLeaderByMessageId: state.attachmentGroupLeaderByMessageId,
+              attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
+              emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+            ),
+          );
+          _requestPendingUnreadDividerEmailContentPreparation();
         }
         emit(
+          _withEmailContentPreparationProjection(
+            state.copyWith(
+              unreadBoundaryStanzaId: boundary,
+              scrollTargetMessageId: shouldRequestUnreadScroll
+                  ? unreadDividerScrollTargetMessageId
+                  : state.scrollTargetMessageId,
+              scrollTargetRequestId: shouldRequestUnreadScroll
+                  ? state.scrollTargetRequestId + 1
+                  : state.scrollTargetRequestId,
+              initialUnreadBootstrapStatus: nextInitialUnreadBootstrapStatus,
+            ),
+          ),
+        );
+      } else if (nextInitialUnreadBootstrapStatus !=
+          state.initialUnreadBootstrapStatus) {
+        emit(
           state.copyWith(
-            unreadBoundaryStanzaId: boundary,
-            scrollTargetMessageId: shouldRequestUnreadScroll
-                ? unreadDividerScrollTargetMessageId
-                : state.scrollTargetMessageId,
-            scrollTargetRequestId: shouldRequestUnreadScroll
-                ? state.scrollTargetRequestId + 1
-                : state.scrollTargetRequestId,
+            initialUnreadBootstrapStatus: nextInitialUnreadBootstrapStatus,
           ),
         );
       }
       if (boundary != null) {
+        _needsUnreadBootstrap = false;
         _pendingUnreadBoundaryCount = null;
         _sessionUnreadBoundaryResolved = true;
       }
@@ -2846,7 +2891,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachmentsByMessageId: prepared.attachmentsByMessageId,
       emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
     );
+    _continueUnreadBootstrapIfNeeded(
+      rawBoundaryStanzaId: rawUnreadBoundary,
+      visibleBoundaryStanzaId: unreadBoundary,
+    );
+    final nextInitialUnreadBootstrapStatus = _nextInitialUnreadBootstrapStatus(
+      rawBoundaryStanzaId: rawUnreadBoundary,
+      visibleBoundaryStanzaId: unreadBoundary,
+    );
     if (unreadBoundary != null) {
+      _needsUnreadBootstrap = false;
       _pendingUnreadBoundaryCount = null;
       _sessionUnreadBoundaryResolved = true;
     }
@@ -2880,6 +2934,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final nextScrollTargetMessageId = shouldEmitScrollTarget
         ? pendingScrollTargetMessageId
         : state.scrollTargetMessageId;
+    if (shouldRequestUnreadScroll) {
+      _retainPendingUnreadDividerEmailContentMessages(
+        _unreadDividerEmailContentMessages(
+          messages: filteredItems,
+          unreadBoundaryStanzaId: unreadBoundary,
+          groupLeaderByMessageId: prepared.groupLeaderByMessageId,
+          attachmentsByMessageId: prepared.attachmentsByMessageId,
+          emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+        ),
+      );
+      _requestPendingUnreadDividerEmailContentPreparation();
+    }
     emit(
       _withEmailContentPreparationProjection(
         state.copyWith(
@@ -2900,6 +2966,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               shouldRequestUnreadScroll || shouldEmitScrollTarget
               ? state.scrollTargetRequestId + 1
               : state.scrollTargetRequestId,
+          initialUnreadBootstrapStatus: nextInitialUnreadBootstrapStatus,
         ),
       ),
     );
@@ -2948,7 +3015,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         metadataIds: nextMetadataIds,
         syncFileMetadata: true,
       );
-      _reportVisibleEmailContentMessages(filteredItems);
       hydrationQueued = true;
     }
     await _maybeBootstrapUnreadWindow(
@@ -2957,6 +3023,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       pseudoCount: filteredItems
           .where((message) => message.pseudoMessageType != null)
           .length,
+      emit: emit,
     );
     if (readStateWasDeferred && !_mustDeferAutomaticReadStateSync) {
       await _syncEmailChatNoticeForActiveChat();
@@ -3052,7 +3119,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachmentsByMessageId: prepared.attachmentsByMessageId,
       emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
     );
+    _continueUnreadBootstrapIfNeeded(
+      rawBoundaryStanzaId: rawUnreadBoundary,
+      visibleBoundaryStanzaId: unreadBoundary,
+    );
+    final nextInitialUnreadBootstrapStatus = _nextInitialUnreadBootstrapStatus(
+      rawBoundaryStanzaId: rawUnreadBoundary,
+      visibleBoundaryStanzaId: unreadBoundary,
+    );
     if (unreadBoundary != null) {
+      _needsUnreadBootstrap = false;
       _pendingUnreadBoundaryCount = null;
       _sessionUnreadBoundaryResolved = true;
     }
@@ -3080,6 +3156,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final nextScrollTargetMessageId = shouldEmitScrollTarget
         ? pendingScrollTargetMessageId
         : state.scrollTargetMessageId;
+    if (shouldRequestUnreadScroll) {
+      _retainPendingUnreadDividerEmailContentMessages(
+        _unreadDividerEmailContentMessages(
+          messages: filteredItems,
+          unreadBoundaryStanzaId: unreadBoundary,
+          groupLeaderByMessageId: prepared.groupLeaderByMessageId,
+          attachmentsByMessageId: prepared.attachmentsByMessageId,
+          emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+        ),
+      );
+      _requestPendingUnreadDividerEmailContentPreparation();
+    }
     emit(
       _withEmailContentPreparationProjection(
         state.copyWith(
@@ -3098,6 +3186,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               shouldRequestUnreadScroll || shouldEmitScrollTarget
               ? state.scrollTargetRequestId + 1
               : state.scrollTargetRequestId,
+          initialUnreadBootstrapStatus: nextInitialUnreadBootstrapStatus,
         ),
       ),
     );
@@ -3110,7 +3199,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       metadataIds: nextMetadataIds,
       syncFileMetadata: true,
     );
-    _reportVisibleEmailContentMessages(filteredItems);
     return true;
   }
 
@@ -3123,14 +3211,123 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chatJid == null || chatJid.trim().isEmpty) {
       return false;
     }
-    final visibleMessages = messages
-        .where(_messageBelongsToCurrentChat)
-        .toList(growable: false);
+    final messagesByKey = <EmailContentJobKey, Message>{};
+    void addMessage(Message message) {
+      if (!_messageBelongsToCurrentChat(message)) {
+        return;
+      }
+      if (!_messageNeedsVisibleEmailContentPreparation(message)) {
+        return;
+      }
+      final key = _emailContentJobKey(message);
+      if (key != null) {
+        messagesByKey[key] = message;
+      }
+    }
+
+    for (final message in messages) {
+      addMessage(message);
+    }
+    final visibleMessages = messagesByKey.values.toList(growable: false);
     emailService.reportVisibleEmailContentMessages(
       chatJid: chatJid,
       messages: visibleMessages,
     );
     return visibleMessages.isNotEmpty;
+  }
+
+  bool _messageNeedsVisibleEmailContentPreparation(Message message) {
+    if (!message.isEmailBacked || message.rfc822BodyContentUnavailable) {
+      return false;
+    }
+    if (!_messageHasProjectedAttachments(message)) {
+      return true;
+    }
+    final hasReadableText =
+        message.body?.trim().isNotEmpty == true ||
+        message.subject?.trim().isNotEmpty == true;
+    if (hasReadableText) {
+      return true;
+    }
+    if (HtmlContentCodec.normalizeHtml(message.htmlBody) != null) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _messageHasProjectedAttachments(Message message) {
+    final attachmentIds =
+        state.attachmentMetadataIdsByMessageId[_messageKey(message)];
+    if (attachmentIds?.any((id) => id.trim().isNotEmpty) == true) {
+      return true;
+    }
+    final fallbackId = message.fileMetadataID?.trim();
+    return fallbackId != null && fallbackId.isNotEmpty;
+  }
+
+  void _refreshEmailContentPreparationSnapshot() {
+    final snapshot = _emailService?.contentPreparationSnapshot;
+    if (snapshot != null) {
+      _emailContentPreparationSnapshot = snapshot;
+    }
+  }
+
+  void _continueUnreadBootstrapIfNeeded({
+    required String? rawBoundaryStanzaId,
+    required String? visibleBoundaryStanzaId,
+  }) {
+    if (visibleBoundaryStanzaId != null ||
+        state.initialUnreadBootstrapStatus ==
+            ChatInitialUnreadBootstrapStatus.exhausted) {
+      return;
+    }
+    final pendingCount = _pendingUnreadBoundaryCount;
+    if ((pendingCount != null && pendingCount > _emptyMessageCount) ||
+        rawBoundaryStanzaId?.trim().isNotEmpty == true) {
+      _needsUnreadBootstrap = true;
+    }
+  }
+
+  ChatInitialUnreadBootstrapStatus _nextInitialUnreadBootstrapStatus({
+    required String? rawBoundaryStanzaId,
+    required String? visibleBoundaryStanzaId,
+  }) {
+    if (visibleBoundaryStanzaId != null) {
+      return ChatInitialUnreadBootstrapStatus.ready;
+    }
+    if (state.initialUnreadBootstrapStatus ==
+        ChatInitialUnreadBootstrapStatus.exhausted) {
+      return ChatInitialUnreadBootstrapStatus.exhausted;
+    }
+    final pendingCount = _pendingUnreadBoundaryCount;
+    if (_needsUnreadBootstrap ||
+        (pendingCount != null && pendingCount > _emptyMessageCount) ||
+        rawBoundaryStanzaId?.trim().isNotEmpty == true) {
+      return ChatInitialUnreadBootstrapStatus.loading;
+    }
+    return state.initialUnreadBootstrapStatus;
+  }
+
+  void _emitInitialUnreadBootstrapStatus(
+    ChatInitialUnreadBootstrapStatus status,
+    Emitter<ChatState> emit,
+  ) {
+    final shouldClearUnreadDividerScroll =
+        status == ChatInitialUnreadBootstrapStatus.exhausted &&
+        state.scrollTargetMessageId == unreadDividerScrollTargetMessageId;
+    if (emit.isDone ||
+        (state.initialUnreadBootstrapStatus == status &&
+            !shouldClearUnreadDividerScroll)) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        initialUnreadBootstrapStatus: status,
+        scrollTargetMessageId: shouldClearUnreadDividerScroll
+            ? null
+            : state.scrollTargetMessageId,
+      ),
+    );
   }
 
   void _clearVisibleEmailContentMessagesForCurrentChat() {
@@ -3139,6 +3336,132 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     _emailService?.clearVisibleEmailContentMessages(chatJid);
+  }
+
+  void _retainPendingUnreadDividerEmailContentMessages(
+    Iterable<Message> messages,
+  ) {
+    final retained = <EmailContentJobKey, Message>{};
+    for (final message in messages) {
+      if (!_messageBelongsToCurrentChat(message)) {
+        continue;
+      }
+      if (!_messageNeedsVisibleEmailContentPreparation(message)) {
+        continue;
+      }
+      final key = _emailContentJobKey(message);
+      if (key != null) {
+        retained[key] = message;
+      }
+    }
+    _pendingUnreadDividerEmailContentMessages =
+        Map<EmailContentJobKey, Message>.unmodifiable(retained);
+  }
+
+  void _clearPendingUnreadDividerEmailContentMessages() {
+    if (_pendingUnreadDividerEmailContentMessages.isEmpty) {
+      return;
+    }
+    _pendingUnreadDividerEmailContentMessages =
+        const <EmailContentJobKey, Message>{};
+  }
+
+  void _requestPendingUnreadDividerEmailContentPreparation() {
+    final emailService = _emailService;
+    if (emailService == null ||
+        _pendingUnreadDividerEmailContentMessages.isEmpty) {
+      return;
+    }
+    for (final message in _pendingUnreadDividerEmailContentMessages.values) {
+      unawaited(
+        emailService
+            .requestEmailContentPreparation(
+              message,
+              priority: EmailContentPreparationPriority.manual,
+            )
+            .catchError((Object error, StackTrace stackTrace) {
+              _log.fine(
+                'Initial unread email content preparation failed.',
+                error,
+                stackTrace,
+              );
+              return false;
+            }),
+      );
+    }
+    _refreshEmailContentPreparationSnapshot();
+  }
+
+  List<Message> _unreadDividerEmailContentMessages({
+    required List<Message> messages,
+    required String? unreadBoundaryStanzaId,
+    required Map<String, String> groupLeaderByMessageId,
+    required Map<String, List<String>> attachmentsByMessageId,
+    required Map<int, String> emailFullHtmlByDeltaId,
+  }) {
+    if (unreadBoundaryStanzaId == null) {
+      return const <Message>[];
+    }
+    int? boundaryIndex;
+    for (var index = 0; index < messages.length; index += 1) {
+      if (messages[index].stanzaID == unreadBoundaryStanzaId) {
+        boundaryIndex = index;
+        break;
+      }
+    }
+    if (boundaryIndex == null) {
+      return const <Message>[];
+    }
+    final rfcEmailGroupsByStanzaId = buildRfcEmailGroupsByMessageStanzaId(
+      messages: messages,
+      attachmentsForMessage: (message) =>
+          attachmentsByMessageId[_messageKey(message)] ?? const <String>[],
+      bodyTextForMessage: (message) => rfcEmailBodyText(
+        message: message,
+        resolvedHtmlBody: resolvedEmailHtmlBodyForMessage(
+          message: message,
+          emailFullHtmlByDeltaId: emailFullHtmlByDeltaId,
+          deriveHtmlIfMissing: false,
+        ),
+        deriveHtmlIfMissing: false,
+      ),
+      isAuthoritativeBody: (message) => message.hasRfc822BodyContent,
+      requireMeaningfulBody: false,
+    );
+    final byStanzaId = <String, Message>{};
+    final groupLeaderIds = <String>{};
+    final rfcGroupLeaderStanzaIds = <String>{};
+    void addTrackedMessage(Message message) {
+      byStanzaId[message.stanzaID] = message;
+      final leaderId = groupLeaderByMessageId[_messageKey(message)];
+      if (leaderId != null) {
+        groupLeaderIds.add(leaderId);
+      }
+      final group = rfcEmailGroupsByStanzaId[message.stanzaID];
+      final groupLeaderStanzaId = group?.leader.stanzaID.trim();
+      if (groupLeaderStanzaId != null && groupLeaderStanzaId.isNotEmpty) {
+        rfcGroupLeaderStanzaIds.add(groupLeaderStanzaId);
+      }
+    }
+
+    for (var index = 0; index <= boundaryIndex; index += 1) {
+      addTrackedMessage(messages[index]);
+    }
+    if (groupLeaderIds.isNotEmpty || rfcGroupLeaderStanzaIds.isNotEmpty) {
+      for (final message in messages) {
+        final leaderId = groupLeaderByMessageId[_messageKey(message)];
+        final group = rfcEmailGroupsByStanzaId[message.stanzaID];
+        final groupLeaderStanzaId = group?.leader.stanzaID.trim();
+        if ((leaderId != null && groupLeaderIds.contains(leaderId)) ||
+            (groupLeaderStanzaId != null &&
+                rfcGroupLeaderStanzaIds.contains(groupLeaderStanzaId))) {
+          addTrackedMessage(message);
+        }
+      }
+    }
+    return byStanzaId.values
+        .where((message) => _emailContentJobKey(message) != null)
+        .toList(growable: false);
   }
 
   ChatState _withEmailContentPreparationProjection(ChatState base) {
@@ -3206,10 +3529,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Set<int> _emailFullMessageLoadingForState(ChatState base) {
-    final activeKeys = <EmailContentJobKey>{
-      ..._emailContentPreparationSnapshot.activeBodyHydrationKeys,
-      ..._emailContentPreparationSnapshot.activeHtmlDerivationKeys,
-    };
+    final activeKeys =
+        _emailContentPreparationSnapshot.activeLoadingIndicatorKeys;
     if (activeKeys.isEmpty) {
       return const <int>{};
     }
@@ -3435,10 +3756,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  void _onChatEmailContentPreparationUpdated(
+  Future<void> _onChatEmailContentPreparationUpdated(
     _ChatEmailContentPreparationUpdated event,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
+    final previousBodyKeys =
+        _emailContentPreparationSnapshot.activeBodyHydrationKeys;
+    final completedBodyKeys = previousBodyKeys.difference(
+      event.snapshot.activeBodyHydrationKeys,
+    );
+    if (completedBodyKeys.isNotEmpty) {
+      await _refreshVisibleAttachmentProjection(emit);
+      if (emit.isDone) {
+        return;
+      }
+    }
     _emailContentPreparationSnapshot = event.snapshot;
     emit(_withEmailContentPreparationProjection(state));
   }
@@ -3449,6 +3781,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) {
     _emailOriginalContentSnapshot = event.snapshot;
     emit(_withEmailContentPreparationProjection(state));
+  }
+
+  Future<void> _onChatEmailFullMessageDownloaded(
+    _ChatEmailFullMessageDownloaded event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (event.stanzaId.trim().isEmpty) {
+      return;
+    }
+    await _refreshVisibleAttachmentProjection(emit);
   }
 
   void _onChatRenderedMessagesHydrationRequested(
@@ -3486,6 +3828,42 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         'allowOffWindow': event.allowOffWindowEmailContentHydration,
       },
     );
+  }
+
+  Future<void> _onChatUnreadDividerScrollCompleted(
+    ChatUnreadDividerScrollCompleted event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (event.requestId != state.scrollTargetRequestId ||
+        state.scrollTargetMessageId != unreadDividerScrollTargetMessageId) {
+      return;
+    }
+    _clearPendingUnreadDividerEmailContentMessages();
+    emit(
+      state.copyWith(
+        scrollTargetMessageId: null,
+        initialUnreadBootstrapStatus: ChatInitialUnreadBootstrapStatus.idle,
+      ),
+    );
+    await _syncEmailChatNoticeForActiveChat();
+  }
+
+  Future<void> _onChatUnreadDividerScrollAbandoned(
+    ChatUnreadDividerScrollAbandoned event,
+    Emitter<ChatState> emit,
+  ) async {
+    if (event.requestId != state.scrollTargetRequestId ||
+        state.scrollTargetMessageId != unreadDividerScrollTargetMessageId) {
+      return;
+    }
+    _clearPendingUnreadDividerEmailContentMessages();
+    emit(
+      state.copyWith(
+        scrollTargetMessageId: null,
+        initialUnreadBootstrapStatus: ChatInitialUnreadBootstrapStatus.idle,
+      ),
+    );
+    await _syncEmailChatNoticeForActiveChat();
   }
 
   List<Message> _messagesForRenderedEmailContentHydration(
@@ -3750,7 +4128,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     if (boundaryMessage == null) {
-      return boundary;
+      return null;
     }
     final rfcEmailGroup = buildRfcEmailGroupsByMessageStanzaId(
       messages: messages,
@@ -3772,16 +4150,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (rfcEmailLeaderStanzaId != null && rfcEmailLeaderStanzaId.isNotEmpty) {
       return rfcEmailLeaderStanzaId;
     }
-    final boundaryMessageId = boundaryMessage.id;
-    if (boundaryMessageId == null || boundaryMessageId.isEmpty) {
-      return boundary;
-    }
+    final boundaryMessageId = _messageKey(boundaryMessage);
     final leaderId = groupLeaderByMessageId[boundaryMessageId];
     if (leaderId == null || leaderId == boundaryMessageId) {
       return boundary;
     }
     for (final message in messages) {
-      if (message.id != leaderId) {
+      if (_messageKey(message) != leaderId) {
         continue;
       }
       final leaderBoundary = message.stanzaID.trim();
@@ -3828,6 +4203,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _unreadBoundaryStanzaId = null;
       return null;
     }
+    if (chat.defaultTransport.isEmail) {
+      final oldestEmailUnread = await _emailService
+          ?.loadOldestUnreadEmailBackedMessageForChat(
+            chat,
+            selfJid: selfJid,
+            emailSelfJid: state.emailSelfJid,
+            unreadCount: targetUnreadCount,
+            filter: state.viewFilter,
+          );
+      final oldestEmailStanzaId = oldestEmailUnread?.stanzaID.trim();
+      _unreadBoundaryStanzaId =
+          oldestEmailStanzaId == null || oldestEmailStanzaId.isEmpty
+          ? null
+          : oldestEmailStanzaId;
+      return _unreadBoundaryStanzaId;
+    }
     final oldestUnread = await _messageService.loadOldestUnreadMessageForChat(
       chat,
       selfJid: selfJid,
@@ -3846,6 +4237,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required int filteredOutCount,
     required int pseudoCount,
+    required Emitter<ChatState> emit,
   }) async {
     if (!_needsUnreadBootstrap) {
       return;
@@ -3853,21 +4245,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final unreadTargetCount = _pendingUnreadBoundaryCount ?? chat.unreadCount;
     if (unreadTargetCount <= _emptyMessageCount) {
       _needsUnreadBootstrap = false;
+      _emitInitialUnreadBootstrapStatus(
+        ChatInitialUnreadBootstrapStatus.idle,
+        emit,
+      );
       return;
     }
     _needsUnreadBootstrap = false;
+    _emitInitialUnreadBootstrapStatus(
+      ChatInitialUnreadBootstrapStatus.loading,
+      emit,
+    );
     final desiredWindow = unreadTargetCount + filteredOutCount + pseudoCount;
     final batchSize = _timelineBatchSizeForChat(chat);
     final unboundedDesiredLimit = desiredWindow > batchSize
         ? desiredWindow
         : batchSize;
-    final emailMaxLimit = chat.isEmailBacked
-        ? _emailUnreadBootstrapMaxWindow
-        : null;
-    final desiredLimit =
-        emailMaxLimit != null && unboundedDesiredLimit > emailMaxLimit
-        ? emailMaxLimit
-        : unboundedDesiredLimit;
+    final desiredLimit = unboundedDesiredLimit;
     final storedBoundaryStanzaId = _unreadBoundaryStanzaId;
     Message? boundaryMessage;
     if (storedBoundaryStanzaId != null) {
@@ -3875,6 +4269,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         chat: chat,
         messageId: storedBoundaryStanzaId,
       );
+    }
+    if (chat.defaultTransport.isEmail) {
+      final boundary = await _emailService
+          ?.loadOldestUnreadEmailBackedMessageForChat(
+            chat,
+            selfJid: selfJid,
+            emailSelfJid: state.emailSelfJid,
+            unreadCount: unreadTargetCount,
+            filter: state.viewFilter,
+          );
+      final boundaryStanzaId = boundary?.stanzaID.trim();
+      if (boundary != null &&
+          boundaryStanzaId != null &&
+          boundaryStanzaId.isNotEmpty) {
+        _unreadBoundaryStanzaId = boundaryStanzaId;
+        await _subscribeThroughMessage(chat: chat, target: boundary);
+        return;
+      }
+      _pendingUnreadBoundaryCount = null;
+      _clearPendingUnreadDividerEmailContentMessages();
+      _emitInitialUnreadBootstrapStatus(
+        ChatInitialUnreadBootstrapStatus.exhausted,
+        emit,
+      );
+      return;
     }
     if (_xmppAllowedForChat(chat)) {
       await _ensureUnreadWindowLoaded(
@@ -3896,7 +4315,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (desiredLimit != _currentMessageLimit) {
       _unreadBootstrapRefreshLimit = desiredLimit;
       await _subscribeToMessages(limit: desiredLimit, filter: state.viewFilter);
+      return;
     }
+    _pendingUnreadBoundaryCount = null;
+    _clearPendingUnreadDividerEmailContentMessages();
+    _emitInitialUnreadBootstrapStatus(
+      ChatInitialUnreadBootstrapStatus.exhausted,
+      emit,
+    );
   }
 
   Future<void> _onPinnedMessagesUpdated(
@@ -4060,6 +4486,70 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(state.copyWith(fileMetadataById: nextMetadataById));
   }
 
+  Future<void> _refreshVisibleAttachmentProjection(
+    Emitter<ChatState> emit,
+  ) async {
+    if (state.items.isEmpty) {
+      return;
+    }
+    final attachmentMaps = await _loadAttachmentMaps(state.items);
+    if (emit.isDone) {
+      return;
+    }
+    final nextMetadataIds = _metadataIdsForState(
+      messages: state.items,
+      attachmentsByMessageId: attachmentMaps.attachmentsByMessageId,
+      pinnedMessages: state.pinnedMessages,
+    );
+    await _syncFileMetadataSubscriptions(nextMetadataIds);
+    if (emit.isDone) {
+      return;
+    }
+    final metadataIdsToLoad = <String>{
+      for (final id in nextMetadataIds)
+        if (state.fileMetadataById[id] == null) id,
+    };
+    final loadedMetadata = metadataIdsToLoad.isEmpty
+        ? const <FileMetadataData>[]
+        : await _messageService.loadFileMetadataByIds(metadataIdsToLoad);
+    if (emit.isDone) {
+      return;
+    }
+    final loadedMetadataById = <String, FileMetadataData>{
+      for (final metadata in loadedMetadata) metadata.id: metadata,
+    };
+    final nextFileMetadataById = _pruneFileMetadataById(
+      metadataIds: nextMetadataIds,
+      existing: <String, FileMetadataData?>{
+        ...state.fileMetadataById,
+        ...loadedMetadataById,
+      },
+    );
+    if (_stringListMapEquals(
+          state.attachmentMetadataIdsByMessageId,
+          attachmentMaps.attachmentsByMessageId,
+        ) &&
+        mapEquals(
+          state.attachmentGroupLeaderByMessageId,
+          attachmentMaps.groupLeaderByMessageId,
+        ) &&
+        mapEquals(state.fileMetadataById, nextFileMetadataById)) {
+      return;
+    }
+    emit(
+      _withEmailContentPreparationProjection(
+        state.copyWith(
+          attachmentMetadataIdsByMessageId:
+              attachmentMaps.attachmentsByMessageId,
+          attachmentGroupLeaderByMessageId:
+              attachmentMaps.groupLeaderByMessageId,
+          fileMetadataById: nextFileMetadataById,
+        ),
+      ),
+    );
+    _reportVisibleEmailContentMessages(state.items);
+  }
+
   Set<String> _metadataIdsForState({
     required List<Message> messages,
     required Map<String, List<String>> attachmentsByMessageId,
@@ -4109,6 +4599,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       nextMetadataById[id] = existing[id];
     }
     return nextMetadataById;
+  }
+
+  bool _stringListMapEquals(
+    Map<String, List<String>> left,
+    Map<String, List<String>> right,
+  ) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (final entry in left.entries) {
+      final rightValue = right[entry.key];
+      if (rightValue == null || !listEquals(entry.value, rightValue)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _syncFileMetadataSubscriptions(Set<String> metadataIds) async {
@@ -6815,6 +7321,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _emailOriginalContentSubscription = null;
     await _detachAndCancelSubscription(originalContentSub);
     if (emit.isDone) return;
+    _clearPendingUnreadDividerEmailContentMessages();
     _clearVisibleEmailContentMessagesForCurrentChat();
     _emailService = emailService;
     _emailContentPreparationSnapshot =
@@ -8414,6 +8921,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final chatJid = event.chatJid.trim();
     if (chatJid.isEmpty) return;
+    _clearPendingUnreadDividerEmailContentMessages();
     const forcedFilter = MessageTimelineFilter.allWithContact;
     final effectiveFilter = _forceAllWithContactViewFilter
         ? forcedFilter
@@ -9546,10 +10054,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<bool> downloadFullEmailMessage(Message message) async {
     final emailService = _emailService;
     if (emailService == null) return false;
-    return emailService.requestEmailContentPreparation(
+    final downloaded = await emailService.requestEmailContentPreparation(
       message,
       priority: EmailContentPreparationPriority.manual,
     );
+    if (downloaded) {
+      add(_ChatEmailFullMessageDownloaded(message.stanzaID));
+    }
+    return downloaded;
   }
 
   Future<bool> downloadInboundAttachment({

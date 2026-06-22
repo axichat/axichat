@@ -215,6 +215,12 @@ abstract interface class XmppDatabase implements Database {
     required int deltaChatId,
   });
 
+  Future<List<Message>> getUndisplayedMessagesByDeltaChat({
+    required int deltaAccountId,
+    required int deltaChatId,
+    required int limit,
+  });
+
   Future<Message?> getOldestUnreadEmailBackedMessageForChat(
     String jid, {
     String? selfJid,
@@ -825,6 +831,11 @@ abstract interface class XmppDatabase implements Database {
   );
 
   Future<List<int>> getDeltaChatIdsForAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  });
+
+  Future<List<int>> getMessageDeltaChatIdsForAccount({
     required String chatJid,
     required int deltaAccountId,
   });
@@ -2826,7 +2837,11 @@ WHERE transport IS NULL
         if (from < 72) {
           await _createLocalPromptStatesTable();
         }
-        if (from < 73) {
+        if (from < 73 &&
+            !(await _tableHasColumn(
+              messages.actualTableName,
+              'delta_seen_synced',
+            ))) {
           await m.addColumn(messages, messages.deltaSeenSynced);
         }
         if (from < 74) {
@@ -4071,6 +4086,32 @@ WHERE stanza_i_d = ?
             (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
             (tbl) => OrderingTerm.asc(tbl.stanzaID),
           ]))
+        .get();
+  }
+
+  @override
+  Future<List<Message>> getUndisplayedMessagesByDeltaChat({
+    required int deltaAccountId,
+    required int deltaChatId,
+    required int limit,
+  }) {
+    if (deltaAccountId <= 0 || deltaChatId <= 0 || limit <= 0) {
+      return Future.value(const <Message>[]);
+    }
+    return (select(messages)
+          ..where(
+            (tbl) =>
+                tbl.deltaAccountId.equals(deltaAccountId) &
+                tbl.deltaChatId.equals(deltaChatId) &
+                tbl.deltaMsgId.isNotNull() &
+                tbl.displayed.equals(false),
+          )
+          ..orderBy([
+            (tbl) => OrderingTerm.asc(tbl.timestamp),
+            (tbl) => OrderingTerm.asc(tbl.deltaMsgId),
+            (tbl) => OrderingTerm.asc(tbl.stanzaID),
+          ])
+          ..limit(limit))
         .get();
   }
 
@@ -5509,7 +5550,7 @@ UPDATE chats
 SET last_change_timestamp = ?,
     last_message = ?
 WHERE jid = ?
-  AND (last_change_timestamp IS NULL OR last_change_timestamp < ?)
+  AND (last_change_timestamp IS NULL OR last_change_timestamp <= ?)
 ''',
       variables: [
         Variable<DateTime>(timestamp),
@@ -9033,6 +9074,31 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   }
 
   @override
+  Future<List<int>> getMessageDeltaChatIdsForAccount({
+    required String chatJid,
+    required int deltaAccountId,
+  }) async {
+    final normalizedJid = chatJid.trim();
+    if (normalizedJid.isEmpty || deltaAccountId <= 0) {
+      return const <int>[];
+    }
+    final rows =
+        await (selectOnly(messages)
+              ..addColumns([messages.deltaChatId])
+              ..where(
+                messages.chatJid.equals(normalizedJid) &
+                    messages.deltaAccountId.equals(deltaAccountId) &
+                    messages.deltaChatId.isNotNull(),
+              )
+              ..orderBy([OrderingTerm.desc(messages.deltaChatId)]))
+            .get();
+    return {
+      for (final row in rows)
+        if (row.read(messages.deltaChatId) case final int chatId) chatId,
+    }.toList(growable: false);
+  }
+
+  @override
   Future<int?> getDeltaChatIdForAccount({
     required String chatJid,
     required int deltaAccountId,
@@ -10997,11 +11063,6 @@ WHERE jid = ?
     }
     final timestamp = lastMessage.timestamp;
     if (timestamp == null || timestamp.isBefore(chat.lastChangeTimestamp)) {
-      if (clearStaleLastMessage && chat.lastMessage != null) {
-        await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
-          const ChatsCompanion(lastMessage: Value(null)),
-        );
-      }
       return;
     }
     final lastMessagePreview = await _messagePreview(

@@ -749,6 +749,12 @@ class _ChatState extends State<Chat> {
   final _mountedTimelineItemIds = <String>{};
   var _activeUnreadDividerScrollRequestId = 0;
   var _completedUnreadDividerScrollRequestId = 0;
+  var _unreadDividerEmailReadinessRequestId = 0;
+  Set<int> _unreadDividerEmailReadinessTrackedIds = const <int>{};
+  var _unreadDividerEmailReadinessChecked = false;
+  var _unreadDividerEmailReadinessRecheckToken = 0;
+  var _unreadDividerScrollPrepRetryRequestId = 0;
+  var _unreadDividerScrollPrepRetryScheduled = false;
   var _initialEmailViewportWarmupStatus =
       _InitialEmailViewportWarmupStatus.pending;
   Set<String> _initialEmailViewportStanzaIds = const <String>{};
@@ -1947,7 +1953,144 @@ class _ChatState extends State<Chat> {
   }
 
   bool _initialTimelineReadinessPending(ChatState state) {
-    return state.messagesLoaded && _unreadDividerScrollTargetPending(state);
+    return state.messagesLoaded &&
+        (state.initialUnreadBootstrapStatus.isLoading ||
+            _unreadDividerScrollTargetPending(state));
+  }
+
+  Set<int> _trackedUnreadDividerEmailDeltaIds(ChatState state) {
+    final unreadBoundaryStanzaId = state.unreadBoundaryStanzaId;
+    if (unreadBoundaryStanzaId == null) {
+      return const <int>{};
+    }
+    int? boundaryIndex;
+    for (var index = 0; index < state.items.length; index += 1) {
+      if (state.items[index].stanzaID == unreadBoundaryStanzaId) {
+        boundaryIndex = index;
+        break;
+      }
+    }
+    if (boundaryIndex == null) {
+      return const <int>{};
+    }
+    String messageKey(Message message) => message.id ?? message.stanzaID;
+    final rfcEmailGroupsByStanzaId = buildRfcEmailGroupsByMessageStanzaId(
+      messages: state.items,
+      attachmentsForMessage: (message) =>
+          state.attachmentMetadataIdsByMessageId[messageKey(message)] ??
+          const <String>[],
+      bodyTextForMessage: (message) => rfcEmailBodyText(
+        message: message,
+        resolvedHtmlBody: resolvedEmailHtmlBodyForMessage(
+          message: message,
+          emailFullHtmlByDeltaId: state.emailFullHtmlByDeltaId,
+          deriveHtmlIfMissing: false,
+        ),
+        deriveHtmlIfMissing: false,
+      ),
+      isAuthoritativeBody: (message) => message.hasRfc822BodyContent,
+      requireMeaningfulBody: false,
+    );
+    final trackedMessageIds = <String>{};
+    final groupLeaderIds = <String>{};
+    final rfcGroupLeaderStanzaIds = <String>{};
+    void addTrackedMessage(Message message) {
+      trackedMessageIds.add(message.stanzaID);
+      final leaderId =
+          state.attachmentGroupLeaderByMessageId[messageKey(message)];
+      if (leaderId != null) {
+        groupLeaderIds.add(leaderId);
+      }
+      final group = rfcEmailGroupsByStanzaId[message.stanzaID];
+      final groupLeaderStanzaId = group?.leader.stanzaID.trim();
+      if (groupLeaderStanzaId != null && groupLeaderStanzaId.isNotEmpty) {
+        rfcGroupLeaderStanzaIds.add(groupLeaderStanzaId);
+      }
+    }
+
+    for (var index = 0; index <= boundaryIndex; index += 1) {
+      addTrackedMessage(state.items[index]);
+    }
+    if (groupLeaderIds.isNotEmpty || rfcGroupLeaderStanzaIds.isNotEmpty) {
+      for (final message in state.items) {
+        final leaderId =
+            state.attachmentGroupLeaderByMessageId[messageKey(message)];
+        final group = rfcEmailGroupsByStanzaId[message.stanzaID];
+        final groupLeaderStanzaId = group?.leader.stanzaID.trim();
+        if ((leaderId != null && groupLeaderIds.contains(leaderId)) ||
+            (groupLeaderStanzaId != null &&
+                rfcGroupLeaderStanzaIds.contains(groupLeaderStanzaId))) {
+          addTrackedMessage(message);
+        }
+      }
+    }
+    final deltaIds = <int>{};
+    for (final message in state.items) {
+      final deltaMessageId = message.deltaMsgId;
+      if (trackedMessageIds.contains(message.stanzaID) &&
+          message.isEmailBacked &&
+          deltaMessageId != null &&
+          deltaMessageId > 0) {
+        deltaIds.add(deltaMessageId);
+      }
+    }
+    return Set<int>.unmodifiable(deltaIds);
+  }
+
+  bool _cachedTimelineContainsUnreadDivider() {
+    return _hasCachedTimelineItem(ChatBloc.unreadDividerScrollTargetMessageId);
+  }
+
+  void _resetUnreadDividerEmailReadiness() {
+    _unreadDividerEmailReadinessRequestId = 0;
+    _unreadDividerEmailReadinessTrackedIds = const <int>{};
+    _unreadDividerEmailReadinessChecked = false;
+    _unreadDividerEmailReadinessRecheckToken += 1;
+    _unreadDividerScrollPrepRetryRequestId = 0;
+    _unreadDividerScrollPrepRetryScheduled = false;
+  }
+
+  void _scheduleUnreadDividerEmailReadinessRecheck({
+    required int requestId,
+    required Set<int> trackedIds,
+  }) {
+    if (_unreadDividerEmailReadinessRequestId == requestId &&
+        setEquals(_unreadDividerEmailReadinessTrackedIds, trackedIds) &&
+        _unreadDividerEmailReadinessChecked) {
+      return;
+    }
+    _unreadDividerEmailReadinessRequestId = requestId;
+    _unreadDividerEmailReadinessTrackedIds = trackedIds;
+    _unreadDividerEmailReadinessChecked = false;
+    final token = _unreadDividerEmailReadinessRecheckToken + 1;
+    _unreadDividerEmailReadinessRecheckToken = token;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || token != _unreadDividerEmailReadinessRecheckToken) {
+        return;
+      }
+      if (_unreadDividerEmailReadinessRequestId != requestId ||
+          !setEquals(_unreadDividerEmailReadinessTrackedIds, trackedIds)) {
+        return;
+      }
+      _unreadDividerEmailReadinessChecked = true;
+      _handlePendingUnreadDividerScroll(context.read<ChatBloc>().state);
+    });
+  }
+
+  bool _unreadDividerEmailReadinessReady(ChatState state, Set<int> trackedIds) {
+    if (trackedIds.isEmpty) {
+      return true;
+    }
+    final requestId = state.scrollTargetRequestId;
+    if (_unreadDividerEmailReadinessRequestId != requestId ||
+        !setEquals(_unreadDividerEmailReadinessTrackedIds, trackedIds)) {
+      _scheduleUnreadDividerEmailReadinessRecheck(
+        requestId: requestId,
+        trackedIds: trackedIds,
+      );
+      return false;
+    }
+    return _unreadDividerEmailReadinessChecked;
   }
 
   void _resetInitialTimelineReadiness() {
@@ -2044,13 +2187,27 @@ class _ChatState extends State<Chat> {
     if (!_initialUnreadScrollPending(state)) {
       return;
     }
+    final trackedIds = _trackedUnreadDividerEmailDeltaIds(state);
+    if (!_cachedTimelineContainsUnreadDivider()) {
+      if (!state.initialUnreadBootstrapStatus.isLoading) {
+        _retryOrAbandonUnreadDividerScrollRequest(state.scrollTargetRequestId);
+      }
+      return;
+    }
+    if (!_unreadDividerEmailReadinessReady(state, trackedIds)) {
+      return;
+    }
+    if (trackedIds.any(state.emailFullMessageLoading.contains)) {
+      return;
+    }
     if (state.scrollTargetRequestId == _activeUnreadDividerScrollRequestId) {
       return;
     }
+    _unreadDividerScrollPrepRetryRequestId = 0;
+    _unreadDividerScrollPrepRetryScheduled = false;
     _activeUnreadDividerScrollRequestId = state.scrollTargetRequestId;
     unawaited(
       _handleUnreadBoundaryScrollRequest(
-        state.unreadBoundaryStanzaId,
         requestId: state.scrollTargetRequestId,
       ),
     );
@@ -2073,7 +2230,33 @@ class _ChatState extends State<Chat> {
         requestId,
       );
     });
+    _resetUnreadDividerEmailReadiness();
+    context.read<ChatBloc>().add(ChatUnreadDividerScrollCompleted(requestId));
     _scheduleReadThresholdSync();
+  }
+
+  void _retryOrAbandonUnreadDividerScrollRequest(int requestId) {
+    if (!mounted) {
+      return;
+    }
+    if (_unreadDividerScrollPrepRetryRequestId != requestId) {
+      _unreadDividerScrollPrepRetryRequestId = requestId;
+      _unreadDividerScrollPrepRetryScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            _unreadDividerScrollPrepRetryRequestId != requestId ||
+            !_unreadDividerScrollPrepRetryScheduled) {
+          return;
+        }
+        _unreadDividerScrollPrepRetryScheduled = false;
+        _handlePendingUnreadDividerScroll(context.read<ChatBloc>().state);
+      });
+      return;
+    }
+    if (_unreadDividerScrollPrepRetryScheduled) {
+      return;
+    }
+    context.read<ChatBloc>().add(ChatUnreadDividerScrollAbandoned(requestId));
   }
 
   void _scheduleReadThresholdSync() {
@@ -3296,7 +3479,8 @@ class _ChatState extends State<Chat> {
       );
     }
     if (!timelineMessageItem.retracted &&
-        timelineMessageItem.isEmailFullMessageLoading) {
+        timelineMessageItem.isEmailFullMessageLoading &&
+        (bubbleTextChildren.isNotEmpty || !showsAttachmentOnlySurface)) {
       if (bubbleTextChildren.isNotEmpty) {
         bubbleTextChildren.add(SizedBox(height: context.spacing.xs));
       }
@@ -7098,61 +7282,43 @@ class _ChatState extends State<Chat> {
     return _unreadDividerContext != null;
   }
 
-  Future<void> _handleUnreadBoundaryScrollRequest(
-    String? boundaryMessageId, {
+  Future<void> _handleUnreadBoundaryScrollRequest({
     required int requestId,
   }) async {
+    var didScrollToDivider = false;
     try {
-      final messageId = boundaryMessageId?.trim();
       final dividerPrepared = await _prepareTimelineItemContextForScroll(
         ChatBloc.unreadDividerScrollTargetMessageId,
         jumpBeforeWaiting: true,
       );
-      if (dividerPrepared) {
-        await WidgetsBinding.instance.endOfFrame;
-        final ready = await _waitForUnreadDividerContext();
-        final dividerContext = _unreadDividerContext;
-        if (mounted &&
-            ready &&
-            dividerContext != null &&
-            dividerContext.mounted) {
-          await Scrollable.ensureVisible(
-            dividerContext,
-            alignment: 1,
-            alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
-            duration: Duration.zero,
-          );
-          await WidgetsBinding.instance.endOfFrame;
-          _scheduleReadThresholdSync();
-        }
+      if (!dividerPrepared) {
         return;
       }
-      if (_hasCachedTimelineItem(ChatBloc.unreadDividerScrollTargetMessageId)) {
-        return;
-      }
-      if (messageId != null && messageId.isNotEmpty) {
-        await _prepareMessageContextForScroll(
-          messageId,
-          jumpBeforeWaiting: true,
-        );
-      }
-      if (messageId == null || messageId.isEmpty) {
-        return;
-      }
-      final messageContext = _messageKeys[messageId]?.currentContext;
-      if (!mounted || messageContext == null || !messageContext.mounted) {
+      await WidgetsBinding.instance.endOfFrame;
+      final ready = await _waitForUnreadDividerContext();
+      final dividerContext = _unreadDividerContext;
+      if (!mounted ||
+          !ready ||
+          dividerContext == null ||
+          !dividerContext.mounted) {
         return;
       }
       await Scrollable.ensureVisible(
-        messageContext,
-        alignment: 1.0,
+        dividerContext,
+        alignment: 1,
         alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
         duration: Duration.zero,
       );
       await WidgetsBinding.instance.endOfFrame;
       _scheduleReadThresholdSync();
+      didScrollToDivider = true;
     } finally {
-      _completeUnreadDividerScrollRequest(requestId);
+      if (didScrollToDivider) {
+        _completeUnreadDividerScrollRequest(requestId);
+      } else if (_activeUnreadDividerScrollRequestId == requestId) {
+        _activeUnreadDividerScrollRequestId = 0;
+        _retryOrAbandonUnreadDividerScrollRequest(requestId);
+      }
     }
   }
 
@@ -7746,7 +7912,11 @@ class _ChatState extends State<Chat> {
                                       current.messagesLoaded ||
                                   previous.items != current.items ||
                                   previous.unreadBoundaryStanzaId !=
-                                      current.unreadBoundaryStanzaId)
+                                      current.unreadBoundaryStanzaId ||
+                                  previous.emailFullMessageLoading !=
+                                      current.emailFullMessageLoading ||
+                                  previous.emailContentPreparationRevision !=
+                                      current.emailContentPreparationRevision)
                         : previous.scrollTargetRequestId !=
                               current.scrollTargetRequestId),
                 listener: (_, state) {
@@ -7768,6 +7938,7 @@ class _ChatState extends State<Chat> {
                 listener: (_, state) {
                   _activeUnreadDividerScrollRequestId = 0;
                   _completedUnreadDividerScrollRequestId = 0;
+                  _resetUnreadDividerEmailReadiness();
                   _cancelLastTappedAutoScroll();
                   _reportedReadThresholdMessageIds = const <String>{};
                   _resetInitialTimelineReadiness();
@@ -7857,7 +8028,11 @@ class _ChatState extends State<Chat> {
                     previous.emailFullHtmlByDeltaId !=
                         current.emailFullHtmlByDeltaId ||
                     previous.emailFullHtmlUnavailable !=
-                        current.emailFullHtmlUnavailable,
+                        current.emailFullHtmlUnavailable ||
+                    previous.scrollTargetMessageId !=
+                        current.scrollTargetMessageId ||
+                    previous.initialUnreadBootstrapStatus !=
+                        current.initialUnreadBootstrapStatus,
                 listener: (_, _) => _scheduleReadThresholdSync(),
               ),
             ],

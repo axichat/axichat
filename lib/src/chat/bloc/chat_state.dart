@@ -33,6 +33,15 @@ enum ChatHistoryPaginationSourceState {
   bool get canAttempt => this == available;
 }
 
+enum ChatInitialUnreadBootstrapStatus {
+  idle,
+  loading,
+  ready,
+  exhausted;
+
+  bool get isLoading => this == loading;
+}
+
 final class ChatPinnedMessageNotice extends Equatable
     implements Comparable<ChatPinnedMessageNotice> {
   const ChatPinnedMessageNotice({
@@ -259,6 +268,8 @@ abstract class ChatState with _$ChatState {
     @Default(mox.XmppConnectionState.notConnected)
     mox.XmppConnectionState xmppConnectionState,
     String? unreadBoundaryStanzaId,
+    @Default(ChatInitialUnreadBootstrapStatus.idle)
+    ChatInitialUnreadBootstrapStatus initialUnreadBootstrapStatus,
     XmppPeerCapabilities? xmppCapabilities,
     @Default(false) bool supportsHttpFileUpload,
     @Default(false) bool emailServiceAvailable,

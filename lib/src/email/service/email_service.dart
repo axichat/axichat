@@ -186,7 +186,14 @@ final class EmailChatNoticeSyncResult {
       status == EmailChatNoticeSyncStatus.alreadyNoFresh;
 }
 
-enum EmailMessageSeenSyncStatus { sent, pending, unresolved, failed }
+enum EmailMessageSeenSyncStatus {
+  sent,
+  alreadySeen,
+  notFreshButNotSeen,
+  pending,
+  unresolved,
+  failed,
+}
 
 final class EmailMessageSeenSyncResult {
   const EmailMessageSeenSyncResult({
@@ -203,7 +210,9 @@ final class EmailMessageSeenSyncResult {
   final int unresolvedCount;
   final int transportAcceptedCount;
 
-  bool get terminalSuccess => status == EmailMessageSeenSyncStatus.sent;
+  bool get terminalSuccess =>
+      status == EmailMessageSeenSyncStatus.sent ||
+      status == EmailMessageSeenSyncStatus.alreadySeen;
 }
 
 final class EmailContentJobKey {
@@ -238,17 +247,21 @@ final class EmailContentPreparationSnapshot {
   const EmailContentPreparationSnapshot({
     required this.activeBodyHydrationKeys,
     required this.activeHtmlDerivationKeys,
+    Set<EmailContentJobKey>? activeLoadingIndicatorKeys,
     required this.revision,
-  });
+  }) : activeLoadingIndicatorKeys =
+           activeLoadingIndicatorKeys ?? activeBodyHydrationKeys;
 
   static const empty = EmailContentPreparationSnapshot(
     activeBodyHydrationKeys: <EmailContentJobKey>{},
     activeHtmlDerivationKeys: <EmailContentJobKey>{},
+    activeLoadingIndicatorKeys: <EmailContentJobKey>{},
     revision: 0,
   );
 
   final Set<EmailContentJobKey> activeBodyHydrationKeys;
   final Set<EmailContentJobKey> activeHtmlDerivationKeys;
+  final Set<EmailContentJobKey> activeLoadingIndicatorKeys;
   final int revision;
 }
 
@@ -6698,8 +6711,12 @@ class EmailService {
     Chat chat, {
     String? selfJid,
     String? emailSelfJid,
+    int? unreadCount,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
+    if ((unreadCount ?? chat.unreadCount) <= _emptyUnreadCount) {
+      return null;
+    }
     final db = await _databaseBuilder();
     return db.getOldestUnreadEmailBackedMessageForChat(
       chat.jid,
@@ -11014,29 +11031,16 @@ class EmailService {
     return null;
   }
 
-  Future<List<int>> _deltaChatIdsForReadState({
+  Future<List<int>> _storedDeltaChatIdsForReadState({
     required Chat chat,
     required int deltaAccountId,
   }) async {
-    if (_blocksRuntimeReentry) {
-      return const <int>[];
-    }
-    final primaryChatId = await _deltaChatIdForAccount(
-      chat: chat,
-      deltaAccountId: deltaAccountId,
-    );
-    if (_blocksRuntimeReentry) {
-      return const <int>[];
-    }
     final Chat resolvedChat = await _trackAppDatabaseOperation(
       () => _storedEmailChatForAccount(
         chat: chat,
         deltaAccountId: deltaAccountId,
       ),
     );
-    if (_blocksRuntimeReentry) {
-      return const <int>[];
-    }
     final mappedDeltaChatIds = await _trackAppDatabaseOperation(() async {
       final db = await _databaseBuilder();
       return db.getDeltaChatIdsForAccount(
@@ -11044,35 +11048,21 @@ class EmailService {
         deltaAccountId: deltaAccountId,
       );
     });
-    final activeDeltaChatId = resolvedChat.deltaChatId;
-    final activeDeltaChatIdForAccount =
-        activeDeltaChatId != null &&
-            (mappedDeltaChatIds.contains(activeDeltaChatId) ||
-                deltaAccountId == _transport.activeAccountId)
-        ? activeDeltaChatId
-        : null;
-    final ordered = <int>{};
-    if (primaryChatId != null) {
-      ordered.add(primaryChatId);
-    }
-    ordered.addAll(
-      _deltaChatIdCandidates(
+    final messageDeltaChatIds = await _trackAppDatabaseOperation(() async {
+      final db = await _databaseBuilder();
+      return db.getMessageDeltaChatIdsForAccount(
+        chatJid: resolvedChat.jid,
+        deltaAccountId: deltaAccountId,
+      );
+    });
+    final ordered = <int>{
+      ..._deltaChatIdCandidates(
         mappedDeltaChatIds: mappedDeltaChatIds,
-        activeDeltaChatId: activeDeltaChatIdForAccount,
+        activeDeltaChatId: resolvedChat.deltaChatId,
       ),
-    );
+      ...messageDeltaChatIds,
+    };
     return ordered.toList(growable: false);
-  }
-
-  Future<bool> _isEncryptedSendableDeltaChat({
-    required int chatId,
-    required int deltaAccountId,
-  }) async {
-    final capabilities = await _transport.chatSendCapabilities(
-      chatId: chatId,
-      accountId: deltaAccountId,
-    );
-    return capabilities.isEncryptedAndSendable;
   }
 
   List<int> _deltaChatIdCandidates({
@@ -11092,6 +11082,17 @@ class EmailService {
       candidates.add(mappedDeltaChatId);
     }
     return candidates;
+  }
+
+  Future<bool> _isEncryptedSendableDeltaChat({
+    required int chatId,
+    required int deltaAccountId,
+  }) async {
+    final capabilities = await _transport.chatSendCapabilities(
+      chatId: chatId,
+      accountId: deltaAccountId,
+    );
+    return capabilities.isEncryptedAndSendable;
   }
 
   Future<EmailTrustedContactKey?> _trustedContactKeyForNewSend({
@@ -11283,7 +11284,7 @@ class EmailService {
           );
           return;
         }
-        final chatIds = await _deltaChatIdsForReadState(
+        final chatIds = await _storedDeltaChatIdsForReadState(
           chat: resolvedChat,
           deltaAccountId: account.deltaAccountId,
         );
@@ -11294,16 +11295,19 @@ class EmailService {
           );
           return;
         }
-        final freshBeforeByChat = await _freshMessageIdsByChatIds(
+        final freshBeforeByChat = await _localFreshMessageIdsByChatIds(
           accountId: account.deltaAccountId,
           chatIds: chatIds,
+          selfJid: _xmppSelfJidProvider?.call(),
+          emailSelfJid: account.address,
         );
         final freshBeforeCount = freshBeforeByChat.values.fold<int>(
           0,
           (sum, ids) => sum + ids.length,
         );
         final consumer = _deltaConsumerForAccount(account.deltaAccountId);
-        Future<void> repairLocalUnreadCount() async {
+
+        if (freshBeforeCount == 0) {
           await _trackAppDatabaseOperation(() async {
             final db = await _databaseBuilder();
             await db.repairUnreadCountForChat(
@@ -11312,10 +11316,6 @@ class EmailService {
               emailSelfJid: account.address,
             );
           });
-        }
-
-        if (freshBeforeCount == 0) {
-          await repairLocalUnreadCount();
           syncResult = EmailChatNoticeSyncResult(
             status: EmailChatNoticeSyncStatus.alreadyNoFresh,
             deltaAccountId: account.deltaAccountId,
@@ -11327,24 +11327,41 @@ class EmailService {
         }
         var coreNoticeRequested = false;
         var coreNoticeAccepted = false;
+        var reconciledMessageCount = 0;
         for (final chatId in chatIds) {
           final freshIds = freshBeforeByChat[chatId] ?? const <int>[];
           if (freshIds.isNotEmpty) {
             coreNoticeRequested = true;
-            await consumer.syncFreshMessages(freshIds);
             final result = await _transport.markNoticedChat(
               chatId,
               accountId: account.deltaAccountId,
             );
-            coreNoticeAccepted = coreNoticeAccepted || result;
+            if (result) {
+              coreNoticeAccepted = true;
+              reconciledMessageCount += await consumer
+                  .projectNoticedDeltaMessages(
+                    chatId: chatId,
+                    messageIds: freshIds,
+                  );
+            }
           }
         }
-        await repairLocalUnreadCount();
-        final freshAfterCount = coreNoticeAccepted ? 0 : freshBeforeCount;
+        final freshAfterByChat = await _localFreshMessageIdsByChatIds(
+          accountId: account.deltaAccountId,
+          chatIds: chatIds,
+          selfJid: _xmppSelfJidProvider?.call(),
+          emailSelfJid: account.address,
+        );
+        final freshAfterCount = freshAfterByChat.values.fold<int>(
+          0,
+          (sum, ids) => sum + ids.length,
+        );
         final status = freshBeforeCount == 0
             ? EmailChatNoticeSyncStatus.alreadyNoFresh
             : freshAfterCount == 0
-            ? EmailChatNoticeSyncStatus.freshCleared
+            ? coreNoticeAccepted
+                  ? EmailChatNoticeSyncStatus.freshCleared
+                  : EmailChatNoticeSyncStatus.failed
             : freshAfterCount < freshBeforeCount
             ? EmailChatNoticeSyncStatus.partial
             : EmailChatNoticeSyncStatus.failed;
@@ -11354,6 +11371,7 @@ class EmailService {
           chatIds: chatIds,
           freshBeforeCount: freshBeforeCount,
           freshAfterCount: freshAfterCount,
+          reconciledMessageCount: reconciledMessageCount,
           coreNoticeRequested: coreNoticeRequested,
           coreNoticeAccepted: coreNoticeAccepted,
         );
@@ -11519,41 +11537,51 @@ class EmailService {
     return null;
   }
 
-  Future<Map<int, List<int>>> _freshMessageIdsByChatIds({
+  Future<Map<int, List<int>>> _localFreshMessageIdsByChatIds({
     required int accountId,
     required Iterable<int> chatIds,
+    required String? selfJid,
+    required String? emailSelfJid,
   }) async {
     final chatIdSet = chatIds.where((id) => id > 0).toSet();
     if (chatIdSet.isEmpty) {
       return const <int, List<int>>{};
     }
-    final freshIds = await _transport.getFreshMessageIds(accountId: accountId);
-    if (freshIds.isEmpty) {
-      return const <int, List<int>>{};
-    }
-    final filteredFreshIds = <int>[];
-    final seenFreshIds = <int>{};
-    for (final freshId in freshIds) {
-      if (freshId > DeltaMessageId.none && seenFreshIds.add(freshId)) {
-        filteredFreshIds.add(freshId);
-      }
-    }
-    if (filteredFreshIds.isEmpty) {
-      return const <int, List<int>>{};
-    }
-    final statuses = await _transport.getMessageStatuses(
-      filteredFreshIds,
-      accountId: accountId,
-    );
-    final freshIdsByChat = <int, List<int>>{};
-    for (final status in statuses) {
-      final chatId = status.chatId;
-      if (chatIdSet.contains(chatId)) {
-        freshIdsByChat.putIfAbsent(chatId, () => <int>[]).add(status.id);
+    final db = await _databaseBuilder();
+    final result = <int, List<int>>{};
+    const pageStep = 100;
+    for (final chatId in chatIdSet) {
+      var limit = pageStep;
+      final ids = <int>{};
+      while (true) {
+        final rows = await db.getUndisplayedMessagesByDeltaChat(
+          deltaAccountId: accountId,
+          deltaChatId: chatId,
+          limit: limit,
+        );
+        for (final row in rows) {
+          final deltaMsgId = row.deltaMsgId;
+          if (deltaMsgId == null || deltaMsgId <= DeltaMessageId.none) {
+            continue;
+          }
+          if (!row.countsTowardUnread(
+            selfJid: row.isEmailBacked ? emailSelfJid ?? selfJid : selfJid,
+            isGroupChat: false,
+            myOccupantJid: null,
+          )) {
+            continue;
+          }
+          ids.add(deltaMsgId);
+        }
+        if (rows.length < limit) {
+          if (ids.isNotEmpty) result[chatId] = ids.toList(growable: false);
+          break;
+        }
+        limit += pageStep;
       }
     }
     return {
-      for (final entry in freshIdsByChat.entries)
+      for (final entry in result.entries)
         if (entry.value.isNotEmpty)
           entry.key: List<int>.unmodifiable(entry.value),
     };
@@ -11894,23 +11922,72 @@ class EmailService {
 
   /// Triggers download of full message content for partial messages.
   Future<bool> downloadFullMessage(Message message) async {
-    final result = await downloadAndHydrateFullMessage(
-      message,
-      deadline: DateTime.timestamp().add(_pendingEmailBodyDownloadTimeout),
+    try {
+      return await _downloadFullMessage(message);
+    } on TimeoutException catch (error, stackTrace) {
+      _log.fine('Email full message download timed out.', error, stackTrace);
+      return false;
+    } on DeltaChatException catch (error, stackTrace) {
+      _log.fine('Email full message download failed.', error, stackTrace);
+      return false;
+    } on EmailProvisioningException catch (error, stackTrace) {
+      _log.fine('Email full message download failed.', error, stackTrace);
+      return false;
+    } on EmailServiceStoppingException catch (error, stackTrace) {
+      _log.fine('Email full message download failed.', error, stackTrace);
+      return false;
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine('Email full message download failed.', error, stackTrace);
+      return false;
+    } on DeltaSafeException catch (error, stackTrace) {
+      _log.fine('Email full message download failed.', error, stackTrace);
+      return false;
+    } on StateError catch (error, stackTrace) {
+      _log.fine('Email full message download failed.', error, stackTrace);
+      return false;
+    }
+  }
+
+  Future<bool> _downloadFullMessage(Message message) async {
+    final deadline = DateTime.timestamp().add(_pendingEmailBodyDownloadTimeout);
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
+      return false;
+    }
+    final readyResult = await _withPendingEmailBodyDownloadBudgetResult(
+      () async {
+        await _ensureReady();
+        return true;
+      },
+      deadline: deadline,
     );
-    if (!result.accepted || result.timedOut || !result.settled) {
+    if (!readyResult.completed) {
       return false;
     }
-    final current = await _trackAppDatabaseOperation(() async {
-      final db = await _databaseBuilder();
-      return db.getMessageByStanzaID(message.stanzaID);
-    });
-    if (current == null ||
-        current.rfc822BodyStatus.isPendingDownload ||
-        current.rfc822BodyContentUnavailable) {
+    final accountResult = await _withPendingEmailBodyDownloadBudgetResult(
+      () => _storedDeltaAccountIdForBodyHydration(message, deadline: deadline),
+      deadline: deadline,
+    );
+    if (!accountResult.completed) {
       return false;
     }
-    return _emailContentBodyUsable(current);
+    final accountId = accountResult.value;
+    if (accountId == null) {
+      return false;
+    }
+    final acceptedResult = await _downloadFullMessageWithPendingBudget(
+      deltaMsgId: deltaId,
+      accountId: accountId,
+      deadline: deadline,
+    );
+    if (acceptedResult != true) {
+      return false;
+    }
+    return _waitForFullMessageMaterial(
+      message,
+      accountId: accountId,
+      deadline: deadline,
+    );
   }
 
   void reportVisibleEmailContentMessages({
@@ -12720,6 +12797,7 @@ class EmailService {
         );
       }
       return message.copyWith(
+        body: null,
         htmlBody: null,
         rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
         pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
@@ -12799,12 +12877,19 @@ class EmailService {
       return false;
     }
     if (!DateTime.timestamp().isBefore(deferral.nextRetryAt)) {
-      _emailContentRetryDeferrals.remove(key);
-      _scheduleEmailContentRetryTimer();
       return false;
     }
     _scheduleEmailContentRetryTimer();
     return true;
+  }
+
+  bool _emailContentTaskShowsLoadingIndicator({
+    required EmailContentJobKey key,
+    required Message message,
+  }) {
+    final deferral = _emailContentRetryDeferrals[key];
+    return deferral == null ||
+        deferral.fingerprint != _emailContentRetryFingerprint(message);
   }
 
   void _recordEmailContentPreparationSuccess(EmailContentJobKey key) {
@@ -12946,9 +13031,26 @@ class EmailService {
     final bodyKeys = Set<EmailContentJobKey>.unmodifiable(
       _emailContentBodyTasksByKey.keys,
     );
+    final loadingIndicatorKeys = <EmailContentJobKey>{};
+    for (final entry in _emailContentBodyTasksByKey.entries) {
+      if (_emailContentTaskShowsLoadingIndicator(
+        key: entry.key,
+        message: entry.value.message,
+      )) {
+        loadingIndicatorKeys.add(entry.key);
+      }
+    }
     final htmlKeys = <EmailContentJobKey>{};
     for (final task in _emailContentHtmlDerivationTasksByDigest.values) {
       htmlKeys.addAll(task.messagesByKey.keys);
+      for (final entry in task.messagesByKey.entries) {
+        if (_emailContentTaskShowsLoadingIndicator(
+          key: entry.key,
+          message: entry.value,
+        )) {
+          loadingIndicatorKeys.add(entry.key);
+        }
+      }
     }
     if (!force &&
         setEquals(
@@ -12958,6 +13060,10 @@ class EmailService {
         setEquals(
           htmlKeys,
           _contentPreparationSnapshot.activeHtmlDerivationKeys,
+        ) &&
+        setEquals(
+          loadingIndicatorKeys,
+          _contentPreparationSnapshot.activeLoadingIndicatorKeys,
         )) {
       return;
     }
@@ -12965,6 +13071,9 @@ class EmailService {
     _contentPreparationSnapshot = EmailContentPreparationSnapshot(
       activeBodyHydrationKeys: bodyKeys,
       activeHtmlDerivationKeys: Set<EmailContentJobKey>.unmodifiable(htmlKeys),
+      activeLoadingIndicatorKeys: Set<EmailContentJobKey>.unmodifiable(
+        loadingIndicatorKeys,
+      ),
       revision: _contentPreparationRevision,
     );
     _contentPreparationController.add(_contentPreparationSnapshot);
@@ -13126,6 +13235,130 @@ class EmailService {
       isCanceled: isCanceled,
     );
     return result.completed ? result.value : null;
+  }
+
+  Future<bool> _waitForFullMessageMaterial(
+    Message message, {
+    required int accountId,
+    required DateTime deadline,
+  }) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) {
+      return false;
+    }
+    while (DateTime.timestamp().isBefore(deadline)) {
+      final currentResult = await _withPendingEmailBodyDownloadBudgetResult(
+        () => _trackAppDatabaseOperation(() async {
+          final db = await _databaseBuilder();
+          final current = await db.getMessageByStanzaID(message.stanzaID);
+          if (current == null) {
+            return false;
+          }
+          return _storedFullMessageMaterialAvailable(db, current);
+        }),
+        deadline: deadline,
+      );
+      if (currentResult.completed && currentResult.value == true) {
+        return true;
+      }
+      final rfc822Body = await _withPendingEmailBodyDownloadBudgetResult(
+        () => _transport.getMessageRfc822Body(deltaId, accountId: accountId),
+        deadline: deadline,
+      );
+      if (!rfc822Body.completed) {
+        return _storedFullMessageMaterialAvailableForMessage(message);
+      }
+      final body = rfc822Body.value;
+      if (body != null && body.hasBody) {
+        final current = await _trackAppDatabaseOperation(() async {
+          final db = await _databaseBuilder();
+          return db.getMessageByStanzaID(message.stanzaID);
+        });
+        final hydration = await hydrateStoredRfc822BodyContent(
+          current ?? message,
+          rfc822Body: body,
+          deadline: deadline,
+        );
+        if (hydration.timedOut) {
+          return _storedFullMessageMaterialAvailableForMessage(message);
+        }
+      }
+      final currentAfterHydration =
+          await _withPendingEmailBodyDownloadBudgetResult(
+            () => _trackAppDatabaseOperation(() async {
+              final db = await _databaseBuilder();
+              final current = await db.getMessageByStanzaID(message.stanzaID);
+              if (current == null) {
+                return false;
+              }
+              return _storedFullMessageMaterialAvailable(db, current);
+            }),
+            deadline: deadline,
+          );
+      if (currentAfterHydration.completed &&
+          currentAfterHydration.value == true) {
+        return true;
+      }
+      await Future<void>.delayed(_pendingEmailBodyDownloadPollInterval);
+    }
+    return _storedFullMessageMaterialAvailableForMessage(message);
+  }
+
+  Future<bool> _storedFullMessageMaterialAvailableForMessage(
+    Message message,
+  ) async {
+    return _trackAppDatabaseOperation(() async {
+      final db = await _databaseBuilder();
+      final current = await db.getMessageByStanzaID(message.stanzaID);
+      if (current == null) {
+        return false;
+      }
+      return _storedFullMessageMaterialAvailable(db, current);
+    });
+  }
+
+  Future<bool> _storedFullMessageMaterialAvailable(
+    XmppDatabase db,
+    Message message,
+  ) async {
+    if (!message.rfc822BodyStatus.isPendingDownload &&
+        _emailContentBodyUsable(message)) {
+      return true;
+    }
+    final metadataIds = <String>{};
+    void addMetadataId(String? metadataId) {
+      final trimmed = metadataId?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        metadataIds.add(trimmed);
+      }
+    }
+
+    addMetadataId(message.fileMetadataID);
+    final messageId = message.id;
+    if (messageId != null && messageId.isNotEmpty) {
+      final attachments = await db.getMessageAttachments(messageId);
+      for (final attachment in attachments) {
+        addMetadataId(attachment.fileMetadataId);
+      }
+    }
+    if (metadataIds.isEmpty) {
+      return false;
+    }
+    final metadataItems = await db.getFileMetadataForIds(metadataIds);
+    for (final metadata in metadataItems) {
+      if (await _fileMetadataHasLocalFile(metadata)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool> _fileMetadataHasLocalFile(FileMetadataData metadata) async {
+    final path = metadata.path?.trim();
+    if (path == null || path.isEmpty) {
+      return false;
+    }
+    return File(path).exists();
   }
 
   Future<EmailFullMessageHydrationResult> downloadAndHydrateFullMessage(
@@ -14088,6 +14321,8 @@ class EmailService {
     if (rfc822Body == null || !rfc822Body.hasBody) {
       return (
         message: message.copyWith(
+          body: null,
+          htmlBody: null,
           rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
@@ -14124,6 +14359,8 @@ class EmailService {
         HtmlContentCodec.normalizeHtml(message.htmlBody) != null) {
       return (
         message: message.copyWith(
+          body: null,
+          htmlBody: null,
           rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
@@ -14133,6 +14370,8 @@ class EmailService {
     if (normalizedHtml == null) {
       return (
         message: message.copyWith(
+          body: null,
+          htmlBody: null,
           rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
@@ -14157,6 +14396,8 @@ class EmailService {
     if (resolvedBody.isEmpty && !hasRenderableHtml) {
       return (
         message: message.copyWith(
+          body: null,
+          htmlBody: null,
           rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
