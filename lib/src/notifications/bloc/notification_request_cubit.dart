@@ -5,16 +5,59 @@ import 'package:async/async.dart';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 part 'notification_request_state.dart';
+
+enum NotificationBackgroundMessagingPhase {
+  idle,
+  requestingPermissions,
+  awaitingNotificationSettingsResume,
+  awaitingBatteryOptimizationSettingsResume,
+  awaitingPermissionGrantResume,
+  activatingForeground,
+  disablingForeground,
+  persistingPreference;
+
+  bool get isBusy => this != NotificationBackgroundMessagingPhase.idle;
+
+  NotificationPermissionRequestResult? get awaitedPermissionResult {
+    switch (this) {
+      case NotificationBackgroundMessagingPhase
+          .awaitingNotificationSettingsResume:
+        return NotificationPermissionRequestResult.awaitingNotificationSettings;
+      case NotificationBackgroundMessagingPhase
+          .awaitingBatteryOptimizationSettingsResume:
+        return NotificationPermissionRequestResult
+            .awaitingBatteryOptimizationSettings;
+      case NotificationBackgroundMessagingPhase.idle:
+      case NotificationBackgroundMessagingPhase.requestingPermissions:
+      case NotificationBackgroundMessagingPhase.awaitingPermissionGrantResume:
+      case NotificationBackgroundMessagingPhase.activatingForeground:
+      case NotificationBackgroundMessagingPhase.disablingForeground:
+      case NotificationBackgroundMessagingPhase.persistingPreference:
+        return null;
+    }
+  }
+}
 
 class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   NotificationRequestCubit({
     required NotificationService notificationService,
     required ForegroundRuntimeController foregroundRuntimeController,
+    required Future<void> Function(bool enabled, {String? accountJid})
+    persistBackgroundMessagingPreference,
+    required String? Function() accountJidProvider,
+    AppLifecycleState? Function()? lifecycleStateProvider,
   }) : _notificationService = notificationService,
        _foregroundRuntimeController = foregroundRuntimeController,
+       _persistBackgroundMessagingPreference =
+           persistBackgroundMessagingPreference,
+       _accountJidProvider = accountJidProvider,
+       _lifecycleStateProvider =
+           lifecycleStateProvider ??
+           (() => SchedulerBinding.instance.lifecycleState),
        super(
          NotificationRequestState(
            foregroundServiceActive: foregroundRuntimeController.isActive,
@@ -25,10 +68,295 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
 
   final NotificationService _notificationService;
   final ForegroundRuntimeController _foregroundRuntimeController;
+  final Future<void> Function(bool enabled, {String? accountJid})
+  _persistBackgroundMessagingPreference;
+  final String? Function() _accountJidProvider;
+  final AppLifecycleState? Function() _lifecycleStateProvider;
   CancelableOperation<bool>? _refreshPermissionsOperation;
   Future<NotificationPermissionRequestResult>? _requestPermissionsFuture;
   CancelableOperation<ForegroundActivationResult>? _enableForegroundOperation;
   CancelableOperation<bool>? _disableForegroundOperation;
+  CancelableOperation<void>? _backgroundMessagingOperation;
+  DateTime? _permissionDetachAllowanceExpiresAt;
+  var _permissionDetachAllowanceCount = 0;
+  String? _pendingBackgroundMessagingAccountJid;
+
+  Future<void> enableBackgroundMessaging() {
+    return _runBackgroundMessagingOperation(_enableBackgroundMessaging);
+  }
+
+  Future<void> disableBackgroundMessaging() {
+    return _runBackgroundMessagingOperation(_disableBackgroundMessaging);
+  }
+
+  Future<void> resumePendingBackgroundMessagingEnable() {
+    return _resumePendingBackgroundMessagingEnableAfterActiveOperation();
+  }
+
+  Future<void> handleLifecycleResume() {
+    return _handleLifecycleResumeAfterActiveOperation();
+  }
+
+  Future<void>
+  _resumePendingBackgroundMessagingEnableAfterActiveOperation() async {
+    final existing = _backgroundMessagingOperation;
+    if (existing != null) {
+      await existing.valueOrCancellation();
+    }
+    await _runBackgroundMessagingOperation(
+      _resumePendingBackgroundMessagingEnable,
+    );
+  }
+
+  Future<void> _handleLifecycleResumeAfterActiveOperation() async {
+    final existing = _backgroundMessagingOperation;
+    if (existing != null) {
+      await existing.valueOrCancellation();
+    }
+    await _runBackgroundMessagingOperation(_handleLifecycleResume);
+  }
+
+  bool consumePermissionDetachAllowance() {
+    if (!_permissionDetachAllowanceActive) {
+      _endPermissionDetachAllowance();
+      return false;
+    }
+    if (_permissionDetachAllowanceCount == 0) {
+      return false;
+    }
+    _permissionDetachAllowanceCount -= 1;
+    return true;
+  }
+
+  Future<void> _runBackgroundMessagingOperation(
+    Future<void> Function() action,
+  ) async {
+    final existing = _backgroundMessagingOperation;
+    if (existing != null) {
+      await existing.valueOrCancellation();
+      return;
+    }
+    final operation = CancelableOperation<void>.fromFuture(action());
+    _backgroundMessagingOperation = operation;
+    try {
+      await operation.valueOrCancellation();
+    } finally {
+      if (_backgroundMessagingOperation == operation) {
+        _backgroundMessagingOperation = null;
+      }
+    }
+  }
+
+  Future<void> _enableBackgroundMessaging() async {
+    _pendingBackgroundMessagingAccountJid = _accountJidProvider();
+    if (state.hasPermissions == true) {
+      await _activateForegroundAndPersist();
+      return;
+    }
+    await _requestPermissionsAndEnable();
+  }
+
+  Future<void> _disableBackgroundMessaging() async {
+    _pendingBackgroundMessagingAccountJid = _accountJidProvider();
+    _endPermissionDetachAllowance();
+    emit(
+      state.copyWith(
+        backgroundMessagingPhase:
+            NotificationBackgroundMessagingPhase.disablingForeground,
+      ),
+    );
+    try {
+      final foregroundDisabled = await disableForegroundService();
+      if (!foregroundDisabled) {
+        return;
+      }
+      emit(
+        state.copyWith(
+          backgroundMessagingPhase:
+              NotificationBackgroundMessagingPhase.persistingPreference,
+          foregroundActivationDeferredUntilRestart: false,
+        ),
+      );
+      await _persistBackgroundMessagingPreference(
+        false,
+        accountJid: _pendingBackgroundMessagingAccountJid,
+      );
+    } finally {
+      _pendingBackgroundMessagingAccountJid = null;
+      emit(
+        state.copyWith(
+          backgroundMessagingPhase: NotificationBackgroundMessagingPhase.idle,
+        ),
+      );
+    }
+  }
+
+  Future<void> _requestPermissionsAndEnable() async {
+    _beginPermissionDetachAllowance();
+    emit(
+      state.copyWith(
+        backgroundMessagingPhase:
+            NotificationBackgroundMessagingPhase.requestingPermissions,
+      ),
+    );
+    var keepPermissionDetachAllowance = false;
+    try {
+      final permissionResult = await requestPermissions();
+      keepPermissionDetachAllowance = await _handlePermissionResult(
+        permissionResult,
+      );
+    } finally {
+      if (!keepPermissionDetachAllowance) {
+        _endPermissionDetachAllowance();
+      }
+    }
+  }
+
+  Future<void> _resumePendingBackgroundMessagingEnable() async {
+    final awaitedPermissionResult =
+        state.backgroundMessagingPhase.awaitedPermissionResult;
+    if (awaitedPermissionResult != null) {
+      await _resumeSettingsPermissionRequest(awaitedPermissionResult);
+      return;
+    }
+    if (state.backgroundMessagingPhase !=
+        NotificationBackgroundMessagingPhase.awaitingPermissionGrantResume) {
+      return;
+    }
+    await _activateForegroundAndPersist();
+  }
+
+  Future<void> _handleLifecycleResume() async {
+    await refreshPermissions();
+    final awaitedPermissionResult =
+        state.backgroundMessagingPhase.awaitedPermissionResult;
+    if (awaitedPermissionResult != null) {
+      await _resumeSettingsPermissionRequest(awaitedPermissionResult);
+      return;
+    }
+    if (state.backgroundMessagingPhase !=
+        NotificationBackgroundMessagingPhase.awaitingPermissionGrantResume) {
+      return;
+    }
+    if (state.hasPermissions != true) {
+      _clearPendingBackgroundMessagingEnable();
+      return;
+    }
+    await _activateForegroundAndPersist();
+  }
+
+  Future<void> _resumeSettingsPermissionRequest(
+    NotificationPermissionRequestResult awaitedPermissionResult,
+  ) async {
+    emit(
+      state.copyWith(
+        backgroundMessagingPhase:
+            NotificationBackgroundMessagingPhase.requestingPermissions,
+      ),
+    );
+    final resolved = await hasPermissionResolvedFor(awaitedPermissionResult);
+    if (!resolved) {
+      _pendingBackgroundMessagingAccountJid = null;
+      _endPermissionDetachAllowance();
+      emit(
+        state.copyWith(
+          backgroundMessagingPhase: NotificationBackgroundMessagingPhase.idle,
+        ),
+      );
+      return;
+    }
+    await _requestPermissionsAndEnable();
+  }
+
+  Future<bool> _handlePermissionResult(
+    NotificationPermissionRequestResult permissionResult,
+  ) async {
+    switch (permissionResult) {
+      case NotificationPermissionRequestResult.granted:
+        if (!_lifecycleReadyForForegroundActivation) {
+          emit(
+            state.copyWith(
+              backgroundMessagingPhase: NotificationBackgroundMessagingPhase
+                  .awaitingPermissionGrantResume,
+            ),
+          );
+          return true;
+        }
+        await _activateForegroundAndPersist();
+        return false;
+      case NotificationPermissionRequestResult.awaitingNotificationSettings:
+        emit(
+          state.copyWith(
+            backgroundMessagingPhase: NotificationBackgroundMessagingPhase
+                .awaitingNotificationSettingsResume,
+          ),
+        );
+        return true;
+      case NotificationPermissionRequestResult
+          .awaitingBatteryOptimizationSettings:
+        emit(
+          state.copyWith(
+            backgroundMessagingPhase: NotificationBackgroundMessagingPhase
+                .awaitingBatteryOptimizationSettingsResume,
+          ),
+        );
+        return true;
+      case NotificationPermissionRequestResult.denied:
+        _pendingBackgroundMessagingAccountJid = null;
+        emit(
+          state.copyWith(
+            backgroundMessagingPhase: NotificationBackgroundMessagingPhase.idle,
+          ),
+        );
+        return false;
+    }
+  }
+
+  Future<void> _activateForegroundAndPersist() async {
+    try {
+      emit(
+        state.copyWith(
+          backgroundMessagingPhase:
+              NotificationBackgroundMessagingPhase.activatingForeground,
+          foregroundActivationDeferredUntilRestart: false,
+        ),
+      );
+      final foregroundResult = await enableForegroundService(
+        allowCurrentSessionMigration: true,
+      );
+      if (!foregroundResult.shouldPersistPreference) {
+        return;
+      }
+      final deferredUntilRestart =
+          foregroundResult == ForegroundActivationResult.deferredUntilRestart;
+      emit(
+        state.copyWith(
+          backgroundMessagingPhase:
+              NotificationBackgroundMessagingPhase.persistingPreference,
+          foregroundActivationDeferredUntilRestart: deferredUntilRestart,
+        ),
+      );
+      await _persistBackgroundMessagingPreference(
+        true,
+        accountJid: _pendingBackgroundMessagingAccountJid,
+      );
+      if (deferredUntilRestart) {
+        emit(
+          state.copyWith(
+            restartPromptRequestId: state.restartPromptRequestId + 1,
+          ),
+        );
+      }
+    } finally {
+      _pendingBackgroundMessagingAccountJid = null;
+      _endPermissionDetachAllowance();
+      emit(
+        state.copyWith(
+          backgroundMessagingPhase: NotificationBackgroundMessagingPhase.idle,
+        ),
+      );
+    }
+  }
 
   Future<void> refreshPermissions() async {
     _refreshPermissionsOperation?.cancel();
@@ -196,23 +524,70 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
     );
   }
 
+  bool get _permissionDetachAllowanceActive {
+    final expiresAt = _permissionDetachAllowanceExpiresAt;
+    return expiresAt != null && DateTime.now().isBefore(expiresAt);
+  }
+
+  bool get _lifecycleReadyForForegroundActivation {
+    final lifecycleState = _lifecycleStateProvider();
+    return lifecycleState == null ||
+        lifecycleState == AppLifecycleState.resumed;
+  }
+
+  void _beginPermissionDetachAllowance() {
+    _permissionDetachAllowanceExpiresAt = DateTime.now().add(
+      const Duration(minutes: 5),
+    );
+    _permissionDetachAllowanceCount = 1;
+  }
+
+  void _endPermissionDetachAllowance() {
+    _permissionDetachAllowanceExpiresAt = null;
+    _permissionDetachAllowanceCount = 0;
+  }
+
+  void _clearPendingBackgroundMessagingEnable() {
+    if (state.backgroundMessagingPhase !=
+            NotificationBackgroundMessagingPhase
+                .awaitingPermissionGrantResume &&
+        state.backgroundMessagingPhase.awaitedPermissionResult == null) {
+      return;
+    }
+    _pendingBackgroundMessagingAccountJid = null;
+    _endPermissionDetachAllowance();
+    emit(
+      state.copyWith(
+        backgroundMessagingPhase: NotificationBackgroundMessagingPhase.idle,
+      ),
+    );
+  }
+
   @override
   Future<void> close() async {
     foregroundServiceActive.removeListener(_handleForegroundServiceChanged);
+    final requestPermissionsFuture = _requestPermissionsFuture;
     final operations = <CancelableOperation<Object?>?>[
       _refreshPermissionsOperation,
       _enableForegroundOperation,
       _disableForegroundOperation,
+      _backgroundMessagingOperation,
     ];
-    _refreshPermissionsOperation = null;
-    _requestPermissionsFuture = null;
-    _enableForegroundOperation = null;
-    _disableForegroundOperation = null;
-    await Future.wait(
-      operations.whereType<CancelableOperation<Object?>>().map(
-        (operation) => operation.cancel(),
-      ),
-    );
-    return super.close();
+    try {
+      await Future.wait([
+        ...operations.whereType<CancelableOperation<Object?>>().map(
+          (operation) => operation.valueOrCancellation(),
+        ),
+        ?requestPermissionsFuture,
+      ]);
+    } finally {
+      _refreshPermissionsOperation = null;
+      _requestPermissionsFuture = null;
+      _enableForegroundOperation = null;
+      _disableForegroundOperation = null;
+      _backgroundMessagingOperation = null;
+      _endPermissionDetachAllowance();
+      await super.close();
+    }
   }
 }

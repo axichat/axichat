@@ -27,6 +27,7 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
@@ -222,6 +223,21 @@ class _AxichatState extends State<Axichat> {
                       )..initialize(),
                     ),
                     BlocProvider(
+                      create: (context) {
+                        final settingsCubit = context.read<SettingsCubit>();
+                        final xmppService = context.read<XmppService>();
+                        return NotificationRequestCubit(
+                          notificationService: context
+                              .read<NotificationService>(),
+                          foregroundRuntimeController: context
+                              .read<ForegroundRuntimeController>(),
+                          persistBackgroundMessagingPreference:
+                              settingsCubit.toggleBackgroundMessaging,
+                          accountJidProvider: () => xmppService.myJid,
+                        )..refreshPermissions();
+                      },
+                    ),
+                    BlocProvider(
                       create: (context) => AuthenticationCubit(
                         credentialStore: context.read<CredentialStore>(),
                         xmppService: context.read<XmppService>(),
@@ -254,6 +270,9 @@ class _AxichatState extends State<Axichat> {
                                     ),
                               );
                         },
+                        preserveAuthOnLifecycleDetach: context
+                            .read<NotificationRequestCubit>()
+                            .consumePermissionDetachAllowance,
                       ),
                     ),
                     BlocProvider(
@@ -979,6 +998,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   void _handleLifecycleResume() {
     context.read<UpdateCubit>().refresh();
+    fireAndForget(
+      () => context.read<NotificationRequestCubit>().handleLifecycleResume(),
+      operationName: 'NotificationRequestCubit.handleLifecycleResume',
+    );
     _syncSystemShareTargets(context, null);
     _handleNotificationIntent();
     _handleShareIntent();

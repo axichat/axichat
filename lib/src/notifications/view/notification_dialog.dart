@@ -55,21 +55,37 @@ Future<bool?> showNotificationDialog(
   );
 }
 
-Future<void> showNotificationRestartDialog(BuildContext context) =>
-    showFadeScaleDialog<void>(
-      context: context,
-      builder: (context) => AxiDialog(
-        constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
-        title: Text(
-          context.l10n.notificationsRestartTitle,
-          style: context.modalHeaderTextStyle,
-        ),
-        actions: [
-          AxiButton.primary(
-            onPressed: () => context.pop(),
-            child: Text(context.l10n.commonDone),
+Future<void>? _notificationRestartDialogFuture;
+
+Future<void> showNotificationRestartDialog(BuildContext context) {
+  final activeDialog = _notificationRestartDialogFuture;
+  if (activeDialog != null) {
+    return activeDialog;
+  }
+
+  late final Future<void> dialogFuture;
+  dialogFuture =
+      showFadeScaleDialog<void>(
+        context: context,
+        builder: (context) => AxiDialog(
+          constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+          title: Text(
+            context.l10n.notificationsRestartTitle,
+            style: context.modalHeaderTextStyle,
           ),
-        ],
-        child: Text(context.l10n.notificationsRestartSubtitle),
-      ),
-    );
+          actions: [
+            AxiButton.primary(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(context.l10n.commonDone),
+            ),
+          ],
+          child: Text(context.l10n.notificationsRestartSubtitle),
+        ),
+      ).whenComplete(() {
+        if (identical(_notificationRestartDialogFuture, dialogFuture)) {
+          _notificationRestartDialogFuture = null;
+        }
+      });
+  _notificationRestartDialogFuture = dialogFuture;
+  return dialogFuture;
+}

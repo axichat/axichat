@@ -179,6 +179,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     Duration xmppReconnectPauseDelay = const Duration(minutes: 1),
     Future<void> Function()? beforeStickyReconnect,
     Future<void> Function(String accountJid)? beforeXmppConnect,
+    bool Function()? preserveAuthOnLifecycleDetach,
   }) : _credentialStore = credentialStore,
        _xmppService = xmppService,
        _emailService = emailService,
@@ -187,6 +188,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
        _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
        _beforeStickyReconnect = beforeStickyReconnect,
        _beforeXmppConnect = beforeXmppConnect,
+       _preserveAuthOnLifecycleDetach = preserveAuthOnLifecycleDetach,
        super(initialState ?? const AuthenticationNone()) {
     _ownedHttpClient = httpClient == null ? http.Client() : null;
     _httpClient = httpClient ?? _ownedHttpClient!;
@@ -360,6 +362,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final Duration _xmppReconnectPauseDelay;
   final Future<void> Function()? _beforeStickyReconnect;
   final Future<void> Function(String accountJid)? _beforeXmppConnect;
+  final bool Function()? _preserveAuthOnLifecycleDetach;
   Timer? _xmppReconnectPauseTimer;
   AppLifecycleState? _latestLifecycleState;
 
@@ -1440,6 +1443,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _handleLifecycleDetach() async {
+    if (_stickyAuthActive &&
+        (_preserveAuthOnLifecycleDetach?.call() ?? false)) {
+      _log.info('Preserving active session during lifecycle detach handoff.');
+      return;
+    }
     if (_isDesktopLifecyclePlatform) {
       _log.info('Preserving active session during desktop lifecycle detach.');
       return;

@@ -10,6 +10,9 @@ class NotificationRequestState {
     this.isRequestingPermissions = false,
     this.isEnablingForeground = false,
     this.isDisablingForeground = false,
+    this.backgroundMessagingPhase = NotificationBackgroundMessagingPhase.idle,
+    this.foregroundActivationDeferredUntilRestart = false,
+    this.restartPromptRequestId = 0,
     required this.foregroundServiceActive,
   });
 
@@ -18,13 +21,17 @@ class NotificationRequestState {
   final bool isRequestingPermissions;
   final bool isEnablingForeground;
   final bool isDisablingForeground;
+  final NotificationBackgroundMessagingPhase backgroundMessagingPhase;
+  final bool foregroundActivationDeferredUntilRestart;
+  final int restartPromptRequestId;
   final bool foregroundServiceActive;
 
   bool get isBusy =>
       isCheckingPermissions ||
       isRequestingPermissions ||
       isEnablingForeground ||
-      isDisablingForeground;
+      isDisablingForeground ||
+      backgroundMessagingPhase.isBusy;
 
   NotificationRequestState copyWith({
     bool? hasPermissions,
@@ -32,6 +39,9 @@ class NotificationRequestState {
     bool? isRequestingPermissions,
     bool? isEnablingForeground,
     bool? isDisablingForeground,
+    NotificationBackgroundMessagingPhase? backgroundMessagingPhase,
+    bool? foregroundActivationDeferredUntilRestart,
+    int? restartPromptRequestId,
     bool? foregroundServiceActive,
   }) {
     return NotificationRequestState(
@@ -43,6 +53,13 @@ class NotificationRequestState {
       isEnablingForeground: isEnablingForeground ?? this.isEnablingForeground,
       isDisablingForeground:
           isDisablingForeground ?? this.isDisablingForeground,
+      backgroundMessagingPhase:
+          backgroundMessagingPhase ?? this.backgroundMessagingPhase,
+      foregroundActivationDeferredUntilRestart:
+          foregroundActivationDeferredUntilRestart ??
+          this.foregroundActivationDeferredUntilRestart,
+      restartPromptRequestId:
+          restartPromptRequestId ?? this.restartPromptRequestId,
       foregroundServiceActive:
           foregroundServiceActive ?? this.foregroundServiceActive,
     );

@@ -290,8 +290,10 @@ class ForegroundRuntimeController {
   }
 
   Future<void> _reconcileFailedStart() async {
+    var emailKeepaliveStopped = false;
     try {
       await _emailService.setForegroundKeepalive(false);
+      emailKeepaliveStopped = true;
     } on Exception catch (error, stackTrace) {
       _log.finer(
         'Failed to roll back email foreground keepalive.',
@@ -299,8 +301,10 @@ class ForegroundRuntimeController {
         stackTrace,
       );
     }
+    var foregroundSocketDisabled = false;
     try {
-      await _xmppService.disableForegroundSocketIfActive();
+      foregroundSocketDisabled = await _xmppService
+          .disableForegroundSocketIfActive();
     } on Exception catch (error, stackTrace) {
       _log.finer(
         'Failed to roll back XMPP foreground socket.',
@@ -308,7 +312,16 @@ class ForegroundRuntimeController {
         stackTrace,
       );
     }
-    await refreshActualState(fallback: false);
+    var running = await refreshActualState(fallback: false);
+    if (emailKeepaliveStopped &&
+        foregroundSocketDisabled &&
+        running &&
+        (!_xmppService.connected || !_xmppService.usingForegroundSocket)) {
+      await _forceStopForegroundService(
+        reason: 'failed foreground runtime activation',
+      );
+      await refreshActualState(fallback: false);
+    }
     _setForegroundIntent(false);
   }
 
