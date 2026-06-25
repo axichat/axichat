@@ -1204,7 +1204,6 @@ class EmailService {
   bool _foregroundKeepaliveLeaseAcquired = false;
   int _foregroundKeepaliveOperationId = 0;
   Timer? _contactsSyncTimer;
-  String? _pendingPushToken;
   final _syncStateController = StreamController<EmailSyncState>.broadcast(
     sync: true,
   );
@@ -3241,18 +3240,6 @@ class EmailService {
         'elapsedMs': capabilitiesWatch.elapsedMilliseconds,
       },
     );
-    final pushWatch = Stopwatch()..start();
-    await _applyPendingPushToken();
-    _traceEmailOperation(
-      'email.ensureProvisioned.applyPendingPushToken',
-      'end',
-      id: traceId,
-      fields: <String, Object?>{
-        'elapsedMs': pushWatch.elapsedMilliseconds,
-        'hasToken': _pendingPushToken?.isNotEmpty == true,
-      },
-    );
-
     _credentialSession.markEphemerallyProvisioned(scope);
     _clearProvisioningRuntimeFailure(scope);
     final startupSnapshotWatch = Stopwatch()..start();
@@ -3620,7 +3607,6 @@ class EmailService {
       );
     } finally {
       _credentialSession.clearRuntime();
-      _pendingPushToken = null;
       _runtimePhase = _EmailRuntimePhase.stopped;
       _setEmailHistoryImportPromptStatus(
         EmailHistoryImportPromptStatus.hidden,
@@ -3661,7 +3647,6 @@ class EmailService {
     _credentialSession.invalidateBootstrapOperations();
     _resetDeltaOperationQueue();
     _resetImapCapabilities();
-    _pendingPushToken = null;
 
     await _awaitLogoutRuntimeWork(pendingDatabaseRuntimeWork);
 
@@ -5075,18 +5060,6 @@ class EmailService {
       displayName: displayName,
     );
     return sendMessage(chat: chat, body: body);
-  }
-
-  Future<void> registerPushToken(String token) async {
-    final normalized = token.trim();
-    if (normalized.isEmpty) return;
-    _pendingPushToken = normalized;
-    if (_nativeCleanupPending ||
-        _databasePrefix == null ||
-        _databasePassphrase == null) {
-      return;
-    }
-    await _transport.registerPushToken(normalized);
   }
 
   Future<void> handleNetworkAvailable() =>
@@ -7076,10 +7049,14 @@ class EmailService {
     final accountIds = await _deltaAccountIdsForScope(null);
     for (final accountId in accountIds) {
       await _transport.ensureAccountSession(accountId);
-      final cursor = await _ensureDeltaProjectionCursor(
+      final cursor = await _readDeltaProjectionCursor(
         scope: scope,
         accountId: accountId,
       );
+      if (cursor == null) {
+        await _ensureDeltaProjectionCursor(scope: scope, accountId: accountId);
+        continue;
+      }
       await _repairStoredDeltaProjectionForCursor(
         scope: scope,
         accountId: accountId,
@@ -8888,12 +8865,6 @@ class EmailService {
 
   bool _isForegroundKeepaliveOpCurrent(int operationId) =>
       operationId == _foregroundKeepaliveOperationId;
-
-  Future<void> _applyPendingPushToken() async {
-    final token = _pendingPushToken;
-    if (token == null || token.isEmpty) return;
-    await _transport.registerPushToken(token);
-  }
 
   Future<void> _bootstrapActiveAccountIfNeeded() async {
     final traceId = _nextTraceId('email.bootstrapActiveAccount');

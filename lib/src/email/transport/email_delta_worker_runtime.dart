@@ -1594,10 +1594,6 @@ class EmailDeltaWorkerRuntime implements EmailDeltaRuntime {
       _invoke<void>('cancelImex', {'accountId': accountId});
 
   @override
-  Future<void> registerPushToken(String token) =>
-      _invoke<void>('registerPushToken', {'token': token});
-
-  @override
   Future<int> sendText({
     required int chatId,
     required String body,
@@ -2346,9 +2342,6 @@ final class _EmailDeltaWorkerServer {
         );
       case 'cancelImex':
         await _transport.cancelImex(accountId: payload['accountId'] as int?);
-        return null;
-      case 'registerPushToken':
-        await _transport.registerPushToken(payload['token'] as String);
         return null;
       case 'sendText':
         return _transport.sendText(

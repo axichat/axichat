@@ -283,7 +283,6 @@ abstract interface class EmailDeltaRuntime implements ChatTransport {
     Duration timeout = const Duration(minutes: 2),
   });
   Future<void> cancelImex({int? accountId});
-  Future<void> registerPushToken(String token);
   @override
   Future<int> sendText({
     required int chatId,
@@ -1466,23 +1465,6 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
       return;
     }
     await context.stopOngoingProcess();
-  }
-
-  @override
-  Future<void> registerPushToken(String token) async {
-    if (_databasePrefix == null || _databasePassphrase == null) {
-      return;
-    }
-    await _ensureContextReady();
-    if (!_useAccounts) {
-      return;
-    }
-    final accounts = _accounts;
-    if (accounts != null) {
-      await accounts.setPushDeviceToken(token);
-      return;
-    }
-    _log.finer('Delta accounts unavailable; deferring push token registration');
   }
 
   int? get _defaultAccountId {
