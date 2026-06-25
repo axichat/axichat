@@ -204,6 +204,9 @@ class _CalendarWidgetState
   bool get focusedCriticalPathNoticeActive => widget.active;
 
   @override
+  bool get showXmppOperationOverlay => true;
+
+  @override
   void onCalendarDragSessionStarted() {
     final notifier = widget.bottomDragSession;
     if (notifier != null) {

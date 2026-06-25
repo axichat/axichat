@@ -1233,7 +1233,10 @@ extension CalendarModelMerge on CalendarModel {
       remote.availabilityOverlays,
     );
     final mergedCollection = _mergeCollections(collection, remote.collection);
-    final DateTime now = DateTime.now().toUtc();
+    final DateTime mergedLastModified = _latestTimestamp(
+      lastModified,
+      remote.lastModified,
+    )!;
     final merged = CalendarModel(
       tasks: mergedTasks,
       dayEvents: mergedDayEvents,
@@ -1246,7 +1249,7 @@ extension CalendarModelMerge on CalendarModel {
       deletedDayEventIds: mergedDeletedDayEventIds,
       deletedJournalIds: mergedDeletedJournalIds,
       deletedCriticalPathIds: mergedDeletedCriticalPathIds,
-      lastModified: now,
+      lastModified: mergedLastModified,
       checksum: '',
     );
     return merged.copyWith(checksum: merged.calculateChecksum());

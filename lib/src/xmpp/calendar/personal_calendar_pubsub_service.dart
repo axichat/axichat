@@ -424,6 +424,13 @@ mixin PersonalCalendarPubSubService
   Future<void> _handlePersonalCalendarSnapshotUpdate(
     PersonalCalendarSnapshotPubSubPayload payload,
   ) async {
+    await _ensurePersonalCalendarSnapshotSourceLoaded();
+    final sourceId = _normalizePersonalCalendarSnapshotSourceId(
+      payload.sourceId,
+    );
+    if (sourceId != null && sourceId == _personalCalendarSnapshotSourceId) {
+      return;
+    }
     await _requestPersonalCalendarSnapshotSyncFromBloc(
       PersonalCalendarSnapshotSyncSignalKind.refresh,
     );

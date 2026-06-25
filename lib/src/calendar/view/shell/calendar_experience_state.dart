@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
@@ -349,6 +350,11 @@ abstract class CalendarExperienceState<
                       ),
                       if (shouldShowLoadingOverlay(state))
                         buildLoadingOverlay(context),
+                      if (showXmppOperationOverlay)
+                        const Material(
+                          type: MaterialType.transparency,
+                          child: XmppOperationOverlay(),
+                        ),
                     ],
                   ),
                 ),
@@ -905,6 +911,10 @@ abstract class CalendarExperienceState<
   /// Allows subclasses to provide loading overlays with custom tinting.
   Widget buildLoadingOverlay(BuildContext context) =>
       const CalendarLoadingOverlay();
+
+  /// Whether account-level XMPP operation progress should float over this
+  /// calendar surface.
+  bool get showXmppOperationOverlay => false;
 
   /// Only show the blocking overlay when the calendar is empty and bootstrapping.
   bool shouldShowLoadingOverlay(CalendarState state) =>
