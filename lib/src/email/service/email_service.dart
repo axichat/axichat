@@ -276,10 +276,11 @@ final class _EmailContentBodyTask {
   });
 
   final EmailContentJobKey key;
-  final Message message;
+  Message message;
   final DateTime queuedAt;
   final int generation;
   bool started = false;
+  bool loadingIndicatorVisible = false;
 }
 
 final class _EmailContentHtmlDerivationTask {
@@ -985,6 +986,7 @@ class EmailService {
   static const Duration _existingHistoryImportProjectionYieldDelay = Duration(
     milliseconds: 16,
   );
+  static const int _existingHistoryImportProjectionStartDeltaMsgId = 0;
   static const String _existingHistoryImportJournalStatusImporting =
       'importing';
   static const String _existingHistoryImportFailureWarningMarker =
@@ -1240,6 +1242,7 @@ class EmailService {
   bool _existingHistoryImportDeferredContactsSync = false;
   final List<String> _existingHistoryImportWarnings = <String>[];
   final Set<String> _emailHistoryImportPromptSnoozedScopes = <String>{};
+  final Set<String> _deltaProjectionCursorRepairCompletedKeys = <String>{};
 
   String get _emailHistoryImportPromptId => 'email_history_import_v1';
 
@@ -5937,6 +5940,7 @@ class EmailService {
         var journal = await _ensureExistingHistoryImportJournal(
           scope: scope,
           accountId: accountId,
+          resetProjection: force,
         );
         if (!journal.fetchCompleted) {
           final fetchStopwatch = Stopwatch()..start();
@@ -6216,12 +6220,26 @@ class EmailService {
   Future<EmailHistoryImportJournal> _ensureExistingHistoryImportJournal({
     required String scope,
     required int accountId,
+    required bool resetProjection,
   }) async {
     final existing = await _readExistingHistoryImportJournal(
       scope: scope,
       accountId: accountId,
     );
     if (existing != null) {
+      if (resetProjection ||
+          _shouldResetExistingHistoryImportJournalProjection(existing)) {
+        return _saveExistingHistoryImportJournal(
+          scope: scope,
+          accountId: accountId,
+          status: _existingHistoryImportJournalStatusImporting,
+          watermarkDeltaMsgId: existing.watermarkDeltaMsgId,
+          targetDeltaMsgId: existing.targetDeltaMsgId,
+          lastProjectedDeltaMsgId:
+              _existingHistoryImportProjectionStartDeltaMsgId,
+          fetchCompleted: resetProjection ? false : existing.fetchCompleted,
+        );
+      }
       return existing;
     }
     final watermarkDeltaMsgId = await _transport.maxMessageId(
@@ -6233,9 +6251,17 @@ class EmailService {
       status: _existingHistoryImportJournalStatusImporting,
       watermarkDeltaMsgId: watermarkDeltaMsgId,
       targetDeltaMsgId: watermarkDeltaMsgId,
-      lastProjectedDeltaMsgId: watermarkDeltaMsgId,
+      lastProjectedDeltaMsgId: _existingHistoryImportProjectionStartDeltaMsgId,
       fetchCompleted: false,
     );
+  }
+
+  bool _shouldResetExistingHistoryImportJournalProjection(
+    EmailHistoryImportJournal journal,
+  ) {
+    return journal.watermarkDeltaMsgId >
+            _existingHistoryImportProjectionStartDeltaMsgId &&
+        journal.lastProjectedDeltaMsgId >= journal.watermarkDeltaMsgId;
   }
 
   Future<EmailHistoryImportJournal?> _readExistingHistoryImportJournal({
@@ -6980,6 +7006,10 @@ class EmailService {
     for (final resolvedAccountId in accountIds) {
       final accountWatch = Stopwatch()..start();
       await _transport.ensureAccountSession(resolvedAccountId);
+      await _repairStoredDeltaProjectionForCursor(
+        scope: _activeCredentialScope,
+        accountId: resolvedAccountId,
+      );
       await _deltaConsumerForAccount(
         resolvedAccountId,
       ).refreshChatlistSnapshot();
@@ -7046,7 +7076,15 @@ class EmailService {
     final accountIds = await _deltaAccountIdsForScope(null);
     for (final accountId in accountIds) {
       await _transport.ensureAccountSession(accountId);
-      await _ensureDeltaProjectionCursor(scope: scope, accountId: accountId);
+      final cursor = await _ensureDeltaProjectionCursor(
+        scope: scope,
+        accountId: accountId,
+      );
+      await _repairStoredDeltaProjectionForCursor(
+        scope: scope,
+        accountId: accountId,
+        cursor: cursor,
+      );
     }
   }
 
@@ -7110,6 +7148,134 @@ class EmailService {
         status: deltaMsgId.toString(),
       );
     });
+  }
+
+  Future<void> _repairStoredDeltaProjectionForCursor({
+    required String? scope,
+    required int accountId,
+    int? cursor,
+  }) async {
+    final resolvedScope = scope?.trim();
+    if (resolvedScope == null || resolvedScope.isEmpty) {
+      return;
+    }
+    if (_existingHistoryImportProjectionState !=
+        _ExistingHistoryImportProjectionState.idle) {
+      return;
+    }
+    final targetDeltaMsgId =
+        cursor ??
+        await _readDeltaProjectionCursor(
+          scope: resolvedScope,
+          accountId: accountId,
+        );
+    if (targetDeltaMsgId == null ||
+        targetDeltaMsgId <= _existingHistoryImportProjectionStartDeltaMsgId) {
+      return;
+    }
+    final repairKey = '$resolvedScope:$accountId:$targetDeltaMsgId';
+    if (!_deltaProjectionCursorRepairCompletedKeys.add(repairKey)) {
+      return;
+    }
+    final stopwatch = Stopwatch()..start();
+    var repairedCount = 0;
+    _traceEmailOperation(
+      'email.deltaProjectionRepair',
+      'start',
+      fields: <String, Object?>{
+        'accountId': accountId,
+        'targetDeltaMsgId': targetDeltaMsgId,
+      },
+    );
+    var completed = false;
+    try {
+      repairedCount = await _repairMissingStoredDeltaProjectionRange(
+        accountId: accountId,
+        targetDeltaMsgId: targetDeltaMsgId,
+      );
+      completed = true;
+    } finally {
+      if (!completed) {
+        _deltaProjectionCursorRepairCompletedKeys.remove(repairKey);
+      }
+      _traceEmailOperation(
+        'email.deltaProjectionRepair',
+        'end',
+        fields: <String, Object?>{
+          'accountId': accountId,
+          'targetDeltaMsgId': targetDeltaMsgId,
+          'repairedCount': repairedCount,
+          'elapsedMs': stopwatch.elapsedMilliseconds,
+        },
+      );
+    }
+  }
+
+  Future<int> _repairMissingStoredDeltaProjectionRange({
+    required int accountId,
+    required int targetDeltaMsgId,
+  }) async {
+    var cursor = _existingHistoryImportProjectionStartDeltaMsgId;
+    var repairedCount = 0;
+    while (cursor < targetDeltaMsgId) {
+      final page = await _transport.messageIdsAfter(
+        afterId: cursor,
+        limit: _existingHistoryImportDeltaIdPageSize,
+        accountId: accountId,
+      );
+      if (page.isEmpty) {
+        return repairedCount;
+      }
+      final boundedPage = page
+          .where((id) => id <= targetDeltaMsgId)
+          .toList(growable: false);
+      if (boundedPage.isEmpty) {
+        return repairedCount;
+      }
+      final missingIds = await _missingStoredDeltaMessageIds(
+        boundedPage,
+        accountId: accountId,
+      );
+      if (missingIds.isNotEmpty) {
+        await _hydrateMessagesOnMain(
+          missingIds,
+          accountId: accountId,
+          allowExistingHistoryImportProjection: true,
+        );
+        repairedCount += missingIds.length;
+        await _yieldAfterExistingHistoryImportProjectionBatch();
+      }
+      cursor = boundedPage.last;
+      if (page.length < _existingHistoryImportDeltaIdPageSize ||
+          boundedPage.length < page.length) {
+        return repairedCount;
+      }
+    }
+    return repairedCount;
+  }
+
+  Future<List<int>> _missingStoredDeltaMessageIds(
+    List<int> deltaMsgIds, {
+    required int accountId,
+  }) async {
+    if (deltaMsgIds.isEmpty) {
+      return const <int>[];
+    }
+    final db = await _databaseBuilder();
+    final stored = await db.getMessagesByDeltaIds(
+      deltaMsgIds,
+      deltaAccountId: accountId,
+    );
+    final storedIds = <int>{};
+    for (final message in stored) {
+      final deltaMsgId = message.deltaMsgId;
+      if (deltaMsgId != null) {
+        storedIds.add(deltaMsgId);
+      }
+    }
+    return deltaMsgIds
+        .where((deltaMsgId) => !storedIds.contains(deltaMsgId))
+        .toList(growable: false);
   }
 
   Future<_EmailFreshProjectionResult> _syncIncrementalFromCore({
@@ -11909,17 +12075,23 @@ class EmailService {
     if (key == null) {
       return false;
     }
-    if (message.rfc822BodyContentUnavailable) {
+    final effectiveMessage =
+        await _currentStoredEmailContentMessage(message, expectedKey: key) ??
+        message;
+    if (effectiveMessage.rfc822BodyContentUnavailable) {
       return false;
     }
-    if (_emailContentPreparationComplete(message)) {
+    if (_emailContentPreparationComplete(effectiveMessage)) {
       return true;
     }
     final completer = Completer<bool>();
     _emailContentPreparationWaiters
         .putIfAbsent(key, () => <Completer<bool>>[])
         .add(completer);
-    final queued = _enqueueEmailContentPreparation(message, priority: priority);
+    final queued = _enqueueEmailContentPreparation(
+      effectiveMessage,
+      priority: priority,
+    );
     if (!queued) {
       _completeEmailContentPreparationWaiters(key, false);
     } else {
@@ -11944,16 +12116,36 @@ class EmailService {
     if (_emailOriginalLoadingKeys.contains(key)) {
       return false;
     }
+    final effectiveMessage =
+        await _currentStoredEmailContentMessage(message, expectedKey: key) ??
+        message;
     _emailOriginalLoadingKeys.add(key);
     _emailOriginalUnavailableKeys.remove(key);
     _emitEmailOriginalContentSnapshot();
     final generation = _originalContentGeneration;
     return await _runEmailOriginalContentPreparation(
       key: key,
-      message: message,
+      message: effectiveMessage,
       priority: priority,
       generation: generation,
     );
+  }
+
+  Future<Message?> _currentStoredEmailContentMessage(
+    Message message, {
+    required EmailContentJobKey expectedKey,
+  }) {
+    return _trackAppDatabaseOperation(() async {
+      final db = await _databaseBuilder();
+      final current = await db.getMessageByStanzaID(message.stanzaID);
+      if (current == null) {
+        return null;
+      }
+      if (_emailContentJobKey(current) != expectedKey) {
+        return null;
+      }
+      return current;
+    });
   }
 
   Future<bool> _runEmailOriginalContentPreparation({
@@ -12344,6 +12536,7 @@ class EmailService {
     final traceId = _nextTraceId('email.contentBodyPreparation');
     var result = 'failed';
     var usable = false;
+    var retryFailure = true;
     try {
       _traceEmailOperation(
         'email.contentBodyPreparation',
@@ -12356,8 +12549,46 @@ class EmailService {
           'queueWaitMs': startedAt.difference(task.queuedAt).inMilliseconds,
         },
       );
+      final currentBeforeHydration = await _messageForEmailContentKey(
+        task,
+        deadline: deadline,
+      );
+      if (currentBeforeHydration == null) {
+        result = 'missingStoredMessage';
+        return;
+      }
+      task.message = currentBeforeHydration;
+      if (_emailContentPreparationComplete(currentBeforeHydration)) {
+        usable = true;
+        result = 'alreadyStored';
+        return;
+      }
+      if (currentBeforeHydration.rfc822BodyContentUnavailable) {
+        retryFailure = false;
+        result = 'alreadyUnavailable';
+        return;
+      }
+      final normalizedHtml = currentBeforeHydration.normalizedHtmlBody;
+      if (!_emailContentNeedsBodyHydration(currentBeforeHydration)) {
+        retryFailure = false;
+        usable = _emailContentBodyUsable(currentBeforeHydration);
+        if (normalizedHtml != null &&
+            HtmlContentCodec.cachedEmailDerivations(normalizedHtml) == null) {
+          _enqueueEmailHtmlDerivation(
+            key: task.key,
+            message: currentBeforeHydration,
+            normalizedHtml: normalizedHtml,
+          );
+          result = 'htmlDerivationQueued';
+        } else {
+          result = 'notHydratable';
+        }
+        return;
+      }
+      task.loadingIndicatorVisible = true;
+      _emitEmailContentPreparationSnapshot();
       final hydration = await downloadAndHydrateFullMessage(
-        task.message,
+        currentBeforeHydration,
         deadline: deadline,
         pendingHydrationGeneration: task.generation,
         isCanceled: () => _emailContentBodyTaskCanceled(task),
@@ -12372,13 +12603,14 @@ class EmailService {
           deadline: deadline,
         );
         if (current != null) {
-          final normalizedHtml = current.normalizedHtmlBody;
-          if (normalizedHtml != null &&
-              HtmlContentCodec.cachedEmailDerivations(normalizedHtml) == null) {
+          task.message = current;
+          final currentHtml = current.normalizedHtmlBody;
+          if (currentHtml != null &&
+              HtmlContentCodec.cachedEmailDerivations(currentHtml) == null) {
             _enqueueEmailHtmlDerivation(
               key: task.key,
               message: current,
-              normalizedHtml: normalizedHtml,
+              normalizedHtml: currentHtml,
             );
           }
           usable = _emailContentBodyUsable(current);
@@ -12421,7 +12653,7 @@ class EmailService {
           );
           if (usable) {
             _recordEmailContentPreparationSuccess(task.key);
-          } else if (!htmlDerivationPending) {
+          } else if (!htmlDerivationPending && retryFailure) {
             _recordEmailContentPreparationFailure(task.key, task.message);
           }
           if (usable || !htmlDerivationPending) {
@@ -12459,7 +12691,11 @@ class EmailService {
     final result = await _withPendingEmailBodyDownloadBudgetResult(
       () async {
         final db = await _databaseBuilder();
-        return db.getMessageByStanzaID(task.message.stanzaID);
+        final current = await db.getMessageByStanzaID(task.message.stanzaID);
+        if (current == null || _emailContentJobKey(current) != task.key) {
+          return null;
+        }
+        return current;
       },
       deadline: deadline,
       pendingHydrationGeneration: task.generation,
@@ -12908,24 +13144,18 @@ class EmailService {
     );
     final loadingIndicatorKeys = <EmailContentJobKey>{};
     for (final entry in _emailContentBodyTasksByKey.entries) {
-      if (_emailContentTaskShowsLoadingIndicator(
-        key: entry.key,
-        message: entry.value.message,
-      )) {
+      final task = entry.value;
+      if (task.loadingIndicatorVisible &&
+          _emailContentTaskShowsLoadingIndicator(
+            key: entry.key,
+            message: task.message,
+          )) {
         loadingIndicatorKeys.add(entry.key);
       }
     }
     final htmlKeys = <EmailContentJobKey>{};
     for (final task in _emailContentHtmlDerivationTasksByDigest.values) {
       htmlKeys.addAll(task.messagesByKey.keys);
-      for (final entry in task.messagesByKey.entries) {
-        if (_emailContentTaskShowsLoadingIndicator(
-          key: entry.key,
-          message: entry.value,
-        )) {
-          loadingIndicatorKeys.add(entry.key);
-        }
-      }
     }
     if (!force &&
         setEquals(

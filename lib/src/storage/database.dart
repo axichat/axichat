@@ -157,6 +157,8 @@ abstract interface class XmppDatabase implements Database {
     bool includePseudoMessages = true,
   });
 
+  Future<bool> hasDisplayableMessagesForChat(String jid);
+
   Future<int> countEmailBackedChatMessages(
     String jid, {
     int? deltaAccountId,
@@ -3535,6 +3537,19 @@ WHERE stanza_i_d = ?
     }
     final row = await query.getSingle();
     return row.read(countExpression) ?? 0;
+  }
+
+  @override
+  Future<bool> hasDisplayableMessagesForChat(String jid) async {
+    final countExpression = messages.rowId.count();
+    final query = selectOnly(messages)
+      ..addColumns([countExpression])
+      ..where(
+        messages.chatJid.equals(jid) &
+            _timelineDisplayableMessageExpression(messages),
+      );
+    final row = await query.getSingle();
+    return (row.read(countExpression) ?? 0) > 0;
   }
 
   @override

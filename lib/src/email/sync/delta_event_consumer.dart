@@ -1119,21 +1119,12 @@ class DeltaEventConsumer {
             deltaAccountId: deltaAccountId,
             deltaChatId: deltaChatId,
           );
-          await db.trimChatMessages(
-            jid: chat.jid,
-            maxMessages: 0,
-            deltaAccountId: deltaAccountId,
-            deltaChatId: deltaChatId,
-            selfJid: _xmppSelfJid,
-            emailSelfJid: _selfJid,
-          );
           await _repairActiveDeltaChatReference(
             chatJid: chat.jid,
             removedDeltaChatId: deltaChatId,
             db: db,
           );
-          final remaining = await db.countEmailChatAccounts(chat.jid);
-          if (remaining == 0 && chat.defaultTransport.isEmail) {
+          if (await _canRemoveDetachedEmailChat(db: db, chat: chat)) {
             await db.removeChat(chat.jid);
           }
         }
@@ -1811,23 +1802,27 @@ class DeltaEventConsumer {
       deltaAccountId: deltaAccountId,
       deltaChatId: chatId,
     );
-    await db.trimChatMessages(
-      jid: chat.jid,
-      maxMessages: 0,
-      deltaAccountId: deltaAccountId,
-      deltaChatId: chatId,
-      selfJid: _xmppSelfJid,
-      emailSelfJid: _selfJid,
-    );
     await _repairActiveDeltaChatReference(
       chatJid: chat.jid,
       removedDeltaChatId: chatId,
       db: db,
     );
-    final remaining = await db.countEmailChatAccounts(chat.jid);
-    if (remaining == 0 && chat.defaultTransport.isEmail) {
+    if (await _canRemoveDetachedEmailChat(db: db, chat: chat)) {
       await db.removeChat(chat.jid);
     }
+  }
+
+  Future<bool> _canRemoveDetachedEmailChat({
+    required XmppDatabase db,
+    required Chat chat,
+  }) async {
+    if (!chat.defaultTransport.isEmail) {
+      return false;
+    }
+    if (await db.countEmailChatAccounts(chat.jid) > 0) {
+      return false;
+    }
+    return !await db.hasDisplayableMessagesForChat(chat.jid);
   }
 
   Future<void> _repairActiveDeltaChatReference({

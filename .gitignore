@@ -58,22 +58,13 @@ app.*.map.json
 !/docs/readme-media/
 !/docs/readme-media/*
 
-# Vendored chatmail core (Rust)
-chatmail/core/.git/
-chatmail/core/build/
-chatmail/core/target/
-/vendor/deltachat-core-rust/
 /dist/
-deltachat-android-main/
-moxxy-master/
-/deltachat-android-main.zip
-/moxxy-master.zip
 
 # Root docs: keep standard public docs tracked, treat the rest as local-only.
 /*.md
 !/README.md
 !/CONTRIBUTING.md
 /lib/**/*.md
-/conversations/
 /.cargo-home/
 /*.json
+/axichat-apple/
