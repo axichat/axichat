@@ -663,15 +663,6 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> clearMessageHistory();
 
-  Future<void> trimChatMessages({
-    required String jid,
-    required int maxMessages,
-    int? deltaAccountId,
-    int? deltaChatId,
-    String? selfJid,
-    String? emailSelfJid,
-  });
-
   Future<void> createMessageShare({
     required MessageShareData share,
     required List<MessageParticipantData> participants,
@@ -6258,61 +6249,28 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   @override
-  Future<void> trimChatMessages({
-    required String jid,
-    required int maxMessages,
-    int? deltaAccountId,
-    int? deltaChatId,
-    String? selfJid,
-    String? emailSelfJid,
-  }) async {
-    const int trimBatchSize = 900; // stays under SQLite's 999-variable limit
-    const int trimRefreshSummaryLimit = 0;
+  Future<void> removeChatMessages(String jid) async {
+    const int deleteBatchSize = 900; // stays under SQLite's 999-variable limit
     Iterable<List<T>> chunked<T>(List<T> items) sync* {
-      for (var index = 0; index < items.length; index += trimBatchSize) {
-        final end = index + trimBatchSize;
+      for (var index = 0; index < items.length; index += deleteBatchSize) {
+        final end = index + deleteBatchSize;
         yield items.sublist(index, end > items.length ? items.length : end);
       }
     }
 
-    final offset = maxMessages <= trimRefreshSummaryLimit
-        ? trimRefreshSummaryLimit
-        : maxMessages;
-    final bool refreshSummary = maxMessages <= trimRefreshSummaryLimit;
-    final bool filterByAccount = deltaAccountId != null;
-    final String accountClause = filterByAccount
-        ? ' AND delta_account_id = ?'
-              ' AND (delta_chat_id IS NOT NULL OR delta_msg_id IS NOT NULL)'
-        : '';
-    final String deltaChatClause = deltaChatId != null
-        ? ' AND delta_chat_id = ?'
-        : '';
     final pruned = await customSelect(
       '''
       SELECT id AS message_id, stanza_i_d AS stanza_id, origin_i_d,
              muc_stanza_id, delta_msg_id, delta_account_id
       FROM messages
-      WHERE chat_jid = ?$accountClause$deltaChatClause
-      ORDER BY timestamp DESC
-      LIMIT -1 OFFSET ?
+      WHERE chat_jid = ?
       ''',
-      variables: [
-        Variable<String>(jid),
-        if (filterByAccount) Variable<int>(deltaAccountId),
-        if (deltaChatId != null) Variable<int>(deltaChatId),
-        Variable<int>(offset),
-      ],
+      variables: [Variable<String>(jid)],
       readsFrom: {messages},
     ).get();
 
     if (pruned.isEmpty) {
-      if (refreshSummary) {
-        await _refreshChatSummaryAfterTrim(
-          jid: jid,
-          selfJid: selfJid,
-          emailSelfJid: emailSelfJid,
-        );
-      }
+      await _refreshChatSummaryAfterMessageRemoval(jid: jid);
       return;
     }
 
@@ -6468,22 +6426,10 @@ WHERE email_from_address IN ($placeholderClause)
     for (final metadataId in metadataIds) {
       await _deleteFileMetadataIfOrphaned(metadataId);
     }
-    if (refreshSummary) {
-      await _refreshChatSummaryAfterTrim(
-        jid: jid,
-        selfJid: selfJid,
-        emailSelfJid: emailSelfJid,
-      );
-    } else {
-      await repairUnreadCountForChat(
-        jid,
-        selfJid: selfJid,
-        emailSelfJid: emailSelfJid,
-      );
-    }
+    await _refreshChatSummaryAfterMessageRemoval(jid: jid);
   }
 
-  Future<void> _refreshChatSummaryAfterTrim({
+  Future<void> _refreshChatSummaryAfterMessageRemoval({
     required String jid,
     String? selfJid,
     String? emailSelfJid,
@@ -6918,10 +6864,6 @@ WHERE stanza_i_d = ?
     deltaMsgId,
     deltaAccountId: deltaAccountId,
   );
-
-  @override
-  Future<void> removeChatMessages(String jid) =>
-      trimChatMessages(jid: jid, maxMessages: 0);
 
   @override
   Stream<List<Draft>> watchDrafts({required int start, required int end}) {
@@ -11531,7 +11473,7 @@ WHERE (delta_msg_id IS NOT NULL OR delta_chat_id IS NOT NULL)
     }
     await _retargetChatThreadReferences(fromJid: chat.jid, toJid: canonicalJid);
     await (delete(chats)..where((tbl) => tbl.jid.equals(chat.jid))).go();
-    await _refreshChatSummaryAfterTrim(jid: canonicalJid);
+    await _refreshChatSummaryAfterMessageRemoval(jid: canonicalJid);
   }
 
   Future<void> _retargetChatThreadReferences({
@@ -13838,7 +13780,7 @@ WHERE value IS NOT NULL AND trim(value) != ''
       if (await getChat(jid) == null) {
         continue;
       }
-      await _refreshChatSummaryAfterTrim(jid: jid);
+      await _refreshChatSummaryAfterMessageRemoval(jid: jid);
     }
   }
 
