@@ -1328,7 +1328,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _triggerEmailReconnect(
             waitForNetworkAvailable: false,
             recovery: emailRecovery,
-            allowAutoLogout: !_isDesktopLifecyclePlatform,
           ),
         );
       }
@@ -1441,6 +1440,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _handleLifecycleDetach() async {
+    if (_isDesktopLifecyclePlatform) {
+      _log.info('Preserving active session during desktop lifecycle detach.');
+      return;
+    }
     if (_shouldPreserveBackgroundSession()) {
       return;
     }
@@ -1481,13 +1484,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       'xmppHasSettings=${_xmppService.hasConnectionSettings}',
     );
     if (!_canReconnectWithInMemoryCredentials()) {
-      if (_isDesktopLifecyclePlatform) {
-        _log.fine(
-          'Skipping desktop lifecycle sticky-session resume without reconnect '
-          'context: source=$source',
-        );
-        return;
-      }
       await logout();
       return;
     }
@@ -1500,7 +1496,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _triggerEmailReconnect(
         waitForNetworkAvailable: false,
         recovery: emailRecovery,
-        allowAutoLogout: !_isDesktopLifecyclePlatform,
       ),
     );
     if (state is! AuthenticationComplete) {

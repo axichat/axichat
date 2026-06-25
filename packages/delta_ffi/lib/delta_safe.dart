@@ -1218,6 +1218,7 @@ class DeltaContextHandle {
     _eventLoop ??= _DeltaEventLoop(
       emitterFactory: () => _bindings.dc_get_event_emitter(_context),
       debugLabel: 'context-${_context.address}',
+      onIdle: _disposeIdleEventLoop,
     );
     return _eventLoop!.stream;
   }
@@ -2433,6 +2434,15 @@ class DeltaContextHandle {
     _bindings.dc_context_unref(_context);
   }
 
+  Future<void> _disposeIdleEventLoop(_DeltaEventLoop eventLoop) async {
+    if (!identical(_eventLoop, eventLoop) || eventLoop.hasListener) {
+      return;
+    }
+    _eventLoop = null;
+    eventLoop.requestStop();
+    await eventLoop.dispose();
+  }
+
   Future<void> _signalActiveBackgroundFetch(Future<bool>? activeFetch) async {
     if (activeFetch == null) return;
     while (identical(_activeBackgroundFetch, activeFetch)) {
@@ -2822,8 +2832,18 @@ class DeltaAccountsHandle {
     _eventLoop ??= _DeltaEventLoop(
       emitterFactory: () => _bindings.dc_accounts_get_event_emitter(_accounts),
       debugLabel: 'accounts',
+      onIdle: _disposeIdleEventLoop,
     );
     return _eventLoop!.stream;
+  }
+
+  Future<void> _disposeIdleEventLoop(_DeltaEventLoop eventLoop) async {
+    if (!identical(_eventLoop, eventLoop) || eventLoop.hasListener) {
+      return;
+    }
+    _eventLoop = null;
+    eventLoop.requestStop();
+    await eventLoop.dispose();
   }
 
   int? _existingAccountId() {
@@ -3017,13 +3037,17 @@ class _DeltaEventLoop {
   _DeltaEventLoop({
     required ffi.Pointer<dc_event_emitter_t> Function() emitterFactory,
     required String debugLabel,
+    required Future<void> Function(_DeltaEventLoop eventLoop) onIdle,
   })  : _emitterFactory = emitterFactory,
-        _debugLabel = debugLabel;
+        _debugLabel = debugLabel,
+        _onIdle = onIdle;
   final ffi.Pointer<dc_event_emitter_t> Function() _emitterFactory;
   final String _debugLabel;
+  final Future<void> Function(_DeltaEventLoop eventLoop) _onIdle;
   late final StreamController<DeltaCoreEvent> _controller =
       StreamController<DeltaCoreEvent>.broadcast(
     onListen: _handleListen,
+    onCancel: _handleCancel,
   );
 
   ReceivePort? _eventPort;
@@ -3036,9 +3060,14 @@ class _DeltaEventLoop {
   bool _started = false;
   bool _stopRequested = false;
   bool _disposed = false;
+  bool _controllerClosed = false;
+  Future<void>? _startFuture;
+  Future<void>? _disposeFuture;
   Completer<void>? _stoppedCompleter;
 
   Stream<DeltaCoreEvent> get stream => _controller.stream;
+
+  bool get hasListener => _controller.hasListener;
 
   void requestStop() {
     _requestStop();
@@ -3049,7 +3078,21 @@ class _DeltaEventLoop {
       return;
     }
     _started = true;
-    unawaited(_startLoop());
+    final startFuture = _startLoop();
+    _startFuture = startFuture;
+    unawaited(startFuture);
+  }
+
+  void _handleCancel() {
+    unawaited(_disposeIfStillIdle());
+  }
+
+  Future<void> _disposeIfStillIdle() async {
+    await Future<void>.delayed(Duration.zero);
+    if (_disposed || _controller.hasListener) {
+      return;
+    }
+    await _onIdle(this);
   }
 
   Future<void> _startLoop() async {
@@ -3058,7 +3101,7 @@ class _DeltaEventLoop {
       _controller.addError(
         const DeltaOperationException('Failed to obtain Delta event emitter'),
       );
-      await _controller.close();
+      await _closeController();
       return;
     }
 
@@ -3117,10 +3160,28 @@ class _DeltaEventLoop {
   }
 
   Future<void> dispose() async {
+    final activeDispose = _disposeFuture;
+    if (activeDispose != null) {
+      await activeDispose;
+      return;
+    }
+    _disposeFuture = _dispose();
+    await _disposeFuture;
+  }
+
+  Future<void> _dispose() async {
     if (_disposed) return;
     _disposed = true;
+    Object? startError;
+    StackTrace? startStackTrace;
     if (_started) {
       _requestStop();
+      try {
+        await _startFuture;
+      } on Exception catch (error, stackTrace) {
+        startError = error;
+        startStackTrace = stackTrace;
+      }
       if (_stoppedCompleter != null) {
         await _stoppedCompleter!.future
             .timeout(const Duration(seconds: 5), onTimeout: () {});
@@ -3130,11 +3191,22 @@ class _DeltaEventLoop {
     await _controlSubscription?.cancel();
     _eventPort?.close();
     _controlPort?.close();
-    await _controller.close();
+    await _closeController();
     _isolate?.kill(priority: Isolate.immediate);
     _isolate = null;
     _loopControlPort = null;
     _emitter = null;
+    if (startError != null) {
+      Error.throwWithStackTrace(startError, startStackTrace!);
+    }
+  }
+
+  Future<void> _closeController() {
+    if (_controllerClosed) {
+      return _controller.done;
+    }
+    _controllerClosed = true;
+    return _controller.close();
   }
 }
 
