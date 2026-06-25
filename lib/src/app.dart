@@ -223,19 +223,12 @@ class _AxichatState extends State<Axichat> {
                       )..initialize(),
                     ),
                     BlocProvider(
-                      create: (context) {
-                        final settingsCubit = context.read<SettingsCubit>();
-                        final xmppService = context.read<XmppService>();
-                        return NotificationRequestCubit(
-                          notificationService: context
-                              .read<NotificationService>(),
-                          foregroundRuntimeController: context
-                              .read<ForegroundRuntimeController>(),
-                          persistBackgroundMessagingPreference:
-                              settingsCubit.toggleBackgroundMessaging,
-                          accountJidProvider: () => xmppService.myJid,
-                        )..refreshPermissions();
-                      },
+                      create: (context) => NotificationRequestCubit(
+                        notificationService: context
+                            .read<NotificationService>(),
+                        foregroundRuntimeController: context
+                            .read<ForegroundRuntimeController>(),
+                      )..refreshPermissions(),
                     ),
                     BlocProvider(
                       create: (context) => AuthenticationCubit(
@@ -270,9 +263,6 @@ class _AxichatState extends State<Axichat> {
                                     ),
                               );
                         },
-                        preserveAuthOnLifecycleDetach: context
-                            .read<NotificationRequestCubit>()
-                            .consumePermissionDetachAllowance,
                       ),
                     ),
                     BlocProvider(

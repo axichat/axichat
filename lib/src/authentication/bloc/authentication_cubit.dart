@@ -179,7 +179,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     Duration xmppReconnectPauseDelay = const Duration(minutes: 1),
     Future<void> Function()? beforeStickyReconnect,
     Future<void> Function(String accountJid)? beforeXmppConnect,
-    bool Function()? preserveAuthOnLifecycleDetach,
   }) : _credentialStore = credentialStore,
        _xmppService = xmppService,
        _emailService = emailService,
@@ -188,7 +187,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
        _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
        _beforeStickyReconnect = beforeStickyReconnect,
        _beforeXmppConnect = beforeXmppConnect,
-       _preserveAuthOnLifecycleDetach = preserveAuthOnLifecycleDetach,
        super(initialState ?? const AuthenticationNone()) {
     _ownedHttpClient = httpClient == null ? http.Client() : null;
     _httpClient = httpClient ?? _ownedHttpClient!;
@@ -362,13 +360,23 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final Duration _xmppReconnectPauseDelay;
   final Future<void> Function()? _beforeStickyReconnect;
   final Future<void> Function(String accountJid)? _beforeXmppConnect;
-  final bool Function()? _preserveAuthOnLifecycleDetach;
+  DateTime? _notificationPermissionDetachAllowanceExpiresAt;
   Timer? _xmppReconnectPauseTimer;
   AppLifecycleState? _latestLifecycleState;
 
   late final AppLifecycleListener _lifecycleListener;
 
   EndpointConfig get endpointConfig => state.config;
+
+  void beginNotificationPermissionDetachAllowance() {
+    _notificationPermissionDetachAllowanceExpiresAt = DateTime.now().add(
+      _notificationPermissionDetachAllowanceDuration,
+    );
+  }
+
+  void endNotificationPermissionDetachAllowance() {
+    _notificationPermissionDetachAllowanceExpiresAt = null;
+  }
 
   Future<void> updateEndpointConfig(EndpointConfig config) async {
     _handleEndpointConfigUpdated(config);
@@ -1443,8 +1451,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _handleLifecycleDetach() async {
-    if (_stickyAuthActive &&
-        (_preserveAuthOnLifecycleDetach?.call() ?? false)) {
+    if (_stickyAuthActive && _hasNotificationPermissionDetachAllowance()) {
       _log.info('Preserving active session during lifecycle detach handoff.');
       return;
     }
@@ -1456,6 +1463,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await logout();
+  }
+
+  static const Duration _notificationPermissionDetachAllowanceDuration =
+      Duration(minutes: 5);
+
+  bool _hasNotificationPermissionDetachAllowance() {
+    final expiresAt = _notificationPermissionDetachAllowanceExpiresAt;
+    if (expiresAt == null) {
+      return false;
+    }
+    if (!DateTime.now().isBefore(expiresAt)) {
+      endNotificationPermissionDetachAllowance();
+      return false;
+    }
+    return true;
   }
 
   Future<void> prepareForAppExit() async {
@@ -2069,6 +2091,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   @override
   Future<void> close() async {
     _invalidateEmailReconnectGeneration();
+    endNotificationPermissionDetachAllowance();
     _cancelXmppReconnectPauseTimer();
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();

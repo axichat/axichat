@@ -12,7 +12,6 @@ class NotificationRequestState {
     this.isDisablingForeground = false,
     this.backgroundMessagingPhase = NotificationBackgroundMessagingPhase.idle,
     this.foregroundActivationDeferredUntilRestart = false,
-    this.restartPromptRequestId = 0,
     required this.foregroundServiceActive,
   });
 
@@ -23,7 +22,6 @@ class NotificationRequestState {
   final bool isDisablingForeground;
   final NotificationBackgroundMessagingPhase backgroundMessagingPhase;
   final bool foregroundActivationDeferredUntilRestart;
-  final int restartPromptRequestId;
   final bool foregroundServiceActive;
 
   bool get isBusy =>
@@ -41,7 +39,6 @@ class NotificationRequestState {
     bool? isDisablingForeground,
     NotificationBackgroundMessagingPhase? backgroundMessagingPhase,
     bool? foregroundActivationDeferredUntilRestart,
-    int? restartPromptRequestId,
     bool? foregroundServiceActive,
   }) {
     return NotificationRequestState(
@@ -58,8 +55,6 @@ class NotificationRequestState {
       foregroundActivationDeferredUntilRestart:
           foregroundActivationDeferredUntilRestart ??
           this.foregroundActivationDeferredUntilRestart,
-      restartPromptRequestId:
-          restartPromptRequestId ?? this.restartPromptRequestId,
       foregroundServiceActive:
           foregroundServiceActive ?? this.foregroundServiceActive,
     );

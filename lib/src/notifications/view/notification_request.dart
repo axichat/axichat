@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/notifications/view/notification_dialog.dart';
@@ -43,7 +44,7 @@ class NotificationRequest extends StatelessWidget {
   }
 }
 
-class _NotificationRequestBody extends StatelessWidget {
+class _NotificationRequestBody extends StatefulWidget {
   const _NotificationRequestBody({
     required this.capability,
     required this.displayMode,
@@ -53,59 +54,112 @@ class _NotificationRequestBody extends StatelessWidget {
   final NotificationRequestDisplayMode displayMode;
 
   @override
+  State<_NotificationRequestBody> createState() =>
+      _NotificationRequestBodyState();
+}
+
+class _NotificationRequestBodyState extends State<_NotificationRequestBody> {
+  bool _backgroundMessagingActionInProgress = false;
+
+  @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final backgroundMessagingEnabled = context.select<SettingsCubit, bool>(
       (cubit) => cubit.state.backgroundMessagingEnabled,
     );
-    return BlocListener<NotificationRequestCubit, NotificationRequestState>(
-      listenWhen: (previous, current) =>
-          previous.restartPromptRequestId != current.restartPromptRequestId &&
-          current.restartPromptRequestId > 0,
-      listener: (context, state) {
-        unawaited(showNotificationRestartDialog(context));
+    return BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
+      builder: (context, state) {
+        if (state.hasPermissions == null ||
+            !widget.displayMode.shouldShowFor(widget.capability)) {
+          return const SizedBox.shrink();
+        }
+        final String? statusSublabel;
+        if (state.backgroundMessagingPhase ==
+                NotificationBackgroundMessagingPhase.activatingForeground ||
+            state.backgroundMessagingPhase ==
+                NotificationBackgroundMessagingPhase.disablingForeground) {
+          statusSublabel = null;
+        } else if (!backgroundMessagingEnabled) {
+          statusSublabel = l10n.notificationsRequiresRestart;
+        } else if (state.hasPermissions != true) {
+          statusSublabel = null;
+        } else if (state.foregroundActivationDeferredUntilRestart &&
+            !state.foregroundServiceActive) {
+          statusSublabel = l10n.notificationsRestartTitle;
+        } else {
+          statusSublabel = null;
+        }
+        final canToggle =
+            !state.isBusy && !_backgroundMessagingActionInProgress;
+        return ShadSwitch(
+          enabled: canToggle,
+          label: Text(l10n.notificationsMessageToggle),
+          sublabel: statusSublabel == null ? null : Text(statusSublabel),
+          value: backgroundMessagingEnabled,
+          onChanged: canToggle
+              ? (enabled) {
+                  unawaited(
+                    _handleBackgroundMessagingChanged(
+                      enabled,
+                      state.hasPermissions == true,
+                    ),
+                  );
+                }
+              : null,
+        );
       },
-      child: BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
-        builder: (context, state) {
-          if (state.hasPermissions == null ||
-              !displayMode.shouldShowFor(capability)) {
-            return const SizedBox.shrink();
-          }
-          final String? statusSublabel;
-          if (state.backgroundMessagingPhase ==
-                  NotificationBackgroundMessagingPhase.activatingForeground ||
-              state.backgroundMessagingPhase ==
-                  NotificationBackgroundMessagingPhase.disablingForeground) {
-            statusSublabel = null;
-          } else if (!backgroundMessagingEnabled) {
-            statusSublabel = l10n.notificationsRequiresRestart;
-          } else if (state.hasPermissions != true) {
-            statusSublabel = null;
-          } else if (state.foregroundActivationDeferredUntilRestart &&
-              !state.foregroundServiceActive) {
-            statusSublabel = l10n.notificationsRestartTitle;
-          } else {
-            statusSublabel = null;
-          }
-          return ShadSwitch(
-            enabled: !state.isBusy,
-            label: Text(l10n.notificationsMessageToggle),
-            sublabel: statusSublabel == null ? null : Text(statusSublabel),
-            value: backgroundMessagingEnabled,
-            onChanged: state.isBusy
-                ? null
-                : (enabled) {
-                    final notificationCubit = context
-                        .read<NotificationRequestCubit>();
-                    if (enabled) {
-                      unawaited(notificationCubit.enableBackgroundMessaging());
-                      return;
-                    }
-                    unawaited(notificationCubit.disableBackgroundMessaging());
-                  },
-          );
-        },
-      ),
     );
+  }
+
+  Future<void> _handleBackgroundMessagingChanged(
+    bool enabled,
+    bool alreadyHasPermissions,
+  ) async {
+    if (_backgroundMessagingActionInProgress) {
+      return;
+    }
+    setState(() {
+      _backgroundMessagingActionInProgress = true;
+    });
+    final notificationCubit = context.read<NotificationRequestCubit>();
+    final settingsCubit = context.read<SettingsCubit>();
+    final authenticationCubit = context.read<AuthenticationCubit>();
+    var result = NotificationBackgroundMessagingResult.unchanged;
+    var preferencePersisted = false;
+    try {
+      if (enabled) {
+        if (!alreadyHasPermissions) {
+          authenticationCubit.beginNotificationPermissionDetachAllowance();
+        }
+        try {
+          result = await notificationCubit.enableBackgroundMessaging();
+        } finally {
+          if (!alreadyHasPermissions) {
+            authenticationCubit.endNotificationPermissionDetachAllowance();
+          }
+        }
+      } else {
+        authenticationCubit.endNotificationPermissionDetachAllowance();
+        result = await notificationCubit.disableBackgroundMessaging();
+      }
+      final preferenceEnabled = result.preferenceEnabled;
+      if (preferenceEnabled != null) {
+        await settingsCubit.toggleBackgroundMessaging(preferenceEnabled);
+        preferencePersisted = true;
+        notificationCubit.clearBackgroundMessagingPreferencePersistence();
+        if (result.requiresRestartPrompt && mounted) {
+          unawaited(showNotificationRestartDialog(context));
+        }
+      }
+    } finally {
+      if (result.shouldPersistPreference && !preferencePersisted) {
+        notificationCubit.clearBackgroundMessagingPreferencePersistence();
+      }
+      if (mounted) {
+        setState(() {
+          _backgroundMessagingActionInProgress = false;
+        });
+      }
+    }
   }
 }
