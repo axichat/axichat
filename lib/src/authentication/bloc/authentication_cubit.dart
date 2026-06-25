@@ -1328,6 +1328,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _triggerEmailReconnect(
             waitForNetworkAvailable: false,
             recovery: emailRecovery,
+            allowAutoLogout: !_isDesktopLifecyclePlatform,
           ),
         );
       }
@@ -1357,9 +1358,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       state != AppLifecycleState.resumed &&
       state != AppLifecycleState.inactive;
 
+  bool get _isDesktopLifecyclePlatform {
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => true,
+      TargetPlatform.android ||
+      TargetPlatform.fuchsia ||
+      TargetPlatform.iOS => false,
+    };
+  }
+
   void _syncXmppReconnectPauseTimer() {
     if (state is! AuthenticationComplete ||
         !endpointConfig.xmppEnabled ||
+        _isDesktopLifecyclePlatform ||
         !_isXmppReconnectPauseBackground(_effectiveLifecycleState) ||
         foregroundServiceActive.value) {
       _cancelXmppReconnectPauseTimer();
@@ -1468,6 +1481,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       'xmppHasSettings=${_xmppService.hasConnectionSettings}',
     );
     if (!_canReconnectWithInMemoryCredentials()) {
+      if (_isDesktopLifecyclePlatform) {
+        _log.fine(
+          'Skipping desktop lifecycle sticky-session resume without reconnect '
+          'context: source=$source',
+        );
+        return;
+      }
       await logout();
       return;
     }
@@ -1480,6 +1500,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _triggerEmailReconnect(
         waitForNetworkAvailable: false,
         recovery: emailRecovery,
+        allowAutoLogout: !_isDesktopLifecyclePlatform,
       ),
     );
     if (state is! AuthenticationComplete) {
@@ -1522,6 +1543,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _triggerEmailReconnect({
     bool waitForNetworkAvailable = true,
     _EmailReconnectRecovery recovery = _EmailReconnectRecovery.normal,
+    bool allowAutoLogout = true,
   }) async {
     final emailReconnectGeneration = _emailReconnectGeneration;
     await _resumeEmailReconnectIfPossible(
@@ -1529,6 +1551,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       requireStoredCredentials: state is! AuthenticationLogInInProgress,
       waitForNetworkAvailable: waitForNetworkAvailable,
       recovery: recovery,
+      allowAutoLogout: allowAutoLogout,
       emailReconnectGeneration: emailReconnectGeneration,
     );
   }
@@ -1538,6 +1561,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool requireStoredCredentials,
     bool waitForNetworkAvailable = true,
     _EmailReconnectRecovery recovery = _EmailReconnectRecovery.normal,
+    bool allowAutoLogout = true,
     required int emailReconnectGeneration,
   }) async {
     if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
@@ -1581,12 +1605,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (!hasCredentials) {
-        await logout(severity: LogoutSeverity.auto);
+        if (allowAutoLogout) {
+          await logout(severity: LogoutSeverity.auto);
+        } else {
+          _log.fine(
+            'Skipping email reconnect auto-logout without credentials.',
+          );
+        }
         return;
       }
     }
     try {
       await _attemptEmailProvisioningRecovery(
+        allowAutoLogout: allowAutoLogout,
         emailReconnectGeneration: emailReconnectGeneration,
       );
       if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
@@ -1668,6 +1699,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _attemptEmailProvisioningRecovery({
+    required bool allowAutoLogout,
     required int emailReconnectGeneration,
   }) async {
     await _emailProvisioningRecoveryQueue.enqueue(() async {
@@ -1682,12 +1714,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       _lastEmailProvisioningRecoveryAt = now;
       await _attemptEmailProvisioningRecoveryInternal(
+        allowAutoLogout: allowAutoLogout,
         emailReconnectGeneration: emailReconnectGeneration,
       );
     });
   }
 
   Future<void> _attemptEmailProvisioningRecoveryInternal({
+    required bool allowAutoLogout,
     required int emailReconnectGeneration,
   }) async {
     if (!_emailReconnectGenerationIsCurrent(emailReconnectGeneration)) {
@@ -1777,6 +1811,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     if (fatalError != null && !fatalError.isRecoverable && _stickyAuthActive) {
+      if (!allowAutoLogout) {
+        _log.fine(
+          'Skipping email provisioning auto-logout after non-recoverable '
+          'desktop lifecycle recovery failure.',
+        );
+        return;
+      }
       await logout(severity: LogoutSeverity.auto);
       _emit(
         AuthenticationFailure(

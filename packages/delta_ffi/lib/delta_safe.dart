@@ -15,6 +15,7 @@ const String _deltaSendFileOperation = 'send file message';
 const String _deltaSendQuotedOperation = 'send quoted message';
 const String _deltaMessageAllocationError = 'Failed to allocate Delta message';
 const String _deltaUnsupportedConfigKeyMessage = 'Invalid config key';
+const Duration _deltaEventLoopIdleDelay = Duration(milliseconds: 100);
 
 typedef DeltaBackgroundFetchRunner = Future<bool> Function({
   required int accountsAddress,
@@ -3219,6 +3220,10 @@ class _EventLoopConfig {
 }
 
 void _eventLoop(_EventLoopConfig config) {
+  unawaited(_runEventLoop(config));
+}
+
+Future<void> _runEventLoop(_EventLoopConfig config) async {
   final bindings = DeltaChatBindings(loadDeltaLibrary());
   final emitter =
       ffi.Pointer<dc_event_emitter_t>.fromAddress(config.emitterAddress);
@@ -3231,44 +3236,52 @@ void _eventLoop(_EventLoopConfig config) {
       shouldStop = true;
     }
   });
-  while (true) {
-    final eventPtr = bindings.dc_get_next_event(emitter);
-    if (eventPtr == ffi.nullptr) {
-      if (shouldStop) {
-        config.controlPort.send(
-          const _EventLoopStatus(_EventLoopStatusCode.stopped),
-        );
-        break;
+  try {
+    while (!shouldStop) {
+      final eventPtr = bindings.axichat_dc_try_get_next_event(emitter);
+      if (eventPtr == ffi.nullptr) {
+        await Future<void>.delayed(_deltaEventLoopIdleDelay);
+        continue;
       }
-      continue;
+      try {
+        final type = bindings.dc_event_get_id(eventPtr);
+        final data1 = bindings.dc_event_get_data1_int(eventPtr);
+        final data2 = bindings.dc_event_get_data2_int(eventPtr);
+        final data1Str = _takeString(
+          bindings.dc_event_get_data1_str(eventPtr),
+          bindings: bindings,
+        );
+        final data2Str = _takeString(
+          bindings.dc_event_get_data2_str(eventPtr),
+          bindings: bindings,
+        );
+        final accountId = bindings.dc_event_get_account_id(eventPtr);
+        config.eventPort.send(
+          _DeltaRawEvent(
+            type: type,
+            data1: data1,
+            data2: data2,
+            data1Text: data1Str,
+            data2Text: data2Str,
+            accountId: accountId,
+          ),
+        );
+      } finally {
+        bindings.dc_event_unref(eventPtr);
+      }
+      await Future<void>.delayed(Duration.zero);
     }
-    final type = bindings.dc_event_get_id(eventPtr);
-    final data1 = bindings.dc_event_get_data1_int(eventPtr);
-    final data2 = bindings.dc_event_get_data2_int(eventPtr);
-    final data1Str = _takeString(
-      bindings.dc_event_get_data1_str(eventPtr),
-      bindings: bindings,
-    );
-    final data2Str = _takeString(
-      bindings.dc_event_get_data2_str(eventPtr),
-      bindings: bindings,
-    );
-    final accountId = bindings.dc_event_get_account_id(eventPtr);
-    config.eventPort.send(
-      _DeltaRawEvent(
-        type: type,
-        data1: data1,
-        data2: data2,
-        data1Text: data1Str,
-        data2Text: data2Str,
-        accountId: accountId,
-      ),
-    );
-    bindings.dc_event_unref(eventPtr);
+  } finally {
+    try {
+      config.controlPort.send(
+        const _EventLoopStatus(_EventLoopStatusCode.stopped),
+      );
+    } finally {
+      await controlSubscription.cancel();
+      controlReceive.close();
+      bindings.dc_event_emitter_unref(emitter);
+    }
   }
-  controlSubscription.cancel();
-  controlReceive.close();
-  bindings.dc_event_emitter_unref(emitter);
 }
 
 ffi.Pointer<ffi.Char> _toCString(String value) =>

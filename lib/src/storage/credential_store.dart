@@ -5,6 +5,7 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 
@@ -78,7 +79,7 @@ class CredentialStore
     try {
       return await _secureStorage.read(key: key.value);
     } on Exception catch (e) {
-      _log.severe('Failed to read value:', e);
+      _log.severe('Failed to read value: ${_describeStorageError(e)}');
     }
     return null;
   }
@@ -92,7 +93,7 @@ class CredentialStore
       await _secureStorage.write(key: key.value, value: value);
       return true;
     } on Exception catch (e) {
-      _log.severe('Failed to write value:', e);
+      _log.severe('Failed to write value: ${_describeStorageError(e)}');
     }
     return false;
   }
@@ -103,7 +104,7 @@ class CredentialStore
       await _secureStorage.delete(key: key.value);
       return true;
     } on Exception catch (e) {
-      _log.severe('Failed to delete value:', e);
+      _log.severe('Failed to delete value: ${_describeStorageError(e)}');
     }
     return false;
   }
@@ -120,7 +121,7 @@ class CredentialStore
       }
       return await _secureStorage.readAll();
     } on Exception catch (e) {
-      _log.severe('Failed to read all values:', e);
+      _log.severe('Failed to read all values: ${_describeStorageError(e)}');
     }
     return values;
   }
@@ -135,7 +136,7 @@ class CredentialStore
       }
       return true;
     } on Exception catch (e) {
-      _log.severe('Failed to write all values:', e);
+      _log.severe('Failed to write all values: ${_describeStorageError(e)}');
     }
     return false;
   }
@@ -149,7 +150,7 @@ class CredentialStore
       }
       return true;
     } on Exception catch (e) {
-      _log.severe('Failed to delete all values:', e);
+      _log.severe('Failed to delete all values: ${_describeStorageError(e)}');
     }
     return false;
   }
@@ -157,6 +158,14 @@ class CredentialStore
   @override
   Future<void> close() async {
     _instance = null;
+  }
+
+  String _describeStorageError(Exception error) {
+    if (error is PlatformException) {
+      return 'PlatformException(code=${error.code}, message=${error.message}, '
+          'details=${error.details})';
+    }
+    return '${error.runtimeType}: $error';
   }
 }
 

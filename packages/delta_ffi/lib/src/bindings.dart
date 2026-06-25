@@ -859,6 +859,23 @@ class DeltaChatBindings {
   late final _dc_get_next_event = _dc_get_next_eventPtr.asFunction<
       ffi.Pointer<dc_event_t> Function(ffi.Pointer<dc_event_emitter_t>)>();
 
+  ffi.Pointer<dc_event_t> axichat_dc_try_get_next_event(
+    ffi.Pointer<dc_event_emitter_t> emitter,
+  ) {
+    return _axichat_dc_try_get_next_event(
+      emitter,
+    );
+  }
+
+  late final _axichat_dc_try_get_next_eventPtr = _lookup<
+          ffi.NativeFunction<
+              ffi.Pointer<dc_event_t> Function(
+                  ffi.Pointer<dc_event_emitter_t>)>>(
+      'axichat_dc_try_get_next_event');
+  late final _axichat_dc_try_get_next_event =
+      _axichat_dc_try_get_next_eventPtr.asFunction<
+          ffi.Pointer<dc_event_t> Function(ffi.Pointer<dc_event_emitter_t>)>();
+
   void dc_event_unref(
     ffi.Pointer<dc_event_t> event,
   ) {

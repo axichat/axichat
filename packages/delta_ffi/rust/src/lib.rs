@@ -85,6 +85,19 @@ fn _block_on<T>(future: impl std::future::Future<Output = T>) -> T {
     _RUNTIME.block_on(future)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn axichat_dc_try_get_next_event(
+    emitter: *mut dc_event_emitter_t,
+) -> *mut dc_event_t {
+    if emitter.is_null() {
+        return ptr::null_mut();
+    }
+    match (&*emitter).try_recv() {
+        Ok(event) => Box::into_raw(Box::new(event)),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 fn _register_active_background_fetch(accounts: usize) -> Option<Arc<Notify>> {
     let mut active = _ACTIVE_BACKGROUND_FETCHES
         .lock()

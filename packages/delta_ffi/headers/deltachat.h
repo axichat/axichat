@@ -237,6 +237,7 @@ int dc_get_msg_cnt(dc_context_t* ctx, uint32_t chat_id);
 dc_event_emitter_t* dc_get_event_emitter(dc_context_t* ctx);
 void dc_event_emitter_unref(dc_event_emitter_t* emitter);
 dc_event_t* dc_get_next_event(dc_event_emitter_t* emitter);
+dc_event_t* axichat_dc_try_get_next_event(dc_event_emitter_t* emitter);
 void dc_event_unref(dc_event_t* event);
 int32_t dc_event_get_id(dc_event_t* event);
 int32_t dc_event_get_data1_int(dc_event_t* event);

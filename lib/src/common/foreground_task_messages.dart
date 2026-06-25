@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:io';
+
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     hide NotificationVisibility;
@@ -22,6 +24,9 @@ void recordNotificationLaunch(String? chatJid) {
 }
 
 void ensureNotificationTapPortInitialized() {
+  if (!Platform.isAndroid) {
+    return;
+  }
   if (_notificationTapHandlerRegistered) {
     return;
   }
@@ -50,6 +55,9 @@ void notificationTapBackground(NotificationResponse notificationResponse) {
         ? null
         : notificationResponse.payload,
   );
+  if (!Platform.isAndroid) {
+    return;
+  }
   FlutterForegroundTask.sendDataToMain(
     [
       _notificationTapPrefix,
