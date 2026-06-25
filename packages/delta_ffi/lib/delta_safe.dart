@@ -1027,6 +1027,7 @@ class DeltaContextHandle {
   bool get supportsMessageRfc822Body => _deltaOptionalMsgRfc822Body.isAvailable;
 
   _DeltaEventLoop? _eventLoop;
+  Future<void>? _idleEventLoopDisposal;
   Future<bool>? _activeBackgroundFetch;
 
   bool _opened = false;
@@ -1214,6 +1215,9 @@ class DeltaContextHandle {
     final accountId = _accountId;
     if (owner != null && accountId != null) {
       return owner.eventsFor(accountId);
+    }
+    if (_closed) {
+      return const Stream<DeltaCoreEvent>.empty();
     }
     _eventLoop ??= _DeltaEventLoop(
       emitterFactory: () => _bindings.dc_get_event_emitter(_context),
@@ -2426,21 +2430,38 @@ class DeltaContextHandle {
       return;
     }
     _closed = true;
+    final idleEventLoopDisposal = _idleEventLoopDisposal;
     final eventLoop = _eventLoop;
     _eventLoop = null;
     eventLoop?.requestStop();
     await stopIo();
-    await eventLoop?.dispose();
+    try {
+      await idleEventLoopDisposal;
+    } finally {
+      await eventLoop?.dispose();
+    }
     _bindings.dc_context_unref(_context);
   }
 
   Future<void> _disposeIdleEventLoop(_DeltaEventLoop eventLoop) async {
+    final activeDisposal = _idleEventLoopDisposal;
+    if (activeDisposal != null) {
+      await activeDisposal;
+    }
     if (!identical(_eventLoop, eventLoop) || eventLoop.hasListener) {
       return;
     }
     _eventLoop = null;
     eventLoop.requestStop();
-    await eventLoop.dispose();
+    final disposal = eventLoop.dispose();
+    _idleEventLoopDisposal = disposal;
+    try {
+      await disposal;
+    } finally {
+      if (identical(_idleEventLoopDisposal, disposal)) {
+        _idleEventLoopDisposal = null;
+      }
+    }
   }
 
   Future<void> _signalActiveBackgroundFetch(Future<bool>? activeFetch) async {
@@ -2613,6 +2634,7 @@ class DeltaAccountsHandle {
   final DeltaBackgroundFetchRunner _backgroundFetchRunner;
 
   _DeltaEventLoop? _eventLoop;
+  Future<void>? _idleEventLoopDisposal;
   Future<bool>? _activeBackgroundFetch;
   bool _ioRunning = false;
   bool _disposed = false;
@@ -2686,10 +2708,16 @@ class DeltaAccountsHandle {
   }
 
   Stream<DeltaCoreEvent> events() {
+    if (_disposed) {
+      return const Stream<DeltaCoreEvent>.empty();
+    }
     return _ensureEventStream();
   }
 
   Stream<DeltaCoreEvent> eventsFor(int accountId) {
+    if (_disposed) {
+      return const Stream<DeltaCoreEvent>.empty();
+    }
     final stream = _ensureEventStream();
     return stream.where(
       (event) => event.accountId == null || event.accountId == accountId,
@@ -2766,6 +2794,7 @@ class DeltaAccountsHandle {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    final idleEventLoopDisposal = _idleEventLoopDisposal;
     final eventLoop = _eventLoop;
     _eventLoop = null;
     eventLoop?.requestStop();
@@ -2781,7 +2810,11 @@ class DeltaAccountsHandle {
             _bindings.dc_accounts_stop_io(_accounts);
             _ioRunning = false;
           }
-          await eventLoop?.dispose();
+          try {
+            await idleEventLoopDisposal;
+          } finally {
+            await eventLoop?.dispose();
+          }
         }
       } finally {
         _bindings.dc_accounts_unref(_accounts);
@@ -2838,12 +2871,24 @@ class DeltaAccountsHandle {
   }
 
   Future<void> _disposeIdleEventLoop(_DeltaEventLoop eventLoop) async {
+    final activeDisposal = _idleEventLoopDisposal;
+    if (activeDisposal != null) {
+      await activeDisposal;
+    }
     if (!identical(_eventLoop, eventLoop) || eventLoop.hasListener) {
       return;
     }
     _eventLoop = null;
     eventLoop.requestStop();
-    await eventLoop.dispose();
+    final disposal = eventLoop.dispose();
+    _idleEventLoopDisposal = disposal;
+    try {
+      await disposal;
+    } finally {
+      if (identical(_idleEventLoopDisposal, disposal)) {
+        _idleEventLoopDisposal = null;
+      }
+    }
   }
 
   int? _existingAccountId() {
@@ -3047,7 +3092,10 @@ class _DeltaEventLoop {
   late final StreamController<DeltaCoreEvent> _controller =
       StreamController<DeltaCoreEvent>.broadcast(
     onListen: _handleListen,
-    onCancel: _handleCancel,
+  );
+  late final Stream<DeltaCoreEvent> _stream = Stream<DeltaCoreEvent>.multi(
+    _handleStreamListen,
+    isBroadcast: true,
   );
 
   ReceivePort? _eventPort;
@@ -3065,7 +3113,7 @@ class _DeltaEventLoop {
   Future<void>? _disposeFuture;
   Completer<void>? _stoppedCompleter;
 
-  Stream<DeltaCoreEvent> get stream => _controller.stream;
+  Stream<DeltaCoreEvent> get stream => _stream;
 
   bool get hasListener => _controller.hasListener;
 
@@ -3083,8 +3131,34 @@ class _DeltaEventLoop {
     unawaited(startFuture);
   }
 
-  void _handleCancel() {
-    unawaited(_disposeIfStillIdle());
+  void _handleStreamListen(MultiStreamController<DeltaCoreEvent> controller) {
+    var sourceCompleted = false;
+    final subscription = _controller.stream.listen(
+      controller.add,
+      onError: controller.addError,
+      onDone: () {
+        sourceCompleted = true;
+        controller.close();
+        unawaited(_disposeIfStillIdle());
+      },
+    );
+    controller
+      ..onPause = subscription.pause
+      ..onResume = subscription.resume
+      ..onCancel = () => _cancelStreamListener(
+            subscription,
+            sourceCompleted: sourceCompleted,
+          );
+  }
+
+  Future<void> _cancelStreamListener(
+      StreamSubscription<DeltaCoreEvent> subscription,
+      {required bool sourceCompleted}) async {
+    await subscription.cancel();
+    if (sourceCompleted) {
+      return;
+    }
+    await _disposeIfStillIdle();
   }
 
   Future<void> _disposeIfStillIdle() async {
@@ -3175,14 +3249,14 @@ class _DeltaEventLoop {
     Object? startError;
     StackTrace? startStackTrace;
     if (_started) {
-      _requestStop();
       try {
         await _startFuture;
       } on Exception catch (error, stackTrace) {
         startError = error;
         startStackTrace = stackTrace;
       }
-      if (_stoppedCompleter != null) {
+      if (_isolate != null) {
+        _requestStop();
         await _stoppedCompleter!.future
             .timeout(const Duration(seconds: 5), onTimeout: () {});
       }
