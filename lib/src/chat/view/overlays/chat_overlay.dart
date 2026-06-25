@@ -96,6 +96,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
 
 class _ChatDetailsOverlay extends StatelessWidget {
   const _ChatDetailsOverlay({
+    required this.onCloseRoute,
     required this.onAddRecipient,
     required this.loadedEmailImageMessageIds,
     required this.onEmailImagesApproved,
@@ -104,6 +105,7 @@ class _ChatDetailsOverlay extends StatelessWidget {
     required this.focusedTimelineMessageItem,
   });
 
+  final VoidCallback onCloseRoute;
   final bool Function(chat_models.Chat chat) onAddRecipient;
   final Set<String> loadedEmailImageMessageIds;
   final ValueChanged<String> onEmailImagesApproved;
@@ -120,6 +122,7 @@ class _ChatDetailsOverlay extends StatelessWidget {
         top: false,
         child: _ChatSubrouteShell(
           title: context.l10n.chatActionDetails,
+          onCloseRoute: onCloseRoute,
           child: ChatMessageDetails(
             onAddRecipient: onAddRecipient,
             loadedEmailImageMessageIds: loadedEmailImageMessageIds,
@@ -135,9 +138,14 @@ class _ChatDetailsOverlay extends StatelessWidget {
 }
 
 class _ChatSubrouteShell extends StatelessWidget {
-  const _ChatSubrouteShell({required this.title, required this.child});
+  const _ChatSubrouteShell({
+    required this.title,
+    required this.onCloseRoute,
+    required this.child,
+  });
 
   final String title;
+  final VoidCallback onCloseRoute;
   final Widget child;
 
   @override
@@ -145,14 +153,7 @@ class _ChatSubrouteShell extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ChatIndexedHeader(
-          title: title,
-          onClose: () {
-            context.read<ChatsCubit>().setOpenChatRoute(
-              route: ChatRouteIndex.main,
-            );
-          },
-        ),
+        _ChatIndexedHeader(title: title, onClose: onCloseRoute),
         Expanded(child: child),
       ],
     );
@@ -197,6 +198,7 @@ class _ChatIndexedHeader extends StatelessWidget {
 
 class _ChatSettingsOverlay extends StatelessWidget {
   const _ChatSettingsOverlay({
+    required this.onCloseRoute,
     required this.state,
     required this.onViewFilterChanged,
     required this.onNotificationBehaviorChanged,
@@ -207,6 +209,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
     required this.blockAddress,
   });
 
+  final VoidCallback onCloseRoute;
   final ChatState state;
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<ChatNotificationBehavior?> onNotificationBehaviorChanged;
@@ -224,6 +227,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
         top: false,
         child: _ChatSubrouteShell(
           title: context.l10n.chatSettings,
+          onCloseRoute: onCloseRoute,
           child: _ChatSettingsButtons(
             state: state,
             onViewFilterChanged: onViewFilterChanged,
@@ -241,9 +245,10 @@ class _ChatSettingsOverlay extends StatelessWidget {
 }
 
 class _ChatGalleryOverlay extends StatelessWidget {
-  const _ChatGalleryOverlay({required this.chat});
+  const _ChatGalleryOverlay({required this.chat, required this.onCloseRoute});
 
   final chat_models.Chat? chat;
+  final VoidCallback onCloseRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +279,7 @@ class _ChatGalleryOverlay extends StatelessWidget {
           top: false,
           child: _ChatSubrouteShell(
             title: context.l10n.chatAttachmentTooltip,
+            onCloseRoute: onCloseRoute,
             child: AttachmentGalleryView(
               chatOverride: currentChat,
               showChatLabel: false,
@@ -286,9 +292,13 @@ class _ChatGalleryOverlay extends StatelessWidget {
 }
 
 class _ChatImportantOverlay extends StatelessWidget {
-  const _ChatImportantOverlay({required this.onMessageSelected});
+  const _ChatImportantOverlay({
+    required this.onMessageSelected,
+    required this.onCloseRoute,
+  });
 
   final ValueChanged<String> onMessageSelected;
+  final VoidCallback onCloseRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -298,6 +308,7 @@ class _ChatImportantOverlay extends StatelessWidget {
         top: false,
         child: _ChatSubrouteShell(
           title: context.l10n.chatImportantMessagesTooltip,
+          onCloseRoute: onCloseRoute,
           child: ImportantMessagesList(
             onPressed: (item) => onMessageSelected(item.messageReferenceId),
           ),
@@ -454,6 +465,7 @@ class _ChatCalendarOverlayVisibilityState
 class _ChatRouteOverlayStack extends StatelessWidget {
   const _ChatRouteOverlayStack({
     required this.chatMainBody,
+    required this.onCloseRoute,
     required this.currentRoute,
     required this.previousRoute,
     required this.chatEntity,
@@ -479,6 +491,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
   });
 
   final Widget chatMainBody;
+  final VoidCallback onCloseRoute;
   final ChatRouteIndex currentRoute;
   final ChatRouteIndex previousRoute;
   final chat_models.Chat? chatEntity;
@@ -522,6 +535,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
         chatMainBody,
         _ChatRouteOverlaySwitcher(
           currentRoute: currentRoute,
+          onCloseRoute: onCloseRoute,
           chatEntity: chatEntity,
           state: state,
           focusedTimelineMessageItem: focusedTimelineMessageItem,
@@ -570,6 +584,7 @@ class _ChatRouteOverlayStack extends StatelessWidget {
 class _ChatRouteOverlayChild extends StatelessWidget {
   const _ChatRouteOverlayChild({
     required this.currentRoute,
+    required this.onCloseRoute,
     required this.chatEntity,
     required this.state,
     required this.focusedTimelineMessageItem,
@@ -590,6 +605,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
   });
 
   final ChatRouteIndex currentRoute;
+  final VoidCallback onCloseRoute;
   final chat_models.Chat? chatEntity;
   final ChatState state;
   final ChatTimelineMessageItem? focusedTimelineMessageItem;
@@ -615,6 +631,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
       ChatRouteIndex.main => const SizedBox.expand(),
       ChatRouteIndex.search => const SizedBox.expand(),
       ChatRouteIndex.details => _ChatDetailsOverlay(
+        onCloseRoute: onCloseRoute,
         onAddRecipient: onAddRecipientFromChat,
         loadedEmailImageMessageIds: loadedEmailImageMessageIds,
         onEmailImagesApproved: onEmailImagesApproved,
@@ -623,6 +640,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
         focusedTimelineMessageItem: focusedTimelineMessageItem,
       ),
       ChatRouteIndex.settings => _ChatSettingsOverlay(
+        onCloseRoute: onCloseRoute,
         state: state,
         onViewFilterChanged: onViewFilterChanged,
         onNotificationBehaviorChanged: onNotificationBehaviorChanged,
@@ -634,8 +652,12 @@ class _ChatRouteOverlayChild extends StatelessWidget {
       ),
       ChatRouteIndex.important => _ChatImportantOverlay(
         onMessageSelected: onImportantMessageSelected,
+        onCloseRoute: onCloseRoute,
       ),
-      ChatRouteIndex.gallery => _ChatGalleryOverlay(chat: chatEntity),
+      ChatRouteIndex.gallery => _ChatGalleryOverlay(
+        chat: chatEntity,
+        onCloseRoute: onCloseRoute,
+      ),
       ChatRouteIndex.calendar => const SizedBox.expand(),
     };
   }
@@ -644,6 +666,7 @@ class _ChatRouteOverlayChild extends StatelessWidget {
 class _ChatRouteOverlaySwitcher extends StatelessWidget {
   const _ChatRouteOverlaySwitcher({
     required this.currentRoute,
+    required this.onCloseRoute,
     required this.chatEntity,
     required this.state,
     required this.focusedTimelineMessageItem,
@@ -670,6 +693,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
   });
 
   final ChatRouteIndex currentRoute;
+  final VoidCallback onCloseRoute;
   final chat_models.Chat? chatEntity;
   final ChatState state;
   final ChatTimelineMessageItem? focusedTimelineMessageItem;
@@ -717,6 +741,7 @@ class _ChatRouteOverlaySwitcher extends StatelessWidget {
         key: chatRouteKey,
         child: _ChatRouteOverlayChild(
           currentRoute: currentRoute,
+          onCloseRoute: onCloseRoute,
           chatEntity: chatEntity,
           state: state,
           focusedTimelineMessageItem: focusedTimelineMessageItem,

@@ -1067,6 +1067,80 @@ String _emailDocumentHeightObserverExpression() =>
 String emailDocumentHeightObserverExpressionForTesting() =>
     _emailDocumentHeightObserverExpression();
 
+String _emailWheelBridgeExpression() {
+  const handlerName = _EmailHtmlWebViewState._wheelHandlerName;
+  return '''
+(() => {
+  if (window.__axichatWheelBridgeInstalled) {
+    return true;
+  }
+
+  const hasFlutterHandler = () =>
+    window.flutter_inappwebview &&
+    typeof window.flutter_inappwebview.callHandler === 'function';
+  const normalizedDelta = (event, sourceWindow) => {
+    const pageHeight = Math.max(
+      sourceWindow && sourceWindow.innerHeight ? sourceWindow.innerHeight : 0,
+      document.documentElement ? document.documentElement.clientHeight || 0 : 0,
+      document.body ? document.body.clientHeight || 0 : 0,
+      800,
+    );
+    const scale =
+      event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? pageHeight : 1;
+    return {
+      deltaX: Number(event.deltaX || 0) * scale,
+      deltaY: Number(event.deltaY || 0) * scale,
+    };
+  };
+  const forwardWheel = (sourceWindow) => (event) => {
+    if (!hasFlutterHandler()) {
+      return;
+    }
+    const delta = normalizedDelta(event, sourceWindow || window);
+    if (!Number.isFinite(delta.deltaX) ||
+        !Number.isFinite(delta.deltaY) ||
+        (delta.deltaX === 0 && delta.deltaY === 0)) {
+      return;
+    }
+    event.preventDefault();
+    Promise.resolve(
+      window.flutter_inappwebview.callHandler('$handlerName', delta),
+    ).catch(() => {});
+  };
+  const installForDocument = (targetDocument, sourceWindow) => {
+    if (!targetDocument || targetDocument.__axichatWheelBridgeInstalled) {
+      return;
+    }
+    targetDocument.__axichatWheelBridgeInstalled = true;
+    targetDocument.addEventListener('wheel', forwardWheel(sourceWindow), {
+      capture: true,
+      passive: false,
+    });
+  };
+  const frame = document.getElementById('axichat-original-email-frame');
+  const installFrame = () => {
+    try {
+      installForDocument(
+        frame ? frame.contentDocument : null,
+        frame ? frame.contentWindow : null,
+      );
+    } catch (_) {}
+  };
+
+  window.__axichatWheelBridgeInstalled = true;
+  installForDocument(document, window);
+  installFrame();
+  if (frame) {
+    frame.addEventListener('load', installFrame, { passive: true });
+  }
+  return true;
+})()
+''';
+}
+
+@visibleForTesting
+String emailWheelBridgeExpressionForTesting() => _emailWheelBridgeExpression();
+
 bool _usesDomContentHeightMeasurement({
   required EmailHtmlContentMode contentMode,
   required TargetPlatform platform,
@@ -1634,6 +1708,10 @@ Set<Factory<OneSequenceGestureRecognizer>>
 emailHtmlEmbeddedGestureRecognizersForTesting() =>
     _EmailHtmlWebViewState._tapOnlyGestureRecognizers;
 
+class EmailHtmlEmbeddedScrollIntentNotification extends Notification {
+  const EmailHtmlEmbeddedScrollIntentNotification();
+}
+
 class EmailHtmlWebView extends StatefulWidget {
   const EmailHtmlWebView.embedded({
     super.key,
@@ -1761,6 +1839,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   static const _emailWebViewBaseUrl = 'https://axichat.invalid/';
   static const _heightHandlerName = 'axichatEmailHeight';
   static const _linkHandlerName = 'axichatEmailLink';
+  static const _wheelHandlerName = 'axichatEmailWheel';
   static bool get _debugTraceMeasurements => kDebugMode && false;
   static final Set<Factory<OneSequenceGestureRecognizer>>
   _tapOnlyGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
@@ -1779,6 +1858,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   Object? _activeWebViewId;
   final Map<Object?, int> _webViewGenerationsById = <Object?, int>{};
   bool _documentHeightObserverInstalled = false;
+  bool _wheelBridgeInstalled = false;
   bool _reloadPreparedHtmlWhenControllerReady = false;
   final GlobalKey _platformViewSizeKey = GlobalKey();
   bool _linuxPlatformViewResizeScheduled = false;
@@ -1950,6 +2030,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     _activeWebViewId = null;
     _webViewGenerationsById.clear();
     _documentHeightObserverInstalled = false;
+    _wheelBridgeInstalled = false;
     _lastProgressLogBucket = null;
     _scheduledMeasurementWebViewGeneration = null;
     _scheduledMeasurementLoadEpoch = null;
@@ -1993,6 +2074,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _controller = null;
       _activeWebViewId = null;
       _webViewGenerationsById.clear();
+      _wheelBridgeInstalled = false;
       _lastProgressLogBucket = null;
       _scheduledMeasurementWebViewGeneration = null;
       _scheduledMeasurementLoadEpoch = null;
@@ -2011,6 +2093,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         _contentHeight = _normalizedInitialContentHeight();
       }
       _documentHeightObserverInstalled = false;
+      _wheelBridgeInstalled = false;
       _linuxFitLockedHeight = null;
       _lastLinuxPlatformViewId = null;
       _lastLinuxPlatformViewSize = null;
@@ -2028,6 +2111,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _traceMeasurement('widget-update-refresh-prepared-html');
       _preparedHtmlInputKey = null;
       _documentHeightObserverInstalled = false;
+      _wheelBridgeInstalled = false;
       _linuxFitLockedHeight = null;
       if (!hadController && _preparedHtmlData != null) {
         _reloadPreparedHtmlWhenControllerReady = true;
@@ -2104,6 +2188,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       });
     }
     _documentHeightObserverInstalled = false;
+    _wheelBridgeInstalled = false;
     final themeStyle = _buildThemeStyle(brightness: brightness);
     final prepareTimer = Stopwatch()..start();
     _traceMeasurement(
@@ -2271,6 +2356,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     _lastProgressLogBucket = null;
     _scheduledMeasurementWebViewGeneration = null;
     _scheduledMeasurementLoadEpoch = null;
+    _wheelBridgeInstalled = false;
     return webViewGeneration;
   }
 
@@ -2523,6 +2609,10 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     InAppWebViewController controller, {
     required int webViewGeneration,
   }) async {
+    await _installEmbeddedWheelBridge(
+      controller,
+      webViewGeneration: webViewGeneration,
+    );
     await _installDocumentHeightObserver(
       controller,
       webViewGeneration: webViewGeneration,
@@ -2817,6 +2907,37 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     }
   }
 
+  Future<void> _installEmbeddedWheelBridge(
+    InAppWebViewController controller, {
+    required int webViewGeneration,
+  }) async {
+    if (widget._usesInternalScroll ||
+        _wheelBridgeInstalled ||
+        !_canUseController(controller, webViewGeneration)) {
+      return;
+    }
+    try {
+      await controller.evaluateJavascript(
+        source: _emailWheelBridgeExpression(),
+      );
+      if (!_canUseController(controller, webViewGeneration)) {
+        return;
+      }
+      _wheelBridgeInstalled = true;
+      _traceMeasurement(
+        'wheel-bridge-installed',
+        webViewGeneration: webViewGeneration,
+      );
+    } on Exception catch (error) {
+      _wheelBridgeInstalled = false;
+      _traceMeasurement(
+        'wheel-bridge-exception',
+        webViewGeneration: webViewGeneration,
+        details: error.runtimeType.toString(),
+      );
+    }
+  }
+
   void _scheduleLinuxPlatformViewResize() {
     if (defaultTargetPlatform != TargetPlatform.linux ||
         _linuxPlatformViewResizeScheduled) {
@@ -3079,6 +3200,41 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     widget.onLinkTap(safeUrl);
   }
 
+  void _handleEmbeddedWheel(Map<dynamic, dynamic> value) {
+    if (!mounted) {
+      return;
+    }
+    final scrollable = Scrollable.maybeOf(context);
+    if (scrollable == null) {
+      return;
+    }
+    final axis = axisDirectionToAxis(scrollable.axisDirection);
+    final rawDelta = axis == Axis.horizontal
+        ? _parseFiniteDouble(value['deltaX'])
+        : _parseFiniteDouble(value['deltaY']);
+    if (rawDelta == 0) {
+      return;
+    }
+    const EmailHtmlEmbeddedScrollIntentNotification().dispatch(context);
+    final position = scrollable.position;
+    if (!position.hasPixels || !position.hasContentDimensions) {
+      return;
+    }
+    final delta = axisDirectionIsReversed(scrollable.axisDirection)
+        ? -rawDelta
+        : rawDelta;
+    position.pointerScroll(delta);
+  }
+
+  double _parseFiniteDouble(dynamic value) {
+    final parsed = switch (value) {
+      num number => number.toDouble(),
+      String text => double.tryParse(text.trim()),
+      _ => null,
+    };
+    return parsed == null || !parsed.isFinite ? 0 : parsed;
+  }
+
   double? _parsePositiveDouble(dynamic value) {
     return switch (value) {
       num number when number > 0 => number.toDouble(),
@@ -3266,6 +3422,22 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                   return null;
                 },
               );
+              if (!widget._usesInternalScroll) {
+                controller.addJavaScriptHandler(
+                  handlerName: _wheelHandlerName,
+                  callback: (arguments) {
+                    if (!_canUseController(controller, webViewGeneration) ||
+                        arguments.isEmpty) {
+                      return null;
+                    }
+                    final value = arguments.first;
+                    if (value is Map) {
+                      _handleEmbeddedWheel(value);
+                    }
+                    return null;
+                  },
+                );
+              }
               if (_reloadPreparedHtmlWhenControllerReady &&
                   _preparedHtmlData != null) {
                 _reloadPreparedHtmlWhenControllerReady = false;

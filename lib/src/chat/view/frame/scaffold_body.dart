@@ -1212,6 +1212,7 @@ class _ChatScaffoldBody extends StatelessWidget {
         );
         return _ChatRouteOverlayStack(
           chatMainBody: chatMainBody,
+          onCloseRoute: owner._returnToMainRoute,
           currentRoute: owner._chatRoute,
           previousRoute: owner._previousChatRoute,
           chatEntity: chatEntity,
