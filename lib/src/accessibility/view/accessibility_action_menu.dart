@@ -3657,18 +3657,12 @@ class _AccessibilityActionTile extends StatelessWidget {
                           ),
                         if (onDismiss != null) ...[
                           SizedBox(width: spacing.s),
-                          AxiTooltip(
-                            builder: (_) => Text(context.l10n.commonDismiss),
-                            child: Semantics(
-                              button: true,
-                              label: context.l10n.accessibilityDismissHighlight,
-                              child: IconButton(
-                                icon: const Icon(
-                                  Icons.notifications_off_outlined,
-                                ),
-                                onPressed: onDismiss,
-                              ),
-                            ),
+                          AxiIconButton.ghost(
+                            iconData: Icons.notifications_off_outlined,
+                            tooltip: context.l10n.commonDismiss,
+                            semanticLabel:
+                                context.l10n.accessibilityDismissHighlight,
+                            onPressed: onDismiss,
                           ),
                         ],
                       ],

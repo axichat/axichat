@@ -1473,6 +1473,7 @@ class _ChatComposerIconButton extends StatelessWidget {
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderWidth: context.borderSide.width,
+      preserveDesktopSurface: true,
       cornerRadius: context.radii.squircle,
       iconSize: sizing.iconButtonIconSize,
       buttonSize: sizing.iconButtonSize,

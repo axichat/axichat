@@ -2053,6 +2053,7 @@ class _ChatActionsToggle extends StatelessWidget {
       backgroundColor: backgroundColor,
       borderColor: colors.border,
       borderWidth: context.borderSide.width,
+      preserveDesktopSurface: true,
       cornerRadius: context.radii.squircle,
     );
     return Semantics(

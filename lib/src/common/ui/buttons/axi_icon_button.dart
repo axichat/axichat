@@ -2,8 +2,10 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -34,6 +36,7 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
+    this.preserveDesktopSurface = false,
     this.loading = false,
     this.selected = false,
   }) : variant = AxiIconButtonVariant.primary,
@@ -64,6 +67,7 @@ class AxiIconButton extends StatefulWidget {
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
+    this.preserveDesktopSurface = false,
     this.loading = false,
     this.selected = false,
   }) : resolvedIconSize = iconSize,
@@ -91,6 +95,7 @@ class AxiIconButton extends StatefulWidget {
     this.hoverBackgroundColor,
     this.pressedBackgroundColor,
     this.borderColor,
+    this.preserveDesktopSurface = false,
     this.loading = false,
     this.selected = false,
   }) : variant = AxiIconButtonVariant.ghost,
@@ -118,6 +123,7 @@ class AxiIconButton extends StatefulWidget {
     this.cornerRadius,
     this.hoverBackgroundColor,
     this.pressedBackgroundColor,
+    this.preserveDesktopSurface = false,
     this.loading = false,
     this.selected = false,
   }) : variant = AxiIconButtonVariant.outline,
@@ -150,6 +156,7 @@ class AxiIconButton extends StatefulWidget {
     this.hoverBackgroundColor,
     this.pressedBackgroundColor,
     this.borderColor,
+    this.preserveDesktopSurface = false,
     this.loading = false,
     this.selected = false,
   }) : variant = AxiIconButtonVariant.secondary,
@@ -179,6 +186,7 @@ class AxiIconButton extends StatefulWidget {
     this.hoverBackgroundColor,
     this.pressedBackgroundColor,
     this.borderColor,
+    this.preserveDesktopSurface = false,
     this.loading = false,
     this.selected = false,
   }) : variant = AxiIconButtonVariant.destructive,
@@ -207,6 +215,7 @@ class AxiIconButton extends StatefulWidget {
   final double? tapTargetSize;
   final double? cornerRadius;
   final double? borderWidth;
+  final bool preserveDesktopSurface;
   final bool loading;
   final bool selected;
   final double? resolvedIconSize;
@@ -249,6 +258,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
     return ValueListenableBuilder<Set<WidgetState>>(
       valueListenable: _states,
       builder: (context, states, _) {
+        final bool usesDesktopIconOnlyTreatment =
+            _usesDesktopIconOnlyTreatment(context) &&
+            !widget.preserveDesktopSurface &&
+            widget.variant != AxiIconButtonVariant.primary;
         final Color fallbackForeground = widget.selected
             ? context.colorScheme.primary
             : switch (widget.variant) {
@@ -259,16 +272,18 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final Color baseForeground = widget.color ?? fallbackForeground;
         final Color baseBorder =
             widget.borderColor ??
-            (widget.variant == AxiIconButtonVariant.ghost
+            (usesDesktopIconOnlyTreatment ||
+                    widget.variant == AxiIconButtonVariant.ghost
                 ? Colors.transparent
                 : context.borderSide.color);
-        final Color baseBackground =
-            widget.backgroundColor ??
-            switch (widget.variant) {
-              AxiIconButtonVariant.outline => Colors.transparent,
-              AxiIconButtonVariant.ghost => context.colorScheme.secondary,
-              _ => context.colorScheme.card,
-            };
+        final Color variantBackground = switch (widget.variant) {
+          AxiIconButtonVariant.outline => Colors.transparent,
+          AxiIconButtonVariant.ghost => context.colorScheme.secondary,
+          _ => context.colorScheme.card,
+        };
+        final Color baseBackground = usesDesktopIconOnlyTreatment
+            ? Colors.transparent
+            : (widget.backgroundColor ?? variantBackground);
         final bool isSelected = widget.selected;
         final Color selectedTint = context.colorScheme.primary.withValues(
           alpha: context.motion.tapHoverAlpha,
@@ -308,11 +323,12 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             widget.resolvedButtonSize ?? context.sizing.iconButtonSize;
         final double resolvedTapTargetSize =
             widget.resolvedTapTargetSize ?? context.sizing.iconButtonTapTarget;
-        final double resolvedBorderWidth =
-            widget.resolvedBorderWidth ??
-            (widget.variant == AxiIconButtonVariant.outline
-                ? context.borderSide.width
-                : 0);
+        final double resolvedBorderWidth = usesDesktopIconOnlyTreatment
+            ? 0
+            : widget.resolvedBorderWidth ??
+                  (widget.variant == AxiIconButtonVariant.outline
+                      ? context.borderSide.width
+                      : 0);
         final double iconSize = resolvedIconSize;
         final double buttonSize = resolvedButtonSize;
         final double tapTargetSize = resolvedTapTargetSize;
@@ -339,18 +355,26 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                       data: IconThemeData(size: iconSize),
                       child: widget.icon!,
                     ));
-        Color background = emphasized && widget.hoverBackgroundColor != null
-            ? widget.hoverBackgroundColor!
-            : resolvedBackground;
-        if (pressed) {
+        Color background;
+        if (usesDesktopIconOnlyTreatment && (emphasized || pressed)) {
           background =
+              widget.hoverBackgroundColor ??
               widget.pressedBackgroundColor ??
-              Color.alphaBlend(
-                context.colorScheme.primary.withValues(
-                  alpha: context.motion.tapSplashAlpha,
-                ),
-                background,
-              );
+              context.colorScheme.secondary;
+        } else {
+          background = emphasized && widget.hoverBackgroundColor != null
+              ? widget.hoverBackgroundColor!
+              : resolvedBackground;
+          if (pressed) {
+            background =
+                widget.pressedBackgroundColor ??
+                Color.alphaBlend(
+                  context.colorScheme.primary.withValues(
+                    alpha: context.motion.tapSplashAlpha,
+                  ),
+                  background,
+                );
+          }
         }
 
         Widget tappable = SizedBox(
@@ -466,5 +490,22 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         );
       },
     );
+  }
+
+  bool _usesDesktopIconOnlyTreatment(BuildContext context) {
+    final env = EnvScope.maybeOf(context);
+    if (env != null) return env.isDesktopPlatform;
+    if (kIsWeb) {
+      final size = MediaQuery.maybeOf(context)?.size;
+      return size != null && size.width >= smallScreen;
+    }
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => true,
+      TargetPlatform.android ||
+      TargetPlatform.fuchsia ||
+      TargetPlatform.iOS => false,
+    };
   }
 }
