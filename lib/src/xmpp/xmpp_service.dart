@@ -605,6 +605,10 @@ abstract interface class XmppBase {
 
   Future<void> runBootstrapOperations(XmppBootstrapTrigger trigger) async {}
 
+  int get _bootstrapOperationEpoch => 0;
+
+  bool _bootstrapRunAborted(int runEpoch) => false;
+
   XmppForegroundSocketState get foregroundSocketState =>
       XmppForegroundSocketState.uninitialized;
 
@@ -743,17 +747,16 @@ final class XmppMailPushHint {
 
 enum _XmppBootstrapOperationOutcome { success, failed, aborted, skipped }
 
-final class _XmppBootstrapPass {
-  _XmppBootstrapPass();
+final class _XmppBootstrapRunResult {
+  const _XmppBootstrapRunResult({
+    required this.aborted,
+    required this.failedOperationCount,
+  });
 
-  bool aborted = false;
-  final Map<Object, Future<void>> tasks = <Object, Future<void>>{};
-  final Map<Object, _XmppBootstrapOperationOutcome> completedOperations =
-      <Object, _XmppBootstrapOperationOutcome>{};
-  final Map<Object, Map<int, _XmppBootstrapOperationOutcome>> laneOutcomes =
-      <Object, Map<int, _XmppBootstrapOperationOutcome>>{};
-  Future<void> scheduler = Future<void>.value();
-  int queuedRuns = 0;
+  final bool aborted;
+  final int failedOperationCount;
+
+  bool get hasPartialWork => aborted || failedOperationCount > 0;
 }
 
 class XmppService extends XmppBase
@@ -1546,9 +1549,13 @@ class XmppService extends XmppBase
       StreamController<ConnectionState>.broadcast();
   Completer<void> _streamNegotiationsDone = Completer<void>();
   Timer? _connectingWatchdogTimer;
-  _XmppBootstrapPass? _activeBootstrapPass;
   final LinkedHashMap<Object, XmppBootstrapOperation> _bootstrapOperations =
       LinkedHashMap<Object, XmppBootstrapOperation>();
+  final Map<Object, Future<void>> _activeBootstrapOperationFutures =
+      <Object, Future<void>>{};
+  final Map<Object, String> _activeBootstrapOperationNames = <Object, String>{};
+  @override
+  int _bootstrapOperationEpoch = 0;
 
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
@@ -1579,7 +1586,7 @@ class XmppService extends XmppBase
     if (state != ConnectionState.connected) {
       _clearMamNegotiationState();
       _clearSelfAvatarNegotiationState();
-      _abortActiveBootstrapPass();
+      _invalidateBootstrapOperations();
       if (_streamNegotiationsDone.isCompleted) {
         _streamNegotiationsDone = Completer<void>();
       }
@@ -1703,9 +1710,12 @@ class XmppService extends XmppBase
     if (_bootstrapOperations.values.any(
       (operation) => operation.triggers.contains(trigger),
     )) {
-      final pass = _XmppBootstrapPass();
-      _activeBootstrapPass = pass;
-      unawaited(_runBootstrapOperations(trigger, pass: pass));
+      unawaited(
+        fireAndForget(
+          () => _runBootstrapOperations(trigger),
+          operationName: 'XmppService.runAutomaticPostNegotiationWork',
+        ),
+      );
     }
   }
 
@@ -1725,7 +1735,7 @@ class XmppService extends XmppBase
 
   @override
   void resetBootstrapOperations() {
-    _abortActiveBootstrapPass();
+    _invalidateBootstrapOperations();
     _bootstrapOperations.clear();
   }
 
@@ -1745,58 +1755,79 @@ class XmppService extends XmppBase
     await _runBootstrapOperations(trigger);
   }
 
-  Future<void> _runBootstrapOperations(
-    XmppBootstrapTrigger trigger, {
-    _XmppBootstrapPass? pass,
-  }) async {
+  Future<_XmppBootstrapRunResult> _runBootstrapOperations(
+    XmppBootstrapTrigger trigger,
+  ) async {
     final operations =
         _bootstrapOperations.values
             .where((operation) => operation.triggers.contains(trigger))
             .toList(growable: false)
           ..sort((left, right) => left.priority.compareTo(right.priority));
-    if (connectionState != ConnectionState.connected) {
-      return;
-    }
-    final activePass = pass ?? _activeBootstrapPass ?? _XmppBootstrapPass();
-    _activeBootstrapPass ??= activePass;
-    if (operations.isEmpty) {
-      if (identical(_activeBootstrapPass, activePass) &&
-          activePass.tasks.isEmpty) {
-        _activeBootstrapPass = null;
-      }
-      return;
-    }
-    activePass.queuedRuns++;
-    final scheduled = activePass.scheduler
-        .then((_) async {
-          var index = 0;
-          while (index < operations.length &&
-              !activePass.aborted &&
-              connectionState == ConnectionState.connected) {
-            final priority = operations[index].priority;
-            final futures = <Future<void>>[];
-            while (index < operations.length &&
-                operations[index].priority == priority) {
-              futures.add(
-                _startBootstrapOperationIfAllowed(
-                  activePass,
-                  operations[index],
-                ),
-              );
-              index++;
-            }
-            await _waitForBootstrapOperations(futures);
-          }
-        })
-        .whenComplete(() {
-          activePass.queuedRuns--;
-          _maybeClearActiveBootstrapPass(activePass);
-        });
-    activePass.scheduler = scheduled.catchError(
-      (Object _, StackTrace _) {},
-      test: (Object error) => error is Exception,
+    _xmppLogger.fine(
+      'XMPP bootstrap run requested: '
+      'trigger=$trigger '
+      'operationCount=${operations.length} '
+      'connectionState=$connectionState '
+      'activeOperations=${_describeActiveBootstrapOperations()}.',
     );
-    await scheduled;
+    if (connectionState != ConnectionState.connected) {
+      _xmppLogger.fine(
+        'XMPP bootstrap run skipped: '
+        'trigger=$trigger '
+        'connectionState=$connectionState.',
+      );
+      return const _XmppBootstrapRunResult(
+        aborted: true,
+        failedOperationCount: 0,
+      );
+    }
+    if (operations.isEmpty) {
+      _xmppLogger.fine('XMPP bootstrap run completed: trigger=$trigger empty.');
+      return const _XmppBootstrapRunResult(
+        aborted: false,
+        failedOperationCount: 0,
+      );
+    }
+    final runEpoch = _bootstrapOperationEpoch;
+    final completedOperations = <Object, _XmppBootstrapOperationOutcome>{};
+    final laneOutcomes = <Object, Map<int, _XmppBootstrapOperationOutcome>>{};
+    try {
+      _xmppLogger.fine(
+        'XMPP bootstrap run started: '
+        'trigger=$trigger '
+        'operationCount=${operations.length}.',
+      );
+      var index = 0;
+      while (index < operations.length && !_bootstrapRunAborted(runEpoch)) {
+        final priority = operations[index].priority;
+        final futures = <Future<void>>[];
+        while (index < operations.length &&
+            operations[index].priority == priority) {
+          futures.add(
+            _startBootstrapOperationIfAllowed(
+              operations[index],
+              runEpoch: runEpoch,
+              completedOperations: completedOperations,
+              laneOutcomes: laneOutcomes,
+            ),
+          );
+          index++;
+        }
+        await _waitForBootstrapOperations(futures);
+      }
+    } finally {
+      _xmppLogger.fine(
+        'XMPP bootstrap run completed: '
+        'trigger=$trigger '
+        'aborted=${_bootstrapRunAborted(runEpoch)} '
+        'activeOperations=${_describeActiveBootstrapOperations()}.',
+      );
+    }
+    return _bootstrapRunResultFor(
+      operations: operations,
+      completedOperations: completedOperations,
+      aborted: _bootstrapRunAborted(runEpoch),
+    );
   }
 
   Future<void> _waitForBootstrapOperations(List<Future<void>> futures) async {
@@ -1813,40 +1844,93 @@ class XmppService extends XmppBase
     );
   }
 
+  _XmppBootstrapRunResult _bootstrapRunResultFor({
+    required List<XmppBootstrapOperation> operations,
+    required Map<Object, _XmppBootstrapOperationOutcome> completedOperations,
+    required bool aborted,
+  }) {
+    final operationKeys = operations.map((operation) => operation.key).toSet();
+    final failedOperationCount = completedOperations.entries
+        .where(
+          (entry) =>
+              operationKeys.contains(entry.key) &&
+              entry.value == _XmppBootstrapOperationOutcome.failed,
+        )
+        .length;
+    return _XmppBootstrapRunResult(
+      aborted: aborted,
+      failedOperationCount: failedOperationCount,
+    );
+  }
+
   Future<void> _startBootstrapOperationIfAllowed(
-    _XmppBootstrapPass pass,
-    XmppBootstrapOperation operation,
-  ) {
-    if (pass.aborted || connectionState != ConnectionState.connected) {
+    XmppBootstrapOperation operation, {
+    required int runEpoch,
+    required Map<Object, _XmppBootstrapOperationOutcome> completedOperations,
+    required Map<Object, Map<int, _XmppBootstrapOperationOutcome>> laneOutcomes,
+  }) async {
+    if (_bootstrapRunAborted(runEpoch)) {
       _recordBootstrapOutcome(
-        pass: pass,
+        completedOperations: completedOperations,
+        laneOutcomes: laneOutcomes,
         operation: operation,
         outcome: _XmppBootstrapOperationOutcome.aborted,
       );
       _xmppLogger.fine('${operation.operationName} aborted.');
-      return Future<void>.value();
+      return;
     }
-    final completed = pass.completedOperations[operation.key];
+    final operationDiagnosticName = _bootstrapOperationDiagnosticName(
+      operation.operationName,
+    );
+    final completed = completedOperations[operation.key];
     if (completed == _XmppBootstrapOperationOutcome.success ||
         completed == _XmppBootstrapOperationOutcome.aborted) {
-      return Future<void>.value();
+      return;
     }
-    if (!_canRunBootstrapOperation(pass, operation)) {
+    if (!_canRunBootstrapOperation(laneOutcomes, operation)) {
       _recordBootstrapOutcome(
-        pass: pass,
+        completedOperations: completedOperations,
+        laneOutcomes: laneOutcomes,
         operation: operation,
         outcome: _XmppBootstrapOperationOutcome.skipped,
       );
       _xmppLogger.fine(
-        '${operation.operationName} skipped due to unmet lane prerequisites.',
+        '$operationDiagnosticName skipped due to unmet lane prerequisites.',
       );
-      return Future<void>.value();
+      return;
     }
-    return _startBootstrapOperation(pass, operation);
+    try {
+      await _startBootstrapOperation(operation, runEpoch: runEpoch);
+      if (_bootstrapRunAborted(runEpoch)) {
+        throw XmppAbortedException();
+      }
+      _recordBootstrapOutcome(
+        completedOperations: completedOperations,
+        laneOutcomes: laneOutcomes,
+        operation: operation,
+        outcome: _XmppBootstrapOperationOutcome.success,
+      );
+    } on XmppAbortedException {
+      _recordBootstrapOutcome(
+        completedOperations: completedOperations,
+        laneOutcomes: laneOutcomes,
+        operation: operation,
+        outcome: _XmppBootstrapOperationOutcome.aborted,
+      );
+      rethrow;
+    } on Exception {
+      _recordBootstrapOutcome(
+        completedOperations: completedOperations,
+        laneOutcomes: laneOutcomes,
+        operation: operation,
+        outcome: _XmppBootstrapOperationOutcome.failed,
+      );
+      rethrow;
+    }
   }
 
   bool _canRunBootstrapOperation(
-    _XmppBootstrapPass pass,
+    Map<Object, Map<int, _XmppBootstrapOperationOutcome>> laneOutcomes,
     XmppBootstrapOperation operation,
   ) {
     final lane = operation.lane;
@@ -1863,7 +1947,7 @@ class XmppService extends XmppBase
     if (lowerPriorities.isEmpty) {
       return true;
     }
-    final outcomes = pass.laneOutcomes[lane];
+    final outcomes = laneOutcomes[lane];
     if (outcomes == null) {
       return false;
     }
@@ -1876,93 +1960,89 @@ class XmppService extends XmppBase
   }
 
   void _recordBootstrapOutcome({
-    required _XmppBootstrapPass pass,
+    required Map<Object, _XmppBootstrapOperationOutcome> completedOperations,
+    required Map<Object, Map<int, _XmppBootstrapOperationOutcome>> laneOutcomes,
     required XmppBootstrapOperation operation,
     required _XmppBootstrapOperationOutcome outcome,
   }) {
-    pass.completedOperations[operation.key] = outcome;
+    completedOperations[operation.key] = outcome;
     final lane = operation.lane;
     if (lane == null) {
       return;
     }
-    final laneOutcomes = pass.laneOutcomes.putIfAbsent(
+    final outcomes = laneOutcomes.putIfAbsent(
       lane,
       () => <int, _XmppBootstrapOperationOutcome>{},
     );
-    laneOutcomes[operation.priority] = outcome;
+    outcomes[operation.priority] = outcome;
   }
 
-  void _maybeClearActiveBootstrapPass(_XmppBootstrapPass pass) {
-    if (!identical(_activeBootstrapPass, pass)) {
-      return;
-    }
-    if (pass.tasks.isNotEmpty || pass.queuedRuns > 0) {
-      return;
-    }
-    _activeBootstrapPass = null;
+  void _invalidateBootstrapOperations() {
+    _xmppLogger.fine(
+      'XMPP bootstrap operations invalidated: '
+      'activeOperations=${_describeActiveBootstrapOperations()}.',
+    );
+    _bootstrapOperationEpoch++;
+    _activeBootstrapOperationFutures.clear();
+    _activeBootstrapOperationNames.clear();
   }
 
-  void _abortActiveBootstrapPass() {
-    final pass = _activeBootstrapPass;
-    if (pass == null) {
-      return;
+  @override
+  bool _bootstrapRunAborted(int runEpoch) =>
+      runEpoch != _bootstrapOperationEpoch ||
+      connectionState != ConnectionState.connected;
+
+  String _describeActiveBootstrapOperations() {
+    if (_activeBootstrapOperationNames.isEmpty) {
+      return 'none';
     }
-    pass.aborted = true;
-    _activeBootstrapPass = null;
+    final names = _activeBootstrapOperationNames.values.toList(growable: false)
+      ..sort();
+    return names.join(', ');
   }
+
+  String _bootstrapOperationDiagnosticName(String operationName) =>
+      operationName.replaceAll('.', ' ');
 
   Future<void> _startBootstrapOperation(
-    _XmppBootstrapPass pass,
-    XmppBootstrapOperation operation,
-  ) {
-    final existing = pass.tasks[operation.key];
+    XmppBootstrapOperation operation, {
+    required int runEpoch,
+  }) {
+    final existing = _activeBootstrapOperationFutures[operation.key];
     if (existing != null) {
       return existing;
     }
+    final operationDiagnosticName = _bootstrapOperationDiagnosticName(
+      operation.operationName,
+    );
     late final Future<void> future;
     future = Future<void>.microtask(() async {
       try {
-        if (pass.aborted || connectionState != ConnectionState.connected) {
+        if (_bootstrapRunAborted(runEpoch)) {
           throw XmppAbortedException();
         }
+        _activeBootstrapOperationNames[operation.key] = operationDiagnosticName;
+        _xmppLogger.fine('$operationDiagnosticName started.');
         await operation.run();
-        if (pass.aborted || connectionState != ConnectionState.connected) {
+        if (_bootstrapRunAborted(runEpoch)) {
           throw XmppAbortedException();
         }
-        _recordBootstrapOutcome(
-          pass: pass,
-          operation: operation,
-          outcome: _XmppBootstrapOperationOutcome.success,
-        );
+        _xmppLogger.fine('$operationDiagnosticName completed.');
       } on XmppAbortedException {
-        _recordBootstrapOutcome(
-          pass: pass,
-          operation: operation,
-          outcome: _XmppBootstrapOperationOutcome.aborted,
-        );
-        _xmppLogger.fine('${operation.operationName} aborted.');
+        _xmppLogger.fine('$operationDiagnosticName aborted.');
         rethrow;
       } on Exception catch (error, stackTrace) {
-        _recordBootstrapOutcome(
-          pass: pass,
-          operation: operation,
-          outcome: _XmppBootstrapOperationOutcome.failed,
-        );
-        _xmppLogger.fine(
-          '${operation.operationName} failed.',
-          error,
-          stackTrace,
-        );
+        _xmppLogger.fine('$operationDiagnosticName failed.', error, stackTrace);
         rethrow;
       } finally {
-        final current = pass.tasks[operation.key];
+        final current = _activeBootstrapOperationFutures[operation.key];
         if (identical(current, future)) {
-          pass.tasks.remove(operation.key);
+          _activeBootstrapOperationFutures.remove(operation.key);
+          _activeBootstrapOperationNames.remove(operation.key);
         }
-        _maybeClearActiveBootstrapPass(pass);
       }
     });
-    pass.tasks[operation.key] = future;
+    _activeBootstrapOperationFutures[operation.key] = future;
     return future;
   }
 
@@ -3568,6 +3648,27 @@ class XmppService extends XmppBase
     return requestReconnect(ReconnectTrigger.immediateRetry);
   }
 
+  Future<bool> _recoverFromManualRefreshBootstrapTimeout() async {
+    _xmppLogger.warning(
+      'Recovering from manual XMPP session sync bootstrap timeout by reconnecting.',
+    );
+    _reconnectBlocked = false;
+    if (!_sessionReconnectEnabled ||
+        _connectInFlight ||
+        !_synchronousConnection.isCompleted ||
+        !_connection.hasConnectionSettings) {
+      _invalidateBootstrapOperations();
+      return false;
+    }
+    if (connectionState == ConnectionState.connected ||
+        connectionState == ConnectionState.error) {
+      _setConnectionState(ConnectionState.notConnected);
+    } else {
+      _invalidateBootstrapOperations();
+    }
+    return requestReconnect(ReconnectTrigger.immediateRetry);
+  }
+
   Future<bool> requestReconnect(ReconnectTrigger trigger) async {
     _xmppLogger.info(
       'Reconnect request started: trigger=$trigger '
@@ -3687,30 +3788,97 @@ class XmppService extends XmppBase
         .timeout(timeout);
   }
 
-  Future<bool> syncSessionState() async {
+  Future<bool> syncSessionState({
+    Duration manualRefreshBootstrapTimeout = const Duration(seconds: 20),
+  }) async {
+    _xmppLogger.info(
+      'Manual XMPP session sync started: '
+      'hasSettings=$hasConnectionSettings '
+      'connected=$connected '
+      'connectionState=$connectionState '
+      'mamNegotiated=$_hasMamNegotiatedStream '
+      'mamResumed=$_mamNegotiationResumed.',
+    );
     if (!hasConnectionSettings) {
+      _xmppLogger.info('Manual XMPP session sync skipped: no settings.');
       return true;
     }
     if (!connected) {
       const negotiationTimeout = Duration(seconds: 20);
-      final negotiationsDone = _waitForStreamNegotiationsDone(
-        timeout: negotiationTimeout,
+      _xmppLogger.info(
+        'Manual XMPP session sync requesting reconnect: '
+        'timeout=$negotiationTimeout.',
       );
       if (!await requestReconnect(ReconnectTrigger.immediateRetry)) {
+        _xmppLogger.info(
+          'Manual XMPP session sync failed: reconnect request was rejected.',
+        );
         return false;
       }
-      await negotiationsDone;
+      try {
+        await _waitForStreamNegotiationsDone(timeout: negotiationTimeout);
+        _xmppLogger.info(
+          'Manual XMPP session sync stream negotiations completed: '
+          'mamNegotiated=$_hasMamNegotiatedStream '
+          'mamResumed=$_mamNegotiationResumed.',
+        );
+      } on TimeoutException catch (error, stackTrace) {
+        _xmppLogger.warning(
+          'Manual XMPP session sync timed out waiting for stream negotiations.',
+          error,
+          stackTrace,
+        );
+        rethrow;
+      }
     }
 
     const mamHistoryPageSize = 50;
     final mamOutcome = await syncGlobalMamCatchUpForRefresh(
       pageSize: mamHistoryPageSize,
     );
-    if (!_isAcceptableSessionSyncMamOutcome(mamOutcome)) {
+    final acceptsMamOutcome = _isAcceptableSessionSyncMamOutcome(mamOutcome);
+    _xmppLogger.info(
+      'Manual XMPP session sync global MAM outcome: '
+      'outcome=$mamOutcome '
+      'accepted=$acceptsMamOutcome '
+      'mamNegotiated=$_hasMamNegotiatedStream '
+      'mamResumed=$_mamNegotiationResumed.',
+    );
+    if (!acceptsMamOutcome) {
+      _xmppLogger.info(
+        'Manual XMPP session sync failed: unacceptable MAM outcome=$mamOutcome.',
+      );
       return false;
     }
-    await runBootstrapOperations(XmppBootstrapTrigger.manualRefresh);
+    final _XmppBootstrapRunResult bootstrapResult;
+    try {
+      bootstrapResult = await _runBootstrapOperations(
+        XmppBootstrapTrigger.manualRefresh,
+      ).timeout(manualRefreshBootstrapTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Manual XMPP session sync timed out waiting for bootstrap operations: '
+        'timeout=$manualRefreshBootstrapTimeout '
+        'activeOperations=${_describeActiveBootstrapOperations()}.',
+        error,
+        stackTrace,
+      );
+      await _recoverFromManualRefreshBootstrapTimeout();
+      return false;
+    }
+    if (bootstrapResult.hasPartialWork) {
+      _xmppLogger.info(
+        'Manual XMPP session sync bootstrap operations partially completed: '
+        'aborted=${bootstrapResult.aborted} '
+        'failedOperationCount=${bootstrapResult.failedOperationCount}.',
+      );
+      return false;
+    }
+    _xmppLogger.info(
+      'Manual XMPP session sync bootstrap operations completed.',
+    );
     await refreshSelfAvatarIfNeeded(force: true);
+    _xmppLogger.info('Manual XMPP session sync completed.');
     return true;
   }
 

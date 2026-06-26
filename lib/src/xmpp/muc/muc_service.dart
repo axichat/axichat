@@ -416,6 +416,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
   int _selfPresenceGeneration = 0;
   String? _mucServiceHost;
   Future<List<MucBookmark>>? _mucBookmarksSync;
+  int? _mucBookmarksSyncEpoch;
   List<MucBookmark> _latestBootstrapBookmarks = <MucBookmark>[];
   final Set<String> _mucMamUnsupportedRooms = {};
   final Map<String, String> _outboundGroupchatStanzaRooms = <String, String>{};
@@ -845,6 +846,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
     }
     _roomSubjectStreams.clear();
     _mucBookmarksSync = null;
+    _mucBookmarksSyncEpoch = null;
     _mucMamUnsupportedRooms.clear();
     _outboundGroupchatStanzaRooms.clear();
     await super._reset();
@@ -5408,7 +5410,11 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
 
   Future<List<MucBookmark>> syncMucBookmarksSnapshot() async {
     final pendingSync = _mucBookmarksSync;
-    if (pendingSync != null) return pendingSync;
+    if (pendingSync != null &&
+        _mucBookmarksSyncEpoch == _bootstrapOperationEpoch) {
+      return pendingSync;
+    }
+    final syncEpoch = _bootstrapOperationEpoch;
     final task = () async {
       try {
         await database;
@@ -5420,6 +5426,9 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
         await bookmarksManager.ensureNode();
         await bookmarksManager.subscribe();
         final snapshot = await bookmarksManager.fetchAllWithStatus();
+        if (_bootstrapRunAborted(syncEpoch)) {
+          throw XmppAbortedException();
+        }
         await applyMucBookmarksSnapshot(snapshot);
         return snapshot.items;
       } on XmppAbortedException {
@@ -5427,9 +5436,11 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
       }
     }();
     _mucBookmarksSync = task;
+    _mucBookmarksSyncEpoch = syncEpoch;
     return task.whenComplete(() {
-      if (_mucBookmarksSync == task) {
+      if (identical(_mucBookmarksSync, task)) {
         _mucBookmarksSync = null;
+        _mucBookmarksSyncEpoch = null;
       }
     });
   }

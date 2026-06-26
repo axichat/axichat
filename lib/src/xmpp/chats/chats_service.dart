@@ -137,7 +137,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   final Map<String, int> _openChatUnreadBoundarySeedByJid = {};
   final Set<String> _pendingConversationIndexSeeds = <String>{};
   Future<List<ConvItem>>? _conversationIndexLoginSync;
+  int? _conversationIndexLoginSyncEpoch;
   Future<List<ChatSettingsSyncPayload>>? _chatSettingsLoginSync;
+  int? _chatSettingsLoginSyncEpoch;
   String? _chatSettingsSourceId;
   List<Chat>? _cachedChatList;
   bool? _lastMarkerResponsive;
@@ -357,17 +359,23 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
 
   Future<List<ConvItem>> syncConversationIndexSnapshot() async {
     final pendingSync = _conversationIndexLoginSync;
-    if (pendingSync != null) return pendingSync;
-    final task = _syncConversationIndexSnapshot();
+    if (pendingSync != null &&
+        _conversationIndexLoginSyncEpoch == _bootstrapOperationEpoch) {
+      return pendingSync;
+    }
+    final syncEpoch = _bootstrapOperationEpoch;
+    final task = _syncConversationIndexSnapshot(syncEpoch);
     _conversationIndexLoginSync = task;
+    _conversationIndexLoginSyncEpoch = syncEpoch;
     return task.whenComplete(() {
-      if (_conversationIndexLoginSync == task) {
+      if (identical(_conversationIndexLoginSync, task)) {
         _conversationIndexLoginSync = null;
+        _conversationIndexLoginSyncEpoch = null;
       }
     });
   }
 
-  Future<List<ConvItem>> _syncConversationIndexSnapshot() async {
+  Future<List<ConvItem>> _syncConversationIndexSnapshot(int syncEpoch) async {
     try {
       await database;
       final support = await refreshPubSubSupport();
@@ -376,6 +384,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
         featureLabel: 'conversation index',
       );
       if (!decision.isAllowed) {
+        if (_bootstrapRunAborted(syncEpoch)) {
+          throw XmppAbortedException();
+        }
         _conversationIndexSnapshotResolved = true;
         _pendingConversationIndexSeeds.clear();
         return _emptyConversationIndexSnapshot;
@@ -389,6 +400,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       await manager.ensureNode();
       await manager.subscribe();
       final snapshot = await manager.fetchAllWithStatus();
+      if (_bootstrapRunAborted(syncEpoch)) {
+        throw XmppAbortedException();
+      }
       await applyConversationIndexSnapshot(snapshot);
       return snapshot.items;
     } on XmppAbortedException {
@@ -398,17 +412,25 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
 
   Future<List<ChatSettingsSyncPayload>> syncChatSettingsSnapshot() async {
     final pendingSync = _chatSettingsLoginSync;
-    if (pendingSync != null) return pendingSync;
-    final task = _syncChatSettingsSnapshot();
+    if (pendingSync != null &&
+        _chatSettingsLoginSyncEpoch == _bootstrapOperationEpoch) {
+      return pendingSync;
+    }
+    final syncEpoch = _bootstrapOperationEpoch;
+    final task = _syncChatSettingsSnapshot(syncEpoch);
     _chatSettingsLoginSync = task;
+    _chatSettingsLoginSyncEpoch = syncEpoch;
     return task.whenComplete(() {
-      if (_chatSettingsLoginSync == task) {
+      if (identical(_chatSettingsLoginSync, task)) {
         _chatSettingsLoginSync = null;
+        _chatSettingsLoginSyncEpoch = null;
       }
     });
   }
 
-  Future<List<ChatSettingsSyncPayload>> _syncChatSettingsSnapshot() async {
+  Future<List<ChatSettingsSyncPayload>> _syncChatSettingsSnapshot(
+    int syncEpoch,
+  ) async {
     try {
       await database;
       final manager = await _chatSettingsManagerForSync();
@@ -421,6 +443,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       final snapshot = await manager.fetchAllWithStatus();
       if (!snapshot.isSuccess) {
         return _emptyChatSettingsSnapshot;
+      }
+      if (_bootstrapRunAborted(syncEpoch)) {
+        throw XmppAbortedException();
       }
       await _applyChatSettingsSyncSnapshot(snapshot.items, manager: manager);
       return snapshot.items;
@@ -688,7 +713,10 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     _typingParticipantSessions.clear();
     _pendingConversationIndexSeeds.clear();
     _conversationIndexSnapshotResolved = false;
+    _conversationIndexLoginSync = null;
+    _conversationIndexLoginSyncEpoch = null;
     _chatSettingsLoginSync = null;
+    _chatSettingsLoginSyncEpoch = null;
     _chatSettingsSourceId = null;
     await super._reset();
   }
