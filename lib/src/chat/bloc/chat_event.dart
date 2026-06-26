@@ -908,27 +908,42 @@ final class ChatComposerErrorCleared extends ChatEvent {
 
 final class ChatAttachmentPicked extends ChatEvent {
   const ChatAttachmentPicked({
-    required this.attachment,
+    required this.pendingId,
+    required this.source,
+    required this.composerSessionId,
     required this.recipients,
     required this.chat,
     required this.quotedDraft,
     required this.completer,
   });
 
-  final Attachment attachment;
+  final String pendingId;
+  final AttachmentImportSource source;
+  final String composerSessionId;
   final List<ComposerRecipient> recipients;
   final Chat chat;
   final Message? quotedDraft;
-  final CancelableCompleter<PendingAttachment?> completer;
+  final Completer<PendingAttachment?> completer;
 
   @override
   List<Object?> get props => [
-    attachment,
+    pendingId,
+    source,
+    composerSessionId,
     recipients,
     chat,
     quotedDraft,
     completer,
   ];
+}
+
+final class ChatPendingAttachmentMetadataDiscarded extends ChatEvent {
+  const ChatPendingAttachmentMetadataDiscarded(this.metadataId);
+
+  final String metadataId;
+
+  @override
+  List<Object?> get props => [metadataId];
 }
 
 final class ChatAttachmentRetryRequested extends ChatEvent {

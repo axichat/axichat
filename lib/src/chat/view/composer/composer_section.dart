@@ -75,6 +75,7 @@ class _InlineExpandedDraftComposerSection extends StatefulWidget {
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
     required this.onAddAttachment,
+    this.onAttachmentsDropped,
     required this.onAttachmentRetry,
     required this.onAttachmentRemove,
     required this.onPendingAttachmentPressed,
@@ -108,6 +109,7 @@ class _InlineExpandedDraftComposerSection extends StatefulWidget {
   final FutureOr<bool> Function(Contact target) onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
   final Future<void> Function()? onAddAttachment;
+  final AxiDroppedAttachmentsCallback? onAttachmentsDropped;
   final ValueChanged<PendingAttachment> onAttachmentRetry;
   final ValueChanged<String> onAttachmentRemove;
   final ValueChanged<PendingAttachment> onPendingAttachmentPressed;
@@ -345,6 +347,7 @@ class _InlineExpandedDraftComposerSectionState
                   attachments: widget.pendingAttachments,
                   addingAttachment: widget.addingAttachment,
                   onAddAttachment: widget.onAddAttachment,
+                  onAttachmentsDropped: widget.onAttachmentsDropped,
                   onAttachmentRetry: widget.onAttachmentRetry,
                   onAttachmentRemove: widget.onAttachmentRemove,
                   onAttachmentPressed: widget.onPendingAttachmentPressed,
@@ -528,6 +531,7 @@ class _ChatComposerSection extends StatefulWidget {
     required this.onExpandDraftPressed,
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
+    this.onAttachmentsDropped,
     required this.onAttachmentRetry,
     required this.onAttachmentRemove,
     required this.onPendingAttachmentPressed,
@@ -568,6 +572,7 @@ class _ChatComposerSection extends StatefulWidget {
   final VoidCallback onExpandDraftPressed;
   final FutureOr<bool> Function(Contact target) onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
+  final AxiDroppedAttachmentsCallback? onAttachmentsDropped;
   final ValueChanged<PendingAttachment> onAttachmentRetry;
   final ValueChanged<String> onAttachmentRemove;
   final ValueChanged<PendingAttachment> onPendingAttachmentPressed;
@@ -911,20 +916,27 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
       ),
       Opacity(opacity: widget.enabled ? 1.0 : 0.56, child: composer),
     ];
-    final content = TapRegion(
-      groupId: widget.tapRegionGroup,
-      onTapUpOutside: (_) {
-        if (!_textFocusNode.hasFocus && !_subjectFocusNode.hasFocus) {
-          return;
-        }
-        _textFocusNode.unfocus();
-        _subjectFocusNode.unfocus();
-      },
-      child: Padding(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: children,
+    final content = AxiAttachmentDropTarget(
+      enabled:
+          widget.enabled &&
+          !widget.sending &&
+          !pendingAttachments.any((attachment) => attachment.isPreparing),
+      onDropped: widget.onAttachmentsDropped,
+      child: TapRegion(
+        groupId: widget.tapRegionGroup,
+        onTapUpOutside: (_) {
+          if (!_textFocusNode.hasFocus && !_subjectFocusNode.hasFocus) {
+            return;
+          }
+          _textFocusNode.unfocus();
+          _subjectFocusNode.unfocus();
+        },
+        child: Padding(
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
         ),
       ),
     );

@@ -113,6 +113,7 @@ dependencies:
   google_nav_bar: ^5.0.7
   upgrader: ^12.5.0
   showcaseview: ^5.1.0
+  desktop_drop: ^0.7.1
 
 dependency_overrides:
   pinenacl: ^0.6.0

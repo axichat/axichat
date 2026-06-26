@@ -15,6 +15,7 @@ export 'axi_badge.dart';
 export 'axi_borders.dart';
 export 'axi_radii.dart';
 export 'app_bar_actions.dart';
+export 'axi_attachment_drop_target.dart';
 export 'button_spinner_slot.dart';
 export 'composer_quote_banner.dart';
 export 'axi_checkbox_form_field.dart';

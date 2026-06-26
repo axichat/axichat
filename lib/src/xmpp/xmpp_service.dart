@@ -35,6 +35,7 @@ import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
+import 'package:axichat/src/common/composer_attachment_staging.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
@@ -3347,14 +3348,9 @@ class XmppService extends XmppBase
   }
 
   Future<void> _deleteUnregisterAttachmentDirectory(String prefix) async {
-    const attachmentRootDirectoryName = 'attachments';
-    final supportDir = await getApplicationSupportDirectory();
+    final attachmentRoot = await appOwnedAttachmentRootDirectory();
     final directory = Directory(
-      p.join(
-        supportDir.path,
-        attachmentRootDirectoryName,
-        _normalizeUnregisterAttachmentPrefix(prefix),
-      ),
+      p.join(attachmentRoot.path, normalizeAttachmentStoragePrefix(prefix)),
     );
     try {
       final deleted = await deleteAppOwnedDirectoryTree(
@@ -3373,20 +3369,6 @@ class XmppService extends XmppBase
         stackTrace,
       );
     }
-  }
-
-  String _normalizeUnregisterAttachmentPrefix(String prefix) {
-    const attachmentPrefixFallback = 'shared';
-    const attachmentPrefixReplacement = '_';
-    final attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
-    final trimmed = prefix.trim();
-    if (trimmed.isEmpty) {
-      return attachmentPrefixFallback;
-    }
-    return trimmed.replaceAll(
-      attachmentPrefixSanitizer,
-      attachmentPrefixReplacement,
-    );
   }
 
   void _configureSocketCallbacks() {

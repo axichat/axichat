@@ -51,7 +51,9 @@ import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/models/chat_timeline_projection.dart';
 import 'package:axichat/src/chat/models/rfc_email_group.dart';
+import 'package:axichat/src/common/attachment_import_source.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
+import 'package:axichat/src/common/composer_attachment_staging.dart';
 import 'package:axichat/src/chat/view/composer/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/chat/view/timeline/message/bubble_surface.dart';
@@ -69,6 +71,7 @@ import 'package:axichat/src/chat/view/timeline/message/email_image_extension.dar
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/selection_panel_shell.dart';
+import 'package:axichat/src/common/attachment_drop.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
@@ -794,9 +797,12 @@ class _ChatState extends State<Chat> {
   int? _outsideTapPointer;
   Offset? _outsideTapStart;
   var _sendingAttachment = false;
+  var _inlineSendDispatching = false;
+  var _inlineComposerRevision = 0;
+  Set<String> _inlineSubmittedStagedPaths = const <String>{};
+  late final String _inlineComposerStagingSessionId = const Uuid().v4();
   CancelableCompleter<void>? _inlineAttachmentPreparationCancellation;
   Future<void>? _inlineAttachmentPreparationOperation;
-  CancelableOperation<PendingAttachment?>? _inlinePendingAttachmentOperation;
   StreamSubscription<ShareComposerSeed>? _shareComposerSeedSubscription;
   final StreamController<void> _shareComposerSeedConsumptionRequests =
       StreamController<void>();
@@ -810,7 +816,6 @@ class _ChatState extends State<Chat> {
   var _replyResolveRequestId = 0;
   List<PendingAttachment> _pendingAttachments = const [];
   MessageTransport? _inlineRetryTransportOverride;
-  var _pendingAttachmentSeed = 0;
   var _handledPendingOpenMessageRequestId = 0;
 
   bool get _multiSelectActive => false;
@@ -1380,10 +1385,21 @@ class _ChatState extends State<Chat> {
       return true;
     }
     final cancellation = CancelableCompleter<void>();
+    final sources = seed.attachments
+        .map(
+          (attachment) => LocalFileAttachmentImportSource(
+            path: attachment.path,
+            fileName: attachment.fileName,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+          ),
+        )
+        .toList(growable: false);
     final preparation = _prepareInlineAttachments(
       chat: chat,
-      attachments: seed.attachments,
+      sources: sources,
       cancellation: cancellation,
+      queueShareSeedConsumptionOnCompletion: false,
     );
     final operation = preparation.then<void>(
       (_) {},
@@ -1405,9 +1421,13 @@ class _ChatState extends State<Chat> {
         cancellation.complete();
       }
     }
-    if (!operationResult ||
+    if (cancellation.isCanceled ||
         !mounted ||
         locate<ChatBloc>().state.chat?.jid != seed.jid) {
+      return false;
+    }
+    if (!operationResult) {
+      _showSnackbar(context.l10n.chatAttachmentFailed);
       return false;
     }
     if (!locate<ShareComposerSeedQueue>().take(seed)) {
@@ -5000,11 +5020,6 @@ class _ChatState extends State<Chat> {
   }
 
   void _cancelInlineAttachmentPreparation() {
-    final pendingOperation = _inlinePendingAttachmentOperation;
-    _inlinePendingAttachmentOperation = null;
-    if (pendingOperation != null) {
-      pendingOperation.cancel();
-    }
     final cancellation = _inlineAttachmentPreparationCancellation;
     _inlineAttachmentPreparationCancellation = null;
     if (cancellation != null) {
@@ -5012,29 +5027,84 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  String _nextLocalPendingAttachmentId() {
-    final id = _pendingAttachmentSeed;
-    _pendingAttachmentSeed += 1;
-    return 'local-pending-$id';
+  Future<void> _deleteInlineStagedAttachments(
+    Iterable<PendingAttachment> attachments,
+  ) async {
+    for (final pending in attachments) {
+      final staged = pending.stagedAttachment;
+      if (staged == null) {
+        continue;
+      }
+      await deleteComposerStagedAttachment(staged);
+    }
   }
 
-  void _replacePendingAttachment(String id, {PendingAttachment? replacement}) {
-    final index = _pendingAttachments.indexWhere((pending) => pending.id == id);
-    if (index == -1) {
+  Set<String> _stagedPathsForPendingAttachments(
+    Iterable<PendingAttachment> attachments,
+  ) {
+    return attachments
+        .map((pending) => pending.stagedAttachment?.path)
+        .whereType<String>()
+        .toSet();
+  }
+
+  List<PendingAttachment> _unsubmittedInlinePendingAttachments() {
+    return _pendingAttachments
+        .where((pending) {
+          final stagedPath = pending.stagedAttachment?.path;
+          return stagedPath == null ||
+              !_inlineSubmittedStagedPaths.contains(stagedPath);
+        })
+        .toList(growable: false);
+  }
+
+  void _markInlineAttachmentsSubmittedForSend(
+    Iterable<PendingAttachment> attachments,
+  ) {
+    final stagedPaths = _stagedPathsForPendingAttachments(attachments);
+    if (stagedPaths.isEmpty) {
       return;
     }
-    setState(() {
-      final updated = List<PendingAttachment>.from(_pendingAttachments);
-      if (replacement == null) {
-        updated.removeAt(index);
-      } else {
-        updated[index] = replacement;
-      }
-      _pendingAttachments = updated;
-    });
+    _inlineSubmittedStagedPaths = {
+      ..._inlineSubmittedStagedPaths,
+      ...stagedPaths,
+    };
+  }
+
+  void _releaseInlineAttachmentsSubmittedForSend(
+    Iterable<PendingAttachment> attachments,
+  ) {
+    final stagedPaths = _stagedPathsForPendingAttachments(attachments);
+    if (stagedPaths.isEmpty || _inlineSubmittedStagedPaths.isEmpty) {
+      return;
+    }
+    _inlineSubmittedStagedPaths = {
+      for (final path in _inlineSubmittedStagedPaths)
+        if (!stagedPaths.contains(path)) path,
+    };
   }
 
   Future<void> _handleSendMessage({
+    required ChatState chatState,
+    required ChatSettingsSnapshot settingsSnapshot,
+    MessageTransport? oneShotTransportOverride,
+  }) async {
+    if (_inlineSendDispatching) {
+      return;
+    }
+    _inlineSendDispatching = true;
+    try {
+      await _handleSendMessageUnlocked(
+        chatState: chatState,
+        settingsSnapshot: settingsSnapshot,
+        oneShotTransportOverride: oneShotTransportOverride,
+      );
+    } finally {
+      _inlineSendDispatching = false;
+    }
+  }
+
+  Future<void> _handleSendMessageUnlocked({
     required ChatState chatState,
     required ChatSettingsSnapshot settingsSnapshot,
     MessageTransport? oneShotTransportOverride,
@@ -5053,7 +5123,9 @@ class _ChatState extends State<Chat> {
     final String resolvedText = rawText.isNotEmpty
         ? rawText
         : (seedText ?? _emptyText);
-    final pendingAttachments = _pendingAttachments;
+    final pendingAttachments = List<PendingAttachment>.from(
+      _pendingAttachments,
+    );
     final hasPreparingAttachments = pendingAttachments.any(
       (attachment) => attachment.isPreparing,
     );
@@ -5118,6 +5190,8 @@ class _ChatState extends State<Chat> {
     }
     final calendarTaskShareText = _pendingCalendarTaskIcs?.toShareText(l10n);
     final chatJid = chat.jid;
+    final sendRevision = _inlineComposerRevision;
+    _markInlineAttachmentsSubmittedForSend(pendingAttachments);
     final completer = Completer<ChatSendOutcome>();
     locate<ChatBloc>().add(
       ChatMessageSent(
@@ -5138,8 +5212,16 @@ class _ChatState extends State<Chat> {
         completer: completer,
       ),
     );
-    final outcome = await completer.future;
-    if (!mounted || locate<ChatBloc>().jid != chatJid) {
+    final ChatSendOutcome outcome;
+    try {
+      outcome = await completer.future;
+    } finally {
+      _releaseInlineAttachmentsSubmittedForSend(pendingAttachments);
+    }
+    if (!mounted ||
+        context.read<ChatBloc>().jid != chatJid ||
+        _inlineComposerRevision != sendRevision) {
+      await _deleteInlineStagedAttachments(outcome.pendingAttachments);
       return;
     }
     setState(() {
@@ -5331,26 +5413,35 @@ class _ChatState extends State<Chat> {
       if (!mounted) {
         return false;
       }
-      final currentChatState = context.read<ChatBloc>().state;
-      final signatureStillCurrent =
-          _currentInlineDraftSignature(currentChatState) == attemptedSignature;
-      final reconciledAttachments = _inlineAttachmentsWithMetadataIds(
+      final reconciled = await _inlineAttachmentsWithSavedMetadata(
         metadataIds: draft.attachmentMetadata.values,
         expectedAttachmentIds: attachmentIds,
       );
+      if (!mounted) {
+        return false;
+      }
+      final currentChatState = context.read<ChatBloc>().state;
+      final signatureStillCurrent =
+          _currentInlineDraftSignature(currentChatState) == attemptedSignature;
       final savedSignature = signatureStillCurrent
           ? _currentInlineDraftSignature(
               currentChatState,
-              pendingAttachments: reconciledAttachments,
+              pendingAttachments: reconciled.attachments,
             )
           : null;
       setState(() {
         _inlineComposerDraftId = draft.id;
-        _pendingAttachments = reconciledAttachments;
+        _pendingAttachments = reconciled.attachments;
         if (savedSignature != null) {
           _lastSavedInlineDraftSignature = savedSignature;
         }
       });
+      for (final staged in reconciled.stagedAttachmentsToDelete) {
+        await deleteComposerStagedAttachment(staged);
+      }
+      if (!mounted) {
+        return false;
+      }
       ShadToaster.maybeOf(
         context,
       )?.show(FeedbackToast.success(title: l10n.draftSaved));
@@ -5429,6 +5520,10 @@ class _ChatState extends State<Chat> {
 
   void _clearInlineComposerState({required bool clearInlineComposerDraftId}) {
     _cancelInlineAttachmentPreparation();
+    _inlineComposerRevision += 1;
+    unawaited(
+      _deleteInlineStagedAttachments(_unsubmittedInlinePendingAttachments()),
+    );
     _composerHasText = false;
     _clearQuotedDraftAndInvalidateReplyResolution();
     _pendingAttachments = const [];
@@ -5526,34 +5621,58 @@ class _ChatState extends State<Chat> {
     );
   }
 
-  List<PendingAttachment> _inlineAttachmentsWithMetadataIds({
+  Future<
+    ({
+      List<PendingAttachment> attachments,
+      List<ComposerStagedAttachment> stagedAttachmentsToDelete,
+    })
+  >
+  _inlineAttachmentsWithSavedMetadata({
     required List<String> metadataIds,
     required List<String> expectedAttachmentIds,
-  }) {
+  }) async {
     if (metadataIds.isEmpty ||
         metadataIds.length != expectedAttachmentIds.length) {
-      return _pendingAttachments;
+      return (
+        attachments: _pendingAttachments,
+        stagedAttachmentsToDelete: const <ComposerStagedAttachment>[],
+      );
     }
-    final idToMetadata = <String, String>{};
+    final savedAttachments = await context
+        .read<DraftCubit>()
+        .loadDraftAttachments(metadataIds);
+    if (!mounted || savedAttachments.length != expectedAttachmentIds.length) {
+      return (
+        attachments: _pendingAttachments,
+        stagedAttachmentsToDelete: const <ComposerStagedAttachment>[],
+      );
+    }
+    final idToAttachment = <String, Attachment>{};
     for (var index = 0; index < expectedAttachmentIds.length; index += 1) {
-      idToMetadata[expectedAttachmentIds[index]] = metadataIds[index];
+      idToAttachment[expectedAttachmentIds[index]] = savedAttachments[index];
     }
     var changed = false;
     final updated = <PendingAttachment>[];
+    final stagedAttachmentsToDelete = <ComposerStagedAttachment>[];
     for (final pending in _pendingAttachments) {
-      final metadataId = idToMetadata[pending.id];
-      if (metadataId == null || pending.attachment.metadataId == metadataId) {
+      final attachment = idToAttachment[pending.id];
+      if (attachment == null) {
         updated.add(pending);
         continue;
       }
       changed = true;
+      final staged = pending.stagedAttachment;
+      if (staged != null) {
+        stagedAttachmentsToDelete.add(staged);
+      }
       updated.add(
-        pending.copyWith(
-          attachment: pending.attachment.copyWith(metadataId: metadataId),
-        ),
+        pending.copyWith(attachment: attachment, clearStagedAttachment: true),
       );
     }
-    return changed ? updated : _pendingAttachments;
+    return (
+      attachments: changed ? updated : _pendingAttachments,
+      stagedAttachmentsToDelete: stagedAttachmentsToDelete,
+    );
   }
 
   bool _hasInlineComposerDraftContent(ChatState chatState) {
@@ -5821,14 +5940,17 @@ class _ChatState extends State<Chat> {
   Future<void> _handleEditMessage(Message message) async {
     if (!mounted) return;
     final chatJid = context.read<ChatBloc>().state.chat?.jid;
+    final addChatEvent = context.read<ChatBloc>().add;
     final completer = Completer<List<PendingAttachment>>();
-    context.read<ChatBloc>().add(
+    addChatEvent(
       ChatMessageEditRequested(message, attachmentsCompleter: completer),
     );
     final attachments = await completer.future;
     if (!mounted || context.read<ChatBloc>().state.chat?.jid != chatJid) {
+      await _deleteInlineStagedAttachments(attachments);
       return;
     }
+    await _deleteInlineStagedAttachments(_pendingAttachments);
     setState(() {
       _pendingAttachments = attachments;
     });
@@ -5914,6 +6036,47 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  Future<void> _handleAttachmentsDropped(
+    ChatState chatState,
+    DroppedAttachmentSourceResult result,
+  ) async {
+    if (_sendingAttachment) return;
+    if (result.hasSkippedItems) {
+      _showSnackbar(context.l10n.chatAttachmentInaccessible);
+    }
+    if (result.sources.isEmpty) {
+      return;
+    }
+    final chat = chatState.chat;
+    if (chat == null) {
+      return;
+    }
+    final cancellation = CancelableCompleter<void>();
+    final operation = _prepareInlineAttachments(
+      chat: chat,
+      sources: result.sources,
+      cancellation: cancellation,
+    );
+    _inlineAttachmentPreparationCancellation = cancellation;
+    _inlineAttachmentPreparationOperation = operation;
+    try {
+      await operation;
+    } on Exception {
+      if (!mounted || cancellation.isCanceled) return;
+      _showSnackbar(context.l10n.chatAttachmentFailed);
+    } finally {
+      if (_inlineAttachmentPreparationOperation == operation) {
+        _inlineAttachmentPreparationOperation = null;
+      }
+      if (identical(_inlineAttachmentPreparationCancellation, cancellation)) {
+        _inlineAttachmentPreparationCancellation = null;
+      }
+      if (!cancellation.isCompleted && !cancellation.isCanceled) {
+        cancellation.complete();
+      }
+    }
+  }
+
   Future<void> _performAttachmentPressed(
     ChatState chatState, {
     required CancelableCompleter<void> cancellation,
@@ -5934,7 +6097,7 @@ class _ChatState extends State<Chat> {
           cancellation.isCanceled) {
         return;
       }
-      final attachments = <Attachment>[];
+      final sources = <AttachmentImportSource>[];
       var hasInvalidPath = false;
       for (final file in result.files) {
         final path = file.path;
@@ -5945,15 +6108,15 @@ class _ChatState extends State<Chat> {
         final String fileName = file.name.isNotEmpty
             ? file.name
             : path.split('/').last;
-        attachments.add(
-          Attachment(
+        sources.add(
+          LocalFileAttachmentImportSource(
             path: path,
             fileName: fileName,
-            sizeBytes: file.size > 0 ? file.size : 0,
+            sizeBytes: file.size,
           ),
         );
       }
-      if (attachments.isEmpty) {
+      if (sources.isEmpty) {
         if (hasInvalidPath) {
           _showSnackbar(l10n.chatAttachmentInaccessible);
         }
@@ -5964,9 +6127,9 @@ class _ChatState extends State<Chat> {
       if (chat == null) {
         return;
       }
-      await _addInlineAttachments(
+      await _addInlineAttachmentSources(
         chat: chat,
-        attachments: attachments,
+        sources: sources,
         cancellation: cancellation,
       );
     } on PlatformException catch (error) {
@@ -5985,8 +6148,9 @@ class _ChatState extends State<Chat> {
 
   Future<bool> _prepareInlineAttachments({
     required chat_models.Chat chat,
-    required List<Attachment> attachments,
+    required List<AttachmentImportSource> sources,
     required CancelableCompleter<void> cancellation,
+    bool queueShareSeedConsumptionOnCompletion = true,
   }) async {
     if (_sendingAttachment) {
       return false;
@@ -5996,9 +6160,9 @@ class _ChatState extends State<Chat> {
     });
     var completed = false;
     try {
-      final prepared = await _addInlineAttachments(
+      final prepared = await _addInlineAttachmentSources(
         chat: chat,
-        attachments: attachments,
+        sources: sources,
         cancellation: cancellation,
       );
       completed = true;
@@ -6008,60 +6172,96 @@ class _ChatState extends State<Chat> {
         setState(() {
           _sendingAttachment = false;
         });
-        if (completed) {
+        if (completed && queueShareSeedConsumptionOnCompletion) {
           _queueShareComposerSeedConsumption();
         }
       }
     }
   }
 
-  Future<bool> _addInlineAttachments({
+  Future<bool> _addInlineAttachmentSources({
     required chat_models.Chat chat,
-    required List<Attachment> attachments,
+    required List<AttachmentImportSource> sources,
     required CancelableCompleter<void> cancellation,
   }) async {
     final locate = context.read;
     final chatJid = chat.jid;
-    for (final attachment in attachments) {
+    var addedAttachment = false;
+    for (final source in sources) {
       if (cancellation.isCanceled) {
         return false;
       }
-      final placeholderId = _nextLocalPendingAttachmentId();
-      setState(() {
-        _pendingAttachments = [
-          ..._pendingAttachments,
-          PendingAttachment(
-            id: placeholderId,
-            attachment: attachment,
-            isPreparing: true,
-          ),
-        ];
-        _clearInlineRetryTransportOverride();
-      });
-      final completer = CancelableCompleter<PendingAttachment?>();
-      final operation = completer.operation;
-      _inlinePendingAttachmentOperation = operation;
+      final pendingId = const Uuid().v4();
+      final pendingPlaceholder = PendingAttachment(
+        id: pendingId,
+        attachment: Attachment(
+          path: source.path,
+          fileName: source.fileName,
+          sizeBytes: 0,
+          mimeType: source.mimeType,
+          metadataId: pendingId,
+        ),
+        isPreparing: true,
+      );
+      if (mounted && locate<ChatBloc>().state.chat?.jid == chatJid) {
+        setState(() {
+          _pendingAttachments = [..._pendingAttachments, pendingPlaceholder];
+          _clearInlineRetryTransportOverride();
+        });
+      }
+      final completer = Completer<PendingAttachment?>();
       locate<ChatBloc>().add(
         ChatAttachmentPicked(
-          attachment: attachment,
+          pendingId: pendingId,
+          source: source,
+          composerSessionId: _inlineComposerStagingSessionId,
           recipients: _recipients,
           chat: chat,
           quotedDraft: _quotedDraft,
           completer: completer,
         ),
       );
-      final pending = await operation.valueOrCancellation();
-      if (_inlinePendingAttachmentOperation == operation) {
-        _inlinePendingAttachmentOperation = null;
-      }
-      if (cancellation.isCanceled ||
-          !mounted ||
-          locate<ChatBloc>().state.chat?.jid != chatJid) {
+      final pendingResult = await _awaitInlinePendingAttachment(
+        completer.future,
+        cancellation: cancellation,
+      );
+      if (pendingResult.canceled) {
+        _removePendingAttachment(pendingId);
         return false;
       }
-      _replacePendingAttachment(placeholderId, replacement: pending);
+      final pending = pendingResult.pending;
+      if (!mounted || locate<ChatBloc>().state.chat?.jid != chatJid) {
+        if (pending != null) {
+          await _deleteInlineStagedAttachments([pending]);
+        }
+        if (mounted) {
+          _removePendingAttachment(pendingId);
+        }
+        return false;
+      }
+      if (pending == null) {
+        _removePendingAttachment(pendingId);
+        continue;
+      }
+      final index = _pendingAttachments.indexWhere(
+        (candidate) => candidate.id == pendingId,
+      );
+      if (index == -1) {
+        await _deleteInlineStagedAttachments([pending]);
+        continue;
+      }
+      setState(() {
+        final updated = List<PendingAttachment>.from(_pendingAttachments);
+        updated[index] = pending;
+        _pendingAttachments = updated;
+        _clearInlineRetryTransportOverride();
+      });
+      addedAttachment = true;
     }
     if (cancellation.isCanceled) {
+      return false;
+    }
+    if (!addedAttachment) {
       return false;
     }
     if (_quotedDraft != null) {
@@ -6071,6 +6271,31 @@ class _ChatState extends State<Chat> {
     }
     _inlineComposerController.requestTextFocus();
     return true;
+  }
+
+  Future<({bool canceled, PendingAttachment? pending})>
+  _awaitInlinePendingAttachment(
+    Future<PendingAttachment?> pendingFuture, {
+    required CancelableCompleter<void> cancellation,
+  }) async {
+    final canceled = Object();
+    final result = await Future.any<Object?>([
+      pendingFuture,
+      cancellation.operation.valueOrCancellation().then<Object?>(
+        (_) => canceled,
+      ),
+    ]);
+    if (!identical(result, canceled)) {
+      return (canceled: false, pending: result as PendingAttachment?);
+    }
+    unawaited(
+      pendingFuture.then((pending) async {
+        if (pending != null) {
+          await _deleteInlineStagedAttachments([pending]);
+        }
+      }, onError: (_) {}),
+    );
+    return (canceled: true, pending: null);
   }
 
   Future<void> _loadDemoPendingAttachments(chat_models.Chat chat) async {
@@ -6175,16 +6400,30 @@ class _ChatState extends State<Chat> {
   }
 
   void _removePendingAttachment(String id) {
+    if (!mounted) {
+      return;
+    }
+    if (context.read<ChatBloc>().state.composerSendStatus.isLoading) {
+      return;
+    }
     final index = _pendingAttachments.indexWhere((pending) => pending.id == id);
     if (index == -1) {
       return;
     }
+    final removed = _pendingAttachments[index];
     setState(() {
       final updated = List<PendingAttachment>.from(_pendingAttachments)
         ..removeAt(index);
       _pendingAttachments = updated;
       _clearInlineRetryTransportOverride();
     });
+    unawaited(_deleteInlineStagedAttachments([removed]));
+    final metadataId = removed.attachment.metadataId?.trim();
+    if (metadataId != null && metadataId.isNotEmpty) {
+      context.read<ChatBloc>().add(
+        ChatPendingAttachmentMetadataDiscarded(metadataId),
+      );
+    }
   }
 
   void _handlePendingAttachmentPressed(PendingAttachment pending) {
@@ -7659,6 +7898,9 @@ class _ChatState extends State<Chat> {
   @override
   void dispose() {
     _cancelInlineAttachmentPreparation();
+    unawaited(
+      _deleteInlineStagedAttachments(_unsubmittedInlinePendingAttachments()),
+    );
     unawaited(_shareComposerSeedSubscription?.cancel());
     unawaited(_shareComposerSeedConsumptionSubscription.cancel());
     unawaited(_shareComposerSeedConsumptionRequests.close());

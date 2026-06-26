@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   charset_converter
+  desktop_drop
   emoji_picker_flutter
   flutter_inappwebview_linux
   flutter_secure_storage_linux

@@ -8,11 +8,13 @@ import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/common/bloc_cache.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/attachment_import_source.dart';
+import 'package:axichat/src/common/composer_attachment_staging.dart'
+    as composer_attachment_staging;
 import 'package:axichat/src/common/draft_forwarded_content.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
-import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -262,8 +264,17 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     return _messageService.loadDraftAttachments(metadataIds);
   }
 
-  Future<Attachment> optimizeAttachment(Attachment attachment) async {
-    return EmailAttachmentOptimizer.optimize(attachment);
+  Future<composer_attachment_staging.ComposerAttachmentStage>
+  stageComposerAttachment({
+    required AttachmentImportSource source,
+    required String sessionId,
+    required String fallbackId,
+  }) {
+    return composer_attachment_staging.stageComposerAttachment(
+      source: source,
+      sessionId: sessionId,
+      fallbackId: fallbackId,
+    );
   }
 
   Future<void> deleteDraftAttachmentMetadata(String metadataId) async {
@@ -406,6 +417,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
     var sendAttemptHandled = false;
     try {
+      final sendAttachments =
+          attachments.isNotEmpty &&
+              xmppTargets.isNotEmpty &&
+              (emailTargets.isNotEmpty || xmppTargets.length > 1)
+          ? await _messageService.commitComposerAttachmentsForSend(attachments)
+          : attachments;
       if (xmppTargets.isNotEmpty) {
         xmppAttempted = true;
         final xmppResult = await _sendXmppDraft(
@@ -413,7 +430,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           body: body,
           subject: subject,
           quoteTarget: quoteTarget,
-          attachments: attachments,
+          attachments: sendAttachments,
           calendarTaskIcsMessage: calendarTaskIcsMessage,
           forwardedBlocks: forwardedBlocks,
         );
@@ -429,7 +446,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           body: body,
           subject: subject,
           quoteTarget: quoteTarget,
-          attachments: attachments,
+          attachments: sendAttachments,
           calendarTaskIcsMessage: calendarTaskIcsMessage,
           forwardedBlocks: forwardedBlocks,
           shareTokenSignatureEnabled: shareTokenSignatureEnabled,
@@ -584,6 +601,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       autosaveEnabled: autosaveEnabled,
     );
     try {
+      final fallbackAttachments = draft.attachmentMetadata.values.isEmpty
+          ? const <Attachment>[]
+          : await _messageService.loadDraftAttachments(
+              draft.attachmentMetadata.values,
+            );
       await _emailService?.mirrorDraftForFallback(
         jids: jids,
         text: DraftForwardedContent.compose(
@@ -591,7 +613,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           forwardedBlocks: forwardedBlocks,
         ).plainText,
         subject: subject,
-        attachments: attachments,
+        attachments: fallbackAttachments,
       );
     } on Exception {
       // Best-effort: fallback mirroring should not fail local draft saves.

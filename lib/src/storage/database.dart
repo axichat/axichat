@@ -26,7 +26,6 @@ import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:omemo_dart/omemo_dart.dart' as omemo;
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqlcipher_flutter_libs/sqlcipher_flutter_libs.dart';
 import 'package:sqlite3/open.dart';
 
@@ -813,6 +812,11 @@ abstract interface class XmppDatabase implements Database {
   Future<void> saveFileMetadata(FileMetadataData metadata);
 
   Future<FileMetadataData?> getFileMetadata(String id);
+
+  Future<T> transaction<T>(
+    Future<T> Function() action, {
+    bool requireNew = false,
+  });
 
   Future<List<FileMetadataData>> getFileMetadataForIds(Iterable<String> ids);
 
@@ -7584,9 +7588,13 @@ WHERE account_jid = ?
   }
 
   Future<Directory> _attachmentRootDirectory() async {
-    const attachmentRootDirectoryName = 'attachments';
-    final supportDir = await getApplicationSupportDirectory();
-    return Directory(p.join(supportDir.path, attachmentRootDirectoryName));
+    return appOwnedAttachmentRootDirectory();
+  }
+
+  Future<Directory> _attachmentDirectoryForPrefix(String prefix) async {
+    final root = await _attachmentRootDirectory();
+    final normalizedPrefix = normalizeAttachmentStoragePrefix(prefix);
+    return Directory(p.join(root.path, normalizedPrefix));
   }
 
   String? _databasePrefixFromFilePath() {
@@ -7605,26 +7613,6 @@ WHERE account_jid = ?
       return null;
     }
     return trimmed;
-  }
-
-  String _normalizeAttachmentPrefix(String prefix) {
-    const attachmentPrefixFallback = 'shared';
-    const attachmentPrefixReplacement = '_';
-    final attachmentPrefixSanitizer = RegExp(r'[^a-zA-Z0-9_-]');
-    final trimmed = prefix.trim();
-    if (trimmed.isEmpty) {
-      return attachmentPrefixFallback;
-    }
-    return trimmed.replaceAll(
-      attachmentPrefixSanitizer,
-      attachmentPrefixReplacement,
-    );
-  }
-
-  Future<Directory> _attachmentDirectoryForPrefix(String prefix) async {
-    final root = await _attachmentRootDirectory();
-    final normalizedPrefix = _normalizeAttachmentPrefix(prefix);
-    return Directory(p.join(root.path, normalizedPrefix));
   }
 
   Future<bool> _isManagedAttachmentPath(String path) async {

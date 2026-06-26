@@ -79,6 +79,7 @@ class DraftComposerView extends StatelessWidget {
     this.pendingAttachmentMenuBuilder,
     this.disabledSendReason,
     this.onTaskDropped,
+    this.onAttachmentsDropped,
   });
 
   final bool enabled;
@@ -136,6 +137,7 @@ class DraftComposerView extends StatelessWidget {
   final VoidCallback? onDiscardPressed;
   final VoidCallback? onSavePressed;
   final ValueChanged<CalendarDragPayload>? onTaskDropped;
+  final AxiDroppedAttachmentsCallback? onAttachmentsDropped;
 
   @override
   Widget build(BuildContext context) {
@@ -148,7 +150,7 @@ class DraftComposerView extends StatelessWidget {
     final smallGap = spacing.s;
     final onAutosaveChanged = this.onAutosaveChanged;
 
-    return _DraftTaskDropRegion(
+    final content = _DraftTaskDropRegion(
       onTaskDropped: enabled ? onTaskDropped : null,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -362,6 +364,16 @@ class DraftComposerView extends StatelessWidget {
           ),
         ],
       ),
+    );
+    return AxiAttachmentDropTarget(
+      enabled:
+          enabled &&
+          !sending &&
+          !addingAttachment &&
+          !loadingAttachments &&
+          !attachments.any((attachment) => attachment.isPreparing),
+      onDropped: onAttachmentsDropped,
+      child: content,
     );
   }
 }

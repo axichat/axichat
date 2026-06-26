@@ -23,9 +23,10 @@ import 'package:axichat/src/chat/models/rfc_email_group.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/attachment_import_source.dart';
+import 'package:axichat/src/common/composer_attachment_staging.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
-import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
@@ -35,7 +36,6 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
-import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/models/fan_out_recipient_state.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
@@ -74,8 +74,6 @@ const int _emailAttachmentBundleMinimumCount = 2;
 const _calendarTaskIcsAttachmentMimeType = 'text/calendar';
 const _calendarTaskIcsAttachmentSendFailureLogMessage =
     'Failed to send calendar task attachment';
-const _attachmentMimeTypeResolutionLogMessage =
-    'Failed to resolve attachment mime type';
 const _sendSignatureSeparator = '::';
 const _sendSignatureSubjectTag = '::subject:';
 const _sendSignatureAttachmentTag = '::attachments:';
@@ -138,6 +136,36 @@ EventTransformer<ChatMessageResendRequested> _dedupeConcurrentResendRequests() {
       });
 }
 
+EventTransformer<ChatMessageSent> _dedupeConcurrentChatMessageSends() {
+  var sendInFlight = false;
+  return (events, mapper) => events
+      .where((event) {
+        if (!sendInFlight) {
+          sendInFlight = true;
+          return true;
+        }
+        final completer = event.completer;
+        if (completer != null && !completer.isCompleted) {
+          completer.complete(
+            ChatSendOutcome.blocked(
+              message: ChatMessageKey.chatComposerSendFailed,
+              pendingAttachments: List<PendingAttachment>.from(
+                event.pendingAttachments,
+              ),
+            ),
+          );
+        }
+        return false;
+      })
+      .concurrentAsyncExpand((event) async* {
+        try {
+          yield* mapper(event);
+        } finally {
+          sendInFlight = false;
+        }
+      });
+}
+
 class FanOutDraft extends Equatable {
   const FanOutDraft({
     this.body,
@@ -167,10 +195,12 @@ final class _ChatXmppSendResult {
   const _ChatXmppSendResult({
     required this.completedRecipientKeys,
     required this.hasFailures,
+    this.submittedAttachments = const <PendingAttachment>[],
   });
 
   final Set<ComposerRecipientKey> completedRecipientKeys;
   final bool hasFailures;
+  final List<PendingAttachment> submittedAttachments;
 }
 
 final class _ChatEmailSendUnitResult {
@@ -452,7 +482,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatSavedTransportOverrideUpdated>(
       _onChatSavedTransportOverrideUpdated,
     );
-    on<ChatMessageSent>(_onChatMessageSent);
+    on<ChatMessageSent>(
+      _onChatMessageSent,
+      transformer: _dedupeConcurrentChatMessageSends(),
+    );
     on<ChatAvailabilityMessageSent>(_onChatAvailabilityMessageSent);
     on<ChatMuted>(_onChatMuted);
     on<ChatNotificationPreviewSettingChanged>(
@@ -507,6 +540,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatComposerErrorCleared>(_onChatComposerErrorCleared);
     on<_HttpUploadSupportUpdated>(_onHttpUploadSupportUpdated);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
+    on<ChatPendingAttachmentMetadataDiscarded>(
+      _onChatPendingAttachmentMetadataDiscarded,
+    );
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
     on<ChatDemoPendingAttachmentsRequested>(
       _onChatDemoPendingAttachmentsRequested,
@@ -637,7 +673,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatSettingsSnapshot _settingsSnapshot;
 
   final Logger _log = Logger('ChatBloc');
-  var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
   String? _lastEmailSendSignature;
   String? _lastXmppSendSignature;
@@ -1248,7 +1283,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
+  String _nextPendingAttachmentId() => uuid.v4();
 
   String? _oldestLoadedXmppStanzaId() {
     for (final message in state.items.reversed) {
@@ -6310,6 +6345,80 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     completer.complete(outcome);
   }
 
+  Future<void> _deleteReleasedComposerStagedAttachments({
+    required Iterable<PendingAttachment> submitted,
+    required Iterable<PendingAttachment> retained,
+  }) async {
+    final retainedStagedPaths = retained
+        .map((pending) => pending.stagedAttachment?.path)
+        .whereType<String>()
+        .toSet();
+    for (final pending in submitted) {
+      final staged = pending.stagedAttachment;
+      if (staged == null || retainedStagedPaths.contains(staged.path)) {
+        continue;
+      }
+      try {
+        await deleteComposerStagedAttachment(staged);
+      } on Exception catch (error, stackTrace) {
+        _log.safeWarning(
+          'Failed to delete released composer attachment staging file',
+          error,
+          stackTrace,
+        );
+      }
+    }
+  }
+
+  Future<List<PendingAttachment>> _reconcileCommittedPendingAttachments(
+    Iterable<PendingAttachment> pendingAttachments,
+  ) async {
+    final pendingList = pendingAttachments.toList(growable: false);
+    if (pendingList.isEmpty) {
+      return const <PendingAttachment>[];
+    }
+    final indexes = <int>[];
+    final metadataIds = <String>[];
+    for (var index = 0; index < pendingList.length; index += 1) {
+      final pending = pendingList[index];
+      if (pending.stagedAttachment == null) {
+        continue;
+      }
+      final metadataId = pending.attachment.metadataId?.trim();
+      if (metadataId == null || metadataId.isEmpty) {
+        continue;
+      }
+      indexes.add(index);
+      metadataIds.add(metadataId);
+    }
+    if (metadataIds.isEmpty) {
+      return pendingList;
+    }
+    final attachments = await _messageService.loadDraftAttachments(metadataIds);
+    final attachmentByMetadataId = {
+      for (final attachment in attachments)
+        if (attachment.metadataId?.trim().isNotEmpty == true)
+          attachment.metadataId!.trim(): attachment,
+    };
+    if (attachmentByMetadataId.isEmpty) {
+      return pendingList;
+    }
+    final updated = List<PendingAttachment>.from(pendingList);
+    for (var index = 0; index < metadataIds.length; index += 1) {
+      final attachment = attachmentByMetadataId[metadataIds[index]];
+      if (attachment == null) {
+        continue;
+      }
+      final pendingIndex = indexes[index];
+      final pending = pendingList[pendingIndex];
+      updated[pendingIndex] = pending.copyWith(
+        attachment: attachment,
+        clearStagedAttachment: true,
+      );
+    }
+    return updated;
+  }
+
   Future<void> _onChatMessageSent(
     ChatMessageSent event,
     Emitter<ChatState> emit,
@@ -6374,7 +6483,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               attachment.status == PendingAttachmentStatus.queued &&
               !attachment.isPreparing,
         )
-        .toList();
+        .toList(growable: false);
+    var xmppDraftAttachments = queuedAttachments;
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final bool hasCalendarTaskIcs = requestedTask != null;
     final hasSubject = subject?.trim().isNotEmpty == true;
@@ -6645,7 +6755,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         chat: chat,
         recipients: failedRecipients,
         body: trimmedText,
-        attachments: queuedAttachments,
+        attachments: xmppDraftAttachments,
         subject: subject,
         quotedDraft: quotedDraft,
         calendarTaskIcsMessage: xmppCalendarTaskMessage,
@@ -6916,6 +7026,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               : null,
           onLocalMessageStored: storedStanzaIds.add,
         );
+        final generatedAttachmentId = generatedXmppTaskAttachmentId;
+        xmppDraftAttachments = result.submittedAttachments
+            .where((pending) => pending.id != generatedAttachmentId)
+            .toList(growable: false);
         xmppCompletedRecipientKeys.addAll(result.completedRecipientKeys);
         if (shouldAttemptXmppCalendarTaskAfterAttachments) {
           postAttachmentXmppRecipients = xmppRecipients
@@ -7061,7 +7175,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chat: chat,
           recipients: xmppRecipients,
           body: trimmedText,
-          attachments: queuedAttachments,
+          attachments: xmppDraftAttachments,
           subject: subject,
           quotedDraft: quotedDraft,
           calendarTaskIcsMessage: xmppCalendarTaskMessage,
@@ -7148,20 +7262,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ),
         );
       }
-      _completeChatMessageSent(
-        event,
-        outcome: shouldClearComposer
-            ? ChatSendOutcome.completed(
-                pendingAttachments: List<PendingAttachment>.from(attachments),
-              )
-            : ChatSendOutcome.incomplete(
-                recipients: outcomeRecipients,
-                pendingAttachments: List<PendingAttachment>.from(attachments),
-                recipientOutcomes: sendProgress.outcomes,
-                resendMayDuplicate: resendMayDuplicate,
-                message: outcomeMessage,
-              ),
+      final outcomePendingAttachments =
+          await _reconcileCommittedPendingAttachments(attachments);
+      final outcome = shouldClearComposer
+          ? ChatSendOutcome.completed(
+              pendingAttachments: outcomePendingAttachments,
+            )
+          : ChatSendOutcome.incomplete(
+              recipients: outcomeRecipients,
+              pendingAttachments: outcomePendingAttachments,
+              recipientOutcomes: sendProgress.outcomes,
+              resendMayDuplicate: resendMayDuplicate,
+              message: outcomeMessage,
+            );
+      await _deleteReleasedComposerStagedAttachments(
+        submitted: event.pendingAttachments,
+        retained: outcome.pendingAttachments,
       );
+      _completeChatMessageSent(event, outcome: outcome);
       if (shouldClearComposer && (state.emailSubject?.isNotEmpty ?? false)) {
         _clearEmailSubject(emit);
       }
@@ -8753,73 +8871,74 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       event.completer.complete(null);
       return;
     }
-    final rawCaption = event.attachment.caption?.trim();
-    final caption = rawCaption?.isNotEmpty == true ? rawCaption : null;
-    var preparedAttachment = event.attachment.copyWith(caption: caption);
-    final pendingId = _nextPendingAttachmentId();
-    var pending = PendingAttachment(
-      id: pendingId,
-      attachment: preparedAttachment,
-      isPreparing: true,
-    );
-
-    if (preparedAttachment.sizeBytes <= 0) {
-      try {
-        final resolvedSize = await File(preparedAttachment.path).length();
-        if (resolvedSize > 0) {
-          preparedAttachment = preparedAttachment.copyWith(
-            sizeBytes: resolvedSize,
-          );
-        }
-      } on Exception catch (error, stackTrace) {
-        _log.fine('Failed to resolve attachment size', error, stackTrace);
-      }
-    }
-    final String? existingMimeType = preparedAttachment.mimeType?.trim();
-    if (existingMimeType == null || existingMimeType.isEmpty) {
-      try {
-        final String? resolvedMimeType = await resolveMimeTypeFromPath(
-          path: preparedAttachment.path,
-          fileName: preparedAttachment.fileName,
-        );
-        final String? trimmedResolved = resolvedMimeType?.trim();
-        if (trimmedResolved != null && trimmedResolved.isNotEmpty) {
-          preparedAttachment = preparedAttachment.copyWith(
-            mimeType: trimmedResolved,
-          );
-        }
-      } on Exception catch (error, stackTrace) {
-        _log.fine(_attachmentMimeTypeResolutionLogMessage, error, stackTrace);
-      }
-    }
-    try {
-      preparedAttachment = await EmailAttachmentOptimizer.optimize(
-        preparedAttachment,
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to optimize attachment', error, stackTrace);
-    }
+    final pendingId = event.pendingId;
     final uploadLimitBytes = requiresXmpp && !canPickAttachmentForEmailOverride
         ? _messageService.httpUploadSupport.maxFileSizeBytes
         : null;
-    final sizeBytes = preparedAttachment.sizeBytes;
-    if (uploadLimitBytes != null &&
-        uploadLimitBytes > 0 &&
-        sizeBytes > uploadLimitBytes) {
+    final ComposerAttachmentStage staged;
+    try {
+      staged = await stageComposerAttachment(
+        source: event.source,
+        sessionId: event.composerSessionId,
+        fallbackId: pendingId,
+        maxSizeBytes: uploadLimitBytes,
+      );
+    } on ComposerAttachmentTooLargeException {
+      var sizeBytes = 0;
+      try {
+        sizeBytes = await event.source.loadSizeBytes();
+      } on AttachmentImportException {
+        sizeBytes = 0;
+      } on FileSystemException {
+        sizeBytes = 0;
+      }
       const message = ChatMessageKey.messageErrorFileUploadFailure;
-      pending = pending.copyWith(
-        attachment: preparedAttachment,
+      final pending = PendingAttachment(
+        id: pendingId,
+        attachment: Attachment(
+          path: event.source.path,
+          fileName: event.source.fileName,
+          sizeBytes: sizeBytes,
+          mimeType: event.source.mimeType,
+        ),
         status: PendingAttachmentStatus.failed,
-        isPreparing: false,
         errorMessage: message,
       );
       emit(state.copyWith(composerError: message));
       event.completer.complete(pending);
       return;
+    } on ComposerAttachmentStagingException catch (error, stackTrace) {
+      _log.fine('Failed to stage attachment', error, stackTrace);
+      const message = ChatMessageKey.messageErrorFileUploadFailure;
+      emit(state.copyWith(composerError: message));
+      event.completer.complete(null);
+      return;
     }
-    event.completer.complete(
-      pending.copyWith(attachment: preparedAttachment, isPreparing: false),
+    var pending = PendingAttachment(
+      id: pendingId,
+      attachment: staged.attachment.copyWith(metadataId: pendingId),
+      stagedAttachment: staged.staged,
     );
+    event.completer.complete(pending.copyWith(isPreparing: false));
+  }
+
+  Future<void> _onChatPendingAttachmentMetadataDiscarded(
+    ChatPendingAttachmentMetadataDiscarded event,
+    Emitter<ChatState> emit,
+  ) async {
+    final metadataId = event.metadataId.trim();
+    if (metadataId.isEmpty) {
+      return;
+    }
+    try {
+      await _messageService.deleteFileMetadata(metadataId);
+    } on XmppException catch (error, stackTrace) {
+      _log.safeWarning(
+        'Failed to discard pending attachment metadata',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   Future<void> _onChatDemoPendingAttachmentsRequested(
@@ -8882,6 +9001,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ),
     ];
     final updated = pendingAttachments.single;
+    Future<void> completeWithCurrentPendingAttachments() async {
+      final reconciled = await _reconcileCommittedPendingAttachments(
+        pendingAttachments,
+      );
+      await _deleteReleasedComposerStagedAttachments(
+        submitted: [pending],
+        retained: reconciled,
+      );
+      if (!event.completer.isCompleted) {
+        event.completer.complete(reconciled.isEmpty ? null : reconciled.single);
+      }
+    }
+
     if (requiresEmail) {
       final EmailService emailService = service!;
       final emailResult = await _sendEmailAttachment(
@@ -8897,31 +9029,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         retainOnSuccess: requiresXmpp,
       );
       if (!emailResult.succeeded || !requiresXmpp) {
-        event.completer.complete(
-          pendingAttachments.isEmpty ? null : pendingAttachments.single,
-        );
+        await completeWithCurrentPendingAttachments();
         return;
       }
     }
     if (!requiresXmpp) {
-      event.completer.complete(
-        pendingAttachments.isEmpty ? null : pendingAttachments.single,
-      );
+      await completeWithCurrentPendingAttachments();
       return;
     }
-    final result = await _sendXmppAttachments(
-      attachments: [updated],
-      pendingAttachments: pendingAttachments,
-      chat: chat,
-      recipients: xmppRecipients,
-      emit: emit,
-      supportsHttpFileUpload: event.supportsHttpFileUpload,
-      subject: event.subject,
-      quotedDraft: event.quotedDraft,
-    );
-    event.completer.complete(
-      pendingAttachments.isEmpty ? null : pendingAttachments.single,
-    );
+    final _ChatXmppSendResult result;
+    try {
+      result = await _sendXmppAttachments(
+        attachments: [updated],
+        pendingAttachments: pendingAttachments,
+        chat: chat,
+        recipients: xmppRecipients,
+        emit: emit,
+        supportsHttpFileUpload: event.supportsHttpFileUpload,
+        subject: event.subject,
+        quotedDraft: event.quotedDraft,
+      );
+    } on XmppMessageException catch (error, stackTrace) {
+      final message = _xmppAttachmentFailureMessage(error);
+      _markPendingAttachmentFailedInList(
+        pendingAttachments,
+        updated.id,
+        message: message,
+      );
+      emit(state.copyWith(composerError: message));
+      if (_shouldLogXmppAttachmentFailure(error)) {
+        _log.safeWarning(
+          _xmppAttachmentSendFailedLogMessage,
+          error,
+          stackTrace,
+        );
+      }
+      await completeWithCurrentPendingAttachments();
+      return;
+    }
+    await completeWithCurrentPendingAttachments();
     if (result.hasFailures) {
       return;
     }
@@ -9591,6 +9737,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return title;
   }
 
+  Future<List<PendingAttachment>> _commitPendingAttachmentsForXmppFanOut({
+    required List<PendingAttachment> attachments,
+    required List<PendingAttachment> pendingAttachments,
+  }) async {
+    final committedAttachments = await _messageService
+        .commitComposerAttachmentsForSend(
+          attachments
+              .map((pending) => pending.attachment)
+              .toList(growable: false),
+        );
+    if (committedAttachments.length != attachments.length) {
+      throw XmppMessageException();
+    }
+    final committedPendingAttachments = <PendingAttachment>[];
+    for (var index = 0; index < attachments.length; index += 1) {
+      final committed = attachments[index].copyWith(
+        attachment: committedAttachments[index],
+        clearStagedAttachment: true,
+      );
+      committedPendingAttachments.add(committed);
+      _replacePendingAttachmentInList(pendingAttachments, committed);
+    }
+    return committedPendingAttachments;
+  }
+
   Future<_ChatXmppSendResult> _sendXmppAttachments({
     required Iterable<PendingAttachment> attachments,
     required List<PendingAttachment> pendingAttachments,
@@ -9618,7 +9789,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         hasFailures: true,
       );
     }
-    final orderedAttachments = attachments.toList(growable: false);
+    var orderedAttachments = attachments.toList(growable: false);
     if (orderedAttachments.isEmpty) {
       return const _ChatXmppSendResult(
         completedRecipientKeys: <ComposerRecipientKey>{},
@@ -9651,6 +9822,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             composerError: ChatMessageKey.chatComposerSelectRecipient,
           ),
         );
+        return const _ChatXmppSendResult(
+          completedRecipientKeys: <ComposerRecipientKey>{},
+          hasFailures: true,
+        );
+      }
+    }
+    if (targets.length > 1) {
+      try {
+        orderedAttachments = await _commitPendingAttachmentsForXmppFanOut(
+          attachments: orderedAttachments,
+          pendingAttachments: pendingAttachments,
+        );
+      } on XmppMessageException catch (error, stackTrace) {
+        final message = _xmppAttachmentFailureMessage(error);
+        _markPendingAttachmentsFailedInList(
+          pendingAttachments,
+          orderedAttachments,
+          message: message,
+        );
+        emit(state.copyWith(composerError: message));
+        if (_shouldLogXmppAttachmentFailure(error)) {
+          _log.safeWarning(
+            _xmppAttachmentSendFailedLogMessage,
+            error,
+            stackTrace,
+          );
+        }
         return const _ChatXmppSendResult(
           completedRecipientKeys: <ComposerRecipientKey>{},
           hasFailures: true,
@@ -9822,6 +10020,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return _ChatXmppSendResult(
       completedRecipientKeys: completedRecipientKeys,
       hasFailures: hasFailures,
+      submittedAttachments: orderedAttachments,
     );
   }
 

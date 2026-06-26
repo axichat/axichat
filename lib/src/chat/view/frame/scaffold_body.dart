@@ -869,6 +869,13 @@ class _ChatScaffoldBody extends StatelessWidget {
                               attachmentsEnabled && !owner._sendingAttachment
                               ? () => owner._handleAttachmentPressed(state)
                               : null,
+                          onAttachmentsDropped:
+                              attachmentsEnabled && !owner._sendingAttachment
+                              ? (result) => owner._handleAttachmentsDropped(
+                                  state,
+                                  result,
+                                )
+                              : null,
                           onAttachmentRetry: (pending) {
                             final chat = chatEntity;
                             if (chat == null) {
@@ -947,6 +954,13 @@ class _ChatScaffoldBody extends StatelessWidget {
                           onExpandDraftPressed: owner._expandEmailComposer,
                           onRecipientAdded: owner._handleRecipientAdded,
                           onRecipientRemoved: owner._handleRecipientRemoved,
+                          onAttachmentsDropped:
+                              attachmentsEnabled && !owner._sendingAttachment
+                              ? (result) => owner._handleAttachmentsDropped(
+                                  state,
+                                  result,
+                                )
+                              : null,
                           onAttachmentRetry: (pending) {
                             final chat = chatEntity;
                             if (chat == null) {

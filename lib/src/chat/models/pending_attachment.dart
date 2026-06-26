@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/chat/models/chat_message.dart';
+import 'package:axichat/src/common/composer_attachment_staging.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:equatable/equatable.dart';
 
@@ -14,6 +15,7 @@ class PendingAttachment extends Equatable {
     this.status = PendingAttachmentStatus.queued,
     this.isPreparing = false,
     this.errorMessage,
+    this.stagedAttachment,
   });
 
   final String id;
@@ -21,6 +23,7 @@ class PendingAttachment extends Equatable {
   final PendingAttachmentStatus status;
   final bool isPreparing;
   final ChatMessageKey? errorMessage;
+  final ComposerStagedAttachment? stagedAttachment;
 
   PendingAttachment copyWith({
     Attachment? attachment,
@@ -28,6 +31,8 @@ class PendingAttachment extends Equatable {
     bool? isPreparing,
     ChatMessageKey? errorMessage,
     bool clearErrorMessage = false,
+    ComposerStagedAttachment? stagedAttachment,
+    bool clearStagedAttachment = false,
   }) {
     return PendingAttachment(
       id: id,
@@ -37,6 +42,9 @@ class PendingAttachment extends Equatable {
       errorMessage: clearErrorMessage
           ? null
           : (errorMessage ?? this.errorMessage),
+      stagedAttachment: clearStagedAttachment
+          ? null
+          : (stagedAttachment ?? this.stagedAttachment),
     );
   }
 
@@ -47,5 +55,6 @@ class PendingAttachment extends Equatable {
     status,
     isPreparing,
     errorMessage,
+    stagedAttachment,
   ];
 }

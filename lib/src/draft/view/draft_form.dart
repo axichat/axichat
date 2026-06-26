@@ -2,8 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:io';
-
 import 'package:async/async.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -13,6 +11,9 @@ import 'package:axichat/src/calendar/view/grid/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/chat/view/composer/pending_attachment_list.dart';
+import 'package:axichat/src/common/attachment_drop.dart';
+import 'package:axichat/src/common/attachment_import_source.dart';
+import 'package:axichat/src/common/composer_attachment_staging.dart';
 import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
@@ -42,6 +43,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 
 class DraftForm extends StatefulWidget {
   const DraftForm({
@@ -143,10 +145,10 @@ class DraftFormState extends State<DraftForm> {
   late var id = widget.id;
   bool _loadingAttachments = false;
   bool _addingAttachment = false;
-  int _pendingAttachmentSeed = 0;
   late final String _sendOwnerId = 'draft-form-${identityHashCode(this)}';
   bool _savingDraft = false;
   bool _discardingDraft = false;
+  Set<String> _draftSubmittedAttachmentKeys = const <String>{};
   bool _retryForceEmail = false;
   bool _sendCompletionHandled = false;
   bool _seedAttachmentCleanupHandled = false;
@@ -163,6 +165,7 @@ class DraftFormState extends State<DraftForm> {
   CancelableCompleter<void>? _attachmentHydrationCancellation;
   CancelableCompleter<void>? _attachmentPreparationCancellation;
   Future<void> Function(String)? _deleteDraftAttachmentMetadata;
+  late final String _draftComposerStagingSessionId = const Uuid().v4();
   int _saveEpoch = 0;
 
   @override
@@ -235,16 +238,24 @@ class DraftFormState extends State<DraftForm> {
 
   @override
   void dispose() {
-    if (_shouldCleanupSeedAttachments) {
-      final deleteDraftAttachmentMetadata = _deleteDraftAttachmentMetadata;
-      if (deleteDraftAttachmentMetadata != null) {
-        unawaited(
-          _cleanupSeedAttachmentMetadata(deleteDraftAttachmentMetadata),
-        );
-      }
+    final deleteDraftAttachmentMetadata = _deleteDraftAttachmentMetadata;
+    final autosaveOperation = _autosaveOperation;
+    final pendingAttachments = _unsubmittedDraftPendingAttachments();
+    if (deleteDraftAttachmentMetadata != null) {
+      unawaited(
+        _releaseDraftComposerAttachmentsAfterAutosave(
+          autosaveOperation: autosaveOperation,
+          deleteDraftAttachmentMetadata: deleteDraftAttachmentMetadata,
+          pendingAttachments: pendingAttachments,
+        ),
+      );
     }
     _autosaveTimer?.cancel();
     _autosaveSavedIndicatorTimer?.cancel();
+    _invalidatePendingSaves();
+    _invalidateAttachmentWork();
+    _autosaveOperation = null;
+    _autosaveInFlight = false;
     _bodyTextController.removeListener(_bodyListener);
     _bodyTextController.dispose();
     _subjectTextController.removeListener(_subjectListener);
@@ -849,6 +860,13 @@ class DraftFormState extends State<DraftForm> {
                           attachments: _pendingAttachments,
                           addingAttachment: _addingAttachment,
                           onAddAttachment: _handleAttachmentAdded,
+                          onAttachmentsDropped:
+                              enabled &&
+                                  !_addingAttachment &&
+                                  !_loadingAttachments &&
+                                  !hasPreparingAttachments
+                              ? _handleAttachmentsDropped
+                              : null,
                           onAttachmentRetry: _handlePendingAttachmentRetry,
                           onAttachmentRemove: _handlePendingAttachmentRemoved,
                           onAttachmentPressed: _handlePendingAttachmentPressed,
@@ -1175,6 +1193,38 @@ class DraftFormState extends State<DraftForm> {
     }
   }
 
+  Future<void> _handleAttachmentsDropped(
+    DroppedAttachmentSourceResult result,
+  ) async {
+    if (_addingAttachment) return;
+    if (result.hasSkippedItems) {
+      _showToast(context.l10n.draftAttachmentInaccessible);
+    }
+    if (result.sources.isEmpty) {
+      return;
+    }
+    final cancellation = CancelableCompleter<void>();
+    final operation = _performDroppedAttachmentsAdded(
+      result.sources,
+      cancellation: cancellation,
+    );
+    _attachmentPreparationCancellation = cancellation;
+    _attachmentPreparationOperation = operation;
+    try {
+      await operation;
+    } finally {
+      if (_attachmentPreparationOperation == operation) {
+        _attachmentPreparationOperation = null;
+      }
+      if (identical(_attachmentPreparationCancellation, cancellation)) {
+        _attachmentPreparationCancellation = null;
+      }
+      if (!cancellation.isCompleted && !cancellation.isCanceled) {
+        cancellation.complete();
+      }
+    }
+  }
+
   Future<void> _performAttachmentAdded({
     required CancelableCompleter<void> cancellation,
   }) async {
@@ -1201,56 +1251,13 @@ class DraftFormState extends State<DraftForm> {
         _showToast(attachmentInaccessibleMessage);
         return;
       }
-      final pendingId = _nextPendingAttachmentId();
       final fileName = file.name.isNotEmpty ? file.name : path.split('/').last;
-      var attachment = Attachment(
+      final source = LocalFileAttachmentImportSource(
         path: path,
         fileName: fileName,
-        sizeBytes: file.size > 0 ? file.size : 0,
+        sizeBytes: file.size,
       );
-      setState(() {
-        _latestEmailRecipientStatuses = const {};
-        _partialSendNoticeVisible = false;
-        _clearRetryForceEmail();
-        _pendingAttachments = [
-          ..._pendingAttachments,
-          PendingAttachment(
-            id: pendingId,
-            attachment: attachment,
-            isPreparing: true,
-          ),
-        ];
-      });
-
-      final String? resolvedMimeType = await resolveMimeTypeFromPath(
-        path: path,
-        fileName: fileName,
-      );
-      if (!mounted || cancellation.isCanceled) return;
-      attachment = attachment.copyWith(mimeType: resolvedMimeType);
-      if (attachment.sizeBytes <= 0) {
-        try {
-          final resolvedSize = await File(path).length();
-          if (!mounted || cancellation.isCanceled) return;
-          attachment = attachment.copyWith(sizeBytes: resolvedSize);
-        } on Exception {
-          // Best-effort. Keep placeholder size until optimization completes.
-        }
-      }
-      if (!mounted || cancellation.isCanceled) return;
-      attachment = await context.read<DraftCubit>().optimizeAttachment(
-        attachment,
-      );
-      if (!mounted || cancellation.isCanceled) return;
-      setState(() {
-        _pendingAttachments = _pendingAttachments
-            .map(
-              (pending) => pending.id == pendingId
-                  ? pending.copyWith(attachment: attachment, isPreparing: false)
-                  : pending,
-            )
-            .toList();
-      });
+      await _prepareDraftAttachments([source], cancellation: cancellation);
     } on PlatformException catch (error) {
       if (!mounted || cancellation.isCanceled) return;
       setState(() {
@@ -1278,7 +1285,166 @@ class DraftFormState extends State<DraftForm> {
     }
   }
 
+  Future<void> _performDroppedAttachmentsAdded(
+    List<AttachmentImportSource> sources, {
+    required CancelableCompleter<void> cancellation,
+  }) async {
+    if (_addingAttachment) return;
+    setState(() => _addingAttachment = true);
+    final attachmentFailedMessage = context.l10n.draftAttachmentFailed;
+    try {
+      await _prepareDraftAttachments(sources, cancellation: cancellation);
+    } on Exception {
+      if (!mounted || cancellation.isCanceled) return;
+      setState(() {
+        _pendingAttachments = _pendingAttachments
+            .where((pending) => !pending.isPreparing)
+            .toList();
+      });
+      _showToast(attachmentFailedMessage);
+    } finally {
+      if (mounted &&
+          identical(_attachmentPreparationCancellation, cancellation)) {
+        setState(() => _addingAttachment = false);
+      }
+      if (mounted && !cancellation.isCanceled) {
+        _scheduleAutosave();
+      }
+    }
+  }
+
+  Future<void> _prepareDraftAttachments(
+    List<AttachmentImportSource> sources, {
+    required CancelableCompleter<void> cancellation,
+  }) async {
+    final draftCubit = context.read<DraftCubit>();
+    for (final source in sources) {
+      if (!mounted || cancellation.isCanceled) {
+        return;
+      }
+      final pendingId = _nextPendingAttachmentId();
+      final placeholder = PendingAttachment(
+        id: pendingId,
+        attachment: Attachment(
+          path: source.path,
+          fileName: source.fileName,
+          sizeBytes: 0,
+          mimeType: source.mimeType,
+          metadataId: pendingId,
+        ),
+        isPreparing: true,
+      );
+      setState(() {
+        _latestEmailRecipientStatuses = const {};
+        _partialSendNoticeVisible = false;
+        _clearRetryForceEmail();
+        _pendingAttachments = [..._pendingAttachments, placeholder];
+      });
+      final stagedFuture = draftCubit.stageComposerAttachment(
+        source: source,
+        sessionId: _draftComposerStagingSessionId,
+        fallbackId: pendingId,
+      );
+      final ({bool canceled, ComposerAttachmentStage? stage}) stagedResult;
+      try {
+        stagedResult = await _awaitDraftAttachmentStage(
+          stagedFuture,
+          cancellation: cancellation,
+        );
+      } on ComposerAttachmentStagingException {
+        _removeDraftPendingAttachmentPlaceholder(pendingId);
+        if (mounted && !cancellation.isCanceled) {
+          _showToast(context.l10n.draftAttachmentFailed);
+        }
+        continue;
+      }
+      if (stagedResult.canceled) {
+        _removeDraftPendingAttachmentPlaceholder(pendingId);
+        return;
+      }
+      final staged = stagedResult.stage;
+      if (staged == null) {
+        _removeDraftPendingAttachmentPlaceholder(pendingId);
+        return;
+      }
+      if (!mounted) {
+        await deleteComposerStagedAttachment(staged.staged);
+        return;
+      }
+      final replaced = _replaceDraftPendingAttachment(
+        PendingAttachment(
+          id: pendingId,
+          attachment: staged.attachment.copyWith(metadataId: pendingId),
+          stagedAttachment: staged.staged,
+        ),
+      );
+      if (!replaced) {
+        await deleteComposerStagedAttachment(staged.staged);
+        return;
+      }
+    }
+  }
+
+  bool _replaceDraftPendingAttachment(PendingAttachment pending) {
+    if (!mounted) {
+      return false;
+    }
+    final index = _pendingAttachments.indexWhere(
+      (candidate) => candidate.id == pending.id,
+    );
+    if (index == -1) {
+      return false;
+    }
+    setState(() {
+      final updated = List<PendingAttachment>.from(_pendingAttachments);
+      updated[index] = pending;
+      _pendingAttachments = updated;
+    });
+    return true;
+  }
+
+  void _removeDraftPendingAttachmentPlaceholder(String pendingId) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _pendingAttachments = _pendingAttachments
+          .where((pending) => pending.id != pendingId)
+          .toList();
+    });
+  }
+
+  Future<({bool canceled, ComposerAttachmentStage? stage})>
+  _awaitDraftAttachmentStage(
+    Future<ComposerAttachmentStage> stageFuture, {
+    required CancelableCompleter<void> cancellation,
+  }) async {
+    final canceled = Object();
+    final result = await Future.any<Object?>([
+      stageFuture,
+      cancellation.operation.valueOrCancellation().then<Object?>(
+        (_) => canceled,
+      ),
+    ]);
+    if (!identical(result, canceled)) {
+      return (canceled: false, stage: result as ComposerAttachmentStage);
+    }
+    unawaited(
+      stageFuture.then(
+        (stage) => deleteComposerStagedAttachment(stage.staged),
+        onError: (_) {},
+      ),
+    );
+    return (canceled: true, stage: null);
+  }
+
   void _handlePendingAttachmentRemoved(String id) {
+    final removed = _pendingAttachments
+        .where((pending) => pending.id == id)
+        .toList(growable: false);
+    final deleteDraftAttachmentMetadata = context
+        .read<DraftCubit>()
+        .deleteDraftAttachmentMetadata;
     setState(() {
       _latestEmailRecipientStatuses = const {};
       _partialSendNoticeVisible = false;
@@ -1287,6 +1453,12 @@ class DraftFormState extends State<DraftForm> {
           .where((pending) => pending.id != id)
           .toList();
     });
+    unawaited(
+      _releaseDraftComposerPendingAttachments(
+        removed,
+        deleteDraftAttachmentMetadata,
+      ),
+    );
     _scheduleAutosave();
   }
 
@@ -1392,6 +1564,13 @@ class DraftFormState extends State<DraftForm> {
       autosaveEnabled: _autosaveEnabled,
     );
     if (!mounted || saveEpoch != _saveEpoch) return;
+    await _applySavedDraftAttachmentMetadata(
+      draft: draft,
+      draftCubit: draftCubit,
+      cleanupStaleSeedAttachments: wasNewDraft,
+      saveEpoch: saveEpoch,
+    );
+    if (!mounted || saveEpoch != _saveEpoch) return;
     final draftCount = !autoSave && wasNewDraft
         ? await draftCubit.countDrafts()
         : null;
@@ -1424,25 +1603,54 @@ class DraftFormState extends State<DraftForm> {
     await _applyAttachmentMetadataIds(
       metadataIds: draft.attachmentMetadata.values,
       expectedAttachmentIds: attachmentIds,
+      saveEpoch: saveEpoch,
     );
     if (!mounted) return;
-    if (wasNewDraft && _seedAttachmentMetadataIds.isNotEmpty) {
-      final Set<String> retainedMetadataIds = draft.attachmentMetadata.values
-          .toSet();
-      final List<String> staleMetadataIds = _seedAttachmentMetadataIds
-          .where((metadataId) => !retainedMetadataIds.contains(metadataId))
-          .toList();
-      if (staleMetadataIds.isNotEmpty) {
-        for (final metadataId in staleMetadataIds) {
-          try {
-            await draftCubit.deleteDraftAttachmentMetadata(metadataId);
-          } on Exception {
-            // Best-effort cleanup for share intent attachment metadata.
-          }
-        }
-      }
-      _seedAttachmentCleanupHandled = true;
+  }
+
+  Future<void> _applySavedDraftAttachmentMetadata({
+    required Draft draft,
+    required DraftCubit draftCubit,
+    required bool cleanupStaleSeedAttachments,
+    required int saveEpoch,
+  }) async {
+    if (!mounted || saveEpoch != _saveEpoch) {
+      return;
     }
+    final previousSeedMetadataIds = _normalizedMetadataIds(
+      _seedAttachmentMetadataIds,
+    );
+    final savedMetadataIds = _normalizedMetadataIds(
+      draft.attachmentMetadata.values,
+    );
+    _seedAttachmentMetadataIds = savedMetadataIds;
+    if (!cleanupStaleSeedAttachments) {
+      return;
+    }
+    _seedAttachmentCleanupHandled = true;
+    final retainedMetadataIds = savedMetadataIds.toSet();
+    await _deleteAttachmentMetadataIds(
+      draftCubit.deleteDraftAttachmentMetadata,
+      previousSeedMetadataIds.where(
+        (metadataId) => !retainedMetadataIds.contains(metadataId),
+      ),
+    );
+    if (!mounted || saveEpoch != _saveEpoch) {
+      return;
+    }
+  }
+
+  List<String> _normalizedMetadataIds(Iterable<String?> metadataIds) {
+    final normalized = <String>[];
+    final seen = <String>{};
+    for (final metadataId in metadataIds) {
+      final trimmed = metadataId?.trim();
+      if (trimmed == null || trimmed.isEmpty || !seen.add(trimmed)) {
+        continue;
+      }
+      normalized.add(trimmed);
+    }
+    return normalized;
   }
 
   void _scheduleAutosave() {
@@ -1541,6 +1749,21 @@ class DraftFormState extends State<DraftForm> {
     } on Exception {
       // Autosave failures remain best-effort after the composer is closed.
     }
+  }
+
+  Future<void> _releaseDraftComposerAttachmentsAfterAutosave({
+    required Future<void>? autosaveOperation,
+    required Future<void> Function(String) deleteDraftAttachmentMetadata,
+    required List<PendingAttachment> pendingAttachments,
+  }) async {
+    if (autosaveOperation != null) {
+      await _drainDiscardedAutosave(autosaveOperation);
+    }
+    await _releaseDraftComposerPendingAttachments(
+      pendingAttachments,
+      deleteDraftAttachmentMetadata,
+    );
+    await _cleanupSeedAttachmentMetadata(deleteDraftAttachmentMetadata);
   }
 
   Future<void> _awaitAttachmentWorkIfNeeded({bool bestEffort = true}) async {
@@ -1775,43 +1998,41 @@ class DraftFormState extends State<DraftForm> {
   Future<void> _applyAttachmentMetadataIds({
     required List<String> metadataIds,
     required List<String> expectedAttachmentIds,
+    required int saveEpoch,
   }) async {
-    if (!mounted || metadataIds.isEmpty) {
+    if (!mounted || saveEpoch != _saveEpoch || metadataIds.isEmpty) {
       return;
     }
-    if (metadataIds.length != expectedAttachmentIds.length) {
-      return;
-    }
-    final idToMetadata = <String, String>{};
-    for (var index = 0; index < expectedAttachmentIds.length; index++) {
-      idToMetadata[expectedAttachmentIds[index]] = metadataIds[index];
-    }
-    var changed = false;
-    final updated = <PendingAttachment>[];
-    for (final pending in _pendingAttachments) {
-      final metadataId = idToMetadata[pending.id];
-      if (metadataId == null || pending.attachment.metadataId == metadataId) {
-        updated.add(pending);
+    final metadataIdsByPendingId = <String, String>{};
+    final metadataCount = metadataIds.length;
+    final expectedCount = expectedAttachmentIds.length;
+    final count = metadataCount < expectedCount ? metadataCount : expectedCount;
+    for (var index = 0; index < count; index += 1) {
+      final pendingId = expectedAttachmentIds[index].trim();
+      final metadataId = metadataIds[index].trim();
+      if (pendingId.isEmpty || metadataId.isEmpty) {
         continue;
       }
-      changed = true;
-      updated.add(
-        pending.copyWith(
-          attachment: pending.attachment.copyWith(metadataId: metadataId),
-        ),
-      );
+      metadataIdsByPendingId[pendingId] = metadataId;
     }
-    if (!changed) {
+    if (metadataIdsByPendingId.isEmpty) {
       return;
     }
-    setState(() => _pendingAttachments = updated);
+    await _reconcileCurrentDraftPendingAttachments(
+      context.read<DraftCubit>(),
+      metadataIdsByPendingId: metadataIdsByPendingId,
+      saveEpoch: saveEpoch,
+    );
   }
 
   Future<void> _handleDiscard() async {
-    final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     final draftCubit = context.read<DraftCubit>();
     final draftId = id;
     if (_discardingDraft) return;
+    final autosaveOperation = _autosaveOperation;
+    final pendingAttachments = List<PendingAttachment>.from(
+      _pendingAttachments,
+    );
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
     _invalidateAttachmentWork();
@@ -1831,11 +2052,13 @@ class DraftFormState extends State<DraftForm> {
         // Best-effort after local close; the discarded form should stay closed.
       }
     }
-    if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata(
-        draftCubit.deleteDraftAttachmentMetadata,
-      );
-    }
+    unawaited(
+      _releaseDraftComposerAttachmentsAfterAutosave(
+        autosaveOperation: autosaveOperation,
+        deleteDraftAttachmentMetadata: draftCubit.deleteDraftAttachmentMetadata,
+        pendingAttachments: pendingAttachments,
+      ),
+    );
     if (mounted) {
       _showToast(context.l10n.draftDiscarded);
       setState(() => _discardingDraft = false);
@@ -1843,10 +2066,12 @@ class DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _discardUnsavedChangesAndClose() async {
-    final bool shouldCleanupSeedAttachments = _shouldCleanupSeedAttachments;
     final draftCubit = context.read<DraftCubit>();
     if (_discardingDraft) return;
     final autosaveOperation = _autosaveOperation;
+    final pendingAttachments = List<PendingAttachment>.from(
+      _pendingAttachments,
+    );
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
     _invalidateAttachmentWork();
@@ -1859,14 +2084,13 @@ class DraftFormState extends State<DraftForm> {
     } else {
       _closeComposer();
     }
-    if (autosaveOperation != null) {
-      unawaited(_drainDiscardedAutosave(autosaveOperation));
-    }
-    if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata(
-        draftCubit.deleteDraftAttachmentMetadata,
-      );
-    }
+    unawaited(
+      _releaseDraftComposerAttachmentsAfterAutosave(
+        autosaveOperation: autosaveOperation,
+        deleteDraftAttachmentMetadata: draftCubit.deleteDraftAttachmentMetadata,
+        pendingAttachments: pendingAttachments,
+      ),
+    );
     if (mounted) {
       setState(() => _discardingDraft = false);
     }
@@ -2002,22 +2226,27 @@ class DraftFormState extends State<DraftForm> {
     if (metadataIds.isEmpty) {
       return;
     }
-    for (final metadataId in metadataIds) {
-      try {
-        await deleteDraftAttachmentMetadata(metadataId);
-      } on Exception {
-        // Best-effort cleanup for share intent attachment metadata.
-      }
-    }
+    await _deleteAttachmentMetadataIds(
+      deleteDraftAttachmentMetadata,
+      metadataIds,
+    );
   }
 
   Future<void> _deleteAttachmentMetadataIds(
     Future<void> Function(String) deleteDraftAttachmentMetadata,
-    Iterable<String> metadataIds,
+    Iterable<String?> metadataIds,
   ) async {
+    final released = <String>{};
     for (final metadataId in metadataIds) {
+      final normalized = metadataId?.trim();
+      if (normalized == null || normalized.isEmpty) {
+        continue;
+      }
+      if (!released.add(normalized)) {
+        continue;
+      }
       try {
-        await deleteDraftAttachmentMetadata(metadataId);
+        await deleteDraftAttachmentMetadata(normalized);
       } on Exception {
         // Best-effort cleanup for abandoned compose attachment metadata.
       }
@@ -2087,7 +2316,6 @@ class DraftFormState extends State<DraftForm> {
     }
     final effectiveForceEmail = forceEmail || _retryForceEmail;
     _autosaveTimer?.cancel();
-    _invalidatePendingSaves();
     setState(() {
       _showValidationMessages = true;
       _sendErrorMessage = null;
@@ -2097,6 +2325,7 @@ class DraftFormState extends State<DraftForm> {
     });
     try {
       await _awaitAttachmentWorkIfNeeded(bestEffort: false);
+      await _awaitAutosaveIfNeeded();
     } on Exception {
       draftCubit.cancelSendPreparation(_sendOwnerId);
       if (!mounted) return;
@@ -2110,6 +2339,7 @@ class DraftFormState extends State<DraftForm> {
       draftCubit.cancelSendPreparation(_sendOwnerId);
       return;
     }
+    _invalidatePendingSaves();
     if (_addingAttachment ||
         _pendingAttachments.any((pending) => pending.isPreparing)) {
       draftCubit.cancelSendPreparation(_sendOwnerId);
@@ -2193,49 +2423,82 @@ class DraftFormState extends State<DraftForm> {
         return;
       }
     }
+    await _reconcileCurrentDraftPendingAttachments(draftCubit);
+    if (!mounted) {
+      draftCubit.cancelSendPreparation(_sendOwnerId);
+      return;
+    }
     _syncConvertedForwardBlocksFromBody();
-    final outcome = await draftCubit.sendDraft(
-      id: id,
-      xmppTargets: partition.xmpp,
-      emailTargets: partition.email,
-      body: _draftIntroText(),
-      shareTokenSignatureEnabled: settingsState.shareTokenSignatureEnabled,
-      ownerId: _sendOwnerId,
-      subject: _subjectTextController.text,
-      quoteTarget: widget.quoteTarget,
-      attachments: _currentAttachments(),
-      calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
-      forwardedBlocks: List<DraftForwardedBlock>.from(
-        _forwardedBlocks,
-        growable: false,
-      ),
+    final submittedAttachments = List<PendingAttachment>.from(
+      _pendingAttachments,
     );
-    if (!mounted || !outcome.succeeded) {
-      if (mounted) {
-        final recipientCountBeforeFailure = _recipients.length;
-        final partialSend = outcome.incomplete;
-        final failureType =
-            outcome.failureType ?? DraftSendFailureType.sendFailed;
-        setState(() {
-          if (outcome.incomplete) {
-            _applyIncompleteRecipientsForSendOutcome(outcome);
-          }
-          _retryForceEmail = outcome.incomplete && effectiveForceEmail;
-          _latestEmailRecipientStatuses = outcome.latestEmailRecipientStatuses;
-          _partialSendNoticeVisible = partialSend;
-          _sendErrorMessage = partialSend
-              ? null
-              : _draftFailureMessage(failureType, context.l10n);
-          _pendingAttachments = _resetUploadingPendingAttachments();
-          _sendCompletionHandled = true;
-        });
-        if (partialSend || recipientCountBeforeFailure != _recipients.length) {
-          _notifyRecipientAddressesChanged();
-          _revalidateFormIfNeeded();
-          _scheduleAutosave();
-        }
-        _bodyFocusNode.requestFocus();
+    _markDraftAttachmentsSubmittedForSend(submittedAttachments);
+    final DraftSendOutcome outcome;
+    try {
+      outcome = await draftCubit.sendDraft(
+        id: id,
+        xmppTargets: partition.xmpp,
+        emailTargets: partition.email,
+        body: _draftIntroText(),
+        shareTokenSignatureEnabled: settingsState.shareTokenSignatureEnabled,
+        ownerId: _sendOwnerId,
+        subject: _subjectTextController.text,
+        quoteTarget: widget.quoteTarget,
+        attachments: submittedAttachments
+            .map((pending) => pending.attachment)
+            .toList(growable: false),
+        calendarTaskIcsMessage: _pendingCalendarTaskIcsMessage,
+        forwardedBlocks: List<DraftForwardedBlock>.from(
+          _forwardedBlocks,
+          growable: false,
+        ),
+      );
+    } finally {
+      _releaseDraftAttachmentsSubmittedForSend(submittedAttachments);
+    }
+    if (!mounted) {
+      await _releaseDraftComposerPendingAttachments(
+        submittedAttachments,
+        draftCubit.deleteDraftAttachmentMetadata,
+      );
+      return;
+    }
+    if (!outcome.succeeded) {
+      final recipientCountBeforeFailure = _recipients.length;
+      final partialSend = outcome.incomplete;
+      final failureType =
+          outcome.failureType ?? DraftSendFailureType.sendFailed;
+      final failureMessage = partialSend
+          ? null
+          : _draftFailureMessage(failureType, context.l10n);
+      final pendingAttachments = await _reconcileDraftPendingAttachments(
+        _resetUploadingPendingAttachments(),
+        draftCubit,
+      );
+      if (!mounted) {
+        await _releaseDraftComposerPendingAttachments(
+          pendingAttachments,
+          draftCubit.deleteDraftAttachmentMetadata,
+        );
+        return;
       }
+      setState(() {
+        if (outcome.incomplete) {
+          _applyIncompleteRecipientsForSendOutcome(outcome);
+        }
+        _retryForceEmail = outcome.incomplete && effectiveForceEmail;
+        _latestEmailRecipientStatuses = outcome.latestEmailRecipientStatuses;
+        _partialSendNoticeVisible = partialSend;
+        _sendErrorMessage = failureMessage;
+        _pendingAttachments = pendingAttachments;
+        _sendCompletionHandled = true;
+      });
+      if (partialSend || recipientCountBeforeFailure != _recipients.length) {
+        _notifyRecipientAddressesChanged();
+        _revalidateFormIfNeeded();
+        _scheduleAutosave();
+      }
+      _bodyFocusNode.requestFocus();
       return;
     }
     await _handleSendComplete();
@@ -2247,27 +2510,233 @@ class DraftFormState extends State<DraftForm> {
     }
     _sendCompletionHandled = true;
     if (!mounted) return;
+    final deleteDraftAttachmentMetadata = context
+        .read<DraftCubit>()
+        .deleteDraftAttachmentMetadata;
+    final sentAttachments = List<PendingAttachment>.from(_pendingAttachments);
     setState(() {
       _retryForceEmail = false;
       _pendingAttachments = const [];
       _pendingCalendarTaskIcsMessage = null;
       _partialSendNoticeVisible = false;
-      _pendingAttachmentSeed = 0;
       _lastAutosaveAt = null;
       _lastSavedSignature = null;
       _seedAttachmentCleanupHandled = true;
     });
-    ShadToaster.maybeOf(
-      context,
-    )?.show(FeedbackToast.success(title: context.l10n.draftSent));
+    await _releaseDraftComposerPendingAttachments(
+      sentAttachments,
+      deleteDraftAttachmentMetadata,
+    );
     if (!mounted) {
       return;
     }
+    ShadToaster.maybeOf(
+      context,
+    )?.show(FeedbackToast.success(title: context.l10n.draftSent));
     _closeComposer();
   }
 
   List<String> _recipientStrings() {
     return _recipients.includedRecipients.recipientAddresses;
+  }
+
+  Future<void> _deleteDraftStagedAttachments(
+    Iterable<PendingAttachment> pendingAttachments,
+  ) async {
+    for (final pending in pendingAttachments) {
+      final staged = pending.stagedAttachment;
+      if (staged == null) {
+        continue;
+      }
+      await deleteComposerStagedAttachment(staged);
+    }
+  }
+
+  Future<void> _releaseDraftComposerPendingAttachments(
+    Iterable<PendingAttachment> pendingAttachments,
+    Future<void> Function(String) deleteDraftAttachmentMetadata,
+  ) async {
+    final pendingList = pendingAttachments.toList(growable: false);
+    await _deleteDraftStagedAttachments(pendingList);
+    await _deleteAttachmentMetadataIds(
+      deleteDraftAttachmentMetadata,
+      pendingList.map((pending) => pending.attachment.metadataId),
+    );
+  }
+
+  Set<String> _submittedKeysForPendingAttachments(
+    Iterable<PendingAttachment> pendingAttachments,
+  ) {
+    final keys = <String>{};
+    for (final pending in pendingAttachments) {
+      final pendingId = pending.id.trim();
+      if (pendingId.isNotEmpty) {
+        keys.add('pending:$pendingId');
+      }
+      final metadataId = pending.attachment.metadataId?.trim();
+      if (metadataId != null && metadataId.isNotEmpty) {
+        keys.add('metadata:$metadataId');
+      }
+      final stagedPath = pending.stagedAttachment?.path.trim();
+      if (stagedPath != null && stagedPath.isNotEmpty) {
+        keys.add('staged:$stagedPath');
+      }
+    }
+    return keys;
+  }
+
+  List<PendingAttachment> _unsubmittedDraftPendingAttachments() {
+    return _pendingAttachments
+        .where((pending) {
+          final submittedKeys = _submittedKeysForPendingAttachments([pending]);
+          return submittedKeys.isEmpty ||
+              submittedKeys.every(
+                (key) => !_draftSubmittedAttachmentKeys.contains(key),
+              );
+        })
+        .toList(growable: false);
+  }
+
+  void _markDraftAttachmentsSubmittedForSend(
+    Iterable<PendingAttachment> pendingAttachments,
+  ) {
+    final submittedKeys = _submittedKeysForPendingAttachments(
+      pendingAttachments,
+    );
+    if (submittedKeys.isEmpty) {
+      return;
+    }
+    _draftSubmittedAttachmentKeys = {
+      ..._draftSubmittedAttachmentKeys,
+      ...submittedKeys,
+    };
+  }
+
+  void _releaseDraftAttachmentsSubmittedForSend(
+    Iterable<PendingAttachment> pendingAttachments,
+  ) {
+    final submittedKeys = _submittedKeysForPendingAttachments(
+      pendingAttachments,
+    );
+    if (submittedKeys.isEmpty || _draftSubmittedAttachmentKeys.isEmpty) {
+      return;
+    }
+    _draftSubmittedAttachmentKeys = {
+      for (final key in _draftSubmittedAttachmentKeys)
+        if (!submittedKeys.contains(key)) key,
+    };
+  }
+
+  Future<List<PendingAttachment>> _reconcileDraftPendingAttachments(
+    Iterable<PendingAttachment> pendingAttachments,
+    DraftCubit draftCubit, {
+    Map<String, String>? metadataIdsByPendingId,
+  }) async {
+    final pendingList = pendingAttachments.toList(growable: false);
+    final indexes = <int>[];
+    final metadataIds = <String>[];
+    for (var index = 0; index < pendingList.length; index += 1) {
+      final pending = pendingList[index];
+      if (pending.stagedAttachment == null) {
+        continue;
+      }
+      final metadataId =
+          metadataIdsByPendingId?[pending.id]?.trim() ??
+          pending.attachment.metadataId?.trim();
+      if (metadataId == null || metadataId.isEmpty) {
+        continue;
+      }
+      indexes.add(index);
+      metadataIds.add(metadataId);
+    }
+    if (metadataIds.isEmpty) {
+      return pendingList;
+    }
+    final attachments = await draftCubit.loadDraftAttachments(metadataIds);
+    final attachmentByMetadataId = {
+      for (final attachment in attachments)
+        if (attachment.metadataId?.trim().isNotEmpty == true)
+          attachment.metadataId!.trim(): attachment,
+    };
+    if (attachmentByMetadataId.isEmpty) {
+      return pendingList;
+    }
+    final updated = List<PendingAttachment>.from(pendingList);
+    for (var index = 0; index < metadataIds.length; index += 1) {
+      final attachment = attachmentByMetadataId[metadataIds[index]];
+      if (attachment == null) {
+        continue;
+      }
+      final pendingIndex = indexes[index];
+      final pending = pendingList[pendingIndex];
+      updated[pendingIndex] = pending.copyWith(
+        attachment: attachment,
+        clearStagedAttachment: true,
+      );
+    }
+    return updated;
+  }
+
+  Future<void> _reconcileCurrentDraftPendingAttachments(
+    DraftCubit draftCubit, {
+    Map<String, String>? metadataIdsByPendingId,
+    int? saveEpoch,
+  }) async {
+    if (!mounted || (saveEpoch != null && saveEpoch != _saveEpoch)) {
+      return;
+    }
+    final current = List<PendingAttachment>.from(_pendingAttachments);
+    final reconciled = await _reconcileDraftPendingAttachments(
+      current,
+      draftCubit,
+      metadataIdsByPendingId: metadataIdsByPendingId,
+    );
+    if (!mounted || (saveEpoch != null && saveEpoch != _saveEpoch)) {
+      return;
+    }
+    if (!_pendingAttachmentListsMatch(_pendingAttachments, current) ||
+        _pendingAttachmentListsMatch(current, reconciled)) {
+      return;
+    }
+    final releasedStagedAttachments = _releasedStagedPendingAttachments(
+      previous: current,
+      current: reconciled,
+    );
+    setState(() => _pendingAttachments = reconciled);
+    await _deleteDraftStagedAttachments(releasedStagedAttachments);
+  }
+
+  bool _pendingAttachmentListsMatch(
+    List<PendingAttachment> left,
+    List<PendingAttachment> right,
+  ) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index += 1) {
+      if (left[index] != right[index]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  List<PendingAttachment> _releasedStagedPendingAttachments({
+    required List<PendingAttachment> previous,
+    required List<PendingAttachment> current,
+  }) {
+    final retainedStagedPathsById = <String, String>{
+      for (final pending in current)
+        if (pending.stagedAttachment != null)
+          pending.id: pending.stagedAttachment!.path,
+    };
+    return previous
+        .where((pending) {
+          final staged = pending.stagedAttachment;
+          return staged != null &&
+              retainedStagedPathsById[pending.id] != staged.path;
+        })
+        .toList(growable: false);
   }
 
   void _notifyRecipientAddressesChanged() {
@@ -2297,8 +2766,7 @@ class DraftFormState extends State<DraftForm> {
     ShadToaster.maybeOf(context)?.show(FeedbackToast.info(message: message));
   }
 
-  String _nextPendingAttachmentId() =>
-      'draft-pending-${_pendingAttachmentSeed++}';
+  String _nextPendingAttachmentId() => const Uuid().v4();
 
   bool _hasContent() {
     return _hasMeaningfulBodyText(_outgoingPreviewText().trim()) ||

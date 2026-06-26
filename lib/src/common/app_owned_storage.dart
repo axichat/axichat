@@ -12,11 +12,61 @@ const String emailEncryptionKeyTempDirectoryName = 'email_encryption_keys';
 const String attachmentShareTempDirectoryName = 'attachment_shares';
 const String chatHistoryExportTempDirectoryName = 'chat_history_exports';
 const String contactExportTempDirectoryName = 'contact_exports';
+const String attachmentStorageDirectoryName = 'attachments';
+const String composerAttachmentStagingDirectoryName = 'composer_staging';
+const String composerAttachmentCommittedDirectoryName = 'composer_committed';
 
-Future<Directory> appOwnedTemporaryDirectory(String directoryName) async {
+Future<Directory> appOwnedAttachmentRootDirectory() async {
+  final supportDirectory = await getApplicationSupportDirectory();
+  return Directory(
+    p.join(supportDirectory.path, attachmentStorageDirectoryName),
+  );
+}
+
+Future<Directory> appOwnedTemporaryDirectory(
+  String directoryName, {
+  String? childDirectoryName,
+}) async {
   final normalizedName = normalizeAppOwnedPathSegment(directoryName);
+  final normalizedChildName = childDirectoryName == null
+      ? null
+      : normalizeAppOwnedPathSegment(childDirectoryName);
   final tempDirectory = await getTemporaryDirectory();
-  return Directory(p.join(tempDirectory.path, normalizedName));
+  final pathSegments = <String>[
+    tempDirectory.path,
+    normalizedName,
+    ?normalizedChildName,
+  ];
+  return Directory(p.joinAll(pathSegments));
+}
+
+Future<Directory> appOwnedAttachmentStorageDirectory(
+  String directoryName, {
+  String? childDirectoryName,
+}) async {
+  final normalizedName = normalizeAppOwnedPathSegment(directoryName);
+  final normalizedChildName = childDirectoryName == null
+      ? null
+      : normalizeAppOwnedPathSegment(childDirectoryName);
+  final rootDirectory = await appOwnedAttachmentRootDirectory();
+  final pathSegments = <String>[
+    rootDirectory.path,
+    normalizedName,
+    ?normalizedChildName,
+  ];
+  final directory = Directory(p.joinAll(pathSegments));
+  return directory.create(recursive: true);
+}
+
+String normalizeAttachmentStoragePrefix(String prefix) {
+  const fallback = 'shared';
+  const replacement = '_';
+  final sanitizer = RegExp(r'[^a-zA-Z0-9_-]');
+  final trimmed = prefix.trim();
+  if (trimmed.isEmpty) {
+    return fallback;
+  }
+  return trimmed.replaceAll(sanitizer, replacement);
 }
 
 String normalizeAppOwnedPathSegment(String pathSegment) {

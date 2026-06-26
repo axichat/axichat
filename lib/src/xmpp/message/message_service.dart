@@ -1523,42 +1523,63 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       originId: quotingOriginId,
       mucStanzaId: quotingMucStanzaId,
     );
-    final draftSave =
-        await _dbOpReturning<
-          XmppDatabase,
-          ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
-        >((db) async {
-          final attachmentMetadataRows = <FileMetadataData>[];
-          for (final attachment in attachments) {
-            final metadata = await _draftAttachmentMetadataDataInDb(
-              db,
-              attachment,
+    final committedAttachments = <ComposerAttachmentCommit>[];
+    final ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
+    draftSave;
+    var draftPersisted = false;
+    try {
+      draftSave =
+          await _dbOpReturning<
+            XmppDatabase,
+            ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
+          >((db) async {
+            final attachmentMetadataRows = <FileMetadataData>[];
+            for (final attachment in attachments) {
+              final metadata = await _draftAttachmentMetadataDataInDb(
+                db,
+                attachment,
+                committedAttachments: committedAttachments,
+              );
+              attachmentMetadataRows.add(metadata);
+            }
+            final attachmentMetadata = DraftAttachmentMetadataIds(
+              attachmentMetadataRows.map((metadata) => metadata.id).toList(),
             );
-            attachmentMetadataRows.add(metadata);
-          }
-          final attachmentMetadata = DraftAttachmentMetadataIds(
-            attachmentMetadataRows.map((metadata) => metadata.id).toList(),
-          );
-          final savedId = await db.saveDraft(
-            id: id,
-            jids: jids,
-            body: body,
-            draftSyncId: draftSyncMetadata.id,
-            draftUpdatedAt: draftSyncMetadata.updatedAt,
-            draftSourceId: draftSyncMetadata.sourceId,
-            draftRecipients: draftRecipients,
-            subject: subject,
-            quotingStanzaId: quoteTarget?.stanzaId,
-            quotingOriginId: quoteTarget?.originId,
-            quotingMucStanzaId: quoteTarget?.mucStanzaId,
-            attachmentMetadataIds: attachmentMetadata.values,
-            attachmentMetadata: attachmentMetadataRows,
-            calendarTaskIcsMessage: calendarTaskIcsMessage,
-            forwardedBlocks: forwardedBlocks,
-            autosaveEnabled: autosaveEnabled,
-          );
-          return (attachmentMetadata: attachmentMetadata, savedId: savedId);
-        });
+            final savedId = await db.saveDraft(
+              id: id,
+              jids: jids,
+              body: body,
+              draftSyncId: draftSyncMetadata.id,
+              draftUpdatedAt: draftSyncMetadata.updatedAt,
+              draftSourceId: draftSyncMetadata.sourceId,
+              draftRecipients: draftRecipients,
+              subject: subject,
+              quotingStanzaId: quoteTarget?.stanzaId,
+              quotingOriginId: quoteTarget?.originId,
+              quotingMucStanzaId: quoteTarget?.mucStanzaId,
+              attachmentMetadataIds: attachmentMetadata.values,
+              attachmentMetadata: attachmentMetadataRows,
+              calendarTaskIcsMessage: calendarTaskIcsMessage,
+              forwardedBlocks: forwardedBlocks,
+              autosaveEnabled: autosaveEnabled,
+            );
+            draftPersisted = true;
+            return (attachmentMetadata: attachmentMetadata, savedId: savedId);
+          });
+    } on XmppException {
+      if (!draftPersisted) {
+        await _deleteCommittedComposerAttachments(committedAttachments);
+      }
+      rethrow;
+    } on ComposerAttachmentStagingException {
+      await _deleteCommittedComposerAttachments(committedAttachments);
+      rethrow;
+    } on FileSystemException {
+      if (!draftPersisted) {
+        await _deleteCommittedComposerAttachments(committedAttachments);
+      }
+      rethrow;
+    }
     final savedId = draftSave.savedId;
     final attachmentMetadata = draftSave.attachmentMetadata;
     final staleMetadataIds =
@@ -1596,6 +1617,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (staleMetadataIds.isNotEmpty) {
       await _deleteDraftAttachmentMetadata(staleMetadataIds);
     }
+    await _deleteCommittedComposerStaging(committedAttachments);
     return resolvedDraft;
   }
 
@@ -2657,36 +2679,112 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  Future<List<Attachment>> commitComposerAttachmentsForSend(
+    List<Attachment> attachments,
+  ) async {
+    if (attachments.isEmpty) {
+      return const <Attachment>[];
+    }
+    final committedAttachments = <ComposerAttachmentCommit>[];
+    final List<Attachment> committed;
+    var metadataPersisted = false;
+    try {
+      committed = await _dbOpReturning<XmppDatabase, List<Attachment>>((
+        db,
+      ) async {
+        return db.transaction(() async {
+          final entries =
+              <({Attachment attachment, FileMetadataData metadata})>[];
+          for (final attachment in attachments) {
+            final metadata = await _draftAttachmentMetadataDataInDb(
+              db,
+              attachment,
+              committedAttachments: committedAttachments,
+            );
+            entries.add((attachment: attachment, metadata: metadata));
+            await db.saveFileMetadata(metadata);
+          }
+          return [
+            for (final entry in entries)
+              _attachmentForMetadata(entry.attachment, entry.metadata),
+          ];
+        });
+      });
+      metadataPersisted = true;
+    } on XmppException {
+      if (!metadataPersisted) {
+        await _deleteCommittedComposerAttachments(committedAttachments);
+      }
+      throw XmppMessageException();
+    } on ComposerAttachmentStagingException {
+      await _deleteCommittedComposerAttachments(committedAttachments);
+      throw XmppMessageException();
+    } on FileSystemException {
+      if (!metadataPersisted) {
+        await _deleteCommittedComposerAttachments(committedAttachments);
+      }
+      throw XmppMessageException();
+    }
+    await _deleteCommittedComposerStaging(committedAttachments);
+    return committed;
+  }
+
   Future<String> _persistDraftAttachmentMetadataInDb(
     XmppDatabase db,
     Attachment attachment,
   ) async {
-    final metadata = await _draftAttachmentMetadataDataInDb(db, attachment);
-    await db.saveFileMetadata(metadata);
+    final committedAttachments = <ComposerAttachmentCommit>[];
+    final metadata = await _draftAttachmentMetadataDataInDb(
+      db,
+      attachment,
+      committedAttachments: committedAttachments,
+    );
+    var metadataPersisted = false;
+    try {
+      await db.saveFileMetadata(metadata);
+      metadataPersisted = true;
+    } on XmppException {
+      if (!metadataPersisted) {
+        await _deleteCommittedComposerAttachments(committedAttachments);
+      }
+      rethrow;
+    } on ComposerAttachmentStagingException {
+      await _deleteCommittedComposerAttachments(committedAttachments);
+      rethrow;
+    }
+    await _deleteCommittedComposerStaging(committedAttachments);
     return metadata.id;
   }
 
   Future<FileMetadataData> _draftAttachmentMetadataDataInDb(
     XmppDatabase db,
-    Attachment attachment,
-  ) async {
+    Attachment attachment, {
+    List<ComposerAttachmentCommit>? committedAttachments,
+  }) async {
     final metadataId = _resolvedFileMetadataId(attachment.metadataId);
     final existing = await db.getFileMetadata(metadataId);
-    final fileName = attachment.fileName.isNotEmpty
-        ? attachment.fileName
-        : existing?.filename ?? p.basename(attachment.path);
-    final fileSizeBytes = attachment.sizeBytes > 0
-        ? attachment.sizeBytes
+    final committed = await commitComposerStagedAttachment(
+      attachment: attachment,
+      metadataId: metadataId,
+      committedDirectory: await _composerAttachmentCommitDirectory(),
+    );
+    committedAttachments?.add(committed);
+    final committedAttachment = committed.attachment;
+    final fileName = committedAttachment.fileName.isNotEmpty
+        ? committedAttachment.fileName
+        : existing?.filename ?? p.basename(committedAttachment.path);
+    final fileSizeBytes = committedAttachment.sizeBytes > 0
+        ? committedAttachment.sizeBytes
         : existing?.sizeBytes;
     final metadata = FileMetadataData(
       id: metadataId,
       filename: fileName,
-      path: attachment.path,
+      path: committedAttachment.path,
       sourceUrls: existing?.sourceUrls,
-      mimeType: attachment.mimeType ?? existing?.mimeType,
+      mimeType: committedAttachment.mimeType ?? existing?.mimeType,
       sizeBytes: fileSizeBytes,
-      width: attachment.width ?? existing?.width,
-      height: attachment.height ?? existing?.height,
+      width: committedAttachment.width ?? existing?.width,
+      height: committedAttachment.height ?? existing?.height,
       encryptionKey: existing?.encryptionKey,
       encryptionIV: existing?.encryptionIV,
       encryptionScheme: existing?.encryptionScheme,
@@ -2696,6 +2794,26 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       thumbnailData: existing?.thumbnailData,
     );
     return metadata;
+  }
+
+  Future<void> _deleteCommittedComposerAttachments(
+    Iterable<ComposerAttachmentCommit> commits,
+  ) async {
+    for (final commit in commits) {
+      await deleteCommittedComposerAttachment(commit);
+    }
+  }
+
+  Future<void> _deleteCommittedComposerStaging(
+    Iterable<ComposerAttachmentCommit> commits,
+  ) async {
+    for (final commit in commits) {
+      final stagedPath = commit.stagedPath;
+      if (stagedPath == null || stagedPath.trim().isEmpty) {
+        continue;
+      }
+      await deleteComposerStagedAttachmentPath(stagedPath);
+    }
   }
 
   String _resolvedFileMetadataId(String? metadataId) {
@@ -2712,6 +2830,55 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return metadata;
     }
     return metadata.copyWith(id: normalizedId);
+  }
+
+  Attachment _attachmentForMetadata(
+    Attachment attachment,
+    FileMetadataData metadata,
+  ) {
+    final metadataPath = metadata.path?.trim();
+    return attachment.copyWith(
+      metadataId: metadata.id,
+      path: metadataPath == null || metadataPath.isEmpty
+          ? attachment.path
+          : metadataPath,
+      fileName: metadata.filename.isEmpty
+          ? attachment.fileName
+          : metadata.filename,
+      mimeType: metadata.mimeType ?? attachment.mimeType,
+      sizeBytes: metadata.sizeBytes ?? attachment.sizeBytes,
+      width: metadata.width ?? attachment.width,
+      height: metadata.height ?? attachment.height,
+    );
+  }
+
+  FileMetadataData _mergeUploadMetadataIntoCommitted({
+    required FileMetadataData committed,
+    required FileMetadataData upload,
+  }) {
+    final normalizedUpload = _normalizedFileMetadataData(upload);
+    return committed.copyWith(
+      id: committed.id,
+      filename: normalizedUpload.filename.isEmpty
+          ? committed.filename
+          : normalizedUpload.filename,
+      path: committed.path,
+      sourceUrls: normalizedUpload.sourceUrls ?? committed.sourceUrls,
+      mimeType: normalizedUpload.mimeType ?? committed.mimeType,
+      sizeBytes: normalizedUpload.sizeBytes ?? committed.sizeBytes,
+      width: normalizedUpload.width ?? committed.width,
+      height: normalizedUpload.height ?? committed.height,
+      encryptionKey: normalizedUpload.encryptionKey ?? committed.encryptionKey,
+      encryptionIV: normalizedUpload.encryptionIV ?? committed.encryptionIV,
+      encryptionScheme:
+          normalizedUpload.encryptionScheme ?? committed.encryptionScheme,
+      cipherTextHashes:
+          normalizedUpload.cipherTextHashes ?? committed.cipherTextHashes,
+      plainTextHashes:
+          normalizedUpload.plainTextHashes ?? committed.plainTextHashes,
+      thumbnailType: normalizedUpload.thumbnailType ?? committed.thumbnailType,
+      thumbnailData: normalizedUpload.thumbnailData ?? committed.thumbnailData,
+    );
   }
 
   Future<void> _deleteDraftAttachmentMetadata(
@@ -4003,14 +4170,23 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  Future<void> _storeMamGlobalLastId(String value) async {
+  Future<void> _storeMamGlobalLastId(
+    String value, {
+    Object? syncOwner,
+    int? operationEpoch,
+  }) async {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
     final scopedKey = _mamScopedKey(_mamGlobalLastIdKeyName);
     await _dbOp<XmppStateStore>((ss) async {
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       await ss.write(key: scopedKey, value: trimmed);
       await ss.delete(key: _mamGlobalLastIdKey);
     }, awaitDatabase: true);
+    _log.info('Stored global MAM last id: lastId=$trimmed.');
   }
 
   Future<DateTime?> _loadMamGlobalLastSync() async {
@@ -4020,15 +4196,24 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  Future<void> _storeMamGlobalLastSync(DateTime timestamp) async {
+  Future<void> _storeMamGlobalLastSync(
+    DateTime timestamp, {
+    Object? syncOwner,
+    int? operationEpoch,
+  }) async {
     final scopedKey = _mamScopedKey(_mamGlobalLastSyncKeyName);
     await _dbOp<XmppStateStore>((ss) async {
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       await ss.write(
         key: scopedKey,
         value: timestamp.toUtc().toIso8601String(),
       );
       await ss.delete(key: _mamGlobalLastSyncKey);
     }, awaitDatabase: true);
+    _log.info('Stored global MAM last sync: timestamp=${timestamp.toUtc()}.');
   }
 
   Future<DateTime?> _loadMamGlobalDeniedUntil() async {
@@ -4046,13 +4231,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return loaded;
   }
 
-  Future<void> _storeMamGlobalDeniedUntil(DateTime? until) async {
+  Future<void> _storeMamGlobalDeniedUntil(
+    DateTime? until, {
+    Object? syncOwner,
+    int? operationEpoch,
+  }) async {
     final scope = _mamScopeToken();
-    _mamGlobalDeniedUntilScope = scope;
-    _mamGlobalDeniedUntilLoaded = true;
-    _mamGlobalDeniedUntil = until;
     final scopedKey = _mamScopedKey(_mamGlobalDeniedUntilKeyName);
     await _dbOp<XmppStateStore>((ss) async {
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       if (until == null) {
         await ss.delete(key: scopedKey);
         await ss.delete(key: _mamGlobalDeniedUntilKey);
@@ -4061,6 +4251,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await ss.write(key: scopedKey, value: until.toUtc().toIso8601String());
       await ss.delete(key: _mamGlobalDeniedUntilKey);
     }, awaitDatabase: true);
+    _throwIfMamGlobalSyncOwnerChanged(
+      operationEpoch: operationEpoch,
+      syncOwner: syncOwner,
+    );
+    _mamGlobalDeniedUntilScope = scope;
+    _mamGlobalDeniedUntilLoaded = true;
+    _mamGlobalDeniedUntil = until;
   }
 
   Future<List<Message>> searchChatMessages({
@@ -4779,6 +4976,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   static const _mamDiscoChatLimit = 500;
   static const _calendarSyncMamWorkOutcomeLimit = 1000;
   bool _mamGlobalSyncInFlight = false;
+  Object? _mamGlobalSyncOwner;
   bool _hasMamNegotiatedStream = false;
   bool _mamNegotiationResumed = false;
   bool _mamGlobalSyncCompletedSinceConnect = false;
@@ -5917,25 +6115,38 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     int pageSize = mamLoginBackfillMessageLimit,
   }) async {
     if (_mamGlobalSyncInFlight) {
+      _log.info('Global MAM sync skipped: already in flight.');
       return MamGlobalSyncOutcome.skippedInFlight;
     }
     _mamGlobalSyncInFlight = true;
     final operationEpoch = lifecycleEpoch;
+    final syncOwner = Object();
+    _mamGlobalSyncOwner = syncOwner;
     var started = false;
     var success = false;
     try {
       await database;
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       _mamGlobalMaxTimestamp = null;
       _mamGlobalCalendarProcessingFailed = false;
       _mamGlobalArchiveReplayInterrupted = false;
       _mamGlobalCompleteChatCalendarCandidates.clear();
       await _resolveMamSupportForAccount();
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       if (_mamSupportResolved && !_mamSupported) {
+        _log.info('Global MAM sync skipped: unsupported by account.');
         return MamGlobalSyncOutcome.skippedUnsupported;
       }
 
       final deniedUntil = await _loadMamGlobalDeniedUntil();
       if (deniedUntil != null && deniedUntil.isAfter(DateTime.timestamp())) {
+        _log.info('Global MAM sync skipped: deniedUntil=$deniedUntil.');
         return MamGlobalSyncOutcome.skippedDenied;
       }
 
@@ -5945,10 +6156,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       emitXmppOperation(_mamGlobalStartEvent);
       String? after = await _loadMamGlobalLastId();
       final anchor = await _loadMamGlobalLastSync();
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       DateTime? start = after == null ? anchor : null;
       String? before = after == null && start == null
           ? ''
           : null; // Seed last page only on first-run.
+      _log.info(
+        'Global MAM sync started: '
+        'pageSize=$pageSize '
+        'after=$after '
+        'anchor=$anchor '
+        'before=$before.',
+      );
 
       while (true) {
         final result = await _fetchGlobalMamPage(
@@ -5957,14 +6179,33 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           start: start,
           pageSize: pageSize,
         );
-        if (_mamGlobalArchiveReplayInterrupted) {
-          throw XmppMessageException();
-        }
+        _throwIfMamGlobalSyncOwnerChanged(
+          operationEpoch: operationEpoch,
+          syncOwner: syncOwner,
+        );
         final lastId = result.lastId;
         final hasProgress = lastId != null && lastId != after;
+        _log.fine(
+          'Global MAM page fetched: '
+          'lastId=$lastId '
+          'complete=${result.complete} '
+          'hasProgress=$hasProgress.',
+        );
         if (hasProgress) {
           after = lastId;
-          await _storeMamGlobalLastId(lastId);
+          _throwIfMamGlobalSyncOwnerChanged(
+            operationEpoch: operationEpoch,
+            syncOwner: syncOwner,
+          );
+          await _storeMamGlobalLastId(
+            lastId,
+            syncOwner: syncOwner,
+            operationEpoch: operationEpoch,
+          );
+          _throwIfMamGlobalSyncOwnerChanged(
+            operationEpoch: operationEpoch,
+            syncOwner: syncOwner,
+          );
         }
         if (result.complete || lastId == null) {
           break;
@@ -5979,35 +6220,96 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
       final anchorTimestamp =
           _mamGlobalMaxTimestamp?.toUtc() ?? DateTime.timestamp().toUtc();
-      await _storeMamGlobalLastSync(anchorTimestamp);
-      await _storeMamGlobalDeniedUntil(null);
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
+      await _storeMamGlobalLastSync(
+        anchorTimestamp,
+        syncOwner: syncOwner,
+        operationEpoch: operationEpoch,
+      );
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
+      await _storeMamGlobalDeniedUntil(
+        null,
+        syncOwner: syncOwner,
+        operationEpoch: operationEpoch,
+      );
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       if (privateCalendarHadCompleteCoverage &&
           !_mamGlobalCalendarProcessingFailed) {
-        await _writePersonalCalendarSyncState(
+        await _writePersonalCalendarSyncStateForMamGlobal(
           _readPersonalCalendarSyncState().markCoverageComplete(
             completedAt: anchorTimestamp,
             calendarJid: bareAddress(myJid) ?? myJid,
             archiveJid: bareAddress(myJid) ?? myJid,
           ),
+          syncOwner: syncOwner,
+          operationEpoch: operationEpoch,
+        );
+        _throwIfMamGlobalSyncOwnerChanged(
+          operationEpoch: operationEpoch,
+          syncOwner: syncOwner,
         );
       }
       if (!_mamGlobalCalendarProcessingFailed) {
-        await _markMamGlobalChatCalendarCoverageComplete(anchorTimestamp);
+        await _markMamGlobalChatCalendarCoverageComplete(
+          anchorTimestamp,
+          syncOwner: syncOwner,
+          operationEpoch: operationEpoch,
+        );
+        _throwIfMamGlobalSyncOwnerChanged(
+          operationEpoch: operationEpoch,
+          syncOwner: syncOwner,
+        );
       }
       if (operationEpoch == lifecycleEpoch) {
         _mamGlobalSyncCompletedSinceConnect =
             !_mamGlobalCalendarProcessingFailed;
       }
       success = true;
+      _log.info(
+        'Global MAM sync completed: '
+        'anchorTimestamp=$anchorTimestamp '
+        'calendarProcessingFailed=$_mamGlobalCalendarProcessingFailed '
+        'completedSinceConnect=$_mamGlobalSyncCompletedSinceConnect.',
+      );
       return MamGlobalSyncOutcome.completed;
     } on XmppAbortedException {
+      _log.info(
+        'Global MAM sync aborted: '
+        'operationEpoch=$operationEpoch '
+        'currentEpoch=$lifecycleEpoch '
+        'ownerActive=${_ownsMamGlobalSync(syncOwner, operationEpoch)}.',
+      );
       return MamGlobalSyncOutcome.failed;
     } on Exception catch (error, stackTrace) {
       _log.fine('Global MAM sync failed.', error, stackTrace);
+      if (!_ownsMamGlobalSync(syncOwner, operationEpoch)) {
+        return MamGlobalSyncOutcome.failed;
+      }
       final backoff = DateTime.timestamp().add(_mamGlobalDeniedBackoff);
-      await _storeMamGlobalDeniedUntil(backoff);
+      await _storeMamGlobalDeniedUntil(
+        backoff,
+        syncOwner: syncOwner,
+        operationEpoch: operationEpoch,
+      );
+      _log.info(
+        'Global MAM sync failed: '
+        'error=${error.runtimeType} '
+        'deniedUntil=$backoff.',
+      );
       return MamGlobalSyncOutcome.failed;
     } finally {
+      if (identical(_mamGlobalSyncOwner, syncOwner)) {
+        _mamGlobalSyncOwner = null;
+      }
       _mamGlobalSyncInFlight = false;
       _mamGlobalCompleteChatCalendarCandidates.clear();
       if (started) {
@@ -6016,6 +6318,27 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         );
       }
     }
+  }
+
+  void _throwIfMamGlobalSyncOwnerChanged({
+    int? operationEpoch,
+    Object? syncOwner,
+  }) {
+    if (syncOwner == null && operationEpoch == null) {
+      return;
+    }
+    if (!_ownsMamGlobalSync(syncOwner, operationEpoch)) {
+      throw XmppAbortedException();
+    }
+  }
+
+  bool _ownsMamGlobalSync(Object? syncOwner, int? operationEpoch) {
+    if (syncOwner == null || operationEpoch == null) {
+      return true;
+    }
+    return operationEpoch == lifecycleEpoch &&
+        identical(_mamGlobalSyncOwner, syncOwner) &&
+        !_mamGlobalArchiveReplayInterrupted;
   }
 
   Future<MamPageResult> _fetchGlobalMamPage({
@@ -6987,16 +7310,28 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final attachmentWithMetadataId = attachment.metadataId == metadataId
         ? attachment
         : attachment.copyWith(metadataId: metadataId);
-    final metadata =
-        (upload == null
-            ? null
-            : _normalizedFileMetadataData(upload.metadata)) ??
-        await _seedAttachmentMetadata(attachmentWithMetadataId);
+    final existingUploadMetadata = upload == null
+        ? null
+        : await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+            (db) => db.getFileMetadata(metadataId),
+          );
+    final metadata = upload == null
+        ? await _seedAttachmentMetadata(attachmentWithMetadataId)
+        : _mergeUploadMetadataIntoCommitted(
+            committed:
+                existingUploadMetadata ??
+                _normalizedFileMetadataData(upload.metadata),
+            upload: upload.metadata,
+          );
     if (upload != null) {
       await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     }
+    final attachmentForSend = _attachmentForMetadata(
+      attachmentWithMetadataId,
+      metadata,
+    );
     final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
-    final captionText = attachmentWithMetadataId.caption?.trim() ?? '';
+    final captionText = attachmentForSend.caption?.trim() ?? '';
     final caption = captionText.isNotEmpty
         ? captionText
         : (normalizedHtmlCaption == null
@@ -7082,13 +7417,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     if (localOnly) {
       await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
-      final localFile = File(attachment.path);
+      final localFile = File(attachmentForSend.path);
       final localContentType = metadata.mimeType ?? 'application/octet-stream';
-      final localSize = metadata.sizeBytes ?? attachment.sizeBytes;
+      final localSize = metadata.sizeBytes ?? attachmentForSend.sizeBytes;
       final localSourceUrls = metadata.sourceUrls;
       final localUrl = localSourceUrls != null && localSourceUrls.isNotEmpty
           ? localSourceUrls.first
-          : Uri.file(attachment.path).toString();
+          : Uri.file(attachmentForSend.path).toString();
       return XmppAttachmentUpload._(
         metadata: metadata,
         getUrl: localUrl,
@@ -7104,13 +7439,13 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       if (this is DemoScriptService) {
         (this as DemoScriptService)._scheduleDemoAck(message.stanzaID);
       }
-      final demoFile = File(attachment.path);
+      final demoFile = File(attachmentForSend.path);
       final demoContentType = metadata.mimeType ?? 'application/octet-stream';
-      final demoSize = metadata.sizeBytes ?? attachment.sizeBytes;
+      final demoSize = metadata.sizeBytes ?? attachmentForSend.sizeBytes;
       final demoSourceUrls = metadata.sourceUrls;
       final demoGetUrl = demoSourceUrls != null && demoSourceUrls.isNotEmpty
           ? demoSourceUrls.first
-          : Uri.file(attachment.path).toString();
+          : Uri.file(attachmentForSend.path).toString();
       return XmppAttachmentUpload._(
         metadata: metadata,
         getUrl: demoGetUrl,
@@ -7142,8 +7477,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
     late final XmppAttachmentUpload resolvedUpload;
     try {
-      resolvedUpload =
-          upload ?? await _uploadAttachment(attachmentWithMetadataId);
+      resolvedUpload = upload ?? await _uploadAttachment(attachmentForSend);
     } on XmppException {
       if (shouldStore) {
         await _dbOp<XmppDatabase>(
@@ -7165,7 +7499,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       throw XmppMessageException();
     }
-    final updatedMetadata = resolvedUpload.metadata;
+    final updatedMetadata = _mergeUploadMetadataIntoCommitted(
+      committed: metadata,
+      upload: resolvedUpload.metadata,
+    );
     final getUrl = resolvedUpload.getUrl;
     await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(updatedMetadata));
     if (upload == null) {
@@ -8514,6 +8851,19 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   void _clearMamNegotiationState() {
+    if (_hasMamNegotiatedStream ||
+        _mamNegotiationResumed ||
+        _mamGlobalSyncCompletedSinceConnect ||
+        _mamGlobalSyncInFlight) {
+      _log.info(
+        'Clearing MAM negotiation state: '
+        'negotiated=$_hasMamNegotiatedStream '
+        'resumed=$_mamNegotiationResumed '
+        'globalInFlight=$_mamGlobalSyncInFlight '
+        'completedSinceConnect=$_mamGlobalSyncCompletedSinceConnect.',
+      );
+      _mamGlobalSyncOwner = null;
+    }
     _hasMamNegotiatedStream = false;
     _mamNegotiationResumed = false;
     _mamGlobalSyncCompletedSinceConnect = false;
@@ -8545,11 +8895,19 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     int pageSize = 50,
   }) async {
     if (!_hasMamNegotiatedStream) {
+      _log.info('Global MAM refresh skipped: no negotiated stream.');
       return MamGlobalSyncOutcome.failed;
     }
     if (_mamNegotiationResumed) {
+      _log.info('Global MAM refresh skipped: stream resumed.');
       return MamGlobalSyncOutcome.skippedResumed;
     }
+    _log.info(
+      'Global MAM refresh requested: '
+      'pageSize=$pageSize '
+      'inFlight=$_mamGlobalSyncInFlight '
+      'completedSinceConnect=$_mamGlobalSyncCompletedSinceConnect.',
+    );
     return syncGlobalMamCatchUp(pageSize: pageSize);
   }
 
@@ -9295,24 +9653,36 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
       (db) => db.getFileMetadata(metadataId),
     );
-    final fileName = attachment.fileName.isNotEmpty
-        ? attachment.fileName
-        : existing?.filename ?? p.basename(attachment.path);
-    final fileSizeBytes = attachment.sizeBytes > 0
-        ? attachment.sizeBytes
+    final ComposerAttachmentCommit committed;
+    try {
+      committed = await commitComposerStagedAttachment(
+        attachment: attachment,
+        metadataId: metadataId,
+        committedDirectory: await _composerAttachmentCommitDirectory(),
+      );
+    } on ComposerAttachmentStagingException catch (error, stackTrace) {
+      _log.warning(_attachmentUploadFailedLog, error, stackTrace);
+      throw XmppMessageException();
+    }
+    final committedAttachment = committed.attachment;
+    final fileName = committedAttachment.fileName.isNotEmpty
+        ? committedAttachment.fileName
+        : existing?.filename ?? p.basename(committedAttachment.path);
+    final fileSizeBytes = committedAttachment.sizeBytes > 0
+        ? committedAttachment.sizeBytes
         : existing?.sizeBytes;
-    final mimeType = attachment.mimeType?.trim().isNotEmpty == true
-        ? attachment.mimeType
+    final mimeType = committedAttachment.mimeType?.trim().isNotEmpty == true
+        ? committedAttachment.mimeType
         : existing?.mimeType;
     final metadata = FileMetadataData(
       id: metadataId,
       filename: fileName,
-      path: attachment.path,
+      path: committedAttachment.path,
       sourceUrls: existing?.sourceUrls,
       mimeType: mimeType,
       sizeBytes: fileSizeBytes,
-      width: attachment.width ?? existing?.width,
-      height: attachment.height ?? existing?.height,
+      width: committedAttachment.width ?? existing?.width,
+      height: committedAttachment.height ?? existing?.height,
       encryptionKey: existing?.encryptionKey,
       encryptionIV: existing?.encryptionIV,
       encryptionScheme: existing?.encryptionScheme,
@@ -9321,7 +9691,17 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       thumbnailType: existing?.thumbnailType,
       thumbnailData: existing?.thumbnailData,
     );
-    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+    var metadataPersisted = false;
+    try {
+      await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+      metadataPersisted = true;
+    } on XmppException {
+      if (!metadataPersisted) {
+        await deleteCommittedComposerAttachment(committed);
+      }
+      rethrow;
+    }
+    await _deleteCommittedComposerStaging([committed]);
     return metadata;
   }
 
@@ -11715,6 +12095,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   void _markCalendarArchiveReplayInterrupted() {
     _mamGlobalSyncCompletedSinceConnect = false;
     if (_mamGlobalSyncInFlight) {
+      _log.info('Global MAM archive replay marked interrupted.');
+      _mamGlobalSyncOwner = null;
       _mamGlobalArchiveReplayInterrupted = true;
       _mamGlobalCalendarProcessingFailed = true;
     }
@@ -12976,6 +13358,22 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     await const PersonalCalendarSyncStateStore().write(state);
   }
 
+  Future<void> _writePersonalCalendarSyncStateForMamGlobal(
+    CalendarSyncState state, {
+    required Object syncOwner,
+    required int operationEpoch,
+  }) async {
+    _throwIfMamGlobalSyncOwnerChanged(
+      operationEpoch: operationEpoch,
+      syncOwner: syncOwner,
+    );
+    await const PersonalCalendarSyncStateStore().write(state);
+    _throwIfMamGlobalSyncOwnerChanged(
+      operationEpoch: operationEpoch,
+      syncOwner: syncOwner,
+    );
+  }
+
   Future<void> _ensurePersonalCalendarSyncStateStored(
     CalendarSyncState state,
   ) async {
@@ -13359,16 +13757,26 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   }
 
   Future<void> _markMamGlobalChatCalendarCoverageComplete(
-    DateTime completedAt,
-  ) async {
+    DateTime completedAt, {
+    Object? syncOwner,
+    int? operationEpoch,
+  }) async {
     final candidates = _mamGlobalCompleteChatCalendarCandidates.toList(
       growable: false,
     );
     for (final chatJid in candidates) {
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
+      );
       await _writeChatCalendarCoverageState(
         chatJid: chatJid,
         complete: true,
         completedAt: completedAt,
+      );
+      _throwIfMamGlobalSyncOwnerChanged(
+        operationEpoch: operationEpoch,
+        syncOwner: syncOwner,
       );
     }
   }
@@ -14549,17 +14957,28 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (cached != null && await cached.exists()) {
       return cached;
     }
-    final supportDir = await getApplicationSupportDirectory();
     final prefix = _resolveAttachmentCachePrefix();
-    final normalizedPrefix = prefix.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    final directory = Directory(
-      p.join(supportDir.path, 'attachments', normalizedPrefix),
+    final directory = await appOwnedAttachmentStorageDirectory(
+      normalizeAttachmentStoragePrefix(prefix),
     );
-    if (!await directory.exists()) {
-      await directory.create(recursive: true);
-    }
     _attachmentDirectory = directory;
     return directory;
+  }
+
+  Future<Directory> _composerAttachmentCommitDirectory() async {
+    final prefix = _resolveAttachmentCachePrefix();
+    try {
+      return await appOwnedAttachmentStorageDirectory(
+        normalizeAttachmentStoragePrefix(prefix),
+        childDirectoryName: composerAttachmentCommittedDirectoryName,
+      );
+    } on FileSystemException catch (error) {
+      throw ComposerAttachmentStagingException(error);
+    } on MissingPluginException catch (error) {
+      throw ComposerAttachmentStagingException(error);
+    } on PlatformException catch (error) {
+      throw ComposerAttachmentStagingException(error);
+    }
   }
 
   Future<void> _enforceAttachmentCacheLimit({
