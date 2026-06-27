@@ -6186,82 +6186,58 @@ class _ChatState extends State<Chat> {
   }) async {
     final locate = context.read;
     final chatJid = chat.jid;
-    var addedAttachment = false;
-    for (final source in sources) {
-      if (cancellation.isCanceled) {
-        return false;
-      }
-      final pendingId = const Uuid().v4();
-      final pendingPlaceholder = PendingAttachment(
-        id: pendingId,
-        attachment: Attachment(
-          path: source.path,
-          fileName: source.fileName,
-          sizeBytes: 0,
-          mimeType: source.mimeType,
-          metadataId: pendingId,
-        ),
-        isPreparing: true,
-      );
-      if (mounted && locate<ChatBloc>().state.chat?.jid == chatJid) {
-        setState(() {
-          _pendingAttachments = [..._pendingAttachments, pendingPlaceholder];
-          _clearInlineRetryTransportOverride();
-        });
-      }
-      final completer = Completer<PendingAttachment?>();
-      locate<ChatBloc>().add(
-        ChatAttachmentPicked(
-          pendingId: pendingId,
-          source: source,
-          composerSessionId: _inlineComposerStagingSessionId,
-          recipients: _recipients,
-          chat: chat,
-          quotedDraft: _quotedDraft,
-          completer: completer,
-        ),
-      );
-      final pendingResult = await _awaitInlinePendingAttachment(
-        completer.future,
-        cancellation: cancellation,
-      );
-      if (pendingResult.canceled) {
-        _removePendingAttachment(pendingId);
-        return false;
-      }
-      final pending = pendingResult.pending;
-      if (!mounted || locate<ChatBloc>().state.chat?.jid != chatJid) {
-        if (pending != null) {
-          await _deleteInlineStagedAttachments([pending]);
-        }
-        if (mounted) {
-          _removePendingAttachment(pendingId);
-        }
-        return false;
-      }
-      if (pending == null) {
-        _removePendingAttachment(pendingId);
-        continue;
-      }
-      final index = _pendingAttachments.indexWhere(
-        (candidate) => candidate.id == pendingId,
-      );
-      if (index == -1) {
-        await _deleteInlineStagedAttachments([pending]);
-        continue;
-      }
-      setState(() {
-        final updated = List<PendingAttachment>.from(_pendingAttachments);
-        updated[index] = pending;
-        _pendingAttachments = updated;
-        _clearInlineRetryTransportOverride();
-      });
-      addedAttachment = true;
+    if (!mounted ||
+        cancellation.isCanceled ||
+        sources.isEmpty ||
+        locate<ChatBloc>().state.chat?.jid != chatJid) {
+      return false;
     }
+    final recipients = _recipients;
+    final quotedDraft = _quotedDraft;
+    final entries = [
+      for (final source in sources)
+        (pendingId: const Uuid().v4(), source: source),
+    ];
+    final placeholders = [
+      for (final entry in entries)
+        PendingAttachment(
+          id: entry.pendingId,
+          attachment: Attachment(
+            path: entry.source.path,
+            fileName: entry.source.fileName,
+            sizeBytes: 0,
+            mimeType: entry.source.mimeType,
+            metadataId: entry.pendingId,
+          ),
+          isPreparing: true,
+        ),
+    ];
     if (cancellation.isCanceled) {
       return false;
     }
-    if (!addedAttachment) {
+    setState(() {
+      _pendingAttachments = [..._pendingAttachments, ...placeholders];
+      _clearInlineRetryTransportOverride();
+    });
+    final attachmentsAdded = await _mapInlineAttachmentEntries(
+      entries,
+      (entry) => _resolveInlineAttachmentSource(
+        chat: chat,
+        chatJid: chatJid,
+        pendingId: entry.pendingId,
+        source: entry.source,
+        recipients: recipients,
+        quotedDraft: quotedDraft,
+        cancellation: cancellation,
+      ),
+    );
+    if (cancellation.isCanceled) {
+      return false;
+    }
+    if (!attachmentsAdded.contains(true)) {
+      return false;
+    }
+    if (!mounted || locate<ChatBloc>().state.chat?.jid != chatJid) {
       return false;
     }
     if (_quotedDraft != null) {
@@ -6270,6 +6246,98 @@ class _ChatState extends State<Chat> {
       });
     }
     _inlineComposerController.requestTextFocus();
+    return true;
+  }
+
+  Future<List<T>> _mapInlineAttachmentEntries<E, T>(
+    List<E> entries,
+    Future<T> Function(E entry) resolve,
+  ) async {
+    const concurrency = 3;
+    final results = List<T?>.filled(entries.length, null);
+    var nextIndex = 0;
+    final workers = <Future<void>>[];
+    for (
+      var worker = 0;
+      worker < entries.length && worker < concurrency;
+      worker += 1
+    ) {
+      workers.add(() async {
+        while (nextIndex < entries.length) {
+          final index = nextIndex;
+          nextIndex += 1;
+          results[index] = await resolve(entries[index]);
+        }
+      }());
+    }
+    await Future.wait(workers);
+    return results.cast<T>();
+  }
+
+  Future<bool> _resolveInlineAttachmentSource({
+    required chat_models.Chat chat,
+    required String chatJid,
+    required String pendingId,
+    required AttachmentImportSource source,
+    required List<ComposerRecipient> recipients,
+    required Message? quotedDraft,
+    required CancelableCompleter<void> cancellation,
+  }) async {
+    if (!mounted || cancellation.isCanceled) {
+      _removePendingAttachment(pendingId);
+      return false;
+    }
+    if (!_pendingAttachments.any((pending) => pending.id == pendingId)) {
+      return false;
+    }
+    final locate = context.read;
+    final completer = Completer<PendingAttachment?>();
+    locate<ChatBloc>().add(
+      ChatAttachmentPicked(
+        pendingId: pendingId,
+        source: source,
+        composerSessionId: _inlineComposerStagingSessionId,
+        recipients: recipients,
+        chat: chat,
+        quotedDraft: quotedDraft,
+        completer: completer,
+      ),
+    );
+    final pendingResult = await _awaitInlinePendingAttachment(
+      completer.future,
+      cancellation: cancellation,
+    );
+    if (pendingResult.canceled) {
+      _removePendingAttachment(pendingId);
+      return false;
+    }
+    final pending = pendingResult.pending;
+    if (!mounted || locate<ChatBloc>().state.chat?.jid != chatJid) {
+      if (pending != null) {
+        await _deleteInlineStagedAttachments([pending]);
+      }
+      if (mounted) {
+        _removePendingAttachment(pendingId);
+      }
+      return false;
+    }
+    if (pending == null) {
+      _removePendingAttachment(pendingId);
+      return false;
+    }
+    final index = _pendingAttachments.indexWhere(
+      (candidate) => candidate.id == pendingId,
+    );
+    if (index == -1) {
+      await _deleteInlineStagedAttachments([pending]);
+      return false;
+    }
+    setState(() {
+      final updated = List<PendingAttachment>.from(_pendingAttachments);
+      updated[index] = pending;
+      _pendingAttachments = updated;
+      _clearInlineRetryTransportOverride();
+    });
     return true;
   }
 

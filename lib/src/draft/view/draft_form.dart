@@ -1235,7 +1235,7 @@ class DraftFormState extends State<DraftForm> {
     final attachmentFailedMessage = context.l10n.draftAttachmentFailed;
     try {
       final result = await FilePicker.platform.pickFiles(
-        allowMultiple: false,
+        allowMultiple: true,
         withReadStream: false,
       );
       if (result == null || result.files.isEmpty || !mounted) {
@@ -1244,20 +1244,35 @@ class DraftFormState extends State<DraftForm> {
       if (cancellation.isCanceled) {
         return;
       }
-      final file = result.files.single;
-      final path = file.path;
-      if (path == null) {
-        if (!mounted || cancellation.isCanceled) return;
-        _showToast(attachmentInaccessibleMessage);
+      final sources = <AttachmentImportSource>[];
+      var hasInvalidPath = false;
+      for (final file in result.files) {
+        final path = file.path;
+        if (path == null) {
+          hasInvalidPath = true;
+          continue;
+        }
+        final fileName = file.name.isNotEmpty
+            ? file.name
+            : path.split('/').last;
+        sources.add(
+          LocalFileAttachmentImportSource(
+            path: path,
+            fileName: fileName,
+            sizeBytes: file.size,
+          ),
+        );
+      }
+      if (sources.isEmpty) {
+        if (hasInvalidPath && mounted && !cancellation.isCanceled) {
+          _showToast(attachmentInaccessibleMessage);
+        }
         return;
       }
-      final fileName = file.name.isNotEmpty ? file.name : path.split('/').last;
-      final source = LocalFileAttachmentImportSource(
-        path: path,
-        fileName: fileName,
-        sizeBytes: file.size,
-      );
-      await _prepareDraftAttachments([source], cancellation: cancellation);
+      if (hasInvalidPath && mounted && !cancellation.isCanceled) {
+        _showToast(attachmentInaccessibleMessage);
+      }
+      await _prepareDraftAttachments(sources, cancellation: cancellation);
     } on PlatformException catch (error) {
       if (!mounted || cancellation.isCanceled) return;
       setState(() {
@@ -1317,72 +1332,128 @@ class DraftFormState extends State<DraftForm> {
     List<AttachmentImportSource> sources, {
     required CancelableCompleter<void> cancellation,
   }) async {
-    final draftCubit = context.read<DraftCubit>();
-    for (final source in sources) {
-      if (!mounted || cancellation.isCanceled) {
-        return;
-      }
-      final pendingId = _nextPendingAttachmentId();
-      final placeholder = PendingAttachment(
-        id: pendingId,
-        attachment: Attachment(
-          path: source.path,
-          fileName: source.fileName,
-          sizeBytes: 0,
-          mimeType: source.mimeType,
-          metadataId: pendingId,
-        ),
-        isPreparing: true,
-      );
-      setState(() {
-        _latestEmailRecipientStatuses = const {};
-        _partialSendNoticeVisible = false;
-        _clearRetryForceEmail();
-        _pendingAttachments = [..._pendingAttachments, placeholder];
-      });
-      final stagedFuture = draftCubit.stageComposerAttachment(
-        source: source,
-        sessionId: _draftComposerStagingSessionId,
-        fallbackId: pendingId,
-      );
-      final ({bool canceled, ComposerAttachmentStage? stage}) stagedResult;
-      try {
-        stagedResult = await _awaitDraftAttachmentStage(
-          stagedFuture,
-          cancellation: cancellation,
-        );
-      } on ComposerAttachmentStagingException {
-        _removeDraftPendingAttachmentPlaceholder(pendingId);
-        if (mounted && !cancellation.isCanceled) {
-          _showToast(context.l10n.draftAttachmentFailed);
-        }
-        continue;
-      }
-      if (stagedResult.canceled) {
-        _removeDraftPendingAttachmentPlaceholder(pendingId);
-        return;
-      }
-      final staged = stagedResult.stage;
-      if (staged == null) {
-        _removeDraftPendingAttachmentPlaceholder(pendingId);
-        return;
-      }
-      if (!mounted) {
-        await deleteComposerStagedAttachment(staged.staged);
-        return;
-      }
-      final replaced = _replaceDraftPendingAttachment(
-        PendingAttachment(
-          id: pendingId,
-          attachment: staged.attachment.copyWith(metadataId: pendingId),
-          stagedAttachment: staged.staged,
-        ),
-      );
-      if (!replaced) {
-        await deleteComposerStagedAttachment(staged.staged);
-        return;
-      }
+    if (!mounted || cancellation.isCanceled || sources.isEmpty) {
+      return;
     }
+    final draftCubit = context.read<DraftCubit>();
+    final entries = [
+      for (final source in sources)
+        (pendingId: _nextPendingAttachmentId(), source: source),
+    ];
+    final placeholders = [
+      for (final entry in entries)
+        PendingAttachment(
+          id: entry.pendingId,
+          attachment: Attachment(
+            path: entry.source.path,
+            fileName: entry.source.fileName,
+            sizeBytes: 0,
+            mimeType: entry.source.mimeType,
+            metadataId: entry.pendingId,
+          ),
+          isPreparing: true,
+        ),
+    ];
+    if (cancellation.isCanceled) {
+      return;
+    }
+    setState(() {
+      _latestEmailRecipientStatuses = const {};
+      _partialSendNoticeVisible = false;
+      _clearRetryForceEmail();
+      _pendingAttachments = [..._pendingAttachments, ...placeholders];
+    });
+    await _mapDraftAttachmentEntries(entries, (entry) {
+      if (!mounted || cancellation.isCanceled) {
+        _removeDraftPendingAttachmentPlaceholder(entry.pendingId);
+        return Future<bool>.value(false);
+      }
+      if (!_pendingAttachments.any(
+        (pending) => pending.id == entry.pendingId,
+      )) {
+        return Future<bool>.value(false);
+      }
+      final stagedFuture = draftCubit.stageComposerAttachment(
+        source: entry.source,
+        sessionId: _draftComposerStagingSessionId,
+        fallbackId: entry.pendingId,
+      );
+      return _resolveDraftAttachmentSource(
+        pendingId: entry.pendingId,
+        stagedFuture: stagedFuture,
+        cancellation: cancellation,
+      );
+    });
+  }
+
+  Future<List<T>> _mapDraftAttachmentEntries<E, T>(
+    List<E> entries,
+    Future<T> Function(E entry) resolve,
+  ) async {
+    const concurrency = 3;
+    final results = List<T?>.filled(entries.length, null);
+    var nextIndex = 0;
+    final workers = <Future<void>>[];
+    for (
+      var worker = 0;
+      worker < entries.length && worker < concurrency;
+      worker += 1
+    ) {
+      workers.add(() async {
+        while (nextIndex < entries.length) {
+          final index = nextIndex;
+          nextIndex += 1;
+          results[index] = await resolve(entries[index]);
+        }
+      }());
+    }
+    await Future.wait(workers);
+    return results.cast<T>();
+  }
+
+  Future<bool> _resolveDraftAttachmentSource({
+    required String pendingId,
+    required Future<ComposerAttachmentStage> stagedFuture,
+    required CancelableCompleter<void> cancellation,
+  }) async {
+    final ({bool canceled, ComposerAttachmentStage? stage}) stagedResult;
+    try {
+      stagedResult = await _awaitDraftAttachmentStage(
+        stagedFuture,
+        cancellation: cancellation,
+      );
+    } on ComposerAttachmentStagingException {
+      _removeDraftPendingAttachmentPlaceholder(pendingId);
+      if (mounted && !cancellation.isCanceled) {
+        _showToast(context.l10n.draftAttachmentFailed);
+      }
+      return false;
+    }
+    if (stagedResult.canceled) {
+      _removeDraftPendingAttachmentPlaceholder(pendingId);
+      return false;
+    }
+    final staged = stagedResult.stage;
+    if (staged == null) {
+      _removeDraftPendingAttachmentPlaceholder(pendingId);
+      return false;
+    }
+    if (!mounted) {
+      await deleteComposerStagedAttachment(staged.staged);
+      return false;
+    }
+    final replaced = _replaceDraftPendingAttachment(
+      PendingAttachment(
+        id: pendingId,
+        attachment: staged.attachment.copyWith(metadataId: pendingId),
+        stagedAttachment: staged.staged,
+      ),
+    );
+    if (!replaced) {
+      await deleteComposerStagedAttachment(staged.staged);
+      return false;
+    }
+    return true;
   }
 
   bool _replaceDraftPendingAttachment(PendingAttachment pending) {
