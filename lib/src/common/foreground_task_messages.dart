@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -15,12 +16,56 @@ const foregroundNotificationShownPrefix = 'ForegroundNotificationShown';
 const _notificationTapPrefix = 'NotificationTap';
 
 bool launchedFromNotification = false;
-String? _launchedNotificationChatJid;
+String? _launchedNotificationPayload;
 var _notificationTapHandlerRegistered = false;
+final _notificationTapPayloadController = StreamController<String?>.broadcast(
+  sync: true,
+);
 
-void recordNotificationLaunch(String? chatJid) {
+Stream<String?> get notificationTapPayloadStream =>
+    _notificationTapPayloadController.stream;
+
+void recordNotificationLaunch(String? payload) {
   launchedFromNotification = true;
-  _launchedNotificationChatJid = chatJid;
+  _launchedNotificationPayload = payload;
+  _notificationTapPayloadController.add(payload);
+}
+
+void clearLaunchedNotification() {
+  launchedFromNotification = false;
+  _launchedNotificationPayload = null;
+}
+
+String? takeLaunchedNotificationPayload() {
+  launchedFromNotification = false;
+  final payload = _launchedNotificationPayload;
+  _launchedNotificationPayload = null;
+  return payload;
+}
+
+@pragma('vm:entry-point')
+void handleNotificationResponse(NotificationResponse notificationResponse) {
+  recordNotificationLaunch(
+    (notificationResponse.payload?.isEmpty ?? true)
+        ? null
+        : notificationResponse.payload,
+  );
+}
+
+@pragma('vm:entry-point')
+void handleBackgroundNotificationResponse(
+  NotificationResponse notificationResponse,
+) {
+  if (!Platform.isAndroid) {
+    handleNotificationResponse(notificationResponse);
+    return;
+  }
+  FlutterForegroundTask.sendDataToMain(
+    [
+      _notificationTapPrefix,
+      notificationResponse.payload ?? '',
+    ].join(foregroundTaskMessageSeparator),
+  );
 }
 
 void ensureNotificationTapPortInitialized() {
@@ -46,28 +91,4 @@ void _handleNotificationTapMessage(dynamic data) {
     '$_notificationTapPrefix$foregroundTaskMessageSeparator'.length,
   );
   recordNotificationLaunch(payload.isEmpty ? null : payload);
-}
-
-@pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse notificationResponse) {
-  recordNotificationLaunch(
-    (notificationResponse.payload?.isEmpty ?? true)
-        ? null
-        : notificationResponse.payload,
-  );
-  if (!Platform.isAndroid) {
-    return;
-  }
-  FlutterForegroundTask.sendDataToMain(
-    [
-      _notificationTapPrefix,
-      notificationResponse.payload ?? '',
-    ].join(foregroundTaskMessageSeparator),
-  );
-}
-
-String? takeLaunchedNotificationChatJid() {
-  final payload = _launchedNotificationChatJid;
-  _launchedNotificationChatJid = null;
-  return payload;
 }

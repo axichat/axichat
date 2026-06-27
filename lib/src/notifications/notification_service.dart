@@ -265,6 +265,18 @@ class NotificationService {
     _strings = strings;
   }
 
+  void updateRuntimeSettings({
+    required bool chatNotificationsMuted,
+    required bool emailNotificationsMuted,
+    required bool notificationPreviewsEnabled,
+  }) {
+    this.chatNotificationsMuted = chatNotificationsMuted;
+    this.emailNotificationsMuted = emailNotificationsMuted;
+    this.notificationPreviewsEnabled = notificationPreviewsEnabled;
+  }
+
+  Stream<String?> get notificationTapPayloads => notificationTapPayloadStream;
+
   String get channel => _l10n.channelMessages;
 
   String get _genericMessageNotificationTitle => _l10n.newMessageTitle;
@@ -315,8 +327,9 @@ class NotificationService {
 
       await _plugin.initialize(
         settings: initializationSettings,
-        onDidReceiveNotificationResponse: notificationTapBackground,
-        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+        onDidReceiveNotificationResponse: handleNotificationResponse,
+        onDidReceiveBackgroundNotificationResponse:
+            handleBackgroundNotificationResponse,
       );
 
       await _ensureTimeZones(force: true);

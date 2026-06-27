@@ -37,6 +37,8 @@ const writePrefix = 'Write';
 const closePrefix = 'Close';
 const destroyPrefix = 'Destroy';
 const dataPrefix = 'Data';
+const mainAliveProbePrefix = 'MainAliveProbe';
+const mainAliveAckPrefix = 'MainAliveAck';
 const socketErrorPrefix = 'XmppSocketErrorEvent';
 const socketClosurePrefix = 'XmppSocketClosureEvent';
 const taskReadyPrefix = 'ForegroundTaskReady';
@@ -539,12 +541,15 @@ class ForegroundSocket extends TaskHandler {
     showNotification,
     Future<bool> Function()? isAppOnForeground,
     void Function(List<Object> strings)? sendToMain,
+    Duration? mainAliveProbeTimeout,
   }) : _notificationResolver =
            notificationResolver ?? ForegroundSocketNotificationResolver(),
        _showNotification =
            showNotification ?? ForegroundSocketNotificationPresenter().show,
        _isAppOnForeground = isAppOnForeground ?? _defaultIsAppOnForeground,
-       _sendToMainOverride = sendToMain;
+       _sendToMainOverride = sendToMain,
+       _mainAliveProbeTimeout =
+           mainAliveProbeTimeout ?? const Duration(seconds: 5);
 
   static final _log = Logger('ForegroundSocket');
 
@@ -554,6 +559,7 @@ class ForegroundSocket extends TaskHandler {
   _showNotification;
   final Future<bool> Function() _isAppOnForeground;
   final void Function(List<Object> strings)? _sendToMainOverride;
+  final Duration _mainAliveProbeTimeout;
   final WindowRateLimiter _messageNotificationGlobalLimiter = WindowRateLimiter(
     messageNotificationGlobalRateLimit,
   );
@@ -562,9 +568,12 @@ class ForegroundSocket extends TaskHandler {
         limit: messageNotificationPerThreadRateLimit,
         cleanupInterval: messageNotificationRateLimitCleanupInterval,
       );
+  final Map<String, Completer<bool>> _mainAliveProbeCompleters =
+      <String, Completer<bool>>{};
   late final StreamSubscription<String> _dataSubscription;
   late final StreamSubscription<mox.XmppSocketEvent> _eventSubscription;
   Future<void> _incomingDataQueue = Future<void>.value();
+  var _mainAliveProbeSequence = 0;
   var _foregroundCheckUnavailable = false;
 
   static void _sendToMain(List<Object> strings) {
@@ -623,20 +632,14 @@ class ForegroundSocket extends TaskHandler {
   }
 
   Future<void> _resolveAndForward(String data) async {
+    _sendDataToMain([dataPrefix, data]);
     try {
-      if (await _shouldHandleForegroundNotifications()) {
-        final requests = _notificationResolver.resolve(data);
-        for (final request in requests) {
-          if (!_allowMessageNotification(request)) {
-            continue;
-          }
-          if (await _showNotification(request)) {
-            _sendDataToMain([
-              foregroundNotificationShownPrefix,
-              jsonEncode(request.dedupeKeys),
-            ]);
-          }
-        }
+      if (!await _shouldHandleForegroundNotifications()) {
+        return;
+      }
+      final requests = _notificationResolver.resolve(data);
+      if (requests.isNotEmpty) {
+        _scheduleFallbackNotifications(requests);
       }
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -644,8 +647,56 @@ class ForegroundSocket extends TaskHandler {
         error,
         stackTrace,
       );
+    }
+  }
+
+  void _scheduleFallbackNotifications(
+    List<ForegroundSocketNotificationRequest> requests,
+  ) {
+    fireAndForget(
+      () => _showFallbackNotificationsIfMainUnavailable(requests),
+      operationName: 'ForegroundSocket.fallbackNotifications',
+      loggerName: 'ForegroundSocket',
+    );
+  }
+
+  Future<void> _showFallbackNotificationsIfMainUnavailable(
+    List<ForegroundSocketNotificationRequest> requests,
+  ) async {
+    if (await _mainIsolateResponds()) {
+      return;
+    }
+    if (!await _shouldHandleForegroundNotifications()) {
+      return;
+    }
+    for (final request in requests) {
+      if (!_allowMessageNotification(request)) {
+        continue;
+      }
+      if (await _showNotification(request)) {
+        _sendDataToMain([
+          foregroundNotificationShownPrefix,
+          jsonEncode(request.dedupeKeys),
+        ]);
+      }
+    }
+  }
+
+  Future<bool> _mainIsolateResponds() async {
+    final token = (++_mainAliveProbeSequence).toString();
+    final ack = Completer<bool>();
+    _mainAliveProbeCompleters[token] = ack;
+    try {
+      _sendDataToMain([mainAliveProbePrefix, token]);
+      return await ack.future.timeout(
+        _mainAliveProbeTimeout,
+        onTimeout: () => false,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine('Failed to probe main isolate.', error, stackTrace);
+      return false;
     } finally {
-      _sendDataToMain([dataPrefix, data]);
+      _mainAliveProbeCompleters.remove(token);
     }
   }
 
@@ -746,6 +797,11 @@ class ForegroundSocket extends TaskHandler {
       if (updated && token != null && token.isNotEmpty) {
         _sendDataToMain([foregroundNotificationSnapshotAckPrefix, token]);
       }
+      return;
+    }
+    if (data.startsWith('$mainAliveAckPrefix$join')) {
+      final token = data.substring('$mainAliveAckPrefix$join'.length);
+      _mainAliveProbeCompleters.remove(token)?.complete(true);
       return;
     }
     _socket ??= XmppSocketWrapper();
@@ -1594,8 +1650,9 @@ final class ForegroundSocketNotificationPresenter {
     try {
       await _plugin.initialize(
         settings: settings,
-        onDidReceiveNotificationResponse: notificationTapBackground,
-        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+        onDidReceiveNotificationResponse: handleBackgroundNotificationResponse,
+        onDidReceiveBackgroundNotificationResponse:
+            handleBackgroundNotificationResponse,
       );
       _initialized = true;
     } finally {
@@ -1642,7 +1699,14 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
         ? 0
         : data.length - separatorIndex - join.length;
     _log.fine('Received main: type=$type payloadLen=$payloadLength');
-    if (data.startsWith('$dataPrefix$join')) {
+    if (data.startsWith('$mainAliveProbePrefix$join')) {
+      final token = data.substring('$mainAliveProbePrefix$join'.length);
+      try {
+        await _bridge.send([mainAliveAckPrefix, token]);
+      } on Exception catch (error, stackTrace) {
+        _log.fine('Failed to acknowledge main-alive probe.', error, stackTrace);
+      }
+    } else if (data.startsWith('$dataPrefix$join')) {
       _recordIncomingTraffic();
       _dataStream.add(data.substring('$dataPrefix$join'.length));
     } else if (data.startsWith('$foregroundNotificationShownPrefix$join')) {

@@ -184,11 +184,25 @@ class _AxichatState extends State<Axichat> {
         ),
       ],
       child: BlocProvider(
-        create: (context) => SettingsCubit(
-          xmppService: _xmppService,
-          capability: widget._capability,
-          credentialStore: context.read<CredentialStore>(),
-        )..primeAttachmentAutoDownloadSettings(),
+        create: (context) {
+          final settingsCubit = SettingsCubit(
+            xmppService: _xmppService,
+            capability: widget._capability,
+            credentialStore: context.read<CredentialStore>(),
+          )..primeAttachmentAutoDownloadSettings();
+          final settings = settingsCubit.state;
+          context.read<NotificationService>().updateRuntimeSettings(
+            chatNotificationsMuted: settings.chatNotificationsMuted,
+            emailNotificationsMuted: settings.emailNotificationsMuted,
+            notificationPreviewsEnabled: settings.notificationPreviewsEnabled,
+          );
+          _xmppService.updateForegroundNotificationSettings(
+            chatNotificationsMuted: settings.chatNotificationsMuted,
+            emailNotificationsMuted: settings.emailNotificationsMuted,
+            notificationPreviewsEnabled: settings.notificationPreviewsEnabled,
+          );
+          return settingsCubit;
+        },
         child: Builder(
           builder: (context) {
             return RepositoryProvider<EmailService>(
@@ -458,9 +472,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   bool _notificationIntentHandling = false;
   bool _notificationIntentAwaitingRoute = false;
   Timer? _pendingAuthNavigation;
+  StreamSubscription<String?>? _notificationTapSubscription;
   Future<void>? _exitCleanupFuture;
   AuthenticationState? _lastAuthState;
-  String? _pendingNotificationPayload;
+  ({String? payload})? _pendingNotificationIntent;
   String? _pendingNotificationChatJid;
   bool _checkedInitialNotificationLaunchDetails = false;
   late final AppLifecycleListener _lifecycleListener = AppLifecycleListener(
@@ -506,6 +521,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _notificationTapSubscription ??= context
+        .read<NotificationService>()
+        .notificationTapPayloads
+        .listen(_handleNotificationTapPayload);
     final profileState = context.read<ProfileCubit>().state;
     context.read<SettingsCubit>().trackDonationPromptMessageCount(
       accountJid: profileState.jid,
@@ -519,6 +538,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   void dispose() {
     _pendingAuthNavigation?.cancel();
     _pendingAuthNavigation = null;
+    final notificationTapSubscription = _notificationTapSubscription;
+    _notificationTapSubscription = null;
+    if (notificationTapSubscription != null) {
+      unawaited(notificationTapSubscription.cancel());
+    }
     _lifecycleListener.dispose();
     _router.routerDelegate.removeListener(_handleRouteChange);
     _router.dispose();
@@ -538,11 +562,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   Widget build(BuildContext context) {
     return BlocConsumer<SettingsCubit, SettingsState>(
       listener: (context, state) {
-        final notificationService = context.read<NotificationService>();
-        notificationService
-          ..chatNotificationsMuted = state.chatNotificationsMuted
-          ..emailNotificationsMuted = state.emailNotificationsMuted
-          ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
+        context.read<NotificationService>().updateRuntimeSettings(
+          chatNotificationsMuted: state.chatNotificationsMuted,
+          emailNotificationsMuted: state.emailNotificationsMuted,
+          notificationPreviewsEnabled: state.notificationPreviewsEnabled,
+        );
+        context.read<XmppService>().updateForegroundNotificationSettings(
+          chatNotificationsMuted: state.chatNotificationsMuted,
+          emailNotificationsMuted: state.emailNotificationsMuted,
+          notificationPreviewsEnabled: state.notificationPreviewsEnabled,
+        );
       },
       builder: (context, state) {
         final localeOverride = state.language.locale;
@@ -1048,7 +1077,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     if (!mounted || _notificationIntentHandling) return;
     _notificationIntentHandling = true;
     try {
-      _pendingNotificationPayload ??= await _takePendingNotificationPayload();
+      final launchIntent = _pendingNotificationIntent == null
+          ? await _takePendingNotificationIntent()
+          : null;
+      _pendingNotificationIntent ??= launchIntent;
       if (!mounted) {
         return;
       }
@@ -1058,17 +1090,20 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       }
       final xmppService = context.read<XmppService>();
       final chatsCubit = context.read<ChatsCubit>();
-      final emailService = context.read<EmailService>();
-      final payload = _pendingNotificationPayload;
-      if (payload != null) {
-        _pendingNotificationPayload = null;
-        fireAndForget(
-          emailService.handleForegroundResumeNetworkAvailable,
-          operationName: 'MaterialAxichat.notificationWakeEmailRefresh',
-        );
+      final intent = _pendingNotificationIntent;
+      if (intent != null) {
+        final payload = intent.payload;
+        _pendingNotificationIntent = null;
+        if (payload == null) {
+          _pendingNotificationChatJid = null;
+          _refreshEmailForNotificationWake();
+          await _routeHomeForNotificationIntent();
+          return;
+        }
         if (const NotificationPayloadCodec().isEmailInboxPayload(payload)) {
           _pendingNotificationChatJid = null;
-          _goHomeIfNeeded();
+          _refreshEmailForNotificationWake();
+          await _routeHomeForNotificationIntent();
           return;
         }
         final String? chatJid = await xmppService.resolveNotificationPayload(
@@ -1077,7 +1112,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         if (chatJid != null) {
           _pendingNotificationChatJid = chatJid;
         } else {
-          _goHomeIfNeeded();
+          _pendingNotificationChatJid = null;
+          _refreshEmailForNotificationWake();
+          await _routeHomeForNotificationIntent();
           return;
         }
       }
@@ -1101,23 +1138,61 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       }
     } finally {
       _notificationIntentHandling = false;
-    }
-  }
-
-  void _goHomeIfNeeded() {
-    _notificationIntentAwaitingRoute = false;
-    if (!_isOnHomeRoute()) {
-      _router.go(const HomeRoute().location);
-    }
-  }
-
-  Future<String?> _takePendingNotificationPayload() async {
-    if (launchedFromNotification) {
-      launchedFromNotification = false;
-      final payload = takeLaunchedNotificationChatJid();
-      if (payload != null && payload.isNotEmpty) {
-        return payload;
+      if (mounted &&
+          _pendingNotificationIntent != null &&
+          context.read<AuthenticationCubit>().state is AuthenticationComplete) {
+        scheduleMicrotask(_handleNotificationIntent);
       }
+    }
+  }
+
+  Future<bool> _routeHomeForNotificationIntent() async {
+    if (_isOnHomeRoute()) {
+      _notificationIntentAwaitingRoute = false;
+      return true;
+    }
+    _notificationIntentAwaitingRoute = true;
+    _router.go(const HomeRoute().location);
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted || !_isOnHomeRoute()) {
+      return false;
+    }
+    _notificationIntentAwaitingRoute = false;
+    return true;
+  }
+
+  void _refreshEmailForNotificationWake() {
+    fireAndForget(
+      context.read<EmailService>().handleForegroundResumeNetworkAvailable,
+      operationName: 'MaterialAxichat.notificationWakeEmailRefresh',
+    );
+  }
+
+  void _handleNotificationTapPayload(String? payload) {
+    if (!mounted) return;
+    clearLaunchedNotification();
+    _pendingNotificationIntent = (
+      payload: _normalizedNotificationPayload(payload),
+    );
+    _pendingNotificationChatJid = null;
+    _handleNotificationIntent();
+  }
+
+  String? _normalizedNotificationPayload(String? payload) {
+    final normalized = payload?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  Future<({String? payload})?> _takePendingNotificationIntent() async {
+    if (launchedFromNotification) {
+      return (
+        payload: _normalizedNotificationPayload(
+          takeLaunchedNotificationPayload(),
+        ),
+      );
     }
     if (_checkedInitialNotificationLaunchDetails) {
       return null;
@@ -1126,11 +1201,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     final launchDetails = await context
         .read<NotificationService>()
         .getAppNotificationAppLaunchDetails();
-    final payload = launchDetails?.notificationResponse?.payload;
-    if (payload == null || payload.isEmpty) {
+    if (launchDetails?.didNotificationLaunchApp != true) {
       return null;
     }
-    return payload;
+    final payload = launchDetails?.notificationResponse?.payload;
+    return (payload: _normalizedNotificationPayload(payload));
   }
 
   void _handleShareIntent() {
