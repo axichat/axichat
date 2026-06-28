@@ -16,21 +16,31 @@ Binaries:
   https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk
 
 Builds:
-  - versionName: 0.8.1
-    versionCode: 2009
-    commit: bf6e855ca3cd279038dec597946e70569d086170
+  - versionName: 0.8.2
+    versionCode: 2010
+    commit: 282f85cbe9d456d39357120f3fee725085c759ae
     sudo:
       - apt-get update
-      - apt-get install -y gcc make libc-dev pkg-config perl rustup
+      - apt-get install -y gcc make libc-dev pkg-config perl rustup unzip
     output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
     srclibs:
       - flutter@stable
+      - pdfium-binaries@chromium/7520
     prebuild:
       - flutterVersion=$(tr -d '\r\n' < .flutter-version)
       - '[[ $flutterVersion ]]'
       - git -C $$flutter$$ checkout -f $flutterVersion
       - export PUB_CACHE=$(pwd)/.pub-cache
       - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+      - python3 tool/patch_fdroid_in_app_update.py "$PUB_CACHE"
+      - python3 tool/strip_dev_flutter_plugins.py
+      - $$flutter$$/bin/dart run pdfrx:remove_wasm_modules
+      - grep 'set(PDFIUM_RELEASE chromium%2F7520)' $PUB_CACHE/hosted/pub.dev/pdfium_flutter-*/android/CMakeLists.txt
+      - sed -i -e 's|file(DOWNLOAD 
+        https://github.com/bblanchon/pdfium-binaries/releases/download/${PDFIUM_RELEASE}/${PDFIUM_ARCHIVE_NAME}.tgz
+        ${PDFIUM_RELEASE_DIR}/${PDFIUM_ARCHIVE_NAME}.tgz)|file(COPY "$$pdfium-binaries$$/${PDFIUM_ARCHIVE_NAME}.tgz"
+        DESTINATION ${PDFIUM_RELEASE_DIR})|' $PUB_CACHE/hosted/pub.dev/pdfium_flutter-*/android/CMakeLists.txt
     scandelete:
       - .pub-cache
     build:
@@ -39,15 +49,19 @@ Builds:
       - export CARGO_TARGET_DIR=/tmp/axichat-cargo-target
       - rustup default 1.90.0
       - rustup target add aarch64-linux-android
-      - $$flutter$$/bin/flutter pub get
-      - python3 tool/patch_fdroid_in_app_update.py "$PUB_CACHE"
-      - python3 tool/strip_dev_flutter_plugins.py
-      - find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2 \( -name example
-        -o -name test -o -name tests -o -name benchmark -o -name benchmarks -o -name
-        windows -o -name linux -o -name macos -o -name ios -o -name web -o -name extension
-        \) -prune -exec rm -rf {} +
+      - pushd $$pdfium-binaries$$
+      - export PDFium_BRANCH="chromium/7520"
+      - export PDFium_VERSION="144.0.7520.0"
+      - sed -i 's|sudo |echo |g' steps/01-install.sh
+      - echo 'sed -i "s|  sys.exit(main())|  sys.exit(0)|g" pdfium/build/install-build-deps.py'
+        >> steps/02-checkout.sh
+      - truncate -s 0 steps/09-test.sh
+      - ./build.sh -b "$PDFium_BRANCH" android arm64
+      - cp pdfium-android-arm64.tgz pdfium-android-arm.tgz
+      - cp pdfium-android-arm64.tgz pdfium-android-x64.tgz
+      - cp pdfium-android-arm64.tgz pdfium-android-x86.tgz
+      - popd
       - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
-      - rm -rf .dart_tool/build android/.gradle .gradle-user-home
       - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi
         --target-platform=android-arm64 --build-number=$(($$VERCODE$$ % 1000)) --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken
         --dart-define=ENABLE_SHOREBIRD=false
@@ -60,5 +74,5 @@ UpdateCheckMode: Tags
 VercodeOperation:
   - 2000 + %c
 UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
-CurrentVersion: 0.8.1
-CurrentVersionCode: 2009
+CurrentVersion: 0.8.2
+CurrentVersionCode: 2010
