@@ -7,6 +7,7 @@ enum XmppOperationKind {
   pubSubBookmarks,
   pubSubConversations,
   pubSubDrafts,
+  draftSave,
   pubSubSpam,
   pubSubAddressBlock,
   pubSubCalendarSnapshot,
@@ -17,7 +18,9 @@ enum XmppOperationKind {
   mamFetch,
   mucCreate,
   mucJoin,
-  selfAvatarPublish,
+  selfAvatarPublish;
+
+  bool get canStartWhileDisconnected => this == XmppOperationKind.draftSave;
 }
 
 enum XmppOperationStage { start, end }

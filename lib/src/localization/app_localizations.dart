@@ -12134,6 +12134,24 @@ abstract class AppLocalizations {
   /// **'Drafts sync failed'**
   String get xmppOperationPubSubDraftsFailure;
 
+  /// No description provided for @xmppOperationDraftSaveStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving draft...'**
+  String get xmppOperationDraftSaveStart;
+
+  /// No description provided for @xmppOperationDraftSaveSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved'**
+  String get xmppOperationDraftSaveSuccess;
+
+  /// No description provided for @xmppOperationDraftSaveFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft save failed'**
+  String get xmppOperationDraftSaveFailure;
+
   /// No description provided for @xmppOperationPubSubSpamStart.
   ///
   /// In en, this message translates to:

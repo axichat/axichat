@@ -15,7 +15,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class XmppOperationOverlay extends StatefulWidget {
-  const XmppOperationOverlay({super.key});
+  const XmppOperationOverlay({
+    super.key,
+    this.visibleKinds,
+    this.offsetForOpenChat = true,
+  });
+
+  final Set<XmppOperationKind>? visibleKinds;
+  final bool offsetForOpenChat;
 
   @override
   State<XmppOperationOverlay> createState() => _XmppOperationOverlayState();
@@ -358,10 +365,11 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
         mediaQuery.size.shortestSide < compactDeviceBreakpoint;
     final isCompactLayout =
         isCompactDevice || mediaQuery.size.width < smallScreen;
-    final openJid = context.select<ChatsCubit, String?>(
-      (cubit) => cubit.state.openJid,
-    );
-    final chatOpenOverlayFloorInset = openJid == null || !isCompactLayout
+    final openJid = widget.offsetForOpenChat
+        ? context.select<ChatsCubit, String?>((cubit) => cubit.state.openJid)
+        : null;
+    final chatOpenOverlayFloorInset =
+        openJid == null || !isCompactLayout || !widget.offsetForOpenChat
         ? 0.0
         : context.spacing.xl;
     return BlocListener<XmppActivityCubit, XmppActivityState>(
@@ -410,6 +418,10 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
   }
 
   bool _shouldDisplayOperation(XmppOperation operation) {
+    final visibleKinds = widget.visibleKinds;
+    if (visibleKinds != null && !visibleKinds.contains(operation.kind)) {
+      return false;
+    }
     if (operation.status == XmppOperationStatus.failure) {
       return true;
     }
@@ -750,6 +762,11 @@ String _resolveOperationLabel(
       l10n.xmppOperationPubSubDraftsSuccess,
     XmppOperationLabelKey.pubSubDraftsFailure =>
       l10n.xmppOperationPubSubDraftsFailure,
+    XmppOperationLabelKey.draftSaveStart => l10n.xmppOperationDraftSaveStart,
+    XmppOperationLabelKey.draftSaveSuccess =>
+      l10n.xmppOperationDraftSaveSuccess,
+    XmppOperationLabelKey.draftSaveFailure =>
+      l10n.xmppOperationDraftSaveFailure,
     XmppOperationLabelKey.pubSubSpamStart => l10n.xmppOperationPubSubSpamStart,
     XmppOperationLabelKey.pubSubSpamSuccess =>
       l10n.xmppOperationPubSubSpamSuccess,

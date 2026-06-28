@@ -32,6 +32,7 @@ class XmppOperation {
       XmppOperationKind.pubSubConversations =>
         XmppOperationLabelKey.pubSubConversationsStart,
       XmppOperationKind.pubSubDrafts => XmppOperationLabelKey.pubSubDraftsStart,
+      XmppOperationKind.draftSave => XmppOperationLabelKey.draftSaveStart,
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamStart,
       XmppOperationKind.pubSubAddressBlock =>
         XmppOperationLabelKey.pubSubAddressBlockStart,
@@ -55,6 +56,7 @@ class XmppOperation {
         XmppOperationLabelKey.pubSubConversationsSuccess,
       XmppOperationKind.pubSubDrafts =>
         XmppOperationLabelKey.pubSubDraftsSuccess,
+      XmppOperationKind.draftSave => XmppOperationLabelKey.draftSaveSuccess,
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamSuccess,
       XmppOperationKind.pubSubAddressBlock =>
         XmppOperationLabelKey.pubSubAddressBlockSuccess,
@@ -78,6 +80,7 @@ class XmppOperation {
         XmppOperationLabelKey.pubSubConversationsFailure,
       XmppOperationKind.pubSubDrafts =>
         XmppOperationLabelKey.pubSubDraftsFailure,
+      XmppOperationKind.draftSave => XmppOperationLabelKey.draftSaveFailure,
       XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamFailure,
       XmppOperationKind.pubSubAddressBlock =>
         XmppOperationLabelKey.pubSubAddressBlockFailure,
@@ -117,6 +120,9 @@ enum XmppOperationLabelKey {
   pubSubDraftsStart,
   pubSubDraftsSuccess,
   pubSubDraftsFailure,
+  draftSaveStart,
+  draftSaveSuccess,
+  draftSaveFailure,
   pubSubSpamStart,
   pubSubSpamSuccess,
   pubSubSpamFailure,

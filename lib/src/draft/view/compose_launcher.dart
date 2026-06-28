@@ -14,6 +14,7 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -100,6 +101,7 @@ void openComposeDraft(
   final rosterCubit = context.read<RosterCubit>();
   final chatsCubit = context.read<ChatsCubit>();
   final draftCubit = context.read<DraftCubit>();
+  final xmppActivityCubit = context.read<XmppActivityCubit>();
   final offGridDragController = context
       .read<CalendarTaskOffGridDragController>();
 
@@ -110,6 +112,7 @@ void openComposeDraft(
       rosterCubit: rosterCubit,
       chatsCubit: chatsCubit,
       draftCubit: draftCubit,
+      xmppActivityCubit: xmppActivityCubit,
       offGridDragController: offGridDragController,
       child: ComposeScreen(seed: seed),
     );
@@ -181,6 +184,7 @@ class _ComposeRouteProviders extends StatelessWidget {
     required this.rosterCubit,
     required this.chatsCubit,
     required this.draftCubit,
+    required this.xmppActivityCubit,
     required this.offGridDragController,
     required this.child,
   });
@@ -190,6 +194,7 @@ class _ComposeRouteProviders extends StatelessWidget {
   final RosterCubit rosterCubit;
   final ChatsCubit chatsCubit;
   final DraftCubit draftCubit;
+  final XmppActivityCubit xmppActivityCubit;
   final CalendarTaskOffGridDragController offGridDragController;
   final Widget child;
 
@@ -204,6 +209,7 @@ class _ComposeRouteProviders extends StatelessWidget {
           BlocProvider<RosterCubit>.value(value: rosterCubit),
           BlocProvider<ChatsCubit>.value(value: chatsCubit),
           BlocProvider<DraftCubit>.value(value: draftCubit),
+          BlocProvider<XmppActivityCubit>.value(value: xmppActivityCubit),
         ],
         child: child,
       ),

@@ -7169,6 +7169,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Échec de la synchronisation des brouillons';
 
   @override
+  String get xmppOperationDraftSaveStart => 'Enregistrement du brouillon...';
+
+  @override
+  String get xmppOperationDraftSaveSuccess => 'Brouillon enregistré';
+
+  @override
+  String get xmppOperationDraftSaveFailure =>
+      'Échec de l’enregistrement du brouillon';
+
+  @override
   String get xmppOperationPubSubSpamStart =>
       'Synchronisation de la liste de spam...';
 

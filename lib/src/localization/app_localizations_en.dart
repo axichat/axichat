@@ -7028,6 +7028,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get xmppOperationPubSubDraftsFailure => 'Drafts sync failed';
 
   @override
+  String get xmppOperationDraftSaveStart => 'Saving draft...';
+
+  @override
+  String get xmppOperationDraftSaveSuccess => 'Draft saved';
+
+  @override
+  String get xmppOperationDraftSaveFailure => 'Draft save failed';
+
+  @override
   String get xmppOperationPubSubSpamStart => 'Syncing spam list...';
 
   @override

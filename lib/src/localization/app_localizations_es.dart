@@ -7139,6 +7139,15 @@ class AppLocalizationsEs extends AppLocalizations {
       'Error al sincronizar borradores';
 
   @override
+  String get xmppOperationDraftSaveStart => 'Guardando borrador...';
+
+  @override
+  String get xmppOperationDraftSaveSuccess => 'Borrador guardado';
+
+  @override
+  String get xmppOperationDraftSaveFailure => 'Error al guardar borrador';
+
+  @override
   String get xmppOperationPubSubSpamStart => 'Sincronizando lista de spam...';
 
   @override

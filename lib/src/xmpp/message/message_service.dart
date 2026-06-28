@@ -328,6 +328,19 @@ final XmppOperationEvent _mamFetchFailureEvent = XmppOperationEvent(
   stage: XmppOperationStage.end,
   isSuccess: false,
 );
+final XmppOperationEvent _draftSaveStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.draftSave,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _draftSaveSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.draftSave,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _draftSaveFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.draftSave,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
 const int _outboundSummaryLimit = 80;
@@ -1496,129 +1509,138 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     List<DraftForwardedBlock> forwardedBlocks = const <DraftForwardedBlock>[],
     bool autosaveEnabled = false,
   }) async {
-    final Draft? existingDraft = id == null
-        ? null
-        : await _dbOpReturning<XmppDatabase, Draft?>((db) => db.getDraft(id));
-    final draftUpdatedAt = DateTime.timestamp().toUtc();
-    final draftSyncMetadata =
-        (existingDraft?.syncMetadata ??
-                DraftSyncMetadata(
-                  id: '',
-                  updatedAt: draftUpdatedAt,
-                  sourceId: '',
-                ))
-            .resolved(
-              updatedAt: draftUpdatedAt,
-              sourceId: await _ensureDraftSourceId(),
-              createId: uuid.v4,
-            );
-    final draftRecipients = DraftRecipients(
-      jids: jids,
-      storedRecipients:
-          existingDraft?.recipients.storedRecipients ??
-          const <DraftRecipientData>[],
-    ).resolvedStoredRecipients();
-    final quoteTarget = DraftQuoteTarget.fromDraft(
-      stanzaId: quotingStanzaId,
-      originId: quotingOriginId,
-      mucStanzaId: quotingMucStanzaId,
-    );
-    final committedAttachments = <ComposerAttachmentCommit>[];
-    final ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
-    draftSave;
-    var draftPersisted = false;
+    emitXmppOperation(_draftSaveStartEvent);
+    var draftSaveSucceeded = false;
     try {
-      draftSave =
-          await _dbOpReturning<
-            XmppDatabase,
-            ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
-          >((db) async {
-            final attachmentMetadataRows = <FileMetadataData>[];
-            for (final attachment in attachments) {
-              final metadata = await _draftAttachmentMetadataDataInDb(
-                db,
-                attachment,
-                committedAttachments: committedAttachments,
+      final Draft? existingDraft = id == null
+          ? null
+          : await _dbOpReturning<XmppDatabase, Draft?>((db) => db.getDraft(id));
+      final draftUpdatedAt = DateTime.timestamp().toUtc();
+      final draftSyncMetadata =
+          (existingDraft?.syncMetadata ??
+                  DraftSyncMetadata(
+                    id: '',
+                    updatedAt: draftUpdatedAt,
+                    sourceId: '',
+                  ))
+              .resolved(
+                updatedAt: draftUpdatedAt,
+                sourceId: await _ensureDraftSourceId(),
+                createId: uuid.v4,
               );
-              attachmentMetadataRows.add(metadata);
-            }
-            final attachmentMetadata = DraftAttachmentMetadataIds(
-              attachmentMetadataRows.map((metadata) => metadata.id).toList(),
-            );
-            final savedId = await db.saveDraft(
-              id: id,
-              jids: jids,
-              body: body,
-              draftSyncId: draftSyncMetadata.id,
-              draftUpdatedAt: draftSyncMetadata.updatedAt,
-              draftSourceId: draftSyncMetadata.sourceId,
-              draftRecipients: draftRecipients,
-              subject: subject,
-              quotingStanzaId: quoteTarget?.stanzaId,
-              quotingOriginId: quoteTarget?.originId,
-              quotingMucStanzaId: quoteTarget?.mucStanzaId,
-              attachmentMetadataIds: attachmentMetadata.values,
-              attachmentMetadata: attachmentMetadataRows,
-              calendarTaskIcsMessage: calendarTaskIcsMessage,
-              forwardedBlocks: forwardedBlocks,
-              autosaveEnabled: autosaveEnabled,
-            );
-            draftPersisted = true;
-            return (attachmentMetadata: attachmentMetadata, savedId: savedId);
-          });
-    } on XmppException {
-      if (!draftPersisted) {
+      final draftRecipients = DraftRecipients(
+        jids: jids,
+        storedRecipients:
+            existingDraft?.recipients.storedRecipients ??
+            const <DraftRecipientData>[],
+      ).resolvedStoredRecipients();
+      final quoteTarget = DraftQuoteTarget.fromDraft(
+        stanzaId: quotingStanzaId,
+        originId: quotingOriginId,
+        mucStanzaId: quotingMucStanzaId,
+      );
+      final committedAttachments = <ComposerAttachmentCommit>[];
+      final ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
+      draftSave;
+      var draftPersisted = false;
+      try {
+        draftSave =
+            await _dbOpReturning<
+              XmppDatabase,
+              ({DraftAttachmentMetadataIds attachmentMetadata, int savedId})
+            >((db) async {
+              final attachmentMetadataRows = <FileMetadataData>[];
+              for (final attachment in attachments) {
+                final metadata = await _draftAttachmentMetadataDataInDb(
+                  db,
+                  attachment,
+                  committedAttachments: committedAttachments,
+                );
+                attachmentMetadataRows.add(metadata);
+              }
+              final attachmentMetadata = DraftAttachmentMetadataIds(
+                attachmentMetadataRows.map((metadata) => metadata.id).toList(),
+              );
+              final savedId = await db.saveDraft(
+                id: id,
+                jids: jids,
+                body: body,
+                draftSyncId: draftSyncMetadata.id,
+                draftUpdatedAt: draftSyncMetadata.updatedAt,
+                draftSourceId: draftSyncMetadata.sourceId,
+                draftRecipients: draftRecipients,
+                subject: subject,
+                quotingStanzaId: quoteTarget?.stanzaId,
+                quotingOriginId: quoteTarget?.originId,
+                quotingMucStanzaId: quoteTarget?.mucStanzaId,
+                attachmentMetadataIds: attachmentMetadata.values,
+                attachmentMetadata: attachmentMetadataRows,
+                calendarTaskIcsMessage: calendarTaskIcsMessage,
+                forwardedBlocks: forwardedBlocks,
+                autosaveEnabled: autosaveEnabled,
+              );
+              draftPersisted = true;
+              return (attachmentMetadata: attachmentMetadata, savedId: savedId);
+            });
+      } on XmppException {
+        if (!draftPersisted) {
+          await _deleteCommittedComposerAttachments(committedAttachments);
+        }
+        rethrow;
+      } on ComposerAttachmentStagingException {
         await _deleteCommittedComposerAttachments(committedAttachments);
+        rethrow;
+      } on FileSystemException {
+        if (!draftPersisted) {
+          await _deleteCommittedComposerAttachments(committedAttachments);
+        }
+        rethrow;
       }
-      rethrow;
-    } on ComposerAttachmentStagingException {
-      await _deleteCommittedComposerAttachments(committedAttachments);
-      rethrow;
-    } on FileSystemException {
-      if (!draftPersisted) {
-        await _deleteCommittedComposerAttachments(committedAttachments);
+      final savedId = draftSave.savedId;
+      final attachmentMetadata = draftSave.attachmentMetadata;
+      final staleMetadataIds =
+          (existingDraft?.attachmentMetadata ??
+                  DraftAttachmentMetadataIds(const <String>[]))
+              .staleComparedTo(attachmentMetadata.values);
+      final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
+        (db) => savedId > 0
+            ? db.getDraft(savedId)
+            : db.getDraftBySyncId(draftSyncMetadata.id),
+      );
+      final int resolvedDraftId = savedDraft?.id ?? savedId;
+      final resolvedDraft =
+          savedDraft ??
+          Draft(
+            id: resolvedDraftId,
+            jids: jids,
+            draftSyncId: draftSyncMetadata.id,
+            draftUpdatedAt: draftSyncMetadata.updatedAt,
+            draftSourceId: draftSyncMetadata.sourceId,
+            draftRecipients: draftRecipients,
+            body: body,
+            subject: subject,
+            quotingStanzaId: quoteTarget?.stanzaId,
+            quotingOriginId: quoteTarget?.originId,
+            quotingMucStanzaId: quoteTarget?.mucStanzaId,
+            attachmentMetadataIds: attachmentMetadata.values,
+            calendarTaskIcsMessage: calendarTaskIcsMessage,
+            forwardedBlocks: forwardedBlocks,
+            autosaveEnabled: autosaveEnabled,
+          );
+      if (savedDraft != null) {
+        await publishDraftSync(savedDraft);
       }
-      rethrow;
+      if (staleMetadataIds.isNotEmpty) {
+        await _deleteDraftAttachmentMetadata(staleMetadataIds);
+      }
+      await _deleteCommittedComposerStaging(committedAttachments);
+      draftSaveSucceeded = true;
+      return resolvedDraft;
+    } finally {
+      emitXmppOperation(
+        draftSaveSucceeded ? _draftSaveSuccessEvent : _draftSaveFailureEvent,
+      );
     }
-    final savedId = draftSave.savedId;
-    final attachmentMetadata = draftSave.attachmentMetadata;
-    final staleMetadataIds =
-        (existingDraft?.attachmentMetadata ??
-                DraftAttachmentMetadataIds(const <String>[]))
-            .staleComparedTo(attachmentMetadata.values);
-    final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
-      (db) => savedId > 0
-          ? db.getDraft(savedId)
-          : db.getDraftBySyncId(draftSyncMetadata.id),
-    );
-    final int resolvedDraftId = savedDraft?.id ?? savedId;
-    final resolvedDraft =
-        savedDraft ??
-        Draft(
-          id: resolvedDraftId,
-          jids: jids,
-          draftSyncId: draftSyncMetadata.id,
-          draftUpdatedAt: draftSyncMetadata.updatedAt,
-          draftSourceId: draftSyncMetadata.sourceId,
-          draftRecipients: draftRecipients,
-          body: body,
-          subject: subject,
-          quotingStanzaId: quoteTarget?.stanzaId,
-          quotingOriginId: quoteTarget?.originId,
-          quotingMucStanzaId: quoteTarget?.mucStanzaId,
-          attachmentMetadataIds: attachmentMetadata.values,
-          calendarTaskIcsMessage: calendarTaskIcsMessage,
-          forwardedBlocks: forwardedBlocks,
-          autosaveEnabled: autosaveEnabled,
-        );
-    if (savedDraft != null) {
-      await publishDraftSync(savedDraft);
-    }
-    if (staleMetadataIds.isNotEmpty) {
-      await _deleteDraftAttachmentMetadata(staleMetadataIds);
-    }
-    await _deleteCommittedComposerStaging(committedAttachments);
-    return resolvedDraft;
   }
 
   Future<void> updateDraftAutosaveEnabled({

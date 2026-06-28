@@ -6700,6 +6700,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get xmppOperationPubSubDraftsFailure => '草稿同步失败';
 
   @override
+  String get xmppOperationDraftSaveStart => '正在保存草稿...';
+
+  @override
+  String get xmppOperationDraftSaveSuccess => '草稿已保存';
+
+  @override
+  String get xmppOperationDraftSaveFailure => '草稿保存失败';
+
+  @override
   String get xmppOperationPubSubSpamStart => '正在同步垃圾信息列表...';
 
   @override
@@ -13666,6 +13675,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get xmppOperationPubSubDraftsFailure => '草稿同步失敗';
+
+  @override
+  String get xmppOperationDraftSaveStart => '正在儲存草稿...';
+
+  @override
+  String get xmppOperationDraftSaveSuccess => '草稿已儲存';
+
+  @override
+  String get xmppOperationDraftSaveFailure => '草稿儲存失敗';
 
   @override
   String get xmppOperationPubSubSpamStart => '正在同步垃圾訊息清單...';

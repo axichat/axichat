@@ -7152,6 +7152,16 @@ class AppLocalizationsDe extends AppLocalizations {
       'Synchronisierung der Entwürfe fehlgeschlagen';
 
   @override
+  String get xmppOperationDraftSaveStart => 'Entwurf wird gespeichert...';
+
+  @override
+  String get xmppOperationDraftSaveSuccess => 'Entwurf gespeichert';
+
+  @override
+  String get xmppOperationDraftSaveFailure =>
+      'Speichern des Entwurfs fehlgeschlagen';
+
+  @override
   String get xmppOperationPubSubSpamStart => 'Spamliste wird synchronisiert...';
 
   @override
