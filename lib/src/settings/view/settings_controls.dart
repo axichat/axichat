@@ -111,8 +111,8 @@ class SettingsControls extends StatelessWidget {
         final exportBusy = context.select<ProfileExportCubit, bool>(
           (cubit) => cubit.state.isBusy,
         );
-        final canForegroundService = context.select<SettingsCubit, bool>(
-          (cubit) => cubit.canForegroundService,
+        final canBackgroundMessaging = context.select<SettingsCubit, bool>(
+          (cubit) => cubit.canBackgroundMessaging,
         );
         final chatItems = context.select<ChatsCubit, List<Chat>>(
           (cubit) => cubit.state.items ?? const <Chat>[],
@@ -131,7 +131,7 @@ class SettingsControls extends StatelessWidget {
         final double dividerIndent = fullWidthDividers
             ? 0.0
             : sectionHeaderPadding.horizontal;
-        final showImportantSection = canForegroundService;
+        final showImportantSection = canBackgroundMessaging;
         return Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.start,

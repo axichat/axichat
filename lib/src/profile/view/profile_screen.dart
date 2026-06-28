@@ -353,7 +353,7 @@ class _ProfileMainView extends StatelessWidget {
       onNavigate: onNavigate,
     );
     final showImportantSection = context.select<SettingsCubit, bool>(
-      (cubit) => cubit.canForegroundService,
+      (cubit) => cubit.canBackgroundMessaging,
     );
     if (!isWideLayout) {
       final profileSectionPadding = EdgeInsets.symmetric(
