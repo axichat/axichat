@@ -231,23 +231,27 @@ class _ChatsListBody extends StatelessWidget {
                     color: context.colorScheme.background,
                     child: AxiNowTicker(
                       now: kEnableDemoChats ? demoNow : DateTime.now,
-                      builder: (context, nowListenable) =>
-                          AnimatedChatsListView(
-                            items: visibleItems,
-                            contactsByAddressKey: contactsByAddressKey,
-                            animationDuration: context
-                                .watch<SettingsCubit>()
-                                .animationDuration,
-                            scrollPhysics: scrollPhysics,
-                            selectedJids: state.selectedJids,
-                            openJid: state.openJid,
-                            timestampNowListenable: nowListenable,
-                            calendarStorage: calendarStorage,
-                            selfIdentity: selfIdentity,
-                            onNearEnd: () => unawaited(
-                              context.read<ChatsCubit>().loadMoreChats(),
-                            ),
+                      builder: (context, nowListenable) {
+                        final animationDuration = context
+                            .watch<SettingsCubit>()
+                            .animationDuration;
+                        return AnimatedChatsListView(
+                          items: visibleItems,
+                          contactsByAddressKey: contactsByAddressKey,
+                          animationDuration: animationDuration == Duration.zero
+                              ? Duration.zero
+                              : animationDuration * 2,
+                          scrollPhysics: scrollPhysics,
+                          selectedJids: state.selectedJids,
+                          openJid: state.openJid,
+                          timestampNowListenable: nowListenable,
+                          calendarStorage: calendarStorage,
+                          selfIdentity: selfIdentity,
+                          onNearEnd: () => unawaited(
+                            context.read<ChatsCubit>().loadMoreChats(),
                           ),
+                        );
+                      },
                     ),
                   );
                 }
@@ -731,19 +735,19 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
 
     Widget removedBuilder(
       Chat removedChat,
-      Animation<double> animation,
-      bool showContent,
-    ) {
+      Animation<double> animation, {
+      required bool moved,
+    }) {
       return _AnimatedChatTile(
         key: ValueKey<String>(
-          showContent
-              ? 'chat-list-removed-${removedChat.jid}'
-              : 'chat-list-moved-${removedChat.jid}',
+          moved
+              ? 'chat-list-moved-${removedChat.jid}'
+              : 'chat-list-removed-${removedChat.jid}',
         ),
         chat: removedChat,
         contactsByAddressKey: widget.contactsByAddressKey,
         animation: animation,
-        showContent: showContent,
+        showContent: true,
         archivedContext: false,
         onArchivedTap: null,
         selectionActive: widget.selectedJids.isNotEmpty,
@@ -793,7 +797,8 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
       final Chat removedChat = _displayedItems.removeAt(i);
       listState.removeItem(
         i,
-        (context, animation) => removedBuilder(removedChat, animation, true),
+        (context, animation) =>
+            removedBuilder(removedChat, animation, moved: false),
         duration: widget.animationDuration,
       );
       mutated = true;
@@ -807,7 +812,8 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
       final Chat movedChat = _displayedItems.removeAt(i);
       listState.removeItem(
         i,
-        (context, animation) => removedBuilder(movedChat, animation, false),
+        (context, animation) =>
+            removedBuilder(movedChat, animation, moved: true),
         duration: widget.animationDuration,
       );
       mutated = true;
