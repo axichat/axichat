@@ -331,6 +331,7 @@ String? safeEmailLinkUrlForTesting(String value) => _safeEmailLinkUrl(value);
   double? measuredHeight,
   double? scrollHeight,
   double? viewportHeight,
+  double? viewportHeightForCoupling,
   double? contentWidth,
   double? viewportWidth,
   double? widthScale,
@@ -341,11 +342,22 @@ String? safeEmailLinkUrlForTesting(String value) => _safeEmailLinkUrl(value);
   bool widthFitReady,
   bool layoutStable,
   int layoutSequence,
+  String? heightSourceKind,
+  String? heightSourceTag,
+  String? heightSourceId,
+  String? heightSourceClass,
+  String? heightSourceStyle,
+  String? heightSourcePath,
+  double? heightSourceBottom,
+  double? heightSourceHeight,
+  double? bodyTop,
+  double? scrollY,
 })
 _emailDomContentHeightMetrics({
   double? measuredHeight,
   double? scrollHeight,
   double? viewportHeight,
+  double? viewportHeightForCoupling,
   double? contentWidth,
   double? viewportWidth,
   double? widthScale,
@@ -356,10 +368,21 @@ _emailDomContentHeightMetrics({
   bool widthFitReady = false,
   bool layoutStable = false,
   int layoutSequence = 0,
+  String? heightSourceKind,
+  String? heightSourceTag,
+  String? heightSourceId,
+  String? heightSourceClass,
+  String? heightSourceStyle,
+  String? heightSourcePath,
+  double? heightSourceBottom,
+  double? heightSourceHeight,
+  double? bodyTop,
+  double? scrollY,
 }) => (
   measuredHeight: measuredHeight,
   scrollHeight: scrollHeight,
   viewportHeight: viewportHeight,
+  viewportHeightForCoupling: viewportHeightForCoupling,
   contentWidth: contentWidth,
   viewportWidth: viewportWidth,
   widthScale: widthScale,
@@ -370,6 +393,16 @@ _emailDomContentHeightMetrics({
   widthFitReady: widthFitReady,
   layoutStable: layoutStable,
   layoutSequence: layoutSequence,
+  heightSourceKind: heightSourceKind,
+  heightSourceTag: heightSourceTag,
+  heightSourceId: heightSourceId,
+  heightSourceClass: heightSourceClass,
+  heightSourceStyle: heightSourceStyle,
+  heightSourcePath: heightSourcePath,
+  heightSourceBottom: heightSourceBottom,
+  heightSourceHeight: heightSourceHeight,
+  bodyTop: bodyTop,
+  scrollY: scrollY,
 );
 
 bool _emailHtmlHeightCanCommit({
@@ -624,6 +657,67 @@ _resolveEmailHtmlContentHeightAfterReport({
   return (contentHeight: normalizedHeight, isLoading: false, committed: true);
 }
 
+bool _isEmailHtmlViewportCoupledHeightGrowth({
+  required double? currentContentHeight,
+  required double measuredHeight,
+  double? scrollHeight,
+  double? viewportHeight,
+  String? heightSourceKind,
+  double? heightSourceBottom,
+  double? heightSourceHeight,
+}) {
+  final currentHeight = currentContentHeight?.ceilToDouble();
+  if (currentHeight == null ||
+      currentHeight <= 0 ||
+      measuredHeight <= currentHeight + 1 ||
+      heightSourceKind != 'element') {
+    return false;
+  }
+  final normalizedMeasuredHeight = measuredHeight.ceilToDouble();
+  final normalizedScrollHeight = scrollHeight?.ceilToDouble();
+  final normalizedViewportHeight = viewportHeight?.ceilToDouble();
+  final normalizedSourceBottom = heightSourceBottom?.ceilToDouble();
+  final normalizedSourceHeight = heightSourceHeight?.ceilToDouble();
+  if (normalizedScrollHeight == null ||
+      normalizedViewportHeight == null ||
+      normalizedSourceBottom == null ||
+      normalizedSourceHeight == null) {
+    return false;
+  }
+  bool near(double left, double right) => (left - right).abs() <= 1;
+  final viewportTracksMeasuredHeight = near(
+    normalizedViewportHeight,
+    normalizedMeasuredHeight,
+  );
+  final viewportTracksCurrentHeight = near(
+    normalizedViewportHeight,
+    currentHeight,
+  );
+  return near(normalizedScrollHeight, normalizedMeasuredHeight) &&
+      near(normalizedSourceBottom, normalizedMeasuredHeight) &&
+      near(normalizedSourceHeight, currentHeight) &&
+      (viewportTracksMeasuredHeight || viewportTracksCurrentHeight);
+}
+
+@visibleForTesting
+bool emailHtmlViewportCoupledHeightGrowthForTesting({
+  required double? currentContentHeight,
+  required double measuredHeight,
+  double? scrollHeight,
+  double? viewportHeight,
+  String? heightSourceKind,
+  double? heightSourceBottom,
+  double? heightSourceHeight,
+}) => _isEmailHtmlViewportCoupledHeightGrowth(
+  currentContentHeight: currentContentHeight,
+  measuredHeight: measuredHeight,
+  scrollHeight: scrollHeight,
+  viewportHeight: viewportHeight,
+  heightSourceKind: heightSourceKind,
+  heightSourceBottom: heightSourceBottom,
+  heightSourceHeight: heightSourceHeight,
+);
+
 @visibleForTesting
 ({double? contentHeight, bool isLoading, bool committed})
 emailHtmlContentHeightAfterReportForTesting({
@@ -645,6 +739,7 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     measuredHeight: 0,
     scrollHeight: 0,
     viewportHeight: 0,
+    viewportHeightForCoupling: 0,
     contentWidth: 0,
     viewportWidth: 0,
     widthScale: 1,
@@ -655,6 +750,16 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     widthFitReady: false,
     layoutStable: false,
     layoutSequence: 0,
+    heightSourceKind: '',
+    heightSourceTag: '',
+    heightSourceId: '',
+    heightSourceClass: '',
+    heightSourceStyle: '',
+    heightSourcePath: '',
+    heightSourceBottom: 0,
+    heightSourceHeight: 0,
+    bodyTop: 0,
+    scrollY: 0,
   });
   const frame = document.getElementById('axichat-original-email-frame');
   if (frame && (!frame.contentDocument || !frame.contentDocument.body)) {
@@ -778,8 +883,77 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     !sourceDocument.fonts || sourceDocument.fonts.status === 'loaded';
   const scrollY = sourceWindow ? sourceWindow.scrollY || 0 : 0;
   const bodyTop = body.getBoundingClientRect().top + scrollY;
+  const viewportHeightForCoupling = Math.ceil(
+    Math.max(
+      sourceWindow ? sourceWindow.innerHeight || 0 : 0,
+      root ? root.clientHeight || 0 : 0,
+    ),
+  );
   let maxBottom = 0;
   let hasVisibleBounds = false;
+  const compactText = (value, maxLength) => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+  };
+  const elementSummary = (element) => {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+      return {
+        tag: '',
+        id: '',
+        className: '',
+        style: '',
+        path: '',
+      };
+    }
+    const pathParts = [];
+    for (let current = element;
+         current && current.nodeType === Node.ELEMENT_NODE && pathParts.length < 6;
+         current = current.parentElement) {
+      const tag = compactText(current.localName || current.tagName || '', 40)
+        .toLowerCase();
+      if (!tag) {
+        continue;
+      }
+      const id = compactText(current.getAttribute('id') || '', 48);
+      const className = compactText(current.getAttribute('class') || '', 80);
+      pathParts.unshift(
+        tag +
+          (id ? '#' + id : '') +
+          (className ? '.' + className.split(/\s+/).slice(0, 3).join('.') : ''),
+      );
+    }
+    return {
+      tag: compactText(element.localName || element.tagName || '', 40)
+        .toLowerCase(),
+      id: compactText(element.getAttribute('id') || '', 80),
+      className: compactText(element.getAttribute('class') || '', 120),
+      style: compactText(element.getAttribute('style') || '', 220),
+      path: compactText(pathParts.join(' > '), 260),
+    };
+  };
+  let heightSource = {
+    kind: '',
+    tag: '',
+    id: '',
+    className: '',
+    style: '',
+    path: '',
+    bottom: 0,
+    height: 0,
+  };
+  const recordHeightSource = (kind, element, bottom, height) => {
+    const summary = elementSummary(element);
+    heightSource = {
+      kind: kind,
+      tag: summary.tag,
+      id: summary.id,
+      className: summary.className,
+      style: summary.style,
+      path: summary.path,
+      bottom: Number.isFinite(bottom) ? bottom : 0,
+      height: Number.isFinite(height) ? height : 0,
+    };
+  };
   const getElementStyle = (element) =>
     sourceWindow && sourceWindow.getComputedStyle
       ? sourceWindow.getComputedStyle(element)
@@ -816,11 +990,13 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
       continue;
     }
     const marginBottom = Number.parseFloat(style.marginBottom || '0');
-    maxBottom = Math.max(
-      maxBottom,
+    const candidateBottom =
       rect.bottom + scrollY - bodyTop +
-        (Number.isFinite(marginBottom) ? marginBottom * activeWidthScale : 0),
-    );
+        (Number.isFinite(marginBottom) ? marginBottom * activeWidthScale : 0);
+    if (candidateBottom > maxBottom) {
+      maxBottom = candidateBottom;
+      recordHeightSource('element', element, candidateBottom, rect.height);
+    }
     hasVisibleBounds = true;
   }
 
@@ -857,7 +1033,16 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
           rect.height <= 0) {
         continue;
       }
-      maxBottom = Math.max(maxBottom, rect.bottom + scrollY - bodyTop);
+      const candidateBottom = rect.bottom + scrollY - bodyTop;
+      if (candidateBottom > maxBottom) {
+        maxBottom = candidateBottom;
+        recordHeightSource(
+          'text',
+          textNode.parentElement,
+          candidateBottom,
+          rect.height,
+        );
+      }
       hasVisibleBounds = true;
     }
   }
@@ -872,6 +1057,7 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
       Number.isFinite(rangeRect.height) ? rangeRect.height : 0,
       Number.isFinite(bodyRect.bottom) ? bodyRect.bottom + scrollY - bodyTop : 0,
     );
+    recordHeightSource('fallback', body, fallbackHeight, fallbackHeight);
   }
 
   const measuredHeight = Math.ceil(
@@ -924,6 +1110,7 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     measuredHeight: measuredHeight,
     scrollHeight: scaledScrollHeight,
     viewportHeight: measuredViewportHeight,
+    viewportHeightForCoupling: viewportHeightForCoupling,
     contentWidth: contentWidth,
     viewportWidth: viewportWidth,
     widthScale: widthScale,
@@ -934,6 +1121,16 @@ String _emailDomHeightMetricsExpression() => r'''(() => {
     widthFitReady: widthFitReady,
     layoutStable: layoutStable,
     layoutSequence: layoutSequence,
+    heightSourceKind: heightSource.kind,
+    heightSourceTag: heightSource.tag,
+    heightSourceId: heightSource.id,
+    heightSourceClass: heightSource.className,
+    heightSourceStyle: heightSource.style,
+    heightSourcePath: heightSource.path,
+    heightSourceBottom: heightSource.bottom,
+    heightSourceHeight: heightSource.height,
+    bodyTop: bodyTop,
+    scrollY: scrollY,
   };
 })()
 ''';
@@ -964,6 +1161,7 @@ String _emailDocumentHeightObserverExpression() =>
         Math.ceil(metrics.measuredHeight || 0),
         Math.ceil(metrics.scrollHeight || 0),
         Math.ceil(metrics.viewportHeight || 0),
+        Math.ceil(metrics.viewportHeightForCoupling || 0),
         Math.ceil(metrics.contentWidth || 0),
         Math.ceil(metrics.viewportWidth || 0),
         Math.round((metrics.widthScale || 1) * 100000),
@@ -1299,6 +1497,7 @@ html, body {
         Math.ceil(metrics.measuredHeight || 0),
         Math.ceil(metrics.scrollHeight || 0),
         Math.ceil(metrics.viewportHeight || 0),
+        Math.ceil(metrics.viewportHeightForCoupling || 0),
         Math.ceil(metrics.contentWidth || 0),
         Math.ceil(metrics.viewportWidth || 0),
         Math.round((metrics.widthScale || 1) * 100000),
@@ -1840,7 +2039,8 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   static const _heightHandlerName = 'axichatEmailHeight';
   static const _linkHandlerName = 'axichatEmailLink';
   static const _wheelHandlerName = 'axichatEmailWheel';
-  static bool get _debugTraceMeasurements => kDebugMode && false;
+  static bool get _debugTraceMeasurements =>
+      const bool.fromEnvironment('AXI_EMAIL_WEBVIEW_TRACE');
   static final Set<Factory<OneSequenceGestureRecognizer>>
   _tapOnlyGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
     Factory<OneSequenceGestureRecognizer>(TapGestureRecognizer.new),
@@ -1869,6 +2069,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   int? _lastProgressLogBucket;
   int? _scheduledMeasurementWebViewGeneration;
   int? _scheduledMeasurementLoadEpoch;
+  int _consecutiveHeightGrowthReports = 0;
+  int _heightGrowthWarningCount = 0;
+  String? _lastHeightSourceDetails;
 
   void _traceMeasurement(
     String event, {
@@ -1887,6 +2090,16 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     bool? widthFitReady,
     bool? layoutStable,
     int? layoutSequence,
+    String? heightSourceKind,
+    String? heightSourceTag,
+    String? heightSourceId,
+    String? heightSourceClass,
+    String? heightSourceStyle,
+    String? heightSourcePath,
+    double? heightSourceBottom,
+    double? heightSourceHeight,
+    double? bodyTop,
+    double? scrollY,
     Size? contentSize,
     String? details,
     int? delayMs,
@@ -1929,11 +2142,187 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       if (widthFitReady != null) 'widthFitReady=$widthFitReady',
       if (layoutStable != null) 'layoutStable=$layoutStable',
       if (layoutSequence != null) 'layoutSequence=$layoutSequence',
+      if (heightSourceKind != null) 'heightSourceKind=$heightSourceKind',
+      if (heightSourceTag != null) 'heightSourceTag=$heightSourceTag',
+      if (heightSourceId != null) 'heightSourceId=$heightSourceId',
+      if (heightSourceClass != null) 'heightSourceClass=$heightSourceClass',
+      if (heightSourceStyle != null) 'heightSourceStyle=$heightSourceStyle',
+      if (heightSourcePath != null) 'heightSourcePath=$heightSourcePath',
+      if (heightSourceBottom != null)
+        'heightSourceBottom=${heightSourceBottom.toStringAsFixed(2)}',
+      if (heightSourceHeight != null)
+        'heightSourceHeight=${heightSourceHeight.toStringAsFixed(2)}',
+      if (bodyTop != null) 'bodyTop=${bodyTop.toStringAsFixed(2)}',
+      if (scrollY != null) 'scrollY=${scrollY.toStringAsFixed(2)}',
       if (contentSize != null)
         'contentSize=${contentSize.width.ceil()}x${contentSize.height.ceil()}',
       if (details != null) 'details=$details',
     ];
     debugPrint('[EmailHtmlWebView] ${fields.join(' ')}');
+  }
+
+  void _updateLastHeightSourceDetails({
+    double? scrollHeight,
+    double? viewportHeight,
+    double? contentWidth,
+    double? viewportWidth,
+    double? widthScale,
+    int? pendingImages,
+    bool? documentReady,
+    bool? imagesReady,
+    bool? fontsReady,
+    bool? widthFitReady,
+    bool? layoutStable,
+    int? layoutSequence,
+    String? heightSourceKind,
+    String? heightSourceTag,
+    String? heightSourceId,
+    String? heightSourceClass,
+    String? heightSourceStyle,
+    String? heightSourcePath,
+    double? heightSourceBottom,
+    double? heightSourceHeight,
+    double? bodyTop,
+    double? scrollY,
+  }) {
+    final fields = <String>[
+      if (scrollHeight != null) 'scrollHeight=${scrollHeight.ceil()}',
+      if (viewportHeight != null) 'viewportHeight=${viewportHeight.ceil()}',
+      if (contentWidth != null) 'contentWidth=${contentWidth.ceil()}',
+      if (viewportWidth != null) 'viewportWidth=${viewportWidth.ceil()}',
+      if (widthScale != null) 'widthScale=${widthScale.toStringAsFixed(4)}',
+      if (pendingImages != null) 'pendingImages=$pendingImages',
+      if (documentReady != null) 'documentReady=$documentReady',
+      if (imagesReady != null) 'imagesReady=$imagesReady',
+      if (fontsReady != null) 'fontsReady=$fontsReady',
+      if (widthFitReady != null) 'widthFitReady=$widthFitReady',
+      if (layoutStable != null) 'layoutStable=$layoutStable',
+      if (layoutSequence != null) 'layoutSequence=$layoutSequence',
+      if (heightSourceKind != null) 'heightSourceKind=$heightSourceKind',
+      if (heightSourceTag != null) 'heightSourceTag=$heightSourceTag',
+      if (heightSourceId != null) 'heightSourceId=$heightSourceId',
+      if (heightSourceClass != null) 'heightSourceClass=$heightSourceClass',
+      if (heightSourceStyle != null) 'heightSourceStyle=$heightSourceStyle',
+      if (heightSourcePath != null) 'heightSourcePath=$heightSourcePath',
+      if (heightSourceBottom != null)
+        'heightSourceBottom=${heightSourceBottom.toStringAsFixed(2)}',
+      if (heightSourceHeight != null)
+        'heightSourceHeight=${heightSourceHeight.toStringAsFixed(2)}',
+      if (bodyTop != null) 'bodyTop=${bodyTop.toStringAsFixed(2)}',
+      if (scrollY != null) 'scrollY=${scrollY.toStringAsFixed(2)}',
+    ];
+    _lastHeightSourceDetails = fields.isEmpty ? null : fields.join(' ');
+  }
+
+  void _resetHeightGrowthDiagnostics() {
+    _consecutiveHeightGrowthReports = 0;
+    _heightGrowthWarningCount = 0;
+    _lastHeightSourceDetails = null;
+  }
+
+  void _noteCommittedHeight({
+    required double? previousHeight,
+    required double? committedHeight,
+  }) {
+    if (committedHeight == null || committedHeight <= 0) {
+      return;
+    }
+    if (previousHeight != null && committedHeight > previousHeight + 1) {
+      _consecutiveHeightGrowthReports += 1;
+    } else {
+      _consecutiveHeightGrowthReports = 0;
+      _heightGrowthWarningCount = 0;
+      return;
+    }
+    if (_consecutiveHeightGrowthReports < 3) {
+      return;
+    }
+    if (!_debugTraceMeasurements) {
+      return;
+    }
+    _heightGrowthWarningCount += 1;
+    if (_heightGrowthWarningCount > 20 && _heightGrowthWarningCount % 10 != 0) {
+      return;
+    }
+    final sourceDetails = _lastHeightSourceDetails ?? 'source=unavailable';
+    debugPrint(
+      '[EmailHtmlWebView][height-growth] '
+      'mode=${widget.contentMode.name} '
+      'platform=${defaultTargetPlatform.name} '
+      'generation=$_webViewGeneration '
+      'loadEpoch=$_loadEpoch '
+      'previousHeight=${previousHeight.ceil()} '
+      'committedHeight=${committedHeight.ceil()} '
+      'consecutive=$_consecutiveHeightGrowthReports '
+      'warning=$_heightGrowthWarningCount '
+      '$sourceDetails',
+    );
+  }
+
+  bool _rejectViewportCoupledHeightGrowth({
+    required double measuredHeight,
+    double? scrollHeight,
+    double? viewportHeight,
+    double? contentWidth,
+    double? viewportWidth,
+    double? widthScale,
+    int? pendingImages,
+    bool? documentReady,
+    bool? imagesReady,
+    bool? fontsReady,
+    bool? widthFitReady,
+    bool? layoutStable,
+    int? layoutSequence,
+    String? heightSourceKind,
+    String? heightSourceTag,
+    String? heightSourceId,
+    String? heightSourceClass,
+    String? heightSourceStyle,
+    String? heightSourcePath,
+    double? heightSourceBottom,
+    double? heightSourceHeight,
+    double? bodyTop,
+    double? scrollY,
+  }) {
+    final reject = _isEmailHtmlViewportCoupledHeightGrowth(
+      currentContentHeight: _contentHeight,
+      measuredHeight: measuredHeight,
+      scrollHeight: scrollHeight,
+      viewportHeight: viewportHeight,
+      heightSourceKind: heightSourceKind,
+      heightSourceBottom: heightSourceBottom,
+      heightSourceHeight: heightSourceHeight,
+    );
+    if (!reject) {
+      return false;
+    }
+    _traceMeasurement(
+      'height-rejected-viewport-coupled',
+      measuredHeight: measuredHeight,
+      scrollHeight: scrollHeight,
+      viewportHeight: viewportHeight,
+      contentWidth: contentWidth,
+      viewportWidth: viewportWidth,
+      widthScale: widthScale,
+      pendingImages: pendingImages,
+      documentReady: documentReady,
+      imagesReady: imagesReady,
+      fontsReady: fontsReady,
+      widthFitReady: widthFitReady,
+      layoutStable: layoutStable,
+      layoutSequence: layoutSequence,
+      heightSourceKind: heightSourceKind,
+      heightSourceTag: heightSourceTag,
+      heightSourceId: heightSourceId,
+      heightSourceClass: heightSourceClass,
+      heightSourceStyle: heightSourceStyle,
+      heightSourcePath: heightSourcePath,
+      heightSourceBottom: heightSourceBottom,
+      heightSourceHeight: heightSourceHeight,
+      bodyTop: bodyTop,
+      scrollY: scrollY,
+    );
+    return true;
   }
 
   Object get _diagnosticContentKey => (
@@ -2035,6 +2424,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     _scheduledMeasurementWebViewGeneration = null;
     _scheduledMeasurementLoadEpoch = null;
     _reloadPreparedHtmlWhenControllerReady = false;
+    _resetHeightGrowthDiagnostics();
     super.dispose();
   }
 
@@ -2098,6 +2488,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _lastLinuxPlatformViewId = null;
       _lastLinuxPlatformViewSize = null;
       _lastLinuxPlatformViewOffset = null;
+      _resetHeightGrowthDiagnostics();
     }
     if (htmlChanged ||
         allowRemoteImagesChanged ||
@@ -2113,6 +2504,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _documentHeightObserverInstalled = false;
       _wheelBridgeInstalled = false;
       _linuxFitLockedHeight = null;
+      _resetHeightGrowthDiagnostics();
       if (!hadController && _preparedHtmlData != null) {
         _reloadPreparedHtmlWhenControllerReady = true;
       }
@@ -2183,6 +2575,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         }
         if (!preserveMeasuredHeight) {
           _contentHeight = _normalizedInitialContentHeight();
+          _resetHeightGrowthDiagnostics();
         }
         _linuxFitLockedHeight = null;
       });
@@ -2421,13 +2814,21 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       )) {
         return;
       }
-      final domMeasuredHeight = domMetrics.measuredHeight == null
+      final domDisplayScale = domMetrics.measuredHeight == null
           ? null
-          : await _scaleDomMeasuredHeightForDisplay(
+          : await _domMeasurementDisplayScale(
               webViewController,
-              measuredHeight: domMetrics.measuredHeight!,
               webViewGeneration: currentGeneration,
               measurementEpoch: measurementEpoch,
+            );
+      if (domMetrics.measuredHeight != null && domDisplayScale == null) {
+        return;
+      }
+      final domMeasuredHeight = domMetrics.measuredHeight == null
+          ? null
+          : _scaleDomMetricForDisplay(
+              domMetrics.measuredHeight!,
+              domDisplayScale!,
             );
       final measuredHeight =
           domMeasuredHeight ??
@@ -2458,6 +2859,76 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         widthFitReady: domMetrics.widthFitReady,
         layoutStable: domMetrics.layoutStable,
       );
+      _updateLastHeightSourceDetails(
+        scrollHeight: domMetrics.scrollHeight,
+        viewportHeight: domMetrics.viewportHeight,
+        contentWidth: domMetrics.contentWidth,
+        viewportWidth: domMetrics.viewportWidth,
+        widthScale: domMetrics.widthScale,
+        pendingImages: domMetrics.pendingImages,
+        documentReady: domMetrics.documentReady,
+        imagesReady: domMetrics.imagesReady,
+        fontsReady: domMetrics.fontsReady,
+        widthFitReady: domMetrics.widthFitReady,
+        layoutStable: domMetrics.layoutStable,
+        layoutSequence: domMetrics.layoutSequence,
+        heightSourceKind: domMetrics.heightSourceKind,
+        heightSourceTag: domMetrics.heightSourceTag,
+        heightSourceId: domMetrics.heightSourceId,
+        heightSourceClass: domMetrics.heightSourceClass,
+        heightSourceStyle: domMetrics.heightSourceStyle,
+        heightSourcePath: domMetrics.heightSourcePath,
+        heightSourceBottom: domMetrics.heightSourceBottom,
+        heightSourceHeight: domMetrics.heightSourceHeight,
+        bodyTop: domMetrics.bodyTop,
+        scrollY: domMetrics.scrollY,
+      );
+      final domMeasuredHeightForGuard = domMeasuredHeight;
+      final domScrollHeightForGuard = _scaleOptionalDomMetricForDisplay(
+        domMetrics.scrollHeight,
+        domDisplayScale ?? 1.0,
+      );
+      final domViewportHeightForGuard = _scaleOptionalDomMetricForDisplay(
+        domMetrics.viewportHeightForCoupling ?? domMetrics.viewportHeight,
+        domDisplayScale ?? 1.0,
+      );
+      final domHeightSourceBottomForGuard = _scaleOptionalDomMetricForDisplay(
+        domMetrics.heightSourceBottom,
+        domDisplayScale ?? 1.0,
+      );
+      final domHeightSourceHeightForGuard = _scaleOptionalDomMetricForDisplay(
+        domMetrics.heightSourceHeight,
+        domDisplayScale ?? 1.0,
+      );
+      if (canCommitHeight &&
+          domMeasuredHeightForGuard != null &&
+          _rejectViewportCoupledHeightGrowth(
+            measuredHeight: domMeasuredHeightForGuard,
+            scrollHeight: domScrollHeightForGuard,
+            viewportHeight: domViewportHeightForGuard,
+            contentWidth: domMetrics.contentWidth,
+            viewportWidth: domMetrics.viewportWidth,
+            widthScale: domMetrics.widthScale,
+            pendingImages: domMetrics.pendingImages,
+            documentReady: domMetrics.documentReady,
+            imagesReady: domMetrics.imagesReady,
+            fontsReady: domMetrics.fontsReady,
+            widthFitReady: domMetrics.widthFitReady,
+            layoutStable: domMetrics.layoutStable,
+            layoutSequence: domMetrics.layoutSequence,
+            heightSourceKind: domMetrics.heightSourceKind,
+            heightSourceTag: domMetrics.heightSourceTag,
+            heightSourceId: domMetrics.heightSourceId,
+            heightSourceClass: domMetrics.heightSourceClass,
+            heightSourceStyle: domMetrics.heightSourceStyle,
+            heightSourcePath: domMetrics.heightSourcePath,
+            heightSourceBottom: domHeightSourceBottomForGuard,
+            heightSourceHeight: domHeightSourceHeightForGuard,
+            bodyTop: domMetrics.bodyTop,
+            scrollY: domMetrics.scrollY,
+          )) {
+        return;
+      }
       if (defaultTargetPlatform == TargetPlatform.linux) {
         _updateLinuxContentHeightMetrics(
           measuredHeight: measuredHeight,
@@ -2721,25 +3192,21 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     return measuredHeight > 0 ? measuredHeight : null;
   }
 
-  Future<double?> _scaleDomMeasuredHeightForDisplay(
+  Future<double?> _domMeasurementDisplayScale(
     InAppWebViewController controller, {
-    required double measuredHeight,
     required int? webViewGeneration,
     int? measurementEpoch,
   }) async {
-    if (measuredHeight <= 0) {
-      return null;
-    }
     if (defaultTargetPlatform != TargetPlatform.android) {
-      return measuredHeight;
+      return 1.0;
     }
     double? zoomScale;
     try {
       zoomScale = await controller.getZoomScale();
     } on MissingPluginException {
-      return measuredHeight;
+      return 1.0;
     } on PlatformException {
-      return measuredHeight;
+      return 1.0;
     }
     if (!_canMeasureContentHeight(
       controller,
@@ -2749,16 +3216,25 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       return null;
     }
     if (zoomScale == null || zoomScale <= 0) {
-      return measuredHeight;
+      return 1.0;
     }
-    return measuredHeight * zoomScale;
+    return zoomScale;
   }
+
+  double _scaleDomMetricForDisplay(double value, double displayScale) =>
+      value * displayScale;
+
+  double? _scaleOptionalDomMetricForDisplay(
+    double? value,
+    double displayScale,
+  ) => value == null ? null : _scaleDomMetricForDisplay(value, displayScale);
 
   Future<
     ({
       double? measuredHeight,
       double? scrollHeight,
       double? viewportHeight,
+      double? viewportHeightForCoupling,
       double? contentWidth,
       double? viewportWidth,
       double? widthScale,
@@ -2769,6 +3245,16 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       bool widthFitReady,
       bool layoutStable,
       int layoutSequence,
+      String? heightSourceKind,
+      String? heightSourceTag,
+      String? heightSourceId,
+      String? heightSourceClass,
+      String? heightSourceStyle,
+      String? heightSourcePath,
+      double? heightSourceBottom,
+      double? heightSourceHeight,
+      double? bodyTop,
+      double? scrollY,
     })
   >
   _measureDomContentHeight(
@@ -2798,6 +3284,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         final measuredHeight = _parsePositiveDouble(result['measuredHeight']);
         final scrollHeight = _parsePositiveDouble(result['scrollHeight']);
         final viewportHeight = _parsePositiveDouble(result['viewportHeight']);
+        final viewportHeightForCoupling = _parsePositiveDouble(
+          result['viewportHeightForCoupling'],
+        );
         final contentWidth = _parsePositiveDouble(result['contentWidth']);
         final viewportWidth = _parsePositiveDouble(result['viewportWidth']);
         final widthScale = _parsePositiveDouble(result['widthScale']);
@@ -2808,6 +3297,24 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         final widthFitReady = _parseBool(result['widthFitReady']);
         final layoutStable = _parseBool(result['layoutStable']);
         final layoutSequence = _parseNonNegativeInt(result['layoutSequence']);
+        final heightSourceKind = _parseTraceString(result['heightSourceKind']);
+        final heightSourceTag = _parseTraceString(result['heightSourceTag']);
+        final heightSourceId = _parseTraceString(result['heightSourceId']);
+        final heightSourceClass = _parseTraceString(
+          result['heightSourceClass'],
+        );
+        final heightSourceStyle = _parseTraceString(
+          result['heightSourceStyle'],
+        );
+        final heightSourcePath = _parseTraceString(result['heightSourcePath']);
+        final heightSourceBottom = _parseFiniteOptionalDouble(
+          result['heightSourceBottom'],
+        );
+        final heightSourceHeight = _parseFiniteOptionalDouble(
+          result['heightSourceHeight'],
+        );
+        final bodyTop = _parseFiniteOptionalDouble(result['bodyTop']);
+        final scrollY = _parseFiniteOptionalDouble(result['scrollY']);
         _traceMeasurement(
           'dom-result',
           webViewGeneration: webViewGeneration,
@@ -2824,11 +3331,22 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           widthFitReady: widthFitReady,
           layoutStable: layoutStable,
           layoutSequence: layoutSequence,
+          heightSourceKind: heightSourceKind,
+          heightSourceTag: heightSourceTag,
+          heightSourceId: heightSourceId,
+          heightSourceClass: heightSourceClass,
+          heightSourceStyle: heightSourceStyle,
+          heightSourcePath: heightSourcePath,
+          heightSourceBottom: heightSourceBottom,
+          heightSourceHeight: heightSourceHeight,
+          bodyTop: bodyTop,
+          scrollY: scrollY,
         );
         return _emailDomContentHeightMetrics(
           measuredHeight: measuredHeight,
           scrollHeight: scrollHeight,
           viewportHeight: viewportHeight,
+          viewportHeightForCoupling: viewportHeightForCoupling,
           contentWidth: contentWidth,
           viewportWidth: viewportWidth,
           widthScale: widthScale,
@@ -2839,6 +3357,16 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
           widthFitReady: widthFitReady,
           layoutStable: layoutStable,
           layoutSequence: layoutSequence,
+          heightSourceKind: heightSourceKind,
+          heightSourceTag: heightSourceTag,
+          heightSourceId: heightSourceId,
+          heightSourceClass: heightSourceClass,
+          heightSourceStyle: heightSourceStyle,
+          heightSourcePath: heightSourcePath,
+          heightSourceBottom: heightSourceBottom,
+          heightSourceHeight: heightSourceHeight,
+          bodyTop: bodyTop,
+          scrollY: scrollY,
         );
       }
       if (result is num) {
@@ -3031,8 +3559,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     if (!mounted || height <= 0) {
       return;
     }
+    final previousHeight = _contentHeight;
     final resolved = _resolveEmailHtmlContentHeightAfterReport(
-      currentContentHeight: _contentHeight,
+      currentContentHeight: previousHeight,
       isLoading: _isLoading,
       usesHeightBridge: _usesHeightBridge,
       reportedHeight: height,
@@ -3054,6 +3583,10 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     if (contentHeight != null) {
       widget.onContentHeightChanged?.call(contentHeight);
     }
+    _noteCommittedHeight(
+      previousHeight: previousHeight,
+      committedHeight: contentHeight,
+    );
     _traceMeasurement('height-updated', measuredHeight: resolved.contentHeight);
     _scheduleLinuxPlatformViewResize();
   }
@@ -3115,6 +3648,10 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       _isLoading = false;
     });
     widget.onContentHeightChanged?.call(normalizedHeight);
+    _noteCommittedHeight(
+      previousHeight: currentHeight,
+      committedHeight: normalizedHeight,
+    );
     if (documentFitsViewport) {
       _linuxFitLockedHeight = normalizedHeight;
     }
@@ -3127,6 +3664,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     required double measuredHeight,
     double? scrollHeight,
     double? viewportHeight,
+    double? viewportHeightForCoupling,
     double? contentWidth,
     double? viewportWidth,
     double? widthScale,
@@ -3137,6 +3675,16 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     bool widthFitReady = true,
     bool layoutStable = true,
     int layoutSequence = 0,
+    String? heightSourceKind,
+    String? heightSourceTag,
+    String? heightSourceId,
+    String? heightSourceClass,
+    String? heightSourceStyle,
+    String? heightSourcePath,
+    double? heightSourceBottom,
+    double? heightSourceHeight,
+    double? bodyTop,
+    double? scrollY,
   }) async {
     if (!_canMeasureContentHeight(controller, webViewGeneration, null)) {
       return;
@@ -3157,6 +3705,71 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       widthFitReady: widthFitReady,
       layoutStable: layoutStable,
       layoutSequence: layoutSequence,
+      heightSourceKind: heightSourceKind,
+      heightSourceTag: heightSourceTag,
+      heightSourceId: heightSourceId,
+      heightSourceClass: heightSourceClass,
+      heightSourceStyle: heightSourceStyle,
+      heightSourcePath: heightSourcePath,
+      heightSourceBottom: heightSourceBottom,
+      heightSourceHeight: heightSourceHeight,
+      bodyTop: bodyTop,
+      scrollY: scrollY,
+    );
+    _updateLastHeightSourceDetails(
+      scrollHeight: scrollHeight,
+      viewportHeight: viewportHeight,
+      contentWidth: contentWidth,
+      viewportWidth: viewportWidth,
+      widthScale: widthScale,
+      pendingImages: pendingImages,
+      documentReady: documentReady,
+      imagesReady: imagesReady,
+      fontsReady: fontsReady,
+      widthFitReady: widthFitReady,
+      layoutStable: layoutStable,
+      layoutSequence: layoutSequence,
+      heightSourceKind: heightSourceKind,
+      heightSourceTag: heightSourceTag,
+      heightSourceId: heightSourceId,
+      heightSourceClass: heightSourceClass,
+      heightSourceStyle: heightSourceStyle,
+      heightSourcePath: heightSourcePath,
+      heightSourceBottom: heightSourceBottom,
+      heightSourceHeight: heightSourceHeight,
+      bodyTop: bodyTop,
+      scrollY: scrollY,
+    );
+    final displayScale = await _domMeasurementDisplayScale(
+      controller,
+      webViewGeneration: webViewGeneration,
+    );
+    if (displayScale == null) {
+      return;
+    }
+    final displayMeasuredHeight = _scaleDomMetricForDisplay(
+      measuredHeight,
+      displayScale,
+    );
+    final displayScrollHeight = _scaleOptionalDomMetricForDisplay(
+      scrollHeight,
+      displayScale,
+    );
+    final displayViewportHeight = _scaleOptionalDomMetricForDisplay(
+      viewportHeight,
+      displayScale,
+    );
+    final displayViewportHeightForCoupling = _scaleOptionalDomMetricForDisplay(
+      viewportHeightForCoupling ?? viewportHeight,
+      displayScale,
+    );
+    final displayHeightSourceBottom = _scaleOptionalDomMetricForDisplay(
+      heightSourceBottom,
+      displayScale,
+    );
+    final displayHeightSourceHeight = _scaleOptionalDomMetricForDisplay(
+      heightSourceHeight,
+      displayScale,
     );
     final canCommitHeight = _emailHtmlHeightCanCommit(
       hasPositiveHeight: measuredHeight > 0,
@@ -3166,27 +3779,49 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       widthFitReady: widthFitReady,
       layoutStable: layoutStable,
     );
+    if (canCommitHeight &&
+        _rejectViewportCoupledHeightGrowth(
+          measuredHeight: displayMeasuredHeight,
+          scrollHeight: displayScrollHeight,
+          viewportHeight: displayViewportHeightForCoupling,
+          contentWidth: contentWidth,
+          viewportWidth: viewportWidth,
+          widthScale: widthScale,
+          pendingImages: pendingImages,
+          documentReady: documentReady,
+          imagesReady: imagesReady,
+          fontsReady: fontsReady,
+          widthFitReady: widthFitReady,
+          layoutStable: layoutStable,
+          layoutSequence: layoutSequence,
+          heightSourceKind: heightSourceKind,
+          heightSourceTag: heightSourceTag,
+          heightSourceId: heightSourceId,
+          heightSourceClass: heightSourceClass,
+          heightSourceStyle: heightSourceStyle,
+          heightSourcePath: heightSourcePath,
+          heightSourceBottom: displayHeightSourceBottom,
+          heightSourceHeight: displayHeightSourceHeight,
+          bodyTop: bodyTop,
+          scrollY: scrollY,
+        )) {
+      return;
+    }
+    if (!_canMeasureContentHeight(controller, webViewGeneration, null)) {
+      return;
+    }
     if (defaultTargetPlatform == TargetPlatform.linux) {
       _updateLinuxContentHeightMetrics(
-        measuredHeight: measuredHeight,
-        scrollHeight: scrollHeight,
-        viewportHeight: viewportHeight,
+        measuredHeight: displayMeasuredHeight,
+        scrollHeight: displayScrollHeight,
+        viewportHeight: displayViewportHeight,
         canCommitHeight: canCommitHeight,
         layoutSequence: layoutSequence,
       );
       return;
     }
-    final scaledHeight = await _scaleDomMeasuredHeightForDisplay(
-      controller,
-      measuredHeight: measuredHeight,
-      webViewGeneration: webViewGeneration,
-    );
-    if (scaledHeight == null ||
-        !_canMeasureContentHeight(controller, webViewGeneration, null)) {
-      return;
-    }
     _updateContentHeight(
-      scaledHeight,
+      displayMeasuredHeight,
       canCommitHeight: canCommitHeight,
       layoutSequence: layoutSequence,
     );
@@ -3235,6 +3870,15 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     return parsed == null || !parsed.isFinite ? 0 : parsed;
   }
 
+  double? _parseFiniteOptionalDouble(dynamic value) {
+    final parsed = switch (value) {
+      num number => number.toDouble(),
+      String text => double.tryParse(text.trim()),
+      _ => null,
+    };
+    return parsed != null && parsed.isFinite ? parsed : null;
+  }
+
   double? _parsePositiveDouble(dynamic value) {
     return switch (value) {
       num number when number > 0 => number.toDouble(),
@@ -3261,6 +3905,13 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
       },
       _ => false,
     };
+  }
+
+  String? _parseTraceString(dynamic value) {
+    if (value is! String || value.isEmpty) {
+      return null;
+    }
+    return value;
   }
 
   String _buildThemeStyle({required Brightness brightness}) {
@@ -3367,6 +4018,9 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                             viewportHeight: _parsePositiveDouble(
                               value['viewportHeight'],
                             ),
+                            viewportHeightForCoupling: _parsePositiveDouble(
+                              value['viewportHeightForCoupling'],
+                            ),
                             contentWidth: _parsePositiveDouble(
                               value['contentWidth'],
                             ),
@@ -3386,6 +4040,36 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
                             layoutStable: _parseBool(value['layoutStable']),
                             layoutSequence: _parseNonNegativeInt(
                               value['layoutSequence'],
+                            ),
+                            heightSourceKind: _parseTraceString(
+                              value['heightSourceKind'],
+                            ),
+                            heightSourceTag: _parseTraceString(
+                              value['heightSourceTag'],
+                            ),
+                            heightSourceId: _parseTraceString(
+                              value['heightSourceId'],
+                            ),
+                            heightSourceClass: _parseTraceString(
+                              value['heightSourceClass'],
+                            ),
+                            heightSourceStyle: _parseTraceString(
+                              value['heightSourceStyle'],
+                            ),
+                            heightSourcePath: _parseTraceString(
+                              value['heightSourcePath'],
+                            ),
+                            heightSourceBottom: _parseFiniteOptionalDouble(
+                              value['heightSourceBottom'],
+                            ),
+                            heightSourceHeight: _parseFiniteOptionalDouble(
+                              value['heightSourceHeight'],
+                            ),
+                            bodyTop: _parseFiniteOptionalDouble(
+                              value['bodyTop'],
+                            ),
+                            scrollY: _parseFiniteOptionalDouble(
+                              value['scrollY'],
                             ),
                           ),
                         );
