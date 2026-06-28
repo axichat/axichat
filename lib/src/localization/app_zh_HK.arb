@@ -192,6 +192,7 @@
   "chatEmptySearch": "沒有配對",
   "chatEmptyMessages": "沒有訊息",
   "chatComposerEmailHint": "傳送電郵訊息",
+  "chatComposerDropFiles": "拖放檔案",
   "chatTransportChoiceTitle": "選擇傳送方式",
   "chatTransportChoiceMessage": "這個地址可能是聊天地址或電郵地址。Axichat 應該如何傳送到 {address}？",
   "@chatTransportChoiceMessage": {

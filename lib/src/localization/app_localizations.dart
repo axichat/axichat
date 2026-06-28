@@ -1161,6 +1161,12 @@ abstract class AppLocalizations {
   /// **'Sent from Axichat'**
   String get chatComposerEmailWatermark;
 
+  /// No description provided for @chatComposerDropFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop files'**
+  String get chatComposerDropFiles;
+
   /// No description provided for @chatTransportChoiceTitle.
   ///
   /// In en, this message translates to:

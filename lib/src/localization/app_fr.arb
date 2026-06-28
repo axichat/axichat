@@ -193,6 +193,7 @@
   "chatEmptyMessages": "Aucun message",
   "chatComposerEmailHint": "Envoyer un message e-mail",
   "chatComposerEmailWatermark": "Envoyé depuis Axichat",
+  "chatComposerDropFiles": "Déposez les fichiers",
   "chatTransportChoiceTitle": "Choisir le mode d’envoi",
   "chatTransportChoiceMessage": "Cette adresse peut être un chat ou un e-mail. Comment Axichat doit-il envoyer vers {address} ?",
   "@chatTransportChoiceMessage": {

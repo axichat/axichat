@@ -192,6 +192,7 @@
   "chatEmptySearch": "Keine Treffer",
   "chatEmptyMessages": "Keine Nachrichten",
   "chatComposerEmailHint": "E-Mail-Nachricht senden",
+  "chatComposerDropFiles": "Dateien ablegen",
   "chatTransportChoiceTitle": "Sendeart wählen",
   "chatTransportChoiceMessage": "Diese Adresse kann Chat oder E-Mail sein. Wie soll Axichat an {address} senden?",
   "@chatTransportChoiceMessage": {

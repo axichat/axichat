@@ -3,6 +3,8 @@ PODS:
     - FlutterMacOS
   - connectivity_plus (0.0.1):
     - FlutterMacOS
+  - desktop_drop (0.0.1):
+    - FlutterMacOS
   - emoji_picker_flutter (0.0.1):
     - FlutterMacOS
   - file_picker (0.0.1):
@@ -49,6 +51,7 @@ PODS:
 DEPENDENCIES:
   - app_settings (from `Flutter/ephemeral/.symlinks/plugins/app_settings/macos`)
   - connectivity_plus (from `Flutter/ephemeral/.symlinks/plugins/connectivity_plus/macos`)
+  - desktop_drop (from `Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos`)
   - emoji_picker_flutter (from `Flutter/ephemeral/.symlinks/plugins/emoji_picker_flutter/macos`)
   - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
   - flutter_inappwebview_macos (from `Flutter/ephemeral/.symlinks/plugins/flutter_inappwebview_macos/macos`)
@@ -75,6 +78,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/app_settings/macos
   connectivity_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/connectivity_plus/macos
+  desktop_drop:
+    :path: Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos
   emoji_picker_flutter:
     :path: Flutter/ephemeral/.symlinks/plugins/emoji_picker_flutter/macos
   file_picker:
@@ -109,6 +114,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   app_settings: 140be3a9c0fc1f681e44afe9f549ab037b3aa3a2
   connectivity_plus: 0a976dfd033b59192912fa3c6c7b54aab5093802
+  desktop_drop: 1eeeb9484299585770b6461e4f3d60950e99efa2
   emoji_picker_flutter: 846d4afb3368bc864a3884f02654961198bd72da
   file_picker: e716a70a9fe5fd9e09ebc922d7541464289443af
   flutter_inappwebview_macos: ea7f93a5dea1d30dc372fdce1f46926cbaa97138

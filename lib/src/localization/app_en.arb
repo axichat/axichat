@@ -260,6 +260,7 @@
   "chatEmptyMessages": "No messages",
   "chatComposerEmailHint": "Send email message",
   "chatComposerEmailWatermark": "Sent from Axichat",
+  "chatComposerDropFiles": "Drop files",
   "chatTransportChoiceTitle": "Choose how to send",
   "chatTransportChoiceMessage": "This address could be chat or email. How should Axichat send to {address}?",
   "@chatTransportChoiceMessage": {

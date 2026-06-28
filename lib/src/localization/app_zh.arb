@@ -192,6 +192,7 @@
   "chatEmptySearch": "没有匹配项",
   "chatEmptyMessages": "没有消息",
   "chatComposerEmailHint": "发送邮件消息",
+  "chatComposerDropFiles": "拖放文件",
   "chatTransportChoiceTitle": "选择发送方式",
   "chatTransportChoiceMessage": "这个地址既可能是聊天地址也可能是邮箱地址。Axichat 应该如何发送到 {address}？",
   "@chatTransportChoiceMessage": {

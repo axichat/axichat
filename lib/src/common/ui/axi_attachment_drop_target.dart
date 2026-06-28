@@ -5,11 +5,13 @@ import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/attachment_drop.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:desktop_drop/desktop_drop.dart' as desktop_drop;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart' show LucideIcons;
 
 typedef AxiDroppedAttachmentsCallback =
     Future<void> Function(DroppedAttachmentSourceResult result);
@@ -85,24 +87,51 @@ class _AxiAttachmentDropTargetState extends State<AxiAttachmentDropTarget> {
       return widget.child;
     }
     final colors = context.colorScheme;
-    final borderSide = context.borderSide;
     final animationDuration = context.select<SettingsCubit, Duration>(
       (cubit) => cubit.animationDuration,
     );
-    final child = AnimatedContainer(
-      duration: animationDuration,
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: _dragging ? colors.primary : Colors.transparent,
-          width: borderSide.width,
+    final radius = context.radius;
+    final child = Stack(
+      fit: StackFit.passthrough,
+      children: [
+        widget.child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              duration: animationDuration,
+              curve: Curves.easeOutCubic,
+              opacity: _dragging ? 1.0 : 0.0,
+              child: DecoratedBox(
+                key: const ValueKey<String>('axi-attachment-drop-overlay'),
+                decoration: BoxDecoration(
+                  borderRadius: radius,
+                  color: colors.primary.withValues(alpha: 0.16),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        LucideIcons.upload,
+                        color: colors.primary,
+                        size: context.sizing.iconButtonTapTarget,
+                      ),
+                      SizedBox(height: context.spacing.s),
+                      Text(
+                        context.l10n.chatComposerDropFiles,
+                        style: context.textTheme.large.copyWith(
+                          color: colors.primary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
-        borderRadius: context.radius,
-        color: _dragging
-            ? colors.primary.withValues(alpha: context.motion.tapHoverAlpha)
-            : Colors.transparent,
-      ),
-      child: widget.child,
+      ],
     );
     return desktop_drop.DropTarget(
       enable: enabled,

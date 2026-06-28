@@ -576,6 +576,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatComposerEmailWatermark => '由 Axichat 发送';
 
   @override
+  String get chatComposerDropFiles => '拖放文件';
+
+  @override
   String get chatTransportChoiceTitle => '选择发送方式';
 
   @override
@@ -7551,6 +7554,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatComposerEmailWatermark => '由 Axichat 傳送';
+
+  @override
+  String get chatComposerDropFiles => '拖放檔案';
 
   @override
   String get chatTransportChoiceTitle => '選擇傳送方式';

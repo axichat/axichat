@@ -618,6 +618,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatComposerEmailWatermark => 'Envoyé depuis Axichat';
 
   @override
+  String get chatComposerDropFiles => 'Déposez les fichiers';
+
+  @override
   String get chatTransportChoiceTitle => 'Choisir le mode d’envoi';
 
   @override
