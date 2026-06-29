@@ -4,6 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
@@ -38,6 +39,7 @@ import 'package:axichat/src/calendar/view/shell/calendar_task_off_grid_drag_cont
 import 'package:axichat/src/calendar/view/shell/calendar_task_drag_onboarding.dart';
 
 const bool _calendarLoadingOverlayEnabled = false;
+const Duration _calendarSyncOverlayDisplayDelay = Duration(seconds: 3);
 
 /// Base [State] used by both the authenticated and guest calendar surfaces to
 /// host the shared drag/tab interactions, sidebars, and layout switching.
@@ -353,7 +355,12 @@ abstract class CalendarExperienceState<
                       if (showXmppOperationOverlay)
                         const Material(
                           type: MaterialType.transparency,
-                          child: XmppOperationOverlay(),
+                          child: XmppOperationOverlay(
+                            displayDelayByKind: {
+                              XmppOperationKind.pubSubCalendarSnapshot:
+                                  _calendarSyncOverlayDisplayDelay,
+                            },
+                          ),
                         ),
                     ],
                   ),

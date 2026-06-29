@@ -145,6 +145,10 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     if (index != -1) {
       final existing = operations[index];
       _cancelCompletion(existing.id);
+      operations[index] = existing.copyWith(
+        triggerRevision: existing.triggerRevision + 1,
+      );
+      _setOperations(operations);
       return existing.id;
     }
 
@@ -154,6 +158,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
       id: id,
       kind: kind,
       startedAt: DateTime.now(),
+      triggerRevision: 1,
     );
     final updated = operations..add(operation);
     _setOperations(updated);

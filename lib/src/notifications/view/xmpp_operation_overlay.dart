@@ -19,10 +19,12 @@ class XmppOperationOverlay extends StatefulWidget {
     super.key,
     this.visibleKinds,
     this.offsetForOpenChat = true,
+    this.displayDelayByKind = const <XmppOperationKind, Duration>{},
   });
 
   final Set<XmppOperationKind>? visibleKinds;
   final bool offsetForOpenChat;
+  final Map<XmppOperationKind, Duration> displayDelayByKind;
 
   @override
   State<XmppOperationOverlay> createState() => _XmppOperationOverlayState();
@@ -37,9 +39,12 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<_ToastEntry> _entries = <_ToastEntry>[];
   final List<_ToastEntry> _removingEntries = <_ToastEntry>[];
-  final List<XmppOperation> _pendingInsertions = <XmppOperation>[];
+  final List<_PendingInsertion> _pendingInsertions = <_PendingInsertion>[];
+  final Map<XmppOperationKind, _DelayedInsertion> _delayedInsertions =
+      <XmppOperationKind, _DelayedInsertion>{};
   final Map<String, Timer> _exitTimers = <String, Timer>{};
   final Map<String, Timer> _removalDisposalTimers = <String, Timer>{};
+  final Map<String, Timer> _statusRevealTimers = <String, Timer>{};
   Timer? _insertCooldownTimer;
   bool _isInsertAnimating = false;
   final List<String> _pendingRemovals = <String>[];
@@ -79,6 +84,14 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
       timer.cancel();
     }
     _removalDisposalTimers.clear();
+    for (final delayed in _delayedInsertions.values.toList(growable: false)) {
+      delayed.dispose();
+    }
+    _delayedInsertions.clear();
+    for (final timer in _statusRevealTimers.values.toList(growable: false)) {
+      timer.cancel();
+    }
+    _statusRevealTimers.clear();
     _insertCooldownTimer?.cancel();
     _removalCooldownTimer?.cancel();
     _reconciliationTimer?.cancel();
@@ -99,7 +112,9 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
       return _entries.indexWhere((entry) => entry.operation.id == id) == -1;
     });
     _pendingInsertions.removeWhere((pending) {
-      return _entries.any((entry) => entry.operation.id == pending.id);
+      return _entries.any(
+        (entry) => entry.operation.id == pending.operation.id,
+      );
     });
     _processInsertQueue();
     _processRemovalQueue();
@@ -122,35 +137,37 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
     final List<String> removalQueue = <String>[];
 
     for (final entry in _entries) {
-      final XmppOperation? updated = incoming.remove(entry.operation.id);
+      final String previousId = entry.operation.id;
+      var updated = incoming.remove(previousId);
+      final replacement = _takeDelayedReplacement(entry.operation, incoming);
+      if (replacement != null &&
+          (updated == null ||
+              updated.status != XmppOperationStatus.inProgress)) {
+        updated = replacement;
+      }
       if (updated == null) {
+        if (_hasProtectedDelayedLifecycle(entry)) {
+          continue;
+        }
         if (!rawOperationIds.contains(entry.operation.id) ||
             entry.operation.kind == XmppOperationKind.pubSubFetch) {
           removalQueue.add(entry.operation.id);
         }
         continue;
       }
-      final statusChanged =
-          updated.status != entry.operation.status ||
-          updated.startedAt != entry.operation.startedAt;
-      if (statusChanged) {
-        entry.operation = updated;
-        shouldRebuild = true;
-      } else {
-        entry.operation = updated;
+      if (updated.id != previousId) {
+        _cancelExitTimer(previousId);
+        _cancelPendingRemoval(previousId);
+        _cancelStatusReveal(previousId);
       }
-      if (updated.status == XmppOperationStatus.inProgress) {
-        _cancelExitTimer(updated.id);
-        _cancelPendingRemoval(updated.id);
-      } else {
-        _ensureExitScheduled(updated.id);
-      }
+      shouldRebuild = _updateEntryOperation(entry, updated) || shouldRebuild;
     }
 
     for (final id in removalQueue) {
       _queueRemoval(id);
     }
 
+    _syncDelayedInsertions(coalesced);
     _syncPendingInsertions(coalesced);
     for (final operation in coalesced) {
       if (incoming.containsKey(operation.id)) {
@@ -163,7 +180,137 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
     }
   }
 
-  bool _insertEntry(XmppOperation operation) {
+  XmppOperation? _takeDelayedReplacement(
+    XmppOperation current,
+    Map<String, XmppOperation> incoming,
+  ) {
+    if (!_usesDisplayDelay(current)) {
+      return null;
+    }
+    String? replacementId;
+    for (final operation in incoming.values) {
+      if (operation.kind == current.kind &&
+          operation.status == XmppOperationStatus.inProgress) {
+        replacementId = operation.id;
+        break;
+      }
+    }
+    return replacementId == null ? null : incoming.remove(replacementId);
+  }
+
+  bool _hasProtectedDelayedLifecycle(_ToastEntry entry) {
+    if (!_usesDisplayDelay(entry.operation)) {
+      return false;
+    }
+    final id = entry.operation.id;
+    final hasPendingStatusReveal =
+        entry.pendingFinalOperation != null &&
+        _statusRevealTimers.containsKey(id);
+    return hasPendingStatusReveal || _exitTimers.containsKey(id);
+  }
+
+  bool _updateEntryOperation(_ToastEntry entry, XmppOperation updated) {
+    if (_usesDisplayDelay(updated)) {
+      return _updateDelayedEntryOperation(entry, updated);
+    }
+    final statusChanged =
+        updated.status != entry.operation.status ||
+        updated.startedAt != entry.operation.startedAt ||
+        updated.triggerRevision != entry.operation.triggerRevision;
+    entry.operation = updated;
+    if (updated.status == XmppOperationStatus.inProgress) {
+      _cancelExitTimer(updated.id);
+      _cancelPendingRemoval(updated.id);
+    } else {
+      _ensureExitScheduled(updated.id);
+    }
+    return statusChanged;
+  }
+
+  bool _updateDelayedEntryOperation(_ToastEntry entry, XmppOperation updated) {
+    final previous = entry.operation;
+    if (updated.status == XmppOperationStatus.inProgress) {
+      final shouldResetSpinnerTime =
+          updated.id != previous.id ||
+          updated.startedAt != previous.startedAt ||
+          updated.triggerRevision != previous.triggerRevision ||
+          previous.status != XmppOperationStatus.inProgress;
+      _cancelStatusReveal(previous.id);
+      _cancelExitTimer(previous.id);
+      _cancelPendingRemoval(previous.id);
+      entry.operation = updated;
+      if (shouldResetSpinnerTime) {
+        _restartStatusRevealTimer(entry);
+      }
+      return shouldResetSpinnerTime;
+    }
+
+    if (previous.status != XmppOperationStatus.inProgress) {
+      final changed =
+          updated.id != previous.id ||
+          updated.status != previous.status ||
+          updated.startedAt != previous.startedAt ||
+          updated.triggerRevision != previous.triggerRevision;
+      entry.operation = updated;
+      _ensureExitScheduled(updated.id);
+      return changed;
+    }
+
+    final spinnerOperation = updated.copyWith(
+      status: XmppOperationStatus.inProgress,
+    );
+    final changed =
+        spinnerOperation.id != previous.id ||
+        spinnerOperation.startedAt != previous.startedAt ||
+        spinnerOperation.triggerRevision != previous.triggerRevision ||
+        previous.status != XmppOperationStatus.inProgress;
+    entry.operation = spinnerOperation;
+    if (changed) {
+      _restartStatusRevealTimer(entry);
+    }
+    _scheduleStatusReveal(entry, updated);
+    return changed;
+  }
+
+  void _syncDelayedInsertions(List<XmppOperation> operations) {
+    final Set<XmppOperationKind> incomingDelayedKinds = <XmppOperationKind>{};
+    for (final operation in operations) {
+      if (!_usesDisplayDelay(operation)) {
+        continue;
+      }
+      incomingDelayedKinds.add(operation.kind);
+      if (_entries.any((entry) => entry.operation.kind == operation.kind)) {
+        continue;
+      }
+      final delayed = _delayedInsertions[operation.kind];
+      if (delayed == null) {
+        continue;
+      }
+      if (operation.status == XmppOperationStatus.inProgress) {
+        final shouldReset =
+            operation.id != delayed.operation.id ||
+            operation.triggerRevision != delayed.operation.triggerRevision;
+        delayed.operation = operation;
+        if (shouldReset) {
+          _resetDelayedInsertionTimer(operation.kind);
+        }
+      } else if (operation.id == delayed.operation.id) {
+        delayed.operation = operation;
+      }
+    }
+
+    for (final entry in _delayedInsertions.entries.toList(growable: false)) {
+      if (incomingDelayedKinds.contains(entry.key)) {
+        continue;
+      }
+      if (entry.value.operation.status == XmppOperationStatus.inProgress) {
+        _cancelDelayedInsertion(entry.key);
+      }
+    }
+  }
+
+  bool _insertEntry(_PendingInsertion pending) {
+    final operation = pending.operation;
     if (operation.status != XmppOperationStatus.inProgress) {
       return true;
     }
@@ -175,8 +322,16 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
       return false;
     }
     final index = _entries.length;
-    _entries.add(_ToastEntry(operation: operation, vsync: this));
+    final entry = _ToastEntry(operation: operation, vsync: this);
+    _entries.add(entry);
+    if (_usesDisplayDelay(operation)) {
+      _restartStatusRevealTimer(entry);
+    }
     listState.insertItem(index, duration: _resolveAnimationDuration());
+    final finalOperation = pending.finalOperation;
+    if (finalOperation != null) {
+      _scheduleStatusReveal(entry, finalOperation);
+    }
     return true;
   }
 
@@ -185,15 +340,18 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
       for (final operation in operations) operation.id: operation,
     };
     _pendingInsertions.removeWhere((pending) {
-      final XmppOperation? updated = incoming[pending.id];
-      return updated == null ||
-          updated.status != XmppOperationStatus.inProgress;
+      final XmppOperation? updated = incoming[pending.operation.id];
+      if (updated == null) {
+        return pending.finalOperation == null;
+      }
+      return updated.status != XmppOperationStatus.inProgress &&
+          !_usesDisplayDelay(updated);
     });
     for (var index = 0; index < _pendingInsertions.length; index += 1) {
       final pending = _pendingInsertions[index];
-      final XmppOperation? updated = incoming[pending.id];
-      if (updated != null && updated != pending) {
-        _pendingInsertions[index] = updated;
+      final XmppOperation? updated = incoming[pending.operation.id];
+      if (updated != null) {
+        pending.updateFrom(updated);
       }
     }
   }
@@ -202,30 +360,94 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
     if (operation.status != XmppOperationStatus.inProgress) {
       return;
     }
+    if (_usesDisplayDelay(operation)) {
+      _queueDelayedInsertion(operation);
+      return;
+    }
     if (_entries.any((entry) => entry.operation.id == operation.id)) {
       return;
     }
     final int pendingIndex = _pendingInsertions.indexWhere(
-      (entry) => entry.id == operation.id,
+      (entry) => entry.operation.id == operation.id,
     );
     if (pendingIndex != -1) {
-      _pendingInsertions[pendingIndex] = operation;
+      _pendingInsertions[pendingIndex].updateFrom(operation);
       return;
     }
-    _pendingInsertions.add(operation);
+    _pendingInsertions.add(_PendingInsertion.fromOperation(operation));
     _processInsertQueue();
+  }
+
+  void _queueDelayedInsertion(XmppOperation operation) {
+    final delay = _displayDelayFor(operation);
+    if (delay == Duration.zero) {
+      _pendingInsertions.add(_PendingInsertion.fromOperation(operation));
+      _processInsertQueue();
+      return;
+    }
+
+    final delayed = _delayedInsertions[operation.kind];
+    if (delayed != null) {
+      final shouldReset =
+          operation.id != delayed.operation.id ||
+          operation.triggerRevision != delayed.operation.triggerRevision;
+      delayed.operation = operation;
+      if (shouldReset) {
+        _resetDelayedInsertionTimer(operation.kind);
+      }
+      return;
+    }
+
+    _delayedInsertions[operation.kind] = _DelayedInsertion(
+      operation: operation,
+      timer: _createDelayedInsertionTimer(operation.kind, delay),
+    );
+  }
+
+  Timer _createDelayedInsertionTimer(XmppOperationKind kind, Duration delay) {
+    return Timer(delay, () {
+      if (!mounted) {
+        return;
+      }
+      final delayed = _delayedInsertions.remove(kind);
+      if (delayed == null) {
+        return;
+      }
+      delayed.dispose(cancelTimer: false);
+      _pendingInsertions.add(
+        _PendingInsertion.fromOperation(delayed.operation),
+      );
+      _processInsertQueue();
+    });
+  }
+
+  void _resetDelayedInsertionTimer(XmppOperationKind kind) {
+    final delayed = _delayedInsertions[kind];
+    if (delayed == null) {
+      return;
+    }
+    delayed.timer.cancel();
+    delayed.timer = _createDelayedInsertionTimer(
+      kind,
+      _displayDelayFor(delayed.operation),
+    );
+  }
+
+  void _cancelDelayedInsertion(XmppOperationKind kind) {
+    final delayed = _delayedInsertions.remove(kind);
+    delayed?.dispose();
   }
 
   void _processInsertQueue() {
     if (!mounted || _isInsertAnimating || _pendingInsertions.isEmpty) {
       return;
     }
-    final XmppOperation operation = _pendingInsertions.removeAt(0);
+    final pending = _pendingInsertions.removeAt(0);
     _isInsertAnimating = true;
-    final inserted = _insertEntry(operation);
+    final inserted = _insertEntry(pending);
     if (!inserted) {
       _isInsertAnimating = false;
-      _pendingInsertions.insert(0, operation);
+      _pendingInsertions.insert(0, pending);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
           return;
@@ -324,6 +546,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
 
   void _removeEntry(String id, {required bool animated}) {
     _cancelExitTimer(id);
+    _cancelStatusReveal(id);
     final index = _entries.indexWhere((entry) => entry.operation.id == id);
     if (index == -1) {
       return;
@@ -352,6 +575,89 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
       _removingEntries.remove(removedEntry);
       removedEntry.dispose();
     });
+  }
+
+  void _scheduleStatusReveal(_ToastEntry entry, XmppOperation finalOperation) {
+    _cancelPendingRemoval(finalOperation.id);
+    entry.pendingFinalOperation = finalOperation;
+    if (entry.spinnerMinimumElapsed) {
+      _revealStatus(finalOperation);
+      return;
+    }
+    if (!_statusRevealTimers.containsKey(finalOperation.id)) {
+      _restartStatusRevealTimer(entry);
+      entry.pendingFinalOperation = finalOperation;
+    }
+  }
+
+  void _revealStatus(XmppOperation finalOperation) {
+    final index = _entries.indexWhere(
+      (entry) => entry.operation.id == finalOperation.id,
+    );
+    if (index == -1) {
+      return;
+    }
+    final entry = _entries[index];
+    if (entry.operation.triggerRevision != finalOperation.triggerRevision) {
+      return;
+    }
+    entry.operation = finalOperation;
+    entry.pendingFinalOperation = null;
+    _cancelStatusReveal(finalOperation.id);
+    _cancelPendingRemoval(finalOperation.id);
+    _ensureExitScheduled(finalOperation.id);
+    setState(() {});
+  }
+
+  void _cancelStatusReveal(String id) {
+    final timer = _statusRevealTimers.remove(id);
+    timer?.cancel();
+    final index = _entries.indexWhere((entry) => entry.operation.id == id);
+    if (index != -1) {
+      _entries[index].pendingFinalOperation = null;
+    }
+  }
+
+  void _restartStatusRevealTimer(_ToastEntry entry) {
+    final operation = entry.operation;
+    _cancelStatusReveal(operation.id);
+    entry
+      ..pendingFinalOperation = null
+      ..spinnerMinimumElapsed = false;
+    final minimumDuration = _resolveMinimumStatusRevealDuration();
+    if (minimumDuration == Duration.zero) {
+      entry.spinnerMinimumElapsed = true;
+      return;
+    }
+    _statusRevealTimers[operation.id] = Timer(minimumDuration, () {
+      if (!mounted) {
+        return;
+      }
+      _statusRevealTimers.remove(operation.id);
+      final index = _entries.indexWhere(
+        (entry) => entry.operation.id == operation.id,
+      );
+      if (index == -1) {
+        return;
+      }
+      final currentEntry = _entries[index];
+      if (currentEntry.operation.triggerRevision != operation.triggerRevision) {
+        return;
+      }
+      currentEntry.spinnerMinimumElapsed = true;
+      final pendingFinalOperation = currentEntry.pendingFinalOperation;
+      if (pendingFinalOperation != null) {
+        _revealStatus(pendingFinalOperation);
+      }
+    });
+  }
+
+  Duration _resolveMinimumStatusRevealDuration() {
+    final animationDuration = _resolveAnimationDuration();
+    if (animationDuration == Duration.zero) {
+      return Duration.zero;
+    }
+    return Duration(microseconds: animationDuration.inMicroseconds * 2);
   }
 
   Duration _resolveAnimationDuration() {
@@ -431,6 +737,15 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
       XmppOperationKind.mamFetch => false,
       _ => true,
     };
+  }
+
+  bool _usesDisplayDelay(XmppOperation operation) {
+    return _displayDelayFor(operation) > Duration.zero;
+  }
+
+  Duration _displayDelayFor(XmppOperation operation) {
+    final delay = widget.displayDelayByKind[operation.kind] ?? Duration.zero;
+    return delay > Duration.zero ? delay : Duration.zero;
   }
 
   double _resolveBottomInset(BuildContext context) {
@@ -553,6 +868,46 @@ class _OperationStatusIcon extends StatelessWidget {
   }
 }
 
+class _PendingInsertion {
+  _PendingInsertion({required this.operation, required this.finalOperation});
+
+  factory _PendingInsertion.fromOperation(XmppOperation operation) {
+    if (operation.status == XmppOperationStatus.inProgress) {
+      return _PendingInsertion(operation: operation, finalOperation: null);
+    }
+    return _PendingInsertion(
+      operation: operation.copyWith(status: XmppOperationStatus.inProgress),
+      finalOperation: operation,
+    );
+  }
+
+  XmppOperation operation;
+  XmppOperation? finalOperation;
+
+  void updateFrom(XmppOperation updated) {
+    if (updated.status == XmppOperationStatus.inProgress) {
+      operation = updated;
+      finalOperation = null;
+      return;
+    }
+    operation = updated.copyWith(status: XmppOperationStatus.inProgress);
+    finalOperation = updated;
+  }
+}
+
+class _DelayedInsertion {
+  _DelayedInsertion({required this.operation, required this.timer});
+
+  XmppOperation operation;
+  Timer timer;
+
+  void dispose({bool cancelTimer = true}) {
+    if (cancelTimer) {
+      timer.cancel();
+    }
+  }
+}
+
 class _ToastEntry {
   _ToastEntry({required this.operation, required TickerProvider vsync})
     : spinnerController = AnimationController(
@@ -565,6 +920,8 @@ class _ToastEntry {
   }
 
   XmppOperation operation;
+  bool spinnerMinimumElapsed = false;
+  XmppOperation? pendingFinalOperation;
   final AnimationController spinnerController;
 
   void dispose() {

@@ -18,12 +18,14 @@ class XmppOperation {
     required this.kind,
     required this.startedAt,
     this.status = XmppOperationStatus.inProgress,
+    this.triggerRevision = 0,
   });
 
   final String id;
   final XmppOperationKind kind;
   final DateTime startedAt;
   final XmppOperationStatus status;
+  final int triggerRevision;
 
   XmppOperationLabelKey get labelKey => switch (status) {
     XmppOperationStatus.inProgress => switch (kind) {
@@ -99,13 +101,17 @@ class XmppOperation {
     },
   };
 
-  XmppOperation copyWith({XmppOperationStatus? status, DateTime? startedAt}) =>
-      XmppOperation(
-        id: id,
-        kind: kind,
-        startedAt: startedAt ?? this.startedAt,
-        status: status ?? this.status,
-      );
+  XmppOperation copyWith({
+    XmppOperationStatus? status,
+    DateTime? startedAt,
+    int? triggerRevision,
+  }) => XmppOperation(
+    id: id,
+    kind: kind,
+    startedAt: startedAt ?? this.startedAt,
+    status: status ?? this.status,
+    triggerRevision: triggerRevision ?? this.triggerRevision,
+  );
 }
 
 enum XmppOperationStatus { inProgress, success, failure }
