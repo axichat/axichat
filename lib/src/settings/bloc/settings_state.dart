@@ -187,7 +187,7 @@ const List<String> _syncedSettingsKeys = <String>[
 @freezed
 abstract class SettingsState with _$SettingsState {
   const factory SettingsState({
-    @Default(AppLanguage.system) AppLanguage language,
+    @Default(AppLanguage.english) AppLanguage language,
     @Default(ThemeMode.light) ThemeMode themeMode,
     @Default(ShadColor.neutral) ShadColor shadColor,
     @Default(EndpointConfig()) EndpointConfig endpointConfig,

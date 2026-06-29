@@ -27,6 +27,7 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/app_locale_resolution.dart';
 import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -709,6 +710,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         );
         final app = ShadApp.router(
           locale: localeOverride,
+          localeListResolutionCallback: resolveAppLocale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,

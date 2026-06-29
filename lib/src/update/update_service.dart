@@ -21,7 +21,6 @@ enum UpdateChannel {
   none,
   playStore,
   appStore,
-  fdroid,
   githubRelease,
   flatpak;
 
@@ -68,7 +67,7 @@ Future<UpdateChannel> resolveUpdateChannel({
   return switch (platform) {
     TargetPlatform.iOS => UpdateChannel.appStore,
     TargetPlatform.android =>
-      shorebirdEnabled ? UpdateChannel.playStore : UpdateChannel.fdroid,
+      shorebirdEnabled ? UpdateChannel.playStore : UpdateChannel.none,
     TargetPlatform.windows => UpdateChannel.githubRelease,
     _ => UpdateChannel.none,
   };
@@ -141,7 +140,6 @@ final class UpdateService {
     Logger? logger,
     UpdateStoreBackend? playStoreBackend,
     UpdateStoreBackend? appStoreBackend,
-    UpdateStoreBackend? fdroidBackend,
     UpdateStoreBackend? githubReleaseBackend,
     UpdateStoreBackend? flatpakBackend,
     ShorebirdPatchBackend? shorebirdBackend,
@@ -157,8 +155,6 @@ final class UpdateService {
        _playStoreBackend = playStoreBackend ?? const _PlayStoreUpdateBackend(),
        _appStoreBackend =
            appStoreBackend ?? _AppStoreUpdateBackend(httpClient: httpClient),
-       _fdroidBackend =
-           fdroidBackend ?? _FdroidUpdateBackend(httpClient: httpClient),
        _githubReleaseBackend =
            githubReleaseBackend ??
            _GitHubReleaseUpdateBackend(httpClient: httpClient),
@@ -177,7 +173,6 @@ final class UpdateService {
   final Logger _log;
   final UpdateStoreBackend _playStoreBackend;
   final UpdateStoreBackend _appStoreBackend;
-  final UpdateStoreBackend _fdroidBackend;
   final UpdateStoreBackend _githubReleaseBackend;
   final UpdateStoreBackend _flatpakBackend;
   final ShorebirdPatchBackend _shorebirdBackend;
@@ -237,7 +232,6 @@ final class UpdateService {
   void dispose() {
     final backends = [
       _appStoreBackend,
-      _fdroidBackend,
       _playStoreBackend,
       _githubReleaseBackend,
       _flatpakBackend,
@@ -282,7 +276,6 @@ final class UpdateService {
     final backend = switch (channel) {
       UpdateChannel.playStore => _playStoreBackend,
       UpdateChannel.appStore => _appStoreBackend,
-      UpdateChannel.fdroid => _fdroidBackend,
       UpdateChannel.githubRelease => _githubReleaseBackend,
       UpdateChannel.flatpak => _flatpakBackend,
       UpdateChannel.none => null,
@@ -565,77 +558,6 @@ final class _AppStoreUpdateBackend
   void dispose() {
     _upgrader.dispose();
   }
-}
-
-final class _FdroidUpdateBackend
-    implements UpdateStoreBackend, DisposableUpdateBackend {
-  _FdroidUpdateBackend({required http.Client httpClient})
-    : _httpClient = httpClient,
-      _log = Logger('FDroidUpdateBackend');
-
-  final http.Client _httpClient;
-  final Logger _log;
-
-  static const Duration _requestTimeout = Duration(seconds: 15);
-
-  @override
-  Future<UpdateOffer?> check({
-    required UpdateChannel channel,
-    required PackageInfo packageInfo,
-    required TargetPlatform platform,
-  }) async {
-    final installedBuild = int.tryParse(packageInfo.buildNumber);
-    if (installedBuild == null) {
-      return null;
-    }
-    final packageName = packageInfo.packageName;
-    if (packageName.isEmpty) {
-      return null;
-    }
-    final apiUri = Uri.parse(
-      'https://f-droid.org/api/v1/packages/$packageName',
-    );
-    http.Response response;
-    try {
-      response = await _httpClient.get(apiUri).timeout(_requestTimeout);
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Failed to fetch F-Droid package metadata.',
-        error,
-        stackTrace,
-      );
-      return null;
-    }
-    if (response.statusCode != 200) {
-      return null;
-    }
-    final decoded = jsonDecode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      return null;
-    }
-    final rawSuggestedBuild = decoded['suggestedVersionCode'];
-    final suggestedBuild = switch (rawSuggestedBuild) {
-      int value => value,
-      num value => value.toInt(),
-      String value => int.tryParse(value),
-      _ => null,
-    };
-    if (suggestedBuild == null || suggestedBuild <= installedBuild) {
-      return null;
-    }
-    final suggestedVersion = decoded['suggestedVersionName'] as String?;
-    return UpdateOffer(
-      id: 'fdroid:$suggestedBuild',
-      kind: UpdateOfferKind.externalStore,
-      channel: channel,
-      availableVersion: suggestedVersion,
-      availableBuild: suggestedBuild,
-      storeUrl: Uri.parse('https://f-droid.org/packages/$packageName/'),
-    );
-  }
-
-  @override
-  void dispose() {}
 }
 
 final class _GitHubReleaseUpdateBackend implements UpdateStoreBackend {
