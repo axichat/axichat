@@ -356,6 +356,9 @@ Future<AttachmentTextPreviewResult> readAttachmentTextPreview(File file) async {
 }
 
 Future<String> decodeAttachmentTextWithFallback(Uint8List bytes) async {
+  if (Platform.isMacOS) {
+    return _decodeAttachmentTextWithDartCodecs(bytes);
+  }
   const candidates = <String>['utf-8', 'utf-16', 'iso-8859-1'];
   for (final encoding in candidates) {
     try {
@@ -364,7 +367,72 @@ Future<String> decodeAttachmentTextWithFallback(Uint8List bytes) async {
       continue;
     }
   }
-  return const Utf8Decoder(allowMalformed: true).convert(bytes);
+  return _decodeAttachmentTextWithDartCodecs(bytes);
+}
+
+String _decodeAttachmentTextWithDartCodecs(Uint8List bytes) {
+  final utf16 = _decodeUtf16WithBom(bytes) ?? _decodeLikelyUtf16(bytes);
+  if (utf16 != null) {
+    return utf16;
+  }
+  try {
+    return const Utf8Decoder().convert(bytes);
+  } on FormatException {
+    return const Latin1Decoder().convert(bytes);
+  }
+}
+
+String? _decodeUtf16WithBom(Uint8List bytes) {
+  if (bytes.length < 2) {
+    return null;
+  }
+  if (bytes[0] == 0xff && bytes[1] == 0xfe) {
+    return _decodeUtf16(bytes, littleEndian: true, offset: 2);
+  }
+  if (bytes[0] == 0xfe && bytes[1] == 0xff) {
+    return _decodeUtf16(bytes, littleEndian: false, offset: 2);
+  }
+  return null;
+}
+
+String? _decodeLikelyUtf16(Uint8List bytes) {
+  if (bytes.length < 4) {
+    return null;
+  }
+  final sampleLength = math.min(bytes.length - bytes.length.remainder(2), 128);
+  final pairs = sampleLength ~/ 2;
+  var evenNulls = 0;
+  var oddNulls = 0;
+  for (var i = 0; i < sampleLength; i += 2) {
+    if (bytes[i] == 0) {
+      evenNulls++;
+    }
+    if (bytes[i + 1] == 0) {
+      oddNulls++;
+    }
+  }
+  if (oddNulls > pairs ~/ 2) {
+    return _decodeUtf16(bytes, littleEndian: true);
+  }
+  if (evenNulls > pairs ~/ 2) {
+    return _decodeUtf16(bytes, littleEndian: false);
+  }
+  return null;
+}
+
+String _decodeUtf16(
+  Uint8List bytes, {
+  required bool littleEndian,
+  int offset = 0,
+}) {
+  final codeUnits = <int>[];
+  for (var i = offset; i + 1 < bytes.length; i += 2) {
+    final codeUnit = littleEndian
+        ? bytes[i] | (bytes[i + 1] << 8)
+        : (bytes[i] << 8) | bytes[i + 1];
+    codeUnits.add(codeUnit);
+  }
+  return String.fromCharCodes(codeUnits);
 }
 
 class AttachmentTextPreviewResult {
