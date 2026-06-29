@@ -259,11 +259,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSearchClose => '关闭搜索';
 
   @override
-  String get chatEmailWebViewTipTitle => 'View full email';
+  String get chatEmailWebViewTipTitle => '查看完整电子邮件';
 
   @override
-  String get chatEmailWebViewTipDescription =>
-      'Tap the message bubble to open the full email view.';
+  String get chatEmailWebViewTipDescription => '点按消息气泡以打开完整电子邮件视图。';
 
   @override
   String get commonSearch => '搜索';
@@ -2133,7 +2132,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileExportXmppContactsLabel => 'XMPP 联系人';
 
   @override
-  String get profileExportEmailMessagesLabel => '电子邮件';
+  String get profileExportEmailMessagesLabel => '电子邮件 (.eml)';
 
   @override
   String get profileExportEmailContactsLabel => '电子邮件联系人';
@@ -2161,6 +2160,16 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String profileExportFailedMessage(Object label) {
     return '无法导出$label。';
+  }
+
+  @override
+  String profileExportTooLargeForDeviceMessage(Object label) {
+    return '$label 导出文件太大，无法保存在此设备上。';
+  }
+
+  @override
+  String profileExportIncompleteMessage(Object label) {
+    return '无法创建完整的$label导出。请确保所有电子邮件内容和附件均可用，然后重试。';
   }
 
   @override
@@ -6362,7 +6371,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageDetailsOccupantIdLabel => '成员 ID';
 
   @override
-  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta 账户 ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta 消息 ID';
@@ -7244,6 +7253,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatSearchClose => '關閉搜尋';
+
+  @override
+  String get chatEmailWebViewTipTitle => '查看完整電郵';
+
+  @override
+  String get chatEmailWebViewTipDescription => '點按訊息氣泡以開啟完整電郵檢視。';
 
   @override
   String get commonSearch => '搜尋';
@@ -9114,7 +9129,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get profileExportXmppContactsLabel => 'XMPP 聯絡人';
 
   @override
-  String get profileExportEmailMessagesLabel => '電子郵件';
+  String get profileExportEmailMessagesLabel => '電子郵件 (.eml)';
 
   @override
   String get profileExportEmailContactsLabel => '電子郵件聯絡人';
@@ -9142,6 +9157,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String profileExportFailedMessage(Object label) {
     return '無法匯出$label。';
+  }
+
+  @override
+  String profileExportTooLargeForDeviceMessage(Object label) {
+    return '$label 匯出檔案太大，無法儲存在此裝置上。';
+  }
+
+  @override
+  String profileExportIncompleteMessage(Object label) {
+    return '無法建立完整的$label匯出。請確保所有電子郵件內容和附件均可用，然後再試一次。';
   }
 
   @override
@@ -13343,6 +13368,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatMessageDetailsOccupantIdLabel => '成員 ID';
+
+  @override
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta 帳號 ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta 訊息 ID';

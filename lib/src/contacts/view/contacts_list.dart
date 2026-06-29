@@ -26,6 +26,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -1115,11 +1116,24 @@ class _ContactEmailEncryptionContent extends StatelessWidget {
   final EmailContactKeyState state;
 
   Future<void> _pickPublicKey(BuildContext context) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowMultiple: false,
-      allowedExtensions: const ['asc', 'pgp', 'gpg'],
-    );
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowMultiple: false,
+        allowedExtensions: const ['asc', 'pgp', 'gpg'],
+      );
+    } on PlatformException {
+      if (!context.mounted) {
+        return;
+      }
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.error(
+          message: context.l10n.contactEmailEncryptionImportFailed,
+        ),
+      );
+      return;
+    }
     if (!context.mounted || result == null || result.files.isEmpty) {
       return;
     }

@@ -93,6 +93,8 @@
   },
   "filterTooltip": "Filtrer • {label}",
   "chatSearchClose": "Fermer la recherche",
+  "chatEmailWebViewTipTitle": "Voir l’e-mail complet",
+  "chatEmailWebViewTipDescription": "Touchez la bulle du message pour ouvrir l’affichage complet de l’e-mail.",
   "commonSearch": "Rechercher",
   "commonClear": "Effacer",
   "commonCancel": "Annuler",
@@ -820,7 +822,7 @@
   },
   "profileExportXmppMessagesLabel": "Messages XMPP",
   "profileExportXmppContactsLabel": "Contacts XMPP",
-  "profileExportEmailMessagesLabel": "E-mails",
+  "profileExportEmailMessagesLabel": "E-mails (.eml)",
   "profileExportEmailContactsLabel": "Contacts e-mail",
   "profileExportShareText": "Export Axichat : {label}",
   "@profileExportShareText": {
@@ -852,6 +854,8 @@
       "label": {}
     }
   },
+  "profileExportTooLargeForDeviceMessage": "L’export {label} est trop volumineux pour être enregistré sur cet appareil.",
+  "profileExportIncompleteMessage": "Impossible de créer un export {label} complet. Assurez-vous que tout le contenu e-mail et toutes les pièces jointes sont disponibles, puis réessayez.",
   "profileExportShareUnsupportedMessage": "Le partage n’est pas disponible sur cette plateforme. Export {label} enregistré dans {path}.",
   "@profileExportShareUnsupportedMessage": {
     "placeholders": {
@@ -3039,6 +3043,7 @@
   "chatMessageDetailsStanzaIdLabel": "ID de stanza",
   "chatMessageDetailsOriginIdLabel": "ID d origine",
   "chatMessageDetailsOccupantIdLabel": "ID d occupant",
+  "chatMessageDetailsDeltaAccountIdLabel": "ID de compte Delta",
   "chatMessageDetailsDeltaIdLabel": "ID de message Delta",
   "chatMessageDetailsLocalIdLabel": "ID de message local",
   "chatCalendarFragmentShareDeniedMessage": "Les cartes de calendrier sont desactivees pour votre role dans ce salon.",

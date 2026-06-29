@@ -279,11 +279,11 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatSearchClose => 'Fermer la recherche';
 
   @override
-  String get chatEmailWebViewTipTitle => 'View full email';
+  String get chatEmailWebViewTipTitle => 'Voir l’e-mail complet';
 
   @override
   String get chatEmailWebViewTipDescription =>
-      'Tap the message bubble to open the full email view.';
+      'Touchez la bulle du message pour ouvrir l’affichage complet de l’e-mail.';
 
   @override
   String get commonSearch => 'Rechercher';
@@ -2275,7 +2275,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get profileExportXmppContactsLabel => 'Contacts XMPP';
 
   @override
-  String get profileExportEmailMessagesLabel => 'E-mails';
+  String get profileExportEmailMessagesLabel => 'E-mails (.eml)';
 
   @override
   String get profileExportEmailContactsLabel => 'Contacts e-mail';
@@ -2303,6 +2303,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String profileExportFailedMessage(Object label) {
     return 'Impossible d’exporter $label.';
+  }
+
+  @override
+  String profileExportTooLargeForDeviceMessage(Object label) {
+    return 'L’export $label est trop volumineux pour être enregistré sur cet appareil.';
+  }
+
+  @override
+  String profileExportIncompleteMessage(Object label) {
+    return 'Impossible de créer un export $label complet. Assurez-vous que tout le contenu e-mail et toutes les pièces jointes sont disponibles, puis réessayez.';
   }
 
   @override
@@ -6783,7 +6793,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatMessageDetailsOccupantIdLabel => 'ID d occupant';
 
   @override
-  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
+  String get chatMessageDetailsDeltaAccountIdLabel => 'ID de compte Delta';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'ID de message Delta';

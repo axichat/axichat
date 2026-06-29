@@ -93,6 +93,8 @@
   },
   "filterTooltip": "篩選 • {label}",
   "chatSearchClose": "關閉搜尋",
+  "chatEmailWebViewTipTitle": "查看完整電郵",
+  "chatEmailWebViewTipDescription": "點按訊息氣泡以開啟完整電郵檢視。",
   "commonSearch": "搜尋",
   "commonClear": "清除",
   "commonCancel": "取消",
@@ -819,7 +821,7 @@
   },
   "profileExportXmppMessagesLabel": "XMPP 訊息",
   "profileExportXmppContactsLabel": "XMPP 聯絡人",
-  "profileExportEmailMessagesLabel": "電子郵件",
+  "profileExportEmailMessagesLabel": "電子郵件 (.eml)",
   "profileExportEmailContactsLabel": "電子郵件聯絡人",
   "profileExportShareText": "Axichat 匯出：{label}",
   "@profileExportShareText": {
@@ -851,6 +853,8 @@
       "label": {}
     }
   },
+  "profileExportTooLargeForDeviceMessage": "{label} 匯出檔案太大，無法儲存在此裝置上。",
+  "profileExportIncompleteMessage": "無法建立完整的{label}匯出。請確保所有電子郵件內容和附件均可用，然後再試一次。",
   "profileExportShareUnsupportedMessage": "此平台不支援分享。{label} 匯出已儲存至 {path}。",
   "@profileExportShareUnsupportedMessage": {
     "placeholders": {
@@ -3036,6 +3040,7 @@
   "chatMessageDetailsStanzaIdLabel": "訊節 ID",
   "chatMessageDetailsOriginIdLabel": "來源 ID",
   "chatMessageDetailsOccupantIdLabel": "成員 ID",
+  "chatMessageDetailsDeltaAccountIdLabel": "Delta 帳號 ID",
   "chatMessageDetailsDeltaIdLabel": "Delta 訊息 ID",
   "chatMessageDetailsLocalIdLabel": "本機訊息 ID",
   "chatCalendarFragmentShareDeniedMessage": "你的角色無法使用此房間的日曆卡片。",

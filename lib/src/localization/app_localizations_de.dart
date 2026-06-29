@@ -277,11 +277,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatSearchClose => 'Suche schließen';
 
   @override
-  String get chatEmailWebViewTipTitle => 'View full email';
+  String get chatEmailWebViewTipTitle => 'Vollständige E-Mail anzeigen';
 
   @override
   String get chatEmailWebViewTipDescription =>
-      'Tap the message bubble to open the full email view.';
+      'Tippe auf die Nachrichtenblase, um die vollständige E-Mail-Ansicht zu öffnen.';
 
   @override
   String get commonSearch => 'Suchen';
@@ -2276,7 +2276,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileExportXmppContactsLabel => 'XMPP-Kontakte';
 
   @override
-  String get profileExportEmailMessagesLabel => 'E-Mails';
+  String get profileExportEmailMessagesLabel => 'E-Mails (.eml)';
 
   @override
   String get profileExportEmailContactsLabel => 'E-Mail-Kontakte';
@@ -2304,6 +2304,16 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String profileExportFailedMessage(Object label) {
     return '$label konnte nicht exportiert werden.';
+  }
+
+  @override
+  String profileExportTooLargeForDeviceMessage(Object label) {
+    return 'Der Export für $label ist zu groß, um auf diesem Gerät gespeichert zu werden.';
+  }
+
+  @override
+  String profileExportIncompleteMessage(Object label) {
+    return 'Ein vollständiger Export für $label konnte nicht erstellt werden. Stelle sicher, dass alle E-Mail-Inhalte und Anhänge verfügbar sind, und versuche es erneut.';
   }
 
   @override
@@ -6763,7 +6773,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatMessageDetailsOccupantIdLabel => 'Occupant-ID';
 
   @override
-  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta account ID';
+  String get chatMessageDetailsDeltaAccountIdLabel => 'Delta-Konto-ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta-Nachrichten-ID';

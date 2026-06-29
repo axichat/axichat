@@ -2227,7 +2227,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileExportXmppContactsLabel => 'XMPP contacts';
 
   @override
-  String get profileExportEmailMessagesLabel => 'Emails';
+  String get profileExportEmailMessagesLabel => 'Emails (.eml)';
 
   @override
   String get profileExportEmailContactsLabel => 'Email contacts';
@@ -2255,6 +2255,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String profileExportFailedMessage(Object label) {
     return 'Unable to export $label.';
+  }
+
+  @override
+  String profileExportTooLargeForDeviceMessage(Object label) {
+    return '$label export is too large to save on this device.';
+  }
+
+  @override
+  String profileExportIncompleteMessage(Object label) {
+    return 'Unable to create a complete $label export. Make sure all email content and attachments are available, then try again.';
   }
 
   @override
@@ -4813,7 +4823,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emailContactsImportTitle => 'Import contacts';
 
   @override
-  String get emailHistoryImportTitle => 'Import email history';
+  String get emailHistoryImportTitle => 'Sync previous email history';
 
   @override
   String get emailHistoryImportBannerBody =>

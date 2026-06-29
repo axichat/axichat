@@ -62,6 +62,52 @@ class SettingsSectionAnchors {
   final GlobalKey? aboutKey;
 }
 
+@visibleForTesting
+const int profileExportPickerBytesMaxSize = 256 * 1024 * 1024;
+
+class ProfileExportSaveFileTooLargeException implements Exception {
+  const ProfileExportSaveFileTooLargeException({
+    required this.byteCount,
+    required this.maxBytes,
+  });
+
+  final int byteCount;
+  final int maxBytes;
+}
+
+@visibleForTesting
+bool profileExportSaveShouldWriteBytes(TargetPlatform platform) {
+  return switch (platform) {
+    TargetPlatform.android || TargetPlatform.iOS => true,
+    TargetPlatform.fuchsia ||
+    TargetPlatform.linux ||
+    TargetPlatform.macOS ||
+    TargetPlatform.windows => false,
+  };
+}
+
+@visibleForTesting
+Future<String?> saveProfileExportFileWithPicker({
+  required File file,
+  required String filename,
+  required TargetPlatform platform,
+  FilePicker? filePicker,
+}) async {
+  if (profileExportSaveShouldWriteBytes(platform)) {
+    final byteCount = await file.length();
+    if (byteCount > profileExportPickerBytesMaxSize) {
+      throw ProfileExportSaveFileTooLargeException(
+        byteCount: byteCount,
+        maxBytes: profileExportPickerBytesMaxSize,
+      );
+    }
+    final picker = filePicker ?? FilePicker.platform;
+    return picker.saveFile(fileName: filename, bytes: await file.readAsBytes());
+  }
+  final picker = filePicker ?? FilePicker.platform;
+  return picker.saveFile(fileName: filename);
+}
+
 class SettingsControls extends StatelessWidget {
   const SettingsControls({
     super.key,
@@ -108,9 +154,24 @@ class SettingsControls extends StatelessWidget {
           horizontal: spacing.m,
           vertical: spacing.m,
         );
-        final exportBusy = context.select<ProfileExportCubit, bool>(
-          (cubit) => cubit.state.isBusy,
-        );
+        final exportState = context
+            .select<ProfileExportCubit, ProfileExportState>(
+              (cubit) => cubit.state,
+            );
+        final exportBusy = exportState.isBusy;
+        String exportActionLabel(ProfileExportKind kind) {
+          final label = context.l10n.profileExportActionLabel(
+            kind.label(context.l10n),
+          );
+          if (exportState.activeKind == kind && exportState.totalItems > 0) {
+            return '$label (${exportState.completedItems}/${exportState.totalItems})';
+          }
+          return label;
+        }
+
+        bool exportLoading(ProfileExportKind kind) =>
+            exportBusy && exportState.activeKind == kind;
+
         final canBackgroundMessaging = context.select<SettingsCubit, bool>(
           (cubit) => cubit.canBackgroundMessaging,
         );
@@ -266,36 +327,32 @@ class SettingsControls extends StatelessWidget {
             ),
             _SettingsActionButton(
               iconData: LucideIcons.messagesSquare,
-              label: context.l10n.profileExportActionLabel(
-                ProfileExportKind.xmppMessages.label(context.l10n),
-              ),
+              label: exportActionLabel(ProfileExportKind.xmppMessages),
+              loading: exportLoading(ProfileExportKind.xmppMessages),
               onPressed: exportBusy
                   ? null
                   : () async => await _handleXmppMessageExport(context),
             ),
             _SettingsActionButton(
               iconData: LucideIcons.users,
-              label: context.l10n.profileExportActionLabel(
-                ProfileExportKind.xmppContacts.label(context.l10n),
-              ),
+              label: exportActionLabel(ProfileExportKind.xmppContacts),
+              loading: exportLoading(ProfileExportKind.xmppContacts),
               onPressed: exportBusy
                   ? null
                   : () async => await _handleXmppContactsExport(context),
             ),
             _SettingsActionButton(
               iconData: LucideIcons.mail,
-              label: context.l10n.profileExportActionLabel(
-                ProfileExportKind.emailMessages.label(context.l10n),
-              ),
+              label: exportActionLabel(ProfileExportKind.emailMessages),
+              loading: exportLoading(ProfileExportKind.emailMessages),
               onPressed: exportBusy || !emailEnabled
                   ? null
                   : () async => await _handleEmailMessageExport(context),
             ),
             _SettingsActionButton(
               iconData: LucideIcons.userRound,
-              label: context.l10n.profileExportActionLabel(
-                ProfileExportKind.emailContacts.label(context.l10n),
-              ),
+              label: exportActionLabel(ProfileExportKind.emailContacts),
+              loading: exportLoading(ProfileExportKind.emailContacts),
               onPressed: exportBusy || !emailEnabled
                   ? null
                   : () async => await _handleEmailContactsExport(context),
@@ -839,12 +896,9 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    final labels = EmailMessageLineLabels(
-      subjectLabel: context.l10n.chatMessageSubjectLabel,
-    );
-    final result = await context.read<ProfileExportCubit>().exportEmailMessages(
-      labels,
-    );
+    final result = await context
+        .read<ProfileExportCubit>()
+        .exportEmailMessages();
     if (!context.mounted) {
       return;
     }
@@ -967,7 +1021,9 @@ class SettingsControls extends StatelessWidget {
     if (result.outcome.isFailure || result.file == null) {
       showToast?.call(
         FeedbackToast.error(
-          message: context.l10n.profileExportFailedMessage(label),
+          message: result.outcome.isIncomplete
+              ? context.l10n.profileExportIncompleteMessage(label)
+              : context.l10n.profileExportFailedMessage(label),
         ),
       );
       return;
@@ -990,8 +1046,25 @@ class SettingsControls extends StatelessWidget {
       return;
     }
     String? savePath;
+    final pickerWritesBytes = profileExportSaveShouldWriteBytes(
+      defaultTargetPlatform,
+    );
     try {
-      savePath = await FilePicker.platform.saveFile(fileName: exportFileName);
+      savePath = await saveProfileExportFileWithPicker(
+        file: exportFile,
+        filename: exportFileName,
+        platform: defaultTargetPlatform,
+      );
+    } on ProfileExportSaveFileTooLargeException {
+      if (!context.mounted) {
+        return;
+      }
+      showToast?.call(
+        FeedbackToast.error(
+          message: context.l10n.profileExportTooLargeForDeviceMessage(label),
+        ),
+      );
+      return;
     } on Exception {
       if (!context.mounted) {
         return;
@@ -1010,17 +1083,25 @@ class SettingsControls extends StatelessWidget {
       return;
     }
     try {
-      final destination = File(savePath);
-      final samePath = p.equals(destination.path, exportFile.path);
-      if (!samePath) {
-        if (await destination.exists()) {
-          await destination.delete();
-        }
-        await exportFile.copy(destination.path);
+      if (pickerWritesBytes) {
         try {
           await exportFile.delete();
         } on Exception {
           // Keep going even if temp cleanup fails.
+        }
+      } else {
+        final destination = File(savePath);
+        final samePath = p.equals(destination.path, exportFile.path);
+        if (!samePath) {
+          if (await destination.exists()) {
+            await destination.delete();
+          }
+          await exportFile.copy(destination.path);
+          try {
+            await exportFile.delete();
+          } on Exception {
+            // Keep going even if temp cleanup fails.
+          }
         }
       }
     } on Exception {
@@ -1037,11 +1118,19 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    showToast?.call(
-      FeedbackToast.success(
-        message: context.l10n.profileExportReadyMessage(label),
-      ),
-    );
+    if (result.outcome.isIncomplete) {
+      showToast?.call(
+        FeedbackToast.warning(
+          message: context.l10n.profileExportIncompleteMessage(label),
+        ),
+      );
+    } else {
+      showToast?.call(
+        FeedbackToast.success(
+          message: context.l10n.profileExportReadyMessage(label),
+        ),
+      );
+    }
   }
 
   Future<void> _showEmailContactImportDialog(BuildContext context) async {
@@ -1300,11 +1389,24 @@ class _EmailEncryptionBetaRowState extends State<_EmailEncryptionBetaRow> {
   }
 
   Future<void> _pickAndImportKey(BuildContext context) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowMultiple: false,
-      allowedExtensions: const ['asc', 'pgp', 'gpg', 'zip'],
-    );
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowMultiple: false,
+        allowedExtensions: const ['asc', 'pgp', 'gpg', 'zip'],
+      );
+    } on PlatformException {
+      if (!context.mounted) {
+        return;
+      }
+      ShadToaster.maybeOf(context)?.show(
+        FeedbackToast.error(
+          message: context.l10n.emailEncryptionBetaImportFailed,
+        ),
+      );
+      return;
+    }
     if (!context.mounted || result == null || result.files.isEmpty) {
       return;
     }

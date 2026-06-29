@@ -4029,7 +4029,7 @@ abstract class AppLocalizations {
   /// No description provided for @profileExportEmailMessagesLabel.
   ///
   /// In en, this message translates to:
-  /// **'Emails'**
+  /// **'Emails (.eml)'**
   String get profileExportEmailMessagesLabel;
 
   /// No description provided for @profileExportEmailContactsLabel.
@@ -4067,6 +4067,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to export {label}.'**
   String profileExportFailedMessage(Object label);
+
+  /// No description provided for @profileExportTooLargeForDeviceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} export is too large to save on this device.'**
+  String profileExportTooLargeForDeviceMessage(Object label);
+
+  /// No description provided for @profileExportIncompleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to create a complete {label} export. Make sure all email content and attachments are available, then try again.'**
+  String profileExportIncompleteMessage(Object label);
 
   /// No description provided for @profileExportShareUnsupportedMessage.
   ///
@@ -8572,7 +8584,7 @@ abstract class AppLocalizations {
   /// No description provided for @emailHistoryImportTitle.
   ///
   /// In en, this message translates to:
-  /// **'Import email history'**
+  /// **'Sync previous email history'**
   String get emailHistoryImportTitle;
 
   /// No description provided for @emailHistoryImportBannerBody.

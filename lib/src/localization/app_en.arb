@@ -932,7 +932,7 @@
   },
   "profileExportXmppMessagesLabel": "XMPP messages",
   "profileExportXmppContactsLabel": "XMPP contacts",
-  "profileExportEmailMessagesLabel": "Emails",
+  "profileExportEmailMessagesLabel": "Emails (.eml)",
   "profileExportEmailContactsLabel": "Email contacts",
   "profileExportShareText": "Axichat export: {label}",
   "@profileExportShareText": {
@@ -960,6 +960,18 @@
   },
   "profileExportFailedMessage": "Unable to export {label}.",
   "@profileExportFailedMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportTooLargeForDeviceMessage": "{label} export is too large to save on this device.",
+  "@profileExportTooLargeForDeviceMessage": {
+    "placeholders": {
+      "label": {}
+    }
+  },
+  "profileExportIncompleteMessage": "Unable to create a complete {label} export. Make sure all email content and attachments are available, then try again.",
+  "@profileExportIncompleteMessage": {
     "placeholders": {
       "label": {}
     }
@@ -2082,7 +2094,7 @@
   "contactEmailEncryptionImportFailed": "Contact public key import failed.",
   "contactEmailEncryptionRemoveFailed": "Contact public key removal failed.",
   "emailContactsImportTitle": "Import contacts",
-  "emailHistoryImportTitle": "Import email history",
+  "emailHistoryImportTitle": "Sync previous email history",
   "emailHistoryImportBannerBody": "If this mailbox already has email, import it onto this device. Keep the app open until the import finishes. Large mailboxes can take a while.",
   "emailHistoryImportBannerAction": "Import",
   "emailHistoryImportBannerRetry": "Try again",

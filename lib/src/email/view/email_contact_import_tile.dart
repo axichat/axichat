@@ -11,6 +11,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
@@ -102,11 +103,20 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
   String? _selectedFileName;
 
   Future<void> _pickFile() async {
-    final pickerResult = await FilePicker.platform.pickFiles(
-      allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: _format.allowedExtensions,
-    );
+    final FilePickerResult? pickerResult;
+    try {
+      pickerResult = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: FileType.custom,
+        allowedExtensions: _format.allowedExtensions,
+      );
+    } on PlatformException {
+      if (!mounted) {
+        return;
+      }
+      _showFileAccessError();
+      return;
+    }
     if (!mounted || pickerResult == null || pickerResult.files.isEmpty) {
       return;
     }

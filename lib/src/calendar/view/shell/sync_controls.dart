@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -206,11 +207,18 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
     if (shouldImport != true) {
       return;
     }
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: false,
-      type: FileType.custom,
-      allowedExtensions: const ['ics', 'json'],
-    );
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: FileType.custom,
+        allowedExtensions: const ['ics', 'json'],
+      );
+    } on PlatformException {
+      if (!mounted) return;
+      FeedbackSystem.showError(context, l10n.calendarTransferFileAccessFailed);
+      return;
+    }
     if (result == null || result.files.isEmpty) {
       return;
     }
