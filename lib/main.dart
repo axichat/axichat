@@ -18,6 +18,7 @@ import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/common/ui/ui.dart' show compactDeviceBreakpoint;
 import 'package:axichat/src/notifications/notification_service.dart';
+import 'package:axichat/src/push/apns_token_service.dart';
 import 'package:axichat/src/storage/app_storage.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:flutter/foundation.dart';
@@ -56,6 +57,12 @@ Future<void> main(List<String> args) async {
   _registerThirdPartyLicenses();
 
   final NotificationService notificationService = NotificationService();
+  final ApnsTokenService? apnsTokenService = !kIsWeb && Platform.isIOS
+      ? ApnsTokenService()
+      : null;
+  notificationService.updateRemoteNotificationRegistrar(
+    apnsTokenService?.requestRemoteNotifications,
+  );
   final Future<void> notificationInitFuture = notificationService.init();
 
   final Future<Directory> storageDirectoryFuture = prepareAppStorageDirectory();
@@ -94,11 +101,12 @@ Future<void> main(List<String> args) async {
     hasStoredLoginCredentials: hasStoredLoginCredentials,
   );
   final Widget app = _PhoneOrientationPolicy(
-    child: capability.canForegroundService
+    child: capability.usesPlatformForegroundService
         ? WithForegroundTask(
             child: Material(
               child: Axichat(
                 notificationService: notificationService,
+                apnsTokenService: apnsTokenService,
                 capability: capability,
                 storageManager: storageManager,
               ),
@@ -106,6 +114,7 @@ Future<void> main(List<String> args) async {
           )
         : Axichat(
             notificationService: notificationService,
+            apnsTokenService: apnsTokenService,
             capability: capability,
             storageManager: storageManager,
           ),

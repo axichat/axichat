@@ -43,7 +43,8 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
              httpClient: httpClient,
            ),
        _ownsRecoveryClient = recoveryClient == null,
-       super(const SettingsState()) {
+       _bootstrapState = _initialStateFor(capability),
+       super(_initialStateFor(capability)) {
     _initialStoredLoginJid = _readStoredLoginJid();
     _applySettingsSideEffects(state);
     final service = _xmppService;
@@ -81,7 +82,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       CredentialStore.registerKey('calendar_task_drag_tip_shown_by_address_v1');
   final RegisteredCredentialKey _recoveryWelcomeDismissedKey =
       CredentialStore.registerKey('recovery_welcome_dismissed_by_address_v1');
-  SettingsState _bootstrapState = const SettingsState();
+  SettingsState _bootstrapState;
   final Map<String, Map<String, dynamic>> _accountSettingsJsonByKey =
       <String, Map<String, dynamic>>{};
   final Map<String, Map<String, dynamic>> _pendingRemoteSettingsSyncByKey =
@@ -89,7 +90,20 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   Map<String, dynamic>? _legacyAccountSettingsJson;
   String? _activeAccountKey;
 
+  bool get canBackgroundMessaging =>
+      _capability?.canBackgroundMessaging ?? false;
+
   bool get canForegroundService => _capability?.canForegroundService ?? false;
+
+  bool get _defaultBackgroundMessagingEnabled =>
+      _capability?.defaultsBackgroundMessagingEnabled ?? false;
+
+  static SettingsState _initialStateFor(Capability? capability) {
+    return SettingsState(
+      backgroundMessagingEnabled:
+          capability?.defaultsBackgroundMessagingEnabled ?? false,
+    );
+  }
 
   Duration get animationDuration =>
       state.lowMotion ? Duration.zero : baseAnimationDuration;
@@ -224,7 +238,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         legacyAccountJson,
       ).backgroundMessagingEnabled;
     }
-    return false;
+    return _defaultBackgroundMessagingEnabled;
   }
 
   Future<void> toggleChatNotificationsMuted(bool muted) async {
@@ -970,10 +984,18 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void _applyForegroundNotificationSettings(SettingsState nextState) {
     _xmppService?.updateForegroundNotificationSettings(
+      backgroundMessageNotificationsEnabled: _messageNotificationsEnabledFor(
+        nextState,
+      ),
       chatNotificationsMuted: nextState.chatNotificationsMuted,
       emailNotificationsMuted: nextState.emailNotificationsMuted,
       notificationPreviewsEnabled: nextState.notificationPreviewsEnabled,
     );
+  }
+
+  bool _messageNotificationsEnabledFor(SettingsState state) {
+    return _capability?.canBackgroundMessaging != true ||
+        state.backgroundMessagingEnabled;
   }
 
   SettingsState _scopeNextState(
@@ -1002,7 +1024,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   SettingsState _newAccountSettingsState() {
-    const defaults = SettingsState();
+    final defaults = _initialStateFor(_capability);
     return defaults.copyWith(
       language: _bootstrapState.language,
       themeMode: _bootstrapState.themeMode,
@@ -1286,10 +1308,9 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       _activeAccountKey = null;
       return _bootstrapState;
     } catch (_) {
-      _bootstrapState = const SettingsState(
-        themeMode: ThemeMode.light,
-        shadColor: ShadColor.neutral,
-      );
+      _bootstrapState = _initialStateFor(
+        _capability,
+      ).copyWith(themeMode: ThemeMode.light, shadColor: ShadColor.neutral);
       _accountSettingsJsonByKey.clear();
       _pendingRemoteSettingsSyncByKey.clear();
       _legacyAccountSettingsJson = null;
@@ -1425,12 +1446,15 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
           migrated.putIfAbsent('email_notifications_muted', () => muteValue);
         }
       }
+      migrated.putIfAbsent(
+        'background_messaging_enabled',
+        () => _defaultBackgroundMessagingEnabled,
+      );
       return SettingsState.fromJson(migrated);
     } catch (_) {
-      return const SettingsState(
-        themeMode: ThemeMode.light,
-        shadColor: ShadColor.neutral,
-      );
+      return _initialStateFor(
+        _capability,
+      ).copyWith(themeMode: ThemeMode.light, shadColor: ShadColor.neutral);
     }
   }
 

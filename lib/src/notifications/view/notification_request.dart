@@ -20,7 +20,7 @@ enum NotificationRequestDisplayMode {
   bool shouldShowFor(Capability capability) {
     switch (this) {
       case NotificationRequestDisplayMode.platformOnly:
-        return capability.canForegroundService;
+        return capability.canBackgroundMessaging;
       case NotificationRequestDisplayMode.always:
         return true;
     }

@@ -202,6 +202,7 @@ final class ForegroundChatNotificationPolicy {
 final class ForegroundNotificationSnapshot {
   ForegroundNotificationSnapshot({
     required this.accountJid,
+    required this.backgroundMessageNotificationsEnabled,
     required this.chatNotificationsMuted,
     required this.emailNotificationsMuted,
     required this.notificationPreviewsEnabled,
@@ -216,6 +217,7 @@ final class ForegroundNotificationSnapshot {
        );
 
   final String? accountJid;
+  final bool backgroundMessageNotificationsEnabled;
   final bool chatNotificationsMuted;
   final bool emailNotificationsMuted;
   final bool notificationPreviewsEnabled;
@@ -242,6 +244,8 @@ final class ForegroundNotificationSnapshot {
   Map<String, Object?> toJson() => <String, Object?>{
     'version': 1,
     'accountJid': accountJid,
+    'backgroundMessageNotificationsEnabled':
+        backgroundMessageNotificationsEnabled,
     'chatNotificationsMuted': chatNotificationsMuted,
     'emailNotificationsMuted': emailNotificationsMuted,
     'notificationPreviewsEnabled': notificationPreviewsEnabled,
@@ -268,6 +272,8 @@ final class ForegroundNotificationSnapshot {
     final rawBlockedJids = json['blockedJids'];
     return ForegroundNotificationSnapshot(
       accountJid: _nullableStringValue(json['accountJid']),
+      backgroundMessageNotificationsEnabled:
+          json['backgroundMessageNotificationsEnabled'] == true,
       chatNotificationsMuted: json['chatNotificationsMuted'] == true,
       emailNotificationsMuted: json['emailNotificationsMuted'] == true,
       notificationPreviewsEnabled: json['notificationPreviewsEnabled'] == true,

@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/common/background_messaging_platform.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
@@ -34,30 +35,61 @@ class ForegroundRuntimeController {
     required XmppService xmppService,
     required EmailService emailService,
     ForegroundTaskBridge? foregroundBridge,
+    BackgroundMessagingPlatform? backgroundMessagingPlatform,
   }) : _capability = capability,
        _notificationService = notificationService,
        _xmppService = xmppService,
        _emailService = emailService,
-       _foregroundBridge = foregroundBridge;
+       _foregroundBridge = foregroundBridge,
+       _backgroundMessagingPlatform =
+           backgroundMessagingPlatform ?? BackgroundMessagingPlatform();
 
   final Capability _capability;
   final NotificationService _notificationService;
   final XmppService _xmppService;
   final EmailService _emailService;
   final ForegroundTaskBridge? _foregroundBridge;
+  final BackgroundMessagingPlatform _backgroundMessagingPlatform;
   final Logger _log = Logger('ForegroundRuntimeController');
 
   ForegroundTaskBridge get _bridge => _foregroundBridge ?? foregroundTaskBridge;
+
+  bool get _usesPlatformForegroundService =>
+      _capability.usesPlatformForegroundService;
+
+  bool get _usesHiddenWindowBackgroundMessaging =>
+      _capability.usesHiddenWindowBackgroundMessaging;
+
+  bool get _usesPermissionOnlyBackgroundMessaging =>
+      _capability.canBackgroundMessaging &&
+      !_usesPlatformForegroundService &&
+      !_usesHiddenWindowBackgroundMessaging;
 
   bool get isActive => foregroundServiceActive.value;
 
   Future<void> prepareForNextXmppConnection({required bool desired}) async {
     if (!desired ||
-        !_capability.canForegroundService ||
+        !_capability.canBackgroundMessaging ||
         !await _notificationService.hasAllNotificationPermissions()) {
       _setForegroundIntent(false);
-      await _setEmailKeepaliveStopped();
-      await refreshActualState(fallback: foregroundServiceActive.value);
+      if (_usesPlatformForegroundService) {
+        await _setEmailKeepaliveStopped();
+        await refreshActualState(fallback: foregroundServiceActive.value);
+      } else if (_usesHiddenWindowBackgroundMessaging) {
+        await _disableNonPlatformRuntime(clearIntent: false);
+      } else {
+        _setRuntimeActive(false);
+      }
+      return;
+    }
+    if (_usesHiddenWindowBackgroundMessaging) {
+      await _setBackgroundMessagingRuntime(true);
+      _setForegroundIntent(true);
+      return;
+    }
+    if (_usesPermissionOnlyBackgroundMessaging) {
+      _setForegroundIntent(false);
+      _setRuntimeActive(false);
       return;
     }
     _setForegroundIntent(true);
@@ -74,6 +106,14 @@ class ForegroundRuntimeController {
     return result == ForegroundActivationResult.active;
   }
 
+  Future<bool> syncHiddenWindowClosePolicy({required bool desired}) async {
+    if (!_usesHiddenWindowBackgroundMessaging) {
+      return false;
+    }
+    await restoreIfPreferred(desired: desired);
+    return true;
+  }
+
   Future<ForegroundActivationResult> enableForUserToggle({
     bool allowCurrentSessionMigration = false,
   }) => _activateForegroundRuntime(
@@ -83,13 +123,25 @@ class ForegroundRuntimeController {
   Future<ForegroundActivationResult> _activateForegroundRuntime({
     required bool allowCurrentSessionMigration,
   }) async {
-    if (!_capability.canForegroundService) {
+    if (!_capability.canBackgroundMessaging) {
       await disableForUserToggle();
       return ForegroundActivationResult.unavailable;
     }
     if (!await _notificationService.hasAllNotificationPermissions()) {
       await disableForUserToggle();
       return ForegroundActivationResult.unavailable;
+    }
+    if (_usesHiddenWindowBackgroundMessaging) {
+      return await _activateNonPlatformRuntime()
+          ? ForegroundActivationResult.active
+          : ForegroundActivationResult.failed;
+    }
+    if (_usesPermissionOnlyBackgroundMessaging) {
+      _setForegroundIntent(false);
+      _setRuntimeActive(false);
+      return await _notificationService.requestRemoteNotificationsIfAuthorized()
+          ? ForegroundActivationResult.active
+          : ForegroundActivationResult.failed;
     }
     if (_xmppService.connected &&
         !_xmppService.usingForegroundSocket &&
@@ -136,6 +188,15 @@ class ForegroundRuntimeController {
   }
 
   Future<bool> disableForUserToggle() async {
+    if (_usesHiddenWindowBackgroundMessaging) {
+      return _disableNonPlatformRuntime();
+    }
+    if (!_usesPlatformForegroundService) {
+      _setForegroundIntent(false);
+      _setRuntimeActive(false);
+      return true;
+    }
+
     var migrationSucceeded = false;
     var emailKeepaliveStopped = false;
     try {
@@ -165,6 +226,15 @@ class ForegroundRuntimeController {
   }
 
   Future<bool> forceStopAfterExplicitSessionEnd() async {
+    if (_usesHiddenWindowBackgroundMessaging) {
+      return _disableNonPlatformRuntime();
+    }
+    if (!_usesPlatformForegroundService) {
+      _setForegroundIntent(false);
+      _setRuntimeActive(false);
+      return true;
+    }
+
     var emailKeepaliveStopped = false;
     try {
       emailKeepaliveStopped = await _setEmailKeepaliveStopped();
@@ -210,6 +280,21 @@ class ForegroundRuntimeController {
   }
 
   Future<bool> refreshActualState({bool fallback = false}) async {
+    if (_usesHiddenWindowBackgroundMessaging) {
+      final running =
+          _capability.usesHiddenWindowBackgroundMessaging && withForeground;
+      final synced = await _setBackgroundMessagingRuntime(running);
+      if (!synced) {
+        _setRuntimeActive(fallback);
+        return fallback;
+      }
+      return running;
+    }
+    if (!_usesPlatformForegroundService) {
+      _setRuntimeActive(false);
+      return false;
+    }
+
     var running = fallback;
     try {
       running = await _bridge.isRunning();
@@ -225,6 +310,18 @@ class ForegroundRuntimeController {
   }
 
   Future<bool> _forceStopForegroundService({required String reason}) async {
+    if (_usesHiddenWindowBackgroundMessaging) {
+      final stopped = await _setBackgroundMessagingRuntime(false);
+      if (stopped) {
+        _log.info('Stopped background messaging runtime: reason=$reason');
+      }
+      return stopped;
+    }
+    if (!_usesPlatformForegroundService) {
+      _setRuntimeActive(false);
+      return true;
+    }
+
     try {
       final stopped = await _bridge.stopIfRunning();
       if (stopped) {
@@ -244,6 +341,13 @@ class ForegroundRuntimeController {
   Future<bool> _refreshActiveRuntime({
     required bool allowCurrentSessionMigration,
   }) async {
+    if (_usesHiddenWindowBackgroundMessaging) {
+      return _activateNonPlatformRuntime();
+    }
+    if (!_usesPlatformForegroundService) {
+      return true;
+    }
+
     try {
       if (_xmppService.connected) {
         if (_xmppService.usingForegroundSocket ||
@@ -276,7 +380,15 @@ class ForegroundRuntimeController {
     bool allowPendingSocketStart = false,
     bool requireNotificationSnapshot = false,
   }) async {
-    final running = await refreshActualState(fallback: false);
+    final running = await refreshActualState(
+      fallback: foregroundServiceActive.value,
+    );
+    if (_usesHiddenWindowBackgroundMessaging) {
+      return running;
+    }
+    if (!_usesPlatformForegroundService) {
+      return true;
+    }
     if (!_xmppService.connected) {
       return allowPendingSocketStart || running;
     }
@@ -290,39 +402,66 @@ class ForegroundRuntimeController {
   }
 
   Future<void> _reconcileFailedStart() async {
-    var emailKeepaliveStopped = false;
-    try {
-      await _emailService.setForegroundKeepalive(false);
-      emailKeepaliveStopped = true;
-    } on Exception catch (error, stackTrace) {
-      _log.finer(
-        'Failed to roll back email foreground keepalive.',
-        error,
-        stackTrace,
-      );
+    if (_usesPlatformForegroundService) {
+      try {
+        await _emailService.setForegroundKeepalive(false);
+      } on Exception catch (error, stackTrace) {
+        _log.finer(
+          'Failed to roll back email foreground keepalive.',
+          error,
+          stackTrace,
+        );
+      }
     }
-    var foregroundSocketDisabled = false;
     try {
-      foregroundSocketDisabled = await _xmppService
-          .disableForegroundSocketIfActive();
+      if (_usesPlatformForegroundService) {
+        await _xmppService.disableForegroundSocketIfActive();
+        await _forceStopForegroundService(
+          reason: 'failed foreground runtime start',
+        );
+      } else if (_usesHiddenWindowBackgroundMessaging) {
+        await _setBackgroundMessagingRuntime(false);
+      } else {
+        _setRuntimeActive(false);
+      }
     } on Exception catch (error, stackTrace) {
-      _log.finer(
-        'Failed to roll back XMPP foreground socket.',
-        error,
-        stackTrace,
-      );
-    }
-    var running = await refreshActualState(fallback: false);
-    if (emailKeepaliveStopped &&
-        foregroundSocketDisabled &&
-        running &&
-        (!_xmppService.connected || !_xmppService.usingForegroundSocket)) {
-      await _forceStopForegroundService(
-        reason: 'failed foreground runtime activation',
-      );
-      await refreshActualState(fallback: false);
+      _log.finer('Failed to roll back foreground runtime.', error, stackTrace);
     }
     _setForegroundIntent(false);
+    await refreshActualState(fallback: false);
+  }
+
+  Future<bool> _activateNonPlatformRuntime() async {
+    _setForegroundIntent(true);
+    final runtimeEnabled = await _setBackgroundMessagingRuntime(true);
+    if (runtimeEnabled) {
+      return true;
+    }
+    await _reconcileFailedStart();
+    return false;
+  }
+
+  Future<bool> _disableNonPlatformRuntime({bool clearIntent = true}) async {
+    final runtimeStopped = await _setBackgroundMessagingRuntime(false);
+    if (runtimeStopped && clearIntent) {
+      _setForegroundIntent(false);
+    }
+    return runtimeStopped;
+  }
+
+  Future<bool> _setBackgroundMessagingRuntime(bool enabled) async {
+    try {
+      await _backgroundMessagingPlatform.setBackgroundMessagingEnabled(enabled);
+      _setRuntimeActive(enabled);
+      return true;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to update background messaging runtime: enabled=$enabled',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
   }
 
   Future<bool> _setEmailKeepaliveStopped() async {

@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui' show AppLifecycleState;
 
 import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/common/address_tools.dart';
@@ -13,6 +14,7 @@ import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
@@ -25,6 +27,8 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 const String _androidIconPath = '@mipmap/ic_launcher';
+
+typedef RemoteNotificationRegistrar = Future<void> Function();
 
 enum MessageNotificationChannel {
   chat,
@@ -45,6 +49,8 @@ enum ReminderSchedulingPermissionRequestResult {
   failed,
 }
 
+enum NotificationUrgency { normal, timeSensitive }
+
 enum NotificationPermissionRequestResult {
   granted,
   denied,
@@ -52,6 +58,15 @@ enum NotificationPermissionRequestResult {
   awaitingBatteryOptimizationSettings;
 
   bool get isGranted => this == NotificationPermissionRequestResult.granted;
+}
+
+@visibleForTesting
+bool isDarwinAppForegroundFromLifecycle({
+  required bool isIOS,
+  required bool isMacOS,
+  required AppLifecycleState? lifecycleState,
+}) {
+  return (isIOS || isMacOS) && lifecycleState == AppLifecycleState.resumed;
 }
 
 class PendingNotificationReference {
@@ -233,8 +248,10 @@ class NotificationService {
   final Map<String, List<_MessageNotificationEntry>>
   _messageNotificationHistoryByThread =
       <String, List<_MessageNotificationEntry>>{};
+  RemoteNotificationRegistrar? _remoteNotificationRegistrar;
 
   bool mute = false;
+  bool backgroundMessageNotificationsEnabled = false;
   bool chatNotificationsMuted = false;
   bool emailNotificationsMuted = false;
   bool notificationPreviewsEnabled = false;
@@ -252,6 +269,10 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
+  MacOSFlutterLocalNotificationsPlugin? get _macOsNotificationsPlugin => _plugin
+      .resolvePlatformSpecificImplementation<
+        MacOSFlutterLocalNotificationsPlugin
+      >();
 
   static const String _unsupportedSchedulingMessage =
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
@@ -266,10 +287,13 @@ class NotificationService {
   }
 
   void updateRuntimeSettings({
+    required bool backgroundMessageNotificationsEnabled,
     required bool chatNotificationsMuted,
     required bool emailNotificationsMuted,
     required bool notificationPreviewsEnabled,
   }) {
+    this.backgroundMessageNotificationsEnabled =
+        backgroundMessageNotificationsEnabled;
     this.chatNotificationsMuted = chatNotificationsMuted;
     this.emailNotificationsMuted = emailNotificationsMuted;
     this.notificationPreviewsEnabled = notificationPreviewsEnabled;
@@ -280,6 +304,12 @@ class NotificationService {
   String get channel => _l10n.channelMessages;
 
   String get _genericMessageNotificationTitle => _l10n.newMessageTitle;
+
+  void updateRemoteNotificationRegistrar(
+    RemoteNotificationRegistrar? registrar,
+  ) {
+    _remoteNotificationRegistrar = registrar;
+  }
 
   Future<void> init() => _ensureInitialized();
 
@@ -301,12 +331,18 @@ class NotificationService {
     _initializationCompleter = completer;
 
     try {
-      FlutterForegroundTask.initCommunicationPort();
+      if (Platform.isAndroid) {
+        FlutterForegroundTask.initCommunicationPort();
+      }
       ensureNotificationTapPortInitialized();
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings(_androidIconPath);
       const DarwinInitializationSettings initializationSettingsDarwin =
-          DarwinInitializationSettings();
+          DarwinInitializationSettings(
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          );
       final LinuxInitializationSettings initializationSettingsLinux =
           LinuxInitializationSettings(defaultActionName: _l10n.openAction);
       final WindowsInitializationSettings initializationSettingsWindows =
@@ -349,18 +385,15 @@ class NotificationService {
     }
   }
 
-  Future<bool> hasAllNotificationPermissions() async {
+  Future<bool> hasNotificationDisplayPermission() async {
     if (!needsPermissions) return true;
+    if (Platform.isMacOS) {
+      return _hasMacOsNotificationPermissions();
+    }
 
     try {
       if (!await Permission.notification.isGranted) {
         return false;
-      }
-
-      if (Platform.isAndroid) {
-        if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-          return false;
-        }
       }
       return true;
     } on MissingPluginException catch (error, stackTrace) {
@@ -374,9 +407,46 @@ class NotificationService {
     }
   }
 
+  Future<bool> hasAllNotificationPermissions() async {
+    if (!await hasNotificationDisplayPermission()) {
+      return false;
+    }
+    if (!Platform.isAndroid) {
+      return true;
+    }
+
+    try {
+      return await Permission.ignoreBatteryOptimizations.isGranted;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Battery optimization permission plugin unavailable; disabling background messaging notifications.',
+        error,
+        stackTrace,
+      );
+      mute = true;
+      return false;
+    }
+  }
+
+  Future<bool> requestRemoteNotificationsIfAuthorized() async {
+    if (!await hasAllNotificationPermissions()) {
+      return false;
+    }
+    return _requestRemoteNotificationsIfConfigured();
+  }
+
   Future<NotificationPermissionRequestResult>
-  requestAllNotificationPermissions() async {
-    if (!needsPermissions) return NotificationPermissionRequestResult.granted;
+  requestNotificationDisplayPermission() async {
+    if (!needsPermissions) {
+      return NotificationPermissionRequestResult.granted;
+    }
+    if (Platform.isMacOS) {
+      return await _requestMacOsNotificationPermissions(
+            requestRemoteNotifications: false,
+          )
+          ? NotificationPermissionRequestResult.granted
+          : NotificationPermissionRequestResult.awaitingNotificationSettings;
+    }
 
     try {
       await Permission.notification.request();
@@ -390,6 +460,27 @@ class NotificationService {
         }
       }
 
+      return NotificationPermissionRequestResult.granted;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Permission plugin unavailable while requesting permissions.',
+        error,
+        stackTrace,
+      );
+      mute = true;
+      return NotificationPermissionRequestResult.denied;
+    }
+  }
+
+  Future<NotificationPermissionRequestResult>
+  requestAllNotificationPermissions() async {
+    final displayPermissionResult =
+        await requestNotificationDisplayPermission();
+    if (!displayPermissionResult.isGranted) {
+      return displayPermissionResult;
+    }
+
+    try {
       if (Platform.isAndroid) {
         await Permission.ignoreBatteryOptimizations.request();
         if (!await _permissionStatusSettled(
@@ -405,10 +496,11 @@ class NotificationService {
         }
       }
 
+      await _requestRemoteNotificationsIfConfigured();
       return NotificationPermissionRequestResult.granted;
     } on MissingPluginException catch (error, stackTrace) {
       _log.warning(
-        'Permission plugin unavailable while requesting permissions.',
+        'Permission plugin unavailable while requesting background notification permissions.',
         error,
         stackTrace,
       );
@@ -444,6 +536,9 @@ class NotificationService {
         case NotificationPermissionRequestResult.denied:
           return false;
         case NotificationPermissionRequestResult.awaitingNotificationSettings:
+          if (Platform.isMacOS) {
+            return _hasMacOsNotificationPermissions();
+          }
           return await Permission.notification.isGranted;
         case NotificationPermissionRequestResult
             .awaitingBatteryOptimizationSettings:
@@ -457,6 +552,83 @@ class NotificationService {
         stackTrace,
       );
       mute = true;
+      return false;
+    }
+  }
+
+  Future<bool> _hasMacOsNotificationPermissions() async {
+    try {
+      await _ensureInitialized();
+      final permissions = await _macOsNotificationsPlugin?.checkPermissions();
+      return permissions?.isEnabled == true;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'macOS notification plugin unavailable; disabling notifications.',
+        error,
+        stackTrace,
+      );
+      mute = true;
+      return false;
+    }
+  }
+
+  Future<bool> _requestMacOsNotificationPermissions({
+    required bool requestRemoteNotifications,
+  }) async {
+    try {
+      await _ensureInitialized();
+      final granted =
+          await _macOsNotificationsPlugin?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
+          false;
+      if (!granted) {
+        await _openNotificationSettings();
+      } else if (requestRemoteNotifications) {
+        await _requestRemoteNotificationsIfConfigured();
+      }
+      return granted;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'macOS notification plugin unavailable while requesting permissions.',
+        error,
+        stackTrace,
+      );
+      mute = true;
+      return false;
+    }
+  }
+
+  Future<void> _openNotificationSettings() async {
+    try {
+      await AppSettings.openAppSettings(type: AppSettingsType.notification);
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.fine(
+        'App settings plugin unavailable while opening notification settings.',
+        error,
+        stackTrace,
+      );
+    } on PlatformException catch (error, stackTrace) {
+      _log.fine('Failed to open notification settings.', error, stackTrace);
+    }
+  }
+
+  Future<bool> _requestRemoteNotificationsIfConfigured() async {
+    final registrar = _remoteNotificationRegistrar;
+    if (registrar == null) {
+      return !Platform.isIOS;
+    }
+    try {
+      await registrar();
+      return true;
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Remote notification registration request failed.',
+        error,
+        stackTrace,
+      );
       return false;
     }
   }
@@ -533,7 +705,7 @@ class NotificationService {
     String? payload,
   }) async {
     if (mute) return;
-    if (!await hasAllNotificationPermissions()) return;
+    if (!await hasNotificationDisplayPermission()) return;
     final bool appInForeground = await _isAppOnForeground();
     if (!allowForeground && appInForeground) {
       return;
@@ -572,7 +744,8 @@ class NotificationService {
     bool ignoreChannelMute = false,
   }) async {
     if (mute || (!ignoreChannelMute && _isChannelMuted(channel))) return;
-    if (!await hasAllNotificationPermissions()) return;
+    if (!backgroundMessageNotificationsEnabled) return;
+    if (!await hasNotificationDisplayPermission()) return;
     final bool appInForeground = await _isAppOnForeground();
     if (!allowForeground && appInForeground) {
       return;
@@ -665,6 +838,13 @@ class NotificationService {
   }
 
   Future<bool> _isAppOnForeground() async {
+    if (Platform.isIOS || Platform.isMacOS) {
+      return isDarwinAppForegroundFromLifecycle(
+        isIOS: Platform.isIOS,
+        isMacOS: Platform.isMacOS,
+        lifecycleState: SchedulerBinding.instance.lifecycleState,
+      );
+    }
     if (!Platform.isAndroid) {
       return false;
     }
@@ -697,9 +877,10 @@ class NotificationService {
     required String title,
     String? body,
     String? payload,
+    NotificationUrgency urgency = NotificationUrgency.normal,
   }) async {
     if (mute) return;
-    final hasPermissions = await hasAllNotificationPermissions();
+    final hasPermissions = await hasNotificationDisplayPermission();
     if (!hasPermissions) return;
     await _ensureInitialized();
     final scheduledLocal = scheduledAt.toLocal();
@@ -711,6 +892,7 @@ class NotificationService {
         title: title,
         body: body,
         payload: payload,
+        urgency: urgency,
       );
       return;
     }
@@ -724,12 +906,13 @@ class NotificationService {
         title: title,
         body: body,
         payload: payload,
+        urgency: urgency,
       );
       return;
     }
     await _ensureTimeZones(force: true);
 
-    final notificationDetails = await _notificationDetails();
+    final notificationDetails = await _notificationDetails(urgency: urgency);
     final scheduled = tz.TZDateTime.from(scheduledLocal, tz.local);
 
     try {
@@ -751,6 +934,7 @@ class NotificationService {
         title: title,
         body: body,
         payload: payload,
+        urgency: urgency,
       );
     }
   }
@@ -830,16 +1014,29 @@ class NotificationService {
     required String title,
     String? body,
     String? payload,
+    NotificationUrgency urgency = NotificationUrgency.normal,
   }) async {
     final delay = scheduledAt.difference(DateTime.now());
     _cancelInAppTimer(id);
     if (delay.isNegative || delay.inMicroseconds == 0) {
-      await _fireImmediate(id: id, title: title, body: body, payload: payload);
+      await _fireImmediate(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
+        urgency: urgency,
+      );
       return;
     }
     _inAppTimers[id] = Timer(delay, () async {
       _inAppTimers.remove(id);
-      await _fireImmediate(id: id, title: title, body: body, payload: payload);
+      await _fireImmediate(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
+        urgency: urgency,
+      );
     });
   }
 
@@ -848,8 +1045,9 @@ class NotificationService {
     required String title,
     String? body,
     String? payload,
+    NotificationUrgency urgency = NotificationUrgency.normal,
   }) async {
-    final notificationDetails = await _notificationDetails();
+    final notificationDetails = await _notificationDetails(urgency: urgency);
     await _showNotification(
       id: id,
       title: title,
@@ -892,7 +1090,9 @@ class NotificationService {
     _tzInitialized = true;
   }
 
-  Future<NotificationDetails> _notificationDetails() async {
+  Future<NotificationDetails> _notificationDetails({
+    NotificationUrgency urgency = NotificationUrgency.normal,
+  }) async {
     await _ensureInitialized();
     final packageInfo = await _resolvePackageInfo();
 
@@ -907,9 +1107,16 @@ class NotificationService {
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();
+    final darwinDetails = DarwinNotificationDetails(
+      interruptionLevel: urgency == NotificationUrgency.timeSensitive
+          ? InterruptionLevel.timeSensitive
+          : null,
+    );
 
     return NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
       windows: windowsDetails,
       linux: linuxDetails,
     );
@@ -954,9 +1161,12 @@ class NotificationService {
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();
+    const darwinDetails = DarwinNotificationDetails();
 
     return NotificationDetails(
       android: androidDetails,
+      iOS: darwinDetails,
+      macOS: darwinDetails,
       windows: windowsDetails,
       linux: linuxDetails,
     );

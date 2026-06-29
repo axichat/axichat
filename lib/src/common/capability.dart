@@ -15,5 +15,15 @@ class Capability {
     return 'pc';
   }
 
-  bool get canForegroundService => Platform.isAndroid || Platform.isIOS;
+  bool get canBackgroundMessaging =>
+      canForegroundService || Platform.isIOS || Platform.isMacOS;
+
+  bool get canForegroundService => Platform.isAndroid;
+
+  bool get usesPlatformForegroundService => canForegroundService;
+
+  bool get usesHiddenWindowBackgroundMessaging =>
+      !canForegroundService && Platform.isMacOS;
+
+  bool get defaultsBackgroundMessagingEnabled => false;
 }

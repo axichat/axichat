@@ -23,6 +23,7 @@ import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/push/push_registration_coordinator.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -171,6 +172,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required XmppService xmppService,
     EmailService? emailService,
     ForegroundRuntimeController? foregroundRuntimeController,
+    PushRegistrationCoordinator? pushRegistrationCoordinator,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
@@ -183,6 +185,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
        _xmppService = xmppService,
        _emailService = emailService,
        _foregroundRuntimeController = foregroundRuntimeController,
+       _pushRegistrationCoordinator = pushRegistrationCoordinator,
        _authRequestTimeout = authRequestTimeout,
        _xmppReconnectPauseDelay = xmppReconnectPauseDelay,
        _beforeStickyReconnect = beforeStickyReconnect,
@@ -311,6 +314,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
   EmailService? _emailService;
+  final PushRegistrationCoordinator? _pushRegistrationCoordinator;
   late final http.Client _httpClient;
   late final http.Client? _ownedHttpClient;
   late final provisioning.EmailProvisioningClient?
@@ -440,6 +444,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   void _configureEndpointDependencies(EndpointConfig config) {
     _rebuildEmailProvisioningClient(config);
     _emailService?.updateEndpointConfig(config);
+    _pushRegistrationCoordinator?.updateEndpointConfig(config);
   }
 
   void _handleEndpointConfigUpdated(EndpointConfig config) {
@@ -3110,6 +3115,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final AuthenticationState completedState = fromSignup
         ? AuthenticationCompleteFromSignup(config: config)
         : AuthenticationComplete(config: config);
+    _pushRegistrationCoordinator?.handleAuthenticated(jid: jid, config: config);
     _emit(completedState, config: config);
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
@@ -3627,6 +3633,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         'persist logout barrier',
         () => _persistPendingLogoutBarrier(logoutJid),
       );
+      final pushCleanupSucceeded = await _runTimedLogoutStep(
+        'push registration cleanup',
+        () =>
+            _unregisterPushForSessionEnd(jid: logoutJid ?? _xmppService.myJid),
+      );
+      if (!pushCleanupSucceeded) {
+        _log.warning(
+          'Continuing explicit logout after best-effort push cleanup failed.',
+        );
+      }
       try {
         await _runTimedLogoutStep(
           'clear xmpp session tokens',
@@ -3716,11 +3732,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _foregroundRuntimeController?.refreshAfterSessionEnd();
   }
 
+  Future<bool> _unregisterPushForSessionEnd({required String? jid}) async {
+    final coordinator = _pushRegistrationCoordinator;
+    if (coordinator == null) {
+      return true;
+    }
+    try {
+      return await coordinator.handleLogout(jid: jid, config: endpointConfig);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to unregister push notifications.',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
   Future<void> _disconnectForDelete({
     required String jid,
     required bool clearEmail,
   }) async {
     _invalidateEmailReconnectGeneration();
+    await _unregisterPushForSessionEnd(jid: jid);
     await _xmppService.clearSessionTokens();
     if (endpointConfig.smtpEnabled) {
       await _emailService?.shutdown(jid: jid, clearCredentials: clearEmail);

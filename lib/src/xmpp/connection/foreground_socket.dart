@@ -915,6 +915,9 @@ final class ForegroundSocketNotificationResolver {
     ForegroundSocketMessageCandidate candidate,
     ForegroundNotificationSnapshot snapshot,
   ) {
+    if (!snapshot.backgroundMessageNotificationsEnabled) {
+      return null;
+    }
     if (candidate.isMailPushHint) {
       return _mailPushRequestFor(candidate, snapshot);
     }

@@ -32,6 +32,8 @@ import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/push/apns_token_service.dart';
+import 'package:axichat/src/push/push_registration_coordinator.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -70,17 +72,20 @@ class Axichat extends StatefulWidget {
     super.key,
     XmppService? xmppService,
     NotificationService? notificationService,
+    ApnsTokenService? apnsTokenService,
     Capability? capability,
     Policy? policy,
     required CalendarStorageManager storageManager,
   }) : _xmppService = xmppService,
        _notificationService = notificationService ?? NotificationService(),
+       _apnsTokenService = apnsTokenService,
        _capability = capability ?? const Capability(),
        _policy = policy ?? const Policy(),
        _storageManager = storageManager;
 
   final XmppService? _xmppService;
   final NotificationService _notificationService;
+  final ApnsTokenService? _apnsTokenService;
   final Capability _capability;
   final Policy _policy;
   final CalendarStorageManager _storageManager;
@@ -103,7 +108,8 @@ class _AxichatState extends State<Axichat> {
     _xmppService =
         widget._xmppService ??
         XmppService(
-          buildConnection: () => withForeground
+          buildConnection: () =>
+              widget._capability.usesPlatformForegroundService && withForeground
               ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
               : XmppConnection(),
           buildStateStore: (prefix, passphrase) async {
@@ -162,6 +168,9 @@ class _AxichatState extends State<Axichat> {
           create: (context) => context.read<XmppService>(),
         ),
         RepositoryProvider.value(value: widget._notificationService),
+        RepositoryProvider<ApnsTokenService?>.value(
+          value: widget._apnsTokenService,
+        ),
         RepositoryProvider.value(value: widget._capability),
         RepositoryProvider.value(value: widget._policy),
         RepositoryProvider.value(value: _reminderController),
@@ -191,12 +200,17 @@ class _AxichatState extends State<Axichat> {
             credentialStore: context.read<CredentialStore>(),
           )..primeAttachmentAutoDownloadSettings();
           final settings = settingsCubit.state;
+          final messageNotificationsEnabled =
+              !widget._capability.canBackgroundMessaging ||
+              settings.backgroundMessagingEnabled;
           context.read<NotificationService>().updateRuntimeSettings(
+            backgroundMessageNotificationsEnabled: messageNotificationsEnabled,
             chatNotificationsMuted: settings.chatNotificationsMuted,
             emailNotificationsMuted: settings.emailNotificationsMuted,
             notificationPreviewsEnabled: settings.notificationPreviewsEnabled,
           );
           _xmppService.updateForegroundNotificationSettings(
+            backgroundMessageNotificationsEnabled: messageNotificationsEnabled,
             chatNotificationsMuted: settings.chatNotificationsMuted,
             emailNotificationsMuted: settings.emailNotificationsMuted,
             notificationPreviewsEnabled: settings.notificationPreviewsEnabled,
@@ -221,231 +235,330 @@ class _AxichatState extends State<Axichat> {
                 );
               },
               child: RepositoryProvider<ForegroundRuntimeController>(
-                create: (context) => ForegroundRuntimeController(
-                  capability: context.read<Capability>(),
-                  notificationService: context.read<NotificationService>(),
-                  xmppService: context.read<XmppService>(),
-                  emailService: context.read<EmailService>(),
-                ),
-                child: MultiBlocProvider(
-                  providers: [
-                    BlocProvider(
-                      create: (context) => UpdateCubit(
-                        updateService: UpdateService(
-                          httpClient: context.read<http.Client>(),
-                        ),
-                      )..initialize(),
+                create: (context) {
+                  final controller = ForegroundRuntimeController(
+                    capability: context.read<Capability>(),
+                    notificationService: context.read<NotificationService>(),
+                    xmppService: context.read<XmppService>(),
+                    emailService: context.read<EmailService>(),
+                  );
+                  unawaited(
+                    controller.syncHiddenWindowClosePolicy(
+                      desired: context
+                          .read<SettingsCubit>()
+                          .state
+                          .backgroundMessagingEnabled,
                     ),
-                    BlocProvider(
-                      create: (context) => NotificationRequestCubit(
-                        notificationService: context
-                            .read<NotificationService>(),
-                        foregroundRuntimeController: context
-                            .read<ForegroundRuntimeController>(),
-                      )..refreshPermissions(),
-                    ),
-                    BlocProvider(
-                      create: (context) => AuthenticationCubit(
-                        credentialStore: context.read<CredentialStore>(),
-                        xmppService: context.read<XmppService>(),
-                        emailService: context.read<EmailService>(),
-                        foregroundRuntimeController: context
-                            .read<ForegroundRuntimeController>(),
-                        initialEndpointConfig: context
-                            .read<SettingsCubit>()
-                            .state
-                            .endpointConfig,
-                        beforeStickyReconnect: () async {
-                          await context
-                              .read<ForegroundRuntimeController>()
-                              .restoreIfPreferred(
-                                desired: context
-                                    .read<SettingsCubit>()
-                                    .state
-                                    .backgroundMessagingEnabled,
-                              );
-                        },
-                        beforeXmppConnect: (accountJid) async {
-                          _pendingAuthCalendarAccountJid = accountJid;
-                          final settingsCubit = context.read<SettingsCubit>();
-                          await context
-                              .read<ForegroundRuntimeController>()
-                              .prepareForNextXmppConnection(
-                                desired: await settingsCubit
-                                    .backgroundMessagingEnabledForAccount(
-                                      accountJid,
-                                    ),
-                              );
-                        },
+                  );
+                  return controller;
+                },
+                child: RepositoryProvider<PushRegistrationCoordinator?>(
+                  create: (context) {
+                    final apnsTokenService = context.read<ApnsTokenService?>();
+                    if (apnsTokenService == null ||
+                        !apnsTokenService.isEnabled) {
+                      return null;
+                    }
+                    final credentialStore = context.read<CredentialStore>();
+                    final xmppService = context.read<XmppService>();
+                    xmppService.updatePushRegistrationService(
+                      XmppPushRegistrationService(
+                        xmppService: xmppService,
+                        credentialStore: credentialStore,
                       ),
-                    ),
-                    BlocProvider(
-                      create: (context) => OmemoActivityCubit(
-                        xmppBase: context.read<XmppService>(),
-                      ),
-                    ),
-                    BlocProvider(
-                      create: (context) => XmppActivityCubit(
-                        xmppBase: context.read<XmppService>(),
-                      ),
-                    ),
-                    BlocProvider(
-                      create: (context) => ShareIntentCubit()..initialize(),
-                    ),
-                    BlocProvider(
-                      create: (context) {
-                        final xmppService = context.read<XmppService>();
-                        final OmemoService? omemoService =
-                            xmppService is OmemoService
-                            ? xmppService as OmemoService
-                            : null;
-                        return ProfileCubit(
-                          xmppService: xmppService,
-                          omemoService: omemoService,
-                        );
+                    );
+                    final coordinator = PushRegistrationCoordinator(
+                      apnsTokenService: apnsTokenService,
+                      credentialStore: credentialStore,
+                      xmppService: xmppService,
+                      registrationAllowed: () async {
+                        final settings = context.read<SettingsCubit>().state;
+                        if (!settings.backgroundMessagingEnabled) {
+                          return false;
+                        }
+                        return context
+                            .read<NotificationService>()
+                            .hasAllNotificationPermissions();
                       },
-                    ),
-                    BlocProvider(
-                      create: (context) => BlocklistCubit(
-                        xmppService: context.read<XmppService>(),
+                      endpointConfig: context
+                          .read<SettingsCubit>()
+                          .state
+                          .endpointConfig,
+                    );
+                    unawaited(coordinator.start());
+                    return coordinator;
+                  },
+                  dispose: (coordinator) {
+                    _xmppService.updatePushRegistrationService(null);
+                    unawaited(coordinator?.dispose());
+                  },
+                  child: MultiBlocProvider(
+                    providers: [
+                      BlocProvider(
+                        create: (context) => UpdateCubit(
+                          updateService: UpdateService(
+                            httpClient: context.read<http.Client>(),
+                          ),
+                        )..initialize(),
                       ),
-                    ),
-                    BlocProvider(
-                      create: (context) => ChatsCubit(
-                        xmppService: context.read<XmppService>(),
-                        emailService:
-                            context
-                                .read<SettingsCubit>()
-                                .state
-                                .endpointConfig
-                                .smtpEnabled
-                            ? context.read<EmailService>()
-                            : null,
+                      BlocProvider(
+                        create: (context) => NotificationRequestCubit(
+                          notificationService: context
+                              .read<NotificationService>(),
+                          foregroundRuntimeController: context
+                              .read<ForegroundRuntimeController>(),
+                          pushRegistrationCoordinator: context
+                              .read<PushRegistrationCoordinator?>(),
+                        )..refreshPermissions(),
                       ),
-                    ),
-                    BlocProvider(
-                      create: (context) => RosterCubit(
-                        rosterService:
-                            context.read<XmppService>() as RosterService,
+                      BlocProvider(
+                        create: (context) => AuthenticationCubit(
+                          credentialStore: context.read<CredentialStore>(),
+                          xmppService: context.read<XmppService>(),
+                          emailService: context.read<EmailService>(),
+                          foregroundRuntimeController: context
+                              .read<ForegroundRuntimeController>(),
+                          pushRegistrationCoordinator: context
+                              .read<PushRegistrationCoordinator?>(),
+                          initialEndpointConfig: context
+                              .read<SettingsCubit>()
+                              .state
+                              .endpointConfig,
+                          beforeStickyReconnect: () async {
+                            await context
+                                .read<ForegroundRuntimeController>()
+                                .restoreIfPreferred(
+                                  desired: context
+                                      .read<SettingsCubit>()
+                                      .state
+                                      .backgroundMessagingEnabled,
+                                );
+                          },
+                          beforeXmppConnect: (accountJid) async {
+                            _pendingAuthCalendarAccountJid = accountJid;
+                            final settingsCubit = context.read<SettingsCubit>();
+                            await context
+                                .read<ForegroundRuntimeController>()
+                                .prepareForNextXmppConnection(
+                                  desired: await settingsCubit
+                                      .backgroundMessagingEnabledForAccount(
+                                        accountJid,
+                                      ),
+                                );
+                          },
+                        ),
                       ),
-                    ),
-                    BlocProvider(
-                      create: (context) => DraftCubit(
-                        messageService: context.read<MessageService>(),
-                        emailService:
-                            context
-                                .read<SettingsCubit>()
-                                .state
-                                .endpointConfig
-                                .smtpEnabled
-                            ? context.read<EmailService>()
-                            : null,
-                      ),
-                    ),
-                    BlocProvider(
-                      create: (context) {
-                        final endpointConfig = context
-                            .read<SettingsCubit>()
-                            .state
-                            .endpointConfig;
-                        final emailEnabled = endpointConfig.smtpEnabled;
-                        return ConnectivityCubit(
+                      BlocProvider(
+                        create: (context) => OmemoActivityCubit(
                           xmppBase: context.read<XmppService>(),
-                          emailEnabled: emailEnabled,
-                          emailService: emailEnabled
+                        ),
+                      ),
+                      BlocProvider(
+                        create: (context) => XmppActivityCubit(
+                          xmppBase: context.read<XmppService>(),
+                        ),
+                      ),
+                      BlocProvider(
+                        create: (context) => ShareIntentCubit()..initialize(),
+                      ),
+                      BlocProvider(
+                        create: (context) {
+                          final xmppService = context.read<XmppService>();
+                          final OmemoService? omemoService =
+                              xmppService is OmemoService
+                              ? xmppService as OmemoService
+                              : null;
+                          return ProfileCubit(
+                            xmppService: xmppService,
+                            omemoService: omemoService,
+                          );
+                        },
+                      ),
+                      BlocProvider(
+                        create: (context) => BlocklistCubit(
+                          xmppService: context.read<XmppService>(),
+                        ),
+                      ),
+                      BlocProvider(
+                        create: (context) => ChatsCubit(
+                          xmppService: context.read<XmppService>(),
+                          emailService:
+                              context
+                                  .read<SettingsCubit>()
+                                  .state
+                                  .endpointConfig
+                                  .smtpEnabled
                               ? context.read<EmailService>()
                               : null,
-                        );
-                      },
-                    ),
-                    BlocProvider(create: (context) => ComposeWindowCubit()),
-                    if (widget._storageManager.guestStorage != null)
+                        ),
+                      ),
                       BlocProvider(
-                        create: (context) => GuestCalendarBloc(
-                          storage: widget._storageManager.guestStorage!,
-                          reminderController: _reminderController,
-                        )..add(const CalendarStarted()),
-                        key: const Key('guest_calendar_bloc'),
+                        create: (context) => RosterCubit(
+                          rosterService:
+                              context.read<XmppService>() as RosterService,
+                        ),
                       ),
-                  ],
-                  child: MultiBlocListener(
-                    listeners: [
-                      BlocListener<SettingsCubit, SettingsState>(
-                        listenWhen: (previous, current) =>
-                            previous.endpointConfig != current.endpointConfig,
-                        listener: (context, settings) async {
-                          final config = settings.endpointConfig;
-                          final authenticationCubit = context
-                              .read<AuthenticationCubit>();
-                          final chatsCubit = context.read<ChatsCubit>();
-                          final draftCubit = context.read<DraftCubit>();
-                          final connectivityCubit = context
-                              .read<ConnectivityCubit>();
-                          final emailService = context.read<EmailService>();
-                          final foregroundRuntimeController = context
-                              .read<ForegroundRuntimeController>();
-                          final EmailService? activeEmailService =
-                              config.smtpEnabled ? emailService : null;
-                          authenticationCubit.updateEndpointConfig(config);
-                          await authenticationCubit.updateEmailService(
-                            activeEmailService,
+                      BlocProvider(
+                        create: (context) => DraftCubit(
+                          messageService: context.read<MessageService>(),
+                          emailService:
+                              context
+                                  .read<SettingsCubit>()
+                                  .state
+                                  .endpointConfig
+                                  .smtpEnabled
+                              ? context.read<EmailService>()
+                              : null,
+                        ),
+                      ),
+                      BlocProvider(
+                        create: (context) {
+                          final endpointConfig = context
+                              .read<SettingsCubit>()
+                              .state
+                              .endpointConfig;
+                          final emailEnabled = endpointConfig.smtpEnabled;
+                          return ConnectivityCubit(
+                            xmppBase: context.read<XmppService>(),
+                            emailEnabled: emailEnabled,
+                            emailService: emailEnabled
+                                ? context.read<EmailService>()
+                                : null,
                           );
-                          if (!context.mounted) return;
-                          chatsCubit.updateEmailService(activeEmailService);
-                          draftCubit.updateEmailService(activeEmailService);
-                          emailService.updateEndpointConfig(config);
-                          connectivityCubit.updateEmailContext(
-                            emailEnabled: config.smtpEnabled,
-                            emailService: activeEmailService,
-                          );
-                          if (!config.smtpEnabled) {
-                            await emailService.shutdown(
-                              clearCredentials: false,
-                            );
-                            await emailService.handleNetworkLost();
-                          } else {
-                            await emailService.handleNetworkAvailable();
-                          }
-                          if (authenticationCubit.state
-                              is AuthenticationComplete) {
-                            await foregroundRuntimeController
-                                .restoreIfPreferred(
-                                  desired: settings.backgroundMessagingEnabled,
-                                );
-                          } else {
-                            await foregroundRuntimeController
-                                .prepareForNextXmppConnection(
-                                  desired: settings.backgroundMessagingEnabled,
-                                );
-                          }
                         },
                       ),
-                      BlocListener<SettingsCubit, SettingsState>(
-                        listenWhen: (previous, current) =>
-                            previous.emailEncryptionBetaEnabledByAddress !=
-                            current.emailEncryptionBetaEnabledByAddress,
-                        listener: (context, settings) {
-                          context
-                              .read<EmailService>()
-                              .updateEmailEncryptionBetaSettings(
-                                settings.emailEncryptionBetaEnabledByAddress,
-                              );
-                        },
-                      ),
-                      BlocListener<SettingsCubit, SettingsState>(
-                        listenWhen: (previous, current) =>
-                            previous.emailReadReceipts !=
-                            current.emailReadReceipts,
-                        listener: (context, settings) async {
-                          await context
-                              .read<EmailService>()
-                              .updateEmailReadReceiptsEnabled(
-                                settings.emailReadReceipts,
-                              );
-                        },
-                      ),
+                      BlocProvider(create: (context) => ComposeWindowCubit()),
+                      if (widget._storageManager.guestStorage != null)
+                        BlocProvider(
+                          create: (context) => GuestCalendarBloc(
+                            storage: widget._storageManager.guestStorage!,
+                            reminderController: _reminderController,
+                          )..add(const CalendarStarted()),
+                          key: const Key('guest_calendar_bloc'),
+                        ),
                     ],
-                    child: const MaterialAxichat(),
+                    child: MultiBlocListener(
+                      listeners: [
+                        BlocListener<SettingsCubit, SettingsState>(
+                          listenWhen: (previous, current) =>
+                              previous.endpointConfig != current.endpointConfig,
+                          listener: (context, settings) async {
+                            final config = settings.endpointConfig;
+                            final authenticationCubit = context
+                                .read<AuthenticationCubit>();
+                            final chatsCubit = context.read<ChatsCubit>();
+                            final draftCubit = context.read<DraftCubit>();
+                            final connectivityCubit = context
+                                .read<ConnectivityCubit>();
+                            final emailService = context.read<EmailService>();
+                            final foregroundRuntimeController = context
+                                .read<ForegroundRuntimeController>();
+                            final EmailService? activeEmailService =
+                                config.smtpEnabled ? emailService : null;
+                            authenticationCubit.updateEndpointConfig(config);
+                            context
+                                .read<PushRegistrationCoordinator?>()
+                                ?.updateEndpointConfig(config);
+                            await authenticationCubit.updateEmailService(
+                              activeEmailService,
+                            );
+                            if (!context.mounted) return;
+                            chatsCubit.updateEmailService(activeEmailService);
+                            draftCubit.updateEmailService(activeEmailService);
+                            emailService.updateEndpointConfig(config);
+                            connectivityCubit.updateEmailContext(
+                              emailEnabled: config.smtpEnabled,
+                              emailService: activeEmailService,
+                            );
+                            if (!config.smtpEnabled) {
+                              await emailService.shutdown(
+                                clearCredentials: false,
+                              );
+                              await emailService.handleNetworkLost();
+                            } else {
+                              await emailService.handleNetworkAvailable();
+                            }
+                            if (authenticationCubit.state
+                                is AuthenticationComplete) {
+                              await foregroundRuntimeController
+                                  .restoreIfPreferred(
+                                    desired:
+                                        settings.backgroundMessagingEnabled,
+                                  );
+                            } else {
+                              await foregroundRuntimeController
+                                  .prepareForNextXmppConnection(
+                                    desired:
+                                        settings.backgroundMessagingEnabled,
+                                  );
+                            }
+                          },
+                        ),
+                        BlocListener<SettingsCubit, SettingsState>(
+                          listenWhen: (previous, current) =>
+                              previous.backgroundMessagingEnabled !=
+                              current.backgroundMessagingEnabled,
+                          listener: (context, settings) async {
+                            final authenticationCubit = context
+                                .read<AuthenticationCubit>();
+                            final foregroundRuntimeController = context
+                                .read<ForegroundRuntimeController>();
+                            final pushRegistrationCoordinator = context
+                                .read<PushRegistrationCoordinator?>();
+                            await pushRegistrationCoordinator
+                                ?.handleBackgroundMessagingPreferenceChanged(
+                                  enabled: settings.backgroundMessagingEnabled,
+                                );
+                            if (!context.mounted) return;
+                            if (await foregroundRuntimeController
+                                .syncHiddenWindowClosePolicy(
+                                  desired: settings.backgroundMessagingEnabled,
+                                )) {
+                              return;
+                            }
+                            if (authenticationCubit.state
+                                is AuthenticationComplete) {
+                              await foregroundRuntimeController
+                                  .restoreIfPreferred(
+                                    desired:
+                                        settings.backgroundMessagingEnabled,
+                                  );
+                            } else {
+                              await foregroundRuntimeController
+                                  .prepareForNextXmppConnection(
+                                    desired:
+                                        settings.backgroundMessagingEnabled,
+                                  );
+                            }
+                          },
+                        ),
+                        BlocListener<SettingsCubit, SettingsState>(
+                          listenWhen: (previous, current) =>
+                              previous.emailEncryptionBetaEnabledByAddress !=
+                              current.emailEncryptionBetaEnabledByAddress,
+                          listener: (context, settings) {
+                            context
+                                .read<EmailService>()
+                                .updateEmailEncryptionBetaSettings(
+                                  settings.emailEncryptionBetaEnabledByAddress,
+                                );
+                          },
+                        ),
+                        BlocListener<SettingsCubit, SettingsState>(
+                          listenWhen: (previous, current) =>
+                              previous.emailReadReceipts !=
+                              current.emailReadReceipts,
+                          listener: (context, settings) async {
+                            await context
+                                .read<EmailService>()
+                                .updateEmailReadReceiptsEnabled(
+                                  settings.emailReadReceipts,
+                                );
+                          },
+                        ),
+                      ],
+                      child: const MaterialAxichat(),
+                    ),
                   ),
                 ),
               ),
@@ -562,12 +675,18 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   Widget build(BuildContext context) {
     return BlocConsumer<SettingsCubit, SettingsState>(
       listener: (context, state) {
+        final capability = context.read<Capability>();
+        final messageNotificationsEnabled =
+            !capability.canBackgroundMessaging ||
+            state.backgroundMessagingEnabled;
         context.read<NotificationService>().updateRuntimeSettings(
+          backgroundMessageNotificationsEnabled: messageNotificationsEnabled,
           chatNotificationsMuted: state.chatNotificationsMuted,
           emailNotificationsMuted: state.emailNotificationsMuted,
           notificationPreviewsEnabled: state.notificationPreviewsEnabled,
         );
         context.read<XmppService>().updateForegroundNotificationSettings(
+          backgroundMessageNotificationsEnabled: messageNotificationsEnabled,
           chatNotificationsMuted: state.chatNotificationsMuted,
           emailNotificationsMuted: state.emailNotificationsMuted,
           notificationPreviewsEnabled: state.notificationPreviewsEnabled,
@@ -956,6 +1075,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         if (!context.mounted) {
                           return;
                         }
+                        await context
+                            .read<PushRegistrationCoordinator?>()
+                            ?.handleBackgroundMessagingPreferenceChanged(
+                              enabled: settingsCubit
+                                  .state
+                                  .backgroundMessagingEnabled,
+                            );
+                        if (!context.mounted) {
+                          return;
+                        }
                         await _restoreForegroundRuntimeIfPreferredForContext(
                           context,
                         );
@@ -1021,6 +1150,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       () => context.read<NotificationRequestCubit>().handleLifecycleResume(),
       operationName: 'NotificationRequestCubit.handleLifecycleResume',
     );
+    context.read<PushRegistrationCoordinator?>()?.handleLifecycleResume();
     _syncSystemShareTargets(context, null);
     _handleNotificationIntent();
     _handleShareIntent();
@@ -1096,13 +1226,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         _pendingNotificationIntent = null;
         if (payload == null) {
           _pendingNotificationChatJid = null;
-          _refreshEmailForNotificationWake();
+          _refreshEmailForNotificationOpen();
           await _routeHomeForNotificationIntent();
           return;
         }
         if (const NotificationPayloadCodec().isEmailInboxPayload(payload)) {
           _pendingNotificationChatJid = null;
-          _refreshEmailForNotificationWake();
+          _refreshEmailForNotificationOpen();
           await _routeHomeForNotificationIntent();
           return;
         }
@@ -1113,7 +1243,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           _pendingNotificationChatJid = chatJid;
         } else {
           _pendingNotificationChatJid = null;
-          _refreshEmailForNotificationWake();
+          _refreshEmailForNotificationOpen();
           await _routeHomeForNotificationIntent();
           return;
         }
@@ -1161,10 +1291,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     return true;
   }
 
-  void _refreshEmailForNotificationWake() {
+  void _refreshEmailForNotificationOpen() {
     fireAndForget(
       context.read<EmailService>().handleForegroundResumeNetworkAvailable,
-      operationName: 'MaterialAxichat.notificationWakeEmailRefresh',
+      operationName: 'MaterialAxichat.notificationOpenEmailRefresh',
     );
   }
 
