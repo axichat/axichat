@@ -7,6 +7,7 @@ import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/reminders/task_reminder_policy.dart';
 import 'package:axichat/src/calendar/view/tasks/recurrence_editor.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/view/tasks/schedule_range_utils.dart';
@@ -41,14 +42,23 @@ class TaskDraftController extends ChangeNotifier {
        _recurrence = initialRecurrence,
        _isImportant = initialImportant,
        _isUrgent = initialUrgent,
-       _reminders = (initialReminders ?? ReminderPreferences.defaults())
-           .normalized(),
+       _reminders = taskReminderPreferencesForAnchors(
+         initialReminders ?? ReminderPreferences.defaults(),
+         scheduledTime: initialStart,
+         deadline: initialDeadline,
+       ),
        _status = initialStatus,
        _transparency = initialTransparency,
        _categories = _normalizeCategories(initialCategories),
        _url = _normalizeUrl(initialUrl),
        _geo = initialGeo,
-       _advancedAlarms = List<CalendarAlarm>.from(initialAdvancedAlarms),
+       _advancedAlarms =
+           taskCanHaveReminders(
+             scheduledTime: initialStart,
+             deadline: initialDeadline,
+           )
+           ? List<CalendarAlarm>.from(initialAdvancedAlarms)
+           : _emptyAdvancedAlarms,
        _organizer = initialOrganizer,
        _attendees = List<CalendarAttendee>.from(initialAttendees);
 
@@ -75,6 +85,14 @@ class TaskDraftController extends ChangeNotifier {
   DateTime? get deadline => _deadline;
   RecurrenceFormValue get recurrence => _recurrence;
   ReminderPreferences get reminders => _reminders;
+  bool get canHaveReminders =>
+      taskCanHaveReminders(scheduledTime: _startTime, deadline: _deadline);
+  bool get showBothReminderAnchors => taskShowsBothReminderAnchors(
+    scheduledTime: _startTime,
+    deadline: _deadline,
+  );
+  ReminderAnchor get reminderAnchor =>
+      taskReminderAnchor(scheduledTime: _startTime, deadline: _deadline);
   CalendarIcsStatus? get status => _status;
   CalendarTransparency? get transparency => _transparency;
   List<String> get categories => List<String>.unmodifiable(_categories);
@@ -112,18 +130,21 @@ class TaskDraftController extends ChangeNotifier {
       nextStart: value,
     );
 
-    if (value == null) {
-      notifyListeners();
-      return;
-    }
+    final bool remindersChanged = _normalizeRemindersForAnchors();
 
-    if (_recurrence.frequency == RecurrenceFrequency.weekly &&
+    if (value != null &&
+        _recurrence.frequency == RecurrenceFrequency.weekly &&
         (_recurrence.weekdays.isEmpty || _recurrence.weekdays.length == 1)) {
       _recurrence = _recurrence.copyWith(weekdays: {value.weekday});
     }
 
-    if (_recurrence.isActive) {
+    if (value != null && _recurrence.isActive) {
       _recurrence = _recurrence.normalizeLimitFields();
+    }
+
+    if (remindersChanged) {
+      notifyListeners();
+      return;
     }
 
     notifyListeners();
@@ -139,17 +160,24 @@ class TaskDraftController extends ChangeNotifier {
   }
 
   void clearSchedule() {
-    if (_startTime == null && _endTime == null) {
-      return;
-    }
+    final bool scheduleChanged = _startTime != null || _endTime != null;
     _startTime = null;
     _endTime = null;
-    notifyListeners();
+    final bool remindersChanged = _normalizeRemindersForAnchors();
+    if (scheduleChanged || remindersChanged) {
+      notifyListeners();
+    }
   }
 
   void setDeadline(DateTime? value) {
-    if (_deadline == value) return;
+    if (_deadline == value) {
+      if (_normalizeRemindersForAnchors()) {
+        notifyListeners();
+      }
+      return;
+    }
     _deadline = value;
+    _normalizeRemindersForAnchors();
     notifyListeners();
   }
 
@@ -161,7 +189,11 @@ class TaskDraftController extends ChangeNotifier {
   }
 
   void setReminders(ReminderPreferences value) {
-    final ReminderPreferences normalized = value.normalized();
+    final ReminderPreferences normalized = taskReminderPreferencesForAnchors(
+      value,
+      scheduledTime: _startTime,
+      deadline: _deadline,
+    );
     if (_reminders == normalized) {
       return;
     }
@@ -212,10 +244,13 @@ class TaskDraftController extends ChangeNotifier {
   }
 
   void setAdvancedAlarms(List<CalendarAlarm> value) {
-    if (listEquals(_advancedAlarms, value)) {
+    final List<CalendarAlarm> normalized = canHaveReminders
+        ? List<CalendarAlarm>.from(value)
+        : _emptyAdvancedAlarms;
+    if (listEquals(_advancedAlarms, normalized)) {
       return;
     }
-    _advancedAlarms = List<CalendarAlarm>.from(value);
+    _advancedAlarms = normalized;
     notifyListeners();
   }
 
@@ -302,6 +337,24 @@ class TaskDraftController extends ChangeNotifier {
 
     if (didChange) {
       notifyListeners();
+    }
+    return didChange;
+  }
+
+  bool _normalizeRemindersForAnchors() {
+    bool didChange = false;
+    final ReminderPreferences normalized = taskReminderPreferencesForAnchors(
+      _reminders,
+      scheduledTime: _startTime,
+      deadline: _deadline,
+    );
+    if (_reminders != normalized) {
+      _reminders = normalized;
+      didChange = true;
+    }
+    if (!canHaveReminders && _advancedAlarms.isNotEmpty) {
+      _advancedAlarms = _emptyAdvancedAlarms;
+      didChange = true;
     }
     return didChange;
   }

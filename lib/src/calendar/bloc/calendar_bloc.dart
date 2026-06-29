@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
@@ -684,7 +685,20 @@ class CalendarBloc extends BaseCalendarBloc {
     CalendarRemoteModelApplied event,
     Emitter<CalendarState> emit,
   ) async {
+    final CalendarModel before = state.model;
+    final ReminderPermissionRequestMode reminderPermissionRequestMode =
+        modelChangeShouldRequestReminderSchedulingPermission(
+          before: before,
+          after: event.model,
+        )
+        ? ReminderPermissionRequestMode.synced
+        : ReminderPermissionRequestMode.none;
     emitModel(event.model, emit, lastSyncTime: nextSyncTimestamp());
+    await syncRemindersForModel(
+      event.model,
+      emit,
+      permissionRequestMode: reminderPermissionRequestMode,
+    );
   }
 
   Future<void> _onRemoteTaskApplied(
@@ -693,20 +707,48 @@ class CalendarBloc extends BaseCalendarBloc {
   ) async {
     switch (event.operation) {
       case 'add':
-      case 'update':
-        emitModel(
-          state.model.updateTask(event.task),
-          emit,
-          lastSyncTime: nextSyncTimestamp(),
+        final CalendarModel before = state.model;
+        final CalendarModel updatedModel = before.replaceTasks(
+          <String, CalendarTask>{event.task.id: event.task},
         );
+        final ReminderPermissionRequestMode reminderPermissionRequestMode =
+            modelChangeShouldRequestReminderSchedulingPermission(
+              before: before,
+              after: updatedModel,
+            )
+            ? ReminderPermissionRequestMode.synced
+            : ReminderPermissionRequestMode.none;
+        emitModel(updatedModel, emit, lastSyncTime: nextSyncTimestamp());
         await propagateLinkedTaskUpdate(event.task);
-      case 'delete':
-        emitModel(
-          state.model.deleteTask(event.task.id),
+        await syncRemindersForModel(
+          updatedModel,
           emit,
-          lastSyncTime: nextSyncTimestamp(),
+          permissionRequestMode: reminderPermissionRequestMode,
         );
+      case 'update':
+        final CalendarModel before = state.model;
+        final CalendarModel updatedModel = before.updateTask(event.task);
+        final ReminderPermissionRequestMode reminderPermissionRequestMode =
+            modelChangeShouldRequestReminderSchedulingPermission(
+              before: before,
+              after: updatedModel,
+            )
+            ? ReminderPermissionRequestMode.synced
+            : ReminderPermissionRequestMode.none;
+        emitModel(updatedModel, emit, lastSyncTime: nextSyncTimestamp());
+        await propagateLinkedTaskUpdate(event.task);
+        await syncRemindersForModel(
+          updatedModel,
+          emit,
+          permissionRequestMode: reminderPermissionRequestMode,
+        );
+      case 'delete':
+        final CalendarModel updatedModel = state.model.deleteTask(
+          event.task.id,
+        );
+        emitModel(updatedModel, emit, lastSyncTime: nextSyncTimestamp());
         await propagateLinkedTaskDelete(event.task);
+        await syncRemindersForModel(updatedModel, emit);
       default:
         SafeLogging.debugLog(
           'Unknown remote operation: ${event.operation}',

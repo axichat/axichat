@@ -1150,6 +1150,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       () => context.read<NotificationRequestCubit>().handleLifecycleResume(),
       operationName: 'NotificationRequestCubit.handleLifecycleResume',
     );
+    fireAndForget(
+      () => context
+          .read<CalendarReminderController>()
+          .retryPendingPermissionBlockedReminders(),
+      operationName:
+          'CalendarReminderController.retryPendingPermissionBlockedReminders',
+    );
     context.read<PushRegistrationCoordinator?>()?.handleLifecycleResume();
     _syncSystemShareTargets(context, null);
     _handleNotificationIntent();

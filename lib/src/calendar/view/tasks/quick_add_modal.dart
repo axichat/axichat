@@ -173,6 +173,7 @@ class _QuickAddModalState extends State<QuickAddModal> {
         onImportantChanged: _onUserImportantChanged,
         onUrgentChanged: _onUserUrgentChanged,
         onRemindersChanged: _onRemindersChanged,
+        onReminderPermissionsRequested: _requestReminderPermissions,
         onAdvancedAlarmsChanged: _onAdvancedAlarmsChanged,
         onCategoriesChanged: _onCategoriesChanged,
         onUrlChanged: _onUrlChanged,
@@ -300,6 +301,7 @@ class _QuickAddModalState extends State<QuickAddModal> {
     if (!_remindersLocked) {
       _formController.setReminders(task.effectiveReminders);
     }
+    _clearReminderLockIfUnavailable();
 
     if (!_locationLocked) {
       _setLocationField(task.location);
@@ -357,6 +359,7 @@ class _QuickAddModalState extends State<QuickAddModal> {
     if (!_remindersLocked) {
       _formController.setReminders(ReminderPreferences.defaults());
     }
+    _clearReminderLockIfUnavailable();
     _formController
       ..setStatus(null)
       ..setTransparency(null)
@@ -382,6 +385,7 @@ class _QuickAddModalState extends State<QuickAddModal> {
   void _onUserStartChanged(DateTime? value) {
     _scheduleLocked = value != null || _formController.endTime != null;
     _formController.updateStart(value);
+    _clearReminderLockIfUnavailable();
     if (value == null && _formController.endTime == null) {
       _scheduleLocked = false;
     }
@@ -390,6 +394,7 @@ class _QuickAddModalState extends State<QuickAddModal> {
   void _onUserEndChanged(DateTime? value) {
     _scheduleLocked = value != null || _formController.startTime != null;
     _formController.updateEnd(value);
+    _clearReminderLockIfUnavailable();
     if (value == null && _formController.startTime == null) {
       _scheduleLocked = false;
     }
@@ -398,11 +403,13 @@ class _QuickAddModalState extends State<QuickAddModal> {
   void _onUserScheduleCleared() {
     _scheduleLocked = false;
     _formController.clearSchedule();
+    _clearReminderLockIfUnavailable();
   }
 
   void _onUserDeadlineChanged(DateTime? value) {
     _deadlineLocked = value != null;
     _formController.setDeadline(value);
+    _clearReminderLockIfUnavailable();
     if (value == null) {
       _deadlineLocked = false;
     }
@@ -429,6 +436,18 @@ class _QuickAddModalState extends State<QuickAddModal> {
   void _onRemindersChanged(ReminderPreferences value) {
     _remindersLocked = true;
     _formController.setReminders(value);
+  }
+
+  void _requestReminderPermissions() {
+    widget.locateCalendarBloc?.call()?.add(
+      const CalendarEvent.reminderPermissionsRequested(),
+    );
+  }
+
+  void _clearReminderLockIfUnavailable() {
+    if (!_formController.canHaveReminders) {
+      _remindersLocked = false;
+    }
   }
 
   void _onAdvancedAlarmsChanged(List<CalendarAlarm> value) {
@@ -783,6 +802,7 @@ class _QuickAddModalContent extends StatelessWidget {
     required this.onImportantChanged,
     required this.onUrgentChanged,
     required this.onRemindersChanged,
+    required this.onReminderPermissionsRequested,
     required this.onAdvancedAlarmsChanged,
     required this.onCategoriesChanged,
     required this.onUrlChanged,
@@ -821,6 +841,7 @@ class _QuickAddModalContent extends StatelessWidget {
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final VoidCallback onReminderPermissionsRequested;
   final ValueChanged<List<CalendarAlarm>> onAdvancedAlarmsChanged;
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
@@ -856,198 +877,197 @@ class _QuickAddModalContent extends StatelessWidget {
       },
     );
 
-    return AxiSheetScaffold.sections(
-      header: header,
-      footer: actions,
-      sections: [
-        AxiSheetSection(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AnimatedSwitcher(
-                duration: baseAnimationDuration,
-                child: formError == null
-                    ? const SizedBox.shrink()
-                    : Container(
-                        key: const ValueKey('quick-add-error'),
-                        margin: EdgeInsets.only(bottom: spacing.s),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: spacing.m,
-                          vertical: spacing.xs,
-                        ),
-                        decoration: BoxDecoration(
-                          color: calendarDangerColor.withValues(
-                            alpha: context.motion.tapHoverAlpha,
-                          ),
-                          borderRadius: context.radius,
-                          border: Border.fromBorderSide(
-                            context.borderSide.copyWith(
+    return AnimatedBuilder(
+      animation: formController,
+      builder: (context, _) {
+        return AxiSheetScaffold.sections(
+          header: header,
+          footer: actions,
+          sections: [
+            AxiSheetSection(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AnimatedSwitcher(
+                    duration: baseAnimationDuration,
+                    child: formError == null
+                        ? const SizedBox.shrink()
+                        : Container(
+                            key: const ValueKey('quick-add-error'),
+                            margin: EdgeInsets.only(bottom: spacing.s),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: spacing.m,
+                              vertical: spacing.xs,
+                            ),
+                            decoration: BoxDecoration(
                               color: calendarDangerColor.withValues(
-                                alpha: context.motion.tapFocusAlpha,
+                                alpha: context.motion.tapHoverAlpha,
                               ),
-                            ),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              color: calendarDangerColor,
-                              size: context.sizing.menuItemIconSize,
-                            ),
-                            SizedBox(width: spacing.xxs),
-                            Expanded(
-                              child: Text(
-                                formError!,
-                                style: context.textTheme.label.strong.copyWith(
-                                  color: calendarDangerColor,
+                              borderRadius: context.radius,
+                              border: Border.fromBorderSide(
+                                context.borderSide.copyWith(
+                                  color: calendarDangerColor.withValues(
+                                    alpha: context.motion.tapFocusAlpha,
+                                  ),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  color: calendarDangerColor,
+                                  size: context.sizing.menuItemIconSize,
+                                ),
+                                SizedBox(width: spacing.xxs),
+                                Expanded(
+                                  child: Text(
+                                    formError!,
+                                    style: context.textTheme.label.strong
+                                        .copyWith(color: calendarDangerColor),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
+                  _QuickAddTaskNameField(
+                    controller: taskNameController,
+                    focusNode: taskNameFocusNode,
+                    helper: locationHelper,
+                    validator: titleValidator,
+                    autovalidateMode: titleAutovalidateMode,
+                    onChanged: onTaskNameChanged,
+                    onSubmit: onTaskSubmit,
+                  ),
+                  SizedBox(height: spacing.m),
+                  _QuickAddPriorityToggles(
+                    formController: formController,
+                    onImportantChanged: onImportantChanged,
+                    onUrgentChanged: onUrgentChanged,
+                  ),
+                  SizedBox(height: spacing.m),
+                  _QuickAddDescriptionField(controller: descriptionController),
+                  SizedBox(height: spacing.m),
+                  _QuickAddLocationField(
+                    controller: locationController,
+                    helper: locationHelper,
+                    onChanged: onLocationChanged,
+                  ),
+                ],
               ),
-              _QuickAddTaskNameField(
-                controller: taskNameController,
-                focusNode: taskNameFocusNode,
-                helper: locationHelper,
-                validator: titleValidator,
-                autovalidateMode: titleAutovalidateMode,
-                onChanged: onTaskNameChanged,
-                onSubmit: onTaskSubmit,
-              ),
-              SizedBox(height: spacing.m),
-              _QuickAddPriorityToggles(
-                formController: formController,
-                onImportantChanged: onImportantChanged,
-                onUrgentChanged: onUrgentChanged,
-              ),
-              SizedBox(height: spacing.m),
-              _QuickAddDescriptionField(controller: descriptionController),
-              SizedBox(height: spacing.m),
-              _QuickAddLocationField(
-                controller: locationController,
-                helper: locationHelper,
-                onChanged: onLocationChanged,
-              ),
-            ],
-          ),
-        ),
-        AxiSheetSection(
-          child: TaskChecklist(
-            controller: checklistController,
-            showDivider: false,
-          ),
-        ),
-        AxiSheetSection(
-          child: _QuickAddScheduleSection(
-            formController: formController,
-            onStartChanged: onStartChanged,
-            onEndChanged: onEndChanged,
-            onClear: onScheduleCleared,
-          ),
-        ),
-        AxiSheetSection(
-          child: _QuickAddDeadlineSection(
-            formController: formController,
-            onChanged: onDeadlineChanged,
-          ),
-        ),
-        AxiSheetSection(
-          child: AnimatedBuilder(
-            animation: formController,
-            builder: (context, _) {
-              return ReminderPreferencesField(
-                value: formController.reminders,
-                onChanged: onRemindersChanged,
-                advancedAlarms: formController.advancedAlarms,
-                onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
-                referenceStart: formController.startTime,
-                title: context.l10n.calendarRemindersSection,
-                anchor: formController.deadline == null
-                    ? ReminderAnchor.start
-                    : ReminderAnchor.deadline,
-                showBothAnchors: formController.deadline != null,
-              );
-            },
-          ),
-        ),
-        AxiSheetSection(
-          child: AnimatedBuilder(
-            animation: formController,
-            builder: (context, _) {
-              return TaskRecurrenceSection(
-                title: context.l10n.calendarRepeatLabel,
-                value: formController.recurrence,
-                onChanged: onRecurrenceChanged,
-                referenceStart: formController.startTime,
-                fallbackWeekday:
-                    formController.startTime?.weekday ??
-                    fallbackDate?.weekday ??
-                    DateTime.now().weekday,
-                chipSpacing: spacing.s,
-                chipRunSpacing: spacing.s,
-                weekdaySpacing: spacing.s,
-                advancedSectionSpacing: spacing.m,
-                endSpacing: spacing.m,
-                fieldGap: spacing.m,
-              );
-            },
-          ),
-        ),
-        AxiSheetSection(
-          child: AnimatedBuilder(
-            animation: formController,
-            builder: (context, _) {
-              return CalendarCategoriesField(
-                categories: formController.categories,
-                onChanged: onCategoriesChanged,
-                surfaceColor: context.colorScheme.card,
-              );
-            },
-          ),
-        ),
-        AxiSheetSection(
-          child: AnimatedBuilder(
-            animation: formController,
-            builder: (context, _) {
-              return CalendarLinkGeoFields(
-                url: formController.url,
-                geo: formController.geo,
-                onUrlChanged: onUrlChanged,
-                onGeoChanged: onGeoChanged,
-              );
-            },
-          ),
-        ),
-        AxiSheetSection(
-          child: AnimatedBuilder(
-            animation: formController,
-            builder: (context, _) {
-              return CalendarParticipantsField(
-                organizer: formController.organizer,
-                attendees: formController.attendees,
-                onOrganizerChanged: onOrganizerChanged,
-                onAttendeesChanged: onAttendeesChanged,
-              );
-            },
-          ),
-        ),
-        AxiSheetSection(
-          child: CriticalPathMembershipControls(
-            addButton: TaskSecondaryButton(
-              label: context.l10n.calendarAddToCriticalPath,
-              icon: Icons.route,
-              onPressed: isSubmitting || !hasCalendarBloc
-                  ? null
-                  : onAddToCriticalPath,
             ),
-            paths: queuedPaths,
-            onRemovePath: onRemoveQueuedPath,
-          ),
-        ),
-      ],
+            AxiSheetSection(
+              child: TaskChecklist(
+                controller: checklistController,
+                showDivider: false,
+              ),
+            ),
+            AxiSheetSection(
+              child: _QuickAddScheduleSection(
+                formController: formController,
+                onStartChanged: onStartChanged,
+                onEndChanged: onEndChanged,
+                onClear: onScheduleCleared,
+              ),
+            ),
+            AxiSheetSection(
+              child: _QuickAddDeadlineSection(
+                formController: formController,
+                onChanged: onDeadlineChanged,
+              ),
+            ),
+            if (formController.canHaveReminders)
+              AxiSheetSection(
+                child: ReminderPreferencesField(
+                  value: formController.reminders,
+                  onChanged: onRemindersChanged,
+                  onPermissionRequested: onReminderPermissionsRequested,
+                  advancedAlarms: formController.advancedAlarms,
+                  onAdvancedAlarmsChanged: onAdvancedAlarmsChanged,
+                  referenceStart: formController.startTime,
+                  title: context.l10n.calendarRemindersSection,
+                  anchor: formController.reminderAnchor,
+                  showBothAnchors: formController.showBothReminderAnchors,
+                ),
+              ),
+            AxiSheetSection(
+              child: AnimatedBuilder(
+                animation: formController,
+                builder: (context, _) {
+                  return TaskRecurrenceSection(
+                    title: context.l10n.calendarRepeatLabel,
+                    value: formController.recurrence,
+                    onChanged: onRecurrenceChanged,
+                    referenceStart: formController.startTime,
+                    fallbackWeekday:
+                        formController.startTime?.weekday ??
+                        fallbackDate?.weekday ??
+                        DateTime.now().weekday,
+                    chipSpacing: spacing.s,
+                    chipRunSpacing: spacing.s,
+                    weekdaySpacing: spacing.s,
+                    advancedSectionSpacing: spacing.m,
+                    endSpacing: spacing.m,
+                    fieldGap: spacing.m,
+                  );
+                },
+              ),
+            ),
+            AxiSheetSection(
+              child: AnimatedBuilder(
+                animation: formController,
+                builder: (context, _) {
+                  return CalendarCategoriesField(
+                    categories: formController.categories,
+                    onChanged: onCategoriesChanged,
+                    surfaceColor: context.colorScheme.card,
+                  );
+                },
+              ),
+            ),
+            AxiSheetSection(
+              child: AnimatedBuilder(
+                animation: formController,
+                builder: (context, _) {
+                  return CalendarLinkGeoFields(
+                    url: formController.url,
+                    geo: formController.geo,
+                    onUrlChanged: onUrlChanged,
+                    onGeoChanged: onGeoChanged,
+                  );
+                },
+              ),
+            ),
+            AxiSheetSection(
+              child: AnimatedBuilder(
+                animation: formController,
+                builder: (context, _) {
+                  return CalendarParticipantsField(
+                    organizer: formController.organizer,
+                    attendees: formController.attendees,
+                    onOrganizerChanged: onOrganizerChanged,
+                    onAttendeesChanged: onAttendeesChanged,
+                  );
+                },
+              ),
+            ),
+            AxiSheetSection(
+              child: CriticalPathMembershipControls(
+                addButton: TaskSecondaryButton(
+                  label: context.l10n.calendarAddToCriticalPath,
+                  icon: Icons.route,
+                  onPressed: isSubmitting || !hasCalendarBloc
+                      ? null
+                      : onAddToCriticalPath,
+                ),
+                paths: queuedPaths,
+                onRemovePath: onRemoveQueuedPath,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

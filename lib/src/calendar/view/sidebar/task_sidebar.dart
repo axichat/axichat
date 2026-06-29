@@ -24,6 +24,7 @@ import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/alarm_reminder_bridge.dart';
+import 'package:axichat/src/calendar/reminders/task_reminder_policy.dart';
 import 'package:axichat/src/calendar/task/nl_parser_service.dart';
 import 'package:axichat/src/calendar/task/nl_schedule_adapter.dart';
 import 'package:axichat/src/calendar/task/task_share_formatter.dart';
@@ -501,6 +502,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (!_remindersLocked) {
       _draftController.setReminders(task.effectiveReminders);
     }
+    _clearReminderLockIfUnavailable();
 
     if (!_locationLocked) {
       _setLocationField(task.location);
@@ -557,6 +559,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (!_remindersLocked) {
       _draftController.setReminders(ReminderPreferences.defaults());
     }
+    _clearReminderLockIfUnavailable();
     _draftController
       ..setStatus(null)
       ..setTransparency(null)
@@ -582,6 +585,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _onUserStartChanged(DateTime? value) {
     _scheduleLocked = value != null || _draftController.endTime != null;
     _draftController.updateStart(value);
+    _clearReminderLockIfUnavailable();
     if (value == null && _draftController.endTime == null) {
       _scheduleLocked = false;
     }
@@ -590,6 +594,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _onUserEndChanged(DateTime? value) {
     _scheduleLocked = value != null || _draftController.startTime != null;
     _draftController.updateEnd(value);
+    _clearReminderLockIfUnavailable();
     if (value == null && _draftController.startTime == null) {
       _scheduleLocked = false;
     }
@@ -598,11 +603,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _onUserScheduleCleared() {
     _scheduleLocked = false;
     _draftController.clearSchedule();
+    _clearReminderLockIfUnavailable();
   }
 
   void _onUserDeadlineChanged(DateTime? value) {
     _deadlineLocked = value != null;
     _draftController.setDeadline(value);
+    _clearReminderLockIfUnavailable();
     if (value == null) {
       _deadlineLocked = false;
     }
@@ -629,6 +636,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _onRemindersChanged(ReminderPreferences value) {
     _remindersLocked = true;
     _draftController.setReminders(value);
+  }
+
+  void _clearReminderLockIfUnavailable() {
+    if (!_draftController.canHaveReminders) {
+      _remindersLocked = false;
+    }
   }
 
   void _onCategoriesChanged(List<String> value) {
@@ -911,6 +924,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         remindersMixedNotifier:
                             _selectionRemindersMixedNotifier,
                         onRemindersChanged: _handleSelectionRemindersChanged,
+                        onReminderPermissionsRequested: () =>
+                            context.read<B>().add(
+                              const CalendarEvent.reminderPermissionsRequested(),
+                            ),
                         reminderAnchorNotifier:
                             _selectionReminderAnchorNotifier,
                         recurrenceNotifier: _selectionRecurrenceNotifier,
@@ -1053,6 +1070,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         onScheduleCleared: _onUserScheduleCleared,
                         onRecurrenceChanged: _onUserRecurrenceChanged,
                         onRemindersChanged: _onRemindersChanged,
+                        onReminderPermissionsRequested: () =>
+                            context.read<B>().add(
+                              const CalendarEvent.reminderPermissionsRequested(),
+                            ),
                         onCategoriesChanged: _onCategoriesChanged,
                         onUrlChanged: _onUrlChanged,
                         onGeoChanged: _onGeoChanged,
@@ -1409,16 +1430,33 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _selectionReminderAnchorNotifier.value = ReminderAnchor.start;
       return;
     }
-    final bool hasDeadline = tasks.any((task) => task.deadline != null);
+    final List<CalendarTask> reminderCapableTasks = tasks
+        .where(
+          (task) => taskCanHaveReminders(
+            scheduledTime: task.scheduledTime,
+            deadline: task.deadline,
+          ),
+        )
+        .toList();
+    if (reminderCapableTasks.isEmpty) {
+      _selectionRemindersNotifier.value = ReminderPreferences.defaults();
+      _selectionRemindersMixedNotifier.value = false;
+      _selectionReminderAnchorNotifier.value = ReminderAnchor.start;
+      return;
+    }
+    final bool hasDeadline = reminderCapableTasks.any(
+      (task) => task.deadline != null,
+    );
     final ReminderAnchor anchor = hasDeadline
         ? ReminderAnchor.deadline
         : ReminderAnchor.start;
 
-    final ReminderPreferences first = tasks.first.effectiveReminders.alignedTo(
-      anchor,
-    );
+    final ReminderPreferences first = reminderCapableTasks
+        .first
+        .effectiveReminders
+        .alignedTo(anchor);
     bool mixed = false;
-    for (final CalendarTask task in tasks.skip(1)) {
+    for (final CalendarTask task in reminderCapableTasks.skip(1)) {
       if (task.effectiveReminders.alignedTo(anchor) != first) {
         mixed = true;
         break;
@@ -3564,6 +3602,7 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
     required this.remindersNotifier,
     required this.remindersMixedNotifier,
     required this.onRemindersChanged,
+    required this.onReminderPermissionsRequested,
     required this.recurrenceNotifier,
     required this.recurrenceMixedNotifier,
     required this.recurrenceReferenceStart,
@@ -3601,6 +3640,7 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
   final ValueListenable<ReminderPreferences> remindersNotifier;
   final ValueListenable<bool> remindersMixedNotifier;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final VoidCallback onReminderPermissionsRequested;
   final ValueListenable<RecurrenceFormValue> recurrenceNotifier;
   final ValueListenable<bool> recurrenceMixedNotifier;
   final DateTime? recurrenceReferenceStart;
@@ -3623,6 +3663,12 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
     final bool anyCompleted = tasks.any((task) => task.isCompleted);
     final bool completionIndeterminate =
         hasTasks && anyCompleted && !allCompleted;
+    final bool hasReminderCapableTasks = tasks.any(
+      (task) => taskCanHaveReminders(
+        scheduledTime: task.scheduledTime,
+        deadline: task.deadline,
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3748,6 +3794,8 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 remindersMixedListenable: remindersMixedNotifier,
                 anchorListenable: reminderAnchorNotifier,
                 onChanged: onRemindersChanged,
+                onReminderPermissionsRequested: onReminderPermissionsRequested,
+                hasReminderCapableTasks: hasReminderCapableTasks,
                 fallbackWeekday: fallbackWeekday,
                 recurrenceListenable: recurrenceNotifier,
                 recurrenceMixedListenable: recurrenceMixedNotifier,
@@ -4157,6 +4205,8 @@ class _SelectionReminderAndRepeatSections extends StatelessWidget {
     required this.remindersMixedListenable,
     required this.anchorListenable,
     required this.onChanged,
+    required this.onReminderPermissionsRequested,
+    required this.hasReminderCapableTasks,
     required this.fallbackWeekday,
     required this.recurrenceListenable,
     required this.recurrenceMixedListenable,
@@ -4169,6 +4219,8 @@ class _SelectionReminderAndRepeatSections extends StatelessWidget {
   final ValueListenable<bool> remindersMixedListenable;
   final ValueListenable<ReminderAnchor> anchorListenable;
   final ValueChanged<ReminderPreferences> onChanged;
+  final VoidCallback onReminderPermissionsRequested;
+  final bool hasReminderCapableTasks;
   final int fallbackWeekday;
   final ValueListenable<RecurrenceFormValue> recurrenceListenable;
   final ValueListenable<bool> recurrenceMixedListenable;
@@ -4202,17 +4254,21 @@ class _SelectionReminderAndRepeatSections extends StatelessWidget {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            ReminderPreferencesField(
-                              value: reminders,
-                              onChanged: onChanged,
-                              title: context.l10n.calendarRemindersSection,
-                              mixed: remindersMixed,
-                              anchor: anchor,
-                              enabled: hasTasks,
-                            ),
-                            TaskSectionDivider(
-                              verticalPadding: context.spacing.m,
-                            ),
+                            if (hasReminderCapableTasks) ...[
+                              ReminderPreferencesField(
+                                value: reminders,
+                                onChanged: onChanged,
+                                onPermissionRequested:
+                                    onReminderPermissionsRequested,
+                                title: context.l10n.calendarRemindersSection,
+                                mixed: remindersMixed,
+                                anchor: anchor,
+                                enabled: hasTasks,
+                              ),
+                              TaskSectionDivider(
+                                verticalPadding: context.spacing.m,
+                              ),
+                            ],
                             if (recurrenceMixed) ...[
                               const _SelectionMixedRecurrenceNotice(),
                               SizedBox(height: context.spacing.s),
@@ -4428,6 +4484,7 @@ class _AddTaskSection extends StatelessWidget {
     required this.animationDuration,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
+    required this.onReminderPermissionsRequested,
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
@@ -4470,6 +4527,7 @@ class _AddTaskSection extends StatelessWidget {
   final Duration animationDuration;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final VoidCallback onReminderPermissionsRequested;
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
@@ -4598,6 +4656,8 @@ class _AddTaskSection extends StatelessWidget {
                   onRecurrenceChanged: onRecurrenceChanged,
                   onAddToCriticalPath: onAddToCriticalPath,
                   onRemindersChanged: onRemindersChanged,
+                  onReminderPermissionsRequested:
+                      onReminderPermissionsRequested,
                   onCategoriesChanged: onCategoriesChanged,
                   onUrlChanged: onUrlChanged,
                   onGeoChanged: onGeoChanged,
@@ -4684,6 +4744,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.onScheduleCleared,
     required this.onRecurrenceChanged,
     required this.onRemindersChanged,
+    required this.onReminderPermissionsRequested,
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
@@ -4749,6 +4810,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onScheduleCleared;
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final VoidCallback onReminderPermissionsRequested;
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
@@ -4836,6 +4898,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             animationDuration: animationDuration,
             onAddToCriticalPath: onAddToCriticalPath,
             onRemindersChanged: onRemindersChanged,
+            onReminderPermissionsRequested: onReminderPermissionsRequested,
             onCategoriesChanged: onCategoriesChanged,
             onUrlChanged: onUrlChanged,
             onGeoChanged: onGeoChanged,
@@ -6431,6 +6494,7 @@ class _AdvancedOptions extends StatelessWidget {
     required this.onRecurrenceChanged,
     required this.onAddToCriticalPath,
     required this.onRemindersChanged,
+    required this.onReminderPermissionsRequested,
     required this.onCategoriesChanged,
     required this.onUrlChanged,
     required this.onGeoChanged,
@@ -6452,6 +6516,7 @@ class _AdvancedOptions extends StatelessWidget {
   final ValueChanged<RecurrenceFormValue> onRecurrenceChanged;
   final Future<void> Function() onAddToCriticalPath;
   final ValueChanged<ReminderPreferences> onRemindersChanged;
+  final VoidCallback onReminderPermissionsRequested;
   final ValueChanged<List<String>> onCategoriesChanged;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
@@ -6538,24 +6603,25 @@ class _AdvancedOptions extends StatelessWidget {
             );
           },
         ),
-        _AdvancedOptionsSection(
-          label: l10n.calendarRemindersSection,
-          child: AnimatedBuilder(
-            animation: draftController,
-            builder: (context, _) {
-              final referenceStart = draftController.startTime;
-              return ReminderPreferencesField(
+        AnimatedBuilder(
+          animation: draftController,
+          builder: (context, _) {
+            if (!draftController.canHaveReminders) {
+              return const SizedBox.shrink();
+            }
+            return _AdvancedOptionsSection(
+              label: l10n.calendarRemindersSection,
+              child: ReminderPreferencesField(
                 value: draftController.reminders,
                 onChanged: onRemindersChanged,
-                referenceStart: referenceStart,
+                onPermissionRequested: onReminderPermissionsRequested,
+                referenceStart: draftController.startTime,
                 showHeader: false,
-                anchor: draftController.deadline == null
-                    ? ReminderAnchor.start
-                    : ReminderAnchor.deadline,
-                showBothAnchors: draftController.deadline != null,
-              );
-            },
-          ),
+                anchor: draftController.reminderAnchor,
+                showBothAnchors: draftController.showBothReminderAnchors,
+              ),
+            );
+          },
         ),
         _AdvancedOptionsSection(
           label: l10n.calendarRepeatLabel,

@@ -403,10 +403,20 @@ extension CalendarTaskInstanceX on CalendarTask {
       shiftedEndDate = endDate;
     }
 
+    final DateTime? baseDeadline = deadline;
+    final DateTime? baseScheduledTime = scheduledTime;
+    DateTime? shiftedDeadline = baseDeadline;
+    if (baseDeadline != null && baseScheduledTime != null) {
+      shiftedDeadline = actualStart.add(
+        baseDeadline.difference(baseScheduledTime),
+      );
+    }
+
     return copyWith(
       id: '$baseId$_occurrenceSeparator$occurrenceKey',
       scheduledTime: actualStart,
       duration: adjustedDuration,
+      deadline: shiftedDeadline,
       priority: resolvedPriority,
       isCompleted: resolvedCompletion,
       endDate: shiftedEndDate,

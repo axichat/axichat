@@ -436,31 +436,52 @@ class NotificationService {
   }
 
   Future<NotificationPermissionRequestResult>
-  requestNotificationDisplayPermission() async {
+  requestNotificationDisplayPermission({
+    bool openSettingsIfRequired = false,
+  }) async {
     if (!needsPermissions) {
       return NotificationPermissionRequestResult.granted;
     }
     if (Platform.isMacOS) {
       return await _requestMacOsNotificationPermissions(
             requestRemoteNotifications: false,
+            openSettingsIfRequired: openSettingsIfRequired,
           )
           ? NotificationPermissionRequestResult.granted
           : NotificationPermissionRequestResult.awaitingNotificationSettings;
     }
 
     try {
-      await Permission.notification.request();
-      if (!await _permissionStatusSettled(
-        () => Permission.notification.isGranted,
-      )) {
-        await AppSettings.openAppSettings(type: AppSettingsType.notification);
-        if (!await Permission.notification.isGranted) {
-          return NotificationPermissionRequestResult
-              .awaitingNotificationSettings;
+      final PermissionStatus status = await Permission.notification.status;
+      if (status.isGranted) {
+        return NotificationPermissionRequestResult.granted;
+      }
+      if (status.isPermanentlyDenied) {
+        if (openSettingsIfRequired) {
+          await _openNotificationSettings();
         }
+        return NotificationPermissionRequestResult.awaitingNotificationSettings;
+      }
+      if (status.isRestricted) {
+        return NotificationPermissionRequestResult.denied;
       }
 
-      return NotificationPermissionRequestResult.granted;
+      final PermissionStatus requested = await Permission.notification
+          .request();
+      if (requested.isGranted) {
+        return NotificationPermissionRequestResult.granted;
+      }
+      if (requested.isPermanentlyDenied) {
+        if (openSettingsIfRequired) {
+          await _openNotificationSettings();
+        }
+        return NotificationPermissionRequestResult.awaitingNotificationSettings;
+      }
+      if (Platform.isIOS && openSettingsIfRequired) {
+        await _openNotificationSettings();
+        return NotificationPermissionRequestResult.awaitingNotificationSettings;
+      }
+      return NotificationPermissionRequestResult.denied;
     } on MissingPluginException catch (error, stackTrace) {
       _log.warning(
         'Permission plugin unavailable while requesting permissions.',
@@ -474,8 +495,9 @@ class NotificationService {
 
   Future<NotificationPermissionRequestResult>
   requestAllNotificationPermissions() async {
-    final displayPermissionResult =
-        await requestNotificationDisplayPermission();
+    final displayPermissionResult = await requestNotificationDisplayPermission(
+      openSettingsIfRequired: true,
+    );
     if (!displayPermissionResult.isGranted) {
       return displayPermissionResult;
     }
@@ -574,6 +596,7 @@ class NotificationService {
 
   Future<bool> _requestMacOsNotificationPermissions({
     required bool requestRemoteNotifications,
+    bool openSettingsIfRequired = false,
   }) async {
     try {
       await _ensureInitialized();
@@ -584,7 +607,7 @@ class NotificationService {
             sound: true,
           ) ??
           false;
-      if (!granted) {
+      if (!granted && openSettingsIfRequired) {
         await _openNotificationSettings();
       } else if (requestRemoteNotifications) {
         await _requestRemoteNotificationsIfConfigured();
@@ -613,6 +636,10 @@ class NotificationService {
     } on PlatformException catch (error, stackTrace) {
       _log.fine('Failed to open notification settings.', error, stackTrace);
     }
+  }
+
+  Future<void> openNotificationSettings() {
+    return _openNotificationSettings();
   }
 
   Future<bool> _requestRemoteNotificationsIfConfigured() async {

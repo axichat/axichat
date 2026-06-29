@@ -26,6 +26,7 @@ import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/alarm_reminder_bridge.dart';
+import 'package:axichat/src/calendar/reminders/task_reminder_policy.dart';
 import 'package:axichat/src/calendar/interop/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
@@ -392,6 +393,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
   }
 
   bool _isTouched(_TaskEditField field) => _touchedFields.contains(field);
+
+  void _requestReminderPermissions() {
+    context.read<B>().add(const CalendarEvent.reminderPermissionsRequested());
+  }
 
   CalendarTask _resolveLatestTaskSnapshot() {
     final Map<String, CalendarTask> tasks = context.read<B>().state.model.tasks;
@@ -897,34 +902,37 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               AxiSheetSection(
                 child: _EditTaskDeadlineField(
                   deadline: _deadline,
-                  onChanged: (value) => _updateDraft(() {
-                    _markTouched(_TaskEditField.deadline);
-                    _deadline = value;
-                  }),
+                  onChanged: _handleDeadlineChanged,
                   enabled: allowsFullEdits,
                 ),
               ),
-              AxiSheetSection(
-                child: ReminderPreferencesField(
-                  value: _reminders,
-                  onChanged: (value) => _updateDraft(() {
-                    _markTouched(_TaskEditField.reminders);
-                    _reminders = value;
-                  }),
-                  referenceStart: _startTime,
-                  advancedAlarms: _advancedAlarms,
-                  onAdvancedAlarmsChanged: (value) => _updateDraft(() {
-                    _markTouched(_TaskEditField.advancedAlarms);
-                    _advancedAlarms = value;
-                  }),
-                  title: context.l10n.calendarRemindersSection,
-                  anchor: _deadline == null
-                      ? ReminderAnchor.start
-                      : ReminderAnchor.deadline,
-                  showBothAnchors: _deadline != null,
-                  enabled: allowsFullEdits,
+              if (_canHaveReminders)
+                AxiSheetSection(
+                  child: ReminderPreferencesField(
+                    value: _reminders,
+                    onChanged: (value) => _updateDraft(() {
+                      _markTouched(_TaskEditField.reminders);
+                      _reminders = taskReminderPreferencesForAnchors(
+                        value,
+                        scheduledTime: _startTime,
+                        deadline: _deadline,
+                      );
+                    }),
+                    onPermissionRequested: _requestReminderPermissions,
+                    referenceStart: _startTime,
+                    advancedAlarms: _advancedAlarms,
+                    onAdvancedAlarmsChanged: (value) => _updateDraft(() {
+                      _markTouched(_TaskEditField.advancedAlarms);
+                      _advancedAlarms = _canHaveReminders
+                          ? value
+                          : _emptyAdvancedAlarms;
+                    }),
+                    title: context.l10n.calendarRemindersSection,
+                    anchor: _reminderAnchor,
+                    showBothAnchors: _showBothReminderAnchors,
+                    enabled: allowsFullEdits,
+                  ),
                 ),
-              ),
               AxiSheetSection(
                 child: TaskRecurrenceSection(
                   title: context.l10n.calendarRepeatLabel,
@@ -1142,35 +1150,43 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                             SizedBox(height: context.spacing.m),
                             _EditTaskDeadlineField(
                               deadline: _deadline,
-                              onChanged: (value) => _updateDraft(() {
-                                _markTouched(_TaskEditField.deadline);
-                                _deadline = value;
-                              }),
+                              onChanged: _handleDeadlineChanged,
                               enabled: allowsFullEdits,
                             ),
-                            SizedBox(height: context.spacing.m),
-                            const AxiSheetSectionDivider(),
-                            SizedBox(height: context.spacing.m),
-                            ReminderPreferencesField(
-                              value: _reminders,
-                              onChanged: (value) => _updateDraft(() {
-                                _markTouched(_TaskEditField.reminders);
-                                _reminders = value;
-                              }),
-                              referenceStart: _startTime,
-                              advancedAlarms: _advancedAlarms,
-                              onAdvancedAlarmsChanged: (value) =>
-                                  _updateDraft(() {
-                                    _markTouched(_TaskEditField.advancedAlarms);
-                                    _advancedAlarms = value;
-                                  }),
-                              title: context.l10n.calendarRemindersSection,
-                              anchor: _deadline == null
-                                  ? ReminderAnchor.start
-                                  : ReminderAnchor.deadline,
-                              showBothAnchors: _deadline != null,
-                              enabled: allowsFullEdits,
-                            ),
+                            if (_canHaveReminders) ...[
+                              SizedBox(height: context.spacing.m),
+                              const AxiSheetSectionDivider(),
+                              SizedBox(height: context.spacing.m),
+                              ReminderPreferencesField(
+                                value: _reminders,
+                                onChanged: (value) => _updateDraft(() {
+                                  _markTouched(_TaskEditField.reminders);
+                                  _reminders =
+                                      taskReminderPreferencesForAnchors(
+                                        value,
+                                        scheduledTime: _startTime,
+                                        deadline: _deadline,
+                                      );
+                                }),
+                                onPermissionRequested:
+                                    _requestReminderPermissions,
+                                referenceStart: _startTime,
+                                advancedAlarms: _advancedAlarms,
+                                onAdvancedAlarmsChanged: (value) =>
+                                    _updateDraft(() {
+                                      _markTouched(
+                                        _TaskEditField.advancedAlarms,
+                                      );
+                                      _advancedAlarms = _canHaveReminders
+                                          ? value
+                                          : _emptyAdvancedAlarms;
+                                    }),
+                                title: context.l10n.calendarRemindersSection,
+                                anchor: _reminderAnchor,
+                                showBothAnchors: _showBothReminderAnchors,
+                                enabled: allowsFullEdits,
+                              ),
+                            ],
                             SizedBox(height: context.spacing.m),
                             const AxiSheetSectionDivider(),
                             SizedBox(height: context.spacing.m),
@@ -1360,6 +1376,17 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       widget.task.scheduledTime?.weekday ??
       DateTime.now().weekday;
 
+  bool get _canHaveReminders =>
+      taskCanHaveReminders(scheduledTime: _startTime, deadline: _deadline);
+
+  bool get _showBothReminderAnchors => taskShowsBothReminderAnchors(
+    scheduledTime: _startTime,
+    deadline: _deadline,
+  );
+
+  ReminderAnchor get _reminderAnchor =>
+      taskReminderAnchor(scheduledTime: _startTime, deadline: _deadline);
+
   void _handleStartChanged(DateTime? value) {
     _updateDraft(() {
       _markTouched(_TaskEditField.schedule);
@@ -1372,9 +1399,17 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         nextStart: value,
       );
       if (value == null) {
+        _normalizeReminderDraftForAnchors(
+          markRemindersTouched: !widget.task.isOccurrence,
+          markAdvancedAlarmsTouched: !widget.task.isOccurrence,
+        );
         return;
       }
       _recurrence = _normalizeRecurrence(_recurrence);
+      _normalizeReminderDraftForAnchors(
+        markRemindersTouched: !widget.task.isOccurrence,
+        markAdvancedAlarmsTouched: !widget.task.isOccurrence,
+      );
     });
   }
 
@@ -1383,9 +1418,19 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _markTouched(_TaskEditField.schedule);
       _endTime = clampEndTime(start: _startTime, end: value);
       if (_endTime == null) {
+        _normalizeReminderDraftForAnchors();
         return;
       }
       _recurrence = _normalizeRecurrence(_recurrence);
+      _normalizeReminderDraftForAnchors();
+    });
+  }
+
+  void _handleDeadlineChanged(DateTime? value) {
+    _updateDraft(() {
+      _markTouched(_TaskEditField.deadline);
+      _deadline = value;
+      _normalizeReminderDraftForAnchors();
     });
   }
 
@@ -1398,6 +1443,29 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
   RecurrenceFormValue _normalizeRecurrence(RecurrenceFormValue value) {
     return value.normalizeLimitFields();
+  }
+
+  void _normalizeReminderDraftForAnchors({
+    bool markRemindersTouched = true,
+    bool markAdvancedAlarmsTouched = true,
+  }) {
+    final ReminderPreferences normalized = taskReminderPreferencesForAnchors(
+      _reminders,
+      scheduledTime: _startTime,
+      deadline: _deadline,
+    );
+    if (_reminders != normalized) {
+      _reminders = normalized;
+      if (markRemindersTouched) {
+        _markTouched(_TaskEditField.reminders);
+      }
+    }
+    if (!_canHaveReminders && _advancedAlarms.isNotEmpty) {
+      _advancedAlarms = _emptyAdvancedAlarms;
+      if (markAdvancedAlarmsTouched) {
+        _markTouched(_TaskEditField.advancedAlarms);
+      }
+    }
   }
 
   void _handleSave() {
@@ -1529,6 +1597,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     final DateTime? deadline = deadlineTouched
         ? nextDeadline
         : baseTask.deadline;
+    final bool canHaveTaskReminders = taskCanHaveReminders(
+      scheduledTime: scheduledTime,
+      deadline: deadline,
+    );
     final bool completionTouched = _isTouched(_TaskEditField.completion);
     final bool nextIsCompleted = _isCompleted;
     final bool isCompleted = completionTouched
@@ -1546,20 +1618,31 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       _TaskEditField.advancedAlarms,
     );
     final AlarmReminderSplit baseSplit = _splitTaskAlarms(baseTask);
-    final ReminderPreferences remindersForAlarms = remindersTouched
-        ? _reminders
-        : baseSplit.reminders;
-    final List<CalendarAlarm> advancedAlarmsForMerge = advancedAlarmsTouched
-        ? _advancedAlarms
-        : baseSplit.advancedAlarms;
-    final bool shouldUpdateAlarms = remindersTouched || advancedAlarmsTouched;
+    final ReminderPreferences remindersForAlarms =
+        taskReminderPreferencesForAnchors(
+          remindersTouched ? _reminders : baseSplit.reminders,
+          scheduledTime: scheduledTime,
+          deadline: deadline,
+        );
+    final bool hasBaseIcsAlarms = baseTask.icsMeta?.alarms.isNotEmpty ?? false;
+    final bool removedReminderAnchor =
+        (baseTask.scheduledTime != null && scheduledTime == null) ||
+        (baseTask.deadline != null && deadline == null);
+    final List<CalendarAlarm> advancedAlarmsForMerge = canHaveTaskReminders
+        ? (advancedAlarmsTouched ? _advancedAlarms : baseSplit.advancedAlarms)
+        : _emptyAdvancedAlarms;
+    final bool shouldUpdateAlarms =
+        remindersTouched ||
+        advancedAlarmsTouched ||
+        (hasBaseIcsAlarms && (!canHaveTaskReminders || removedReminderAnchor));
     final List<CalendarAlarm>? alarmsOverride = shouldUpdateAlarms
         ? mergeAdvancedAlarms(
             advancedAlarms: advancedAlarmsForMerge,
             reminders: remindersForAlarms,
           )
         : null;
-    final ReminderPreferences? remindersField = remindersTouched
+    final ReminderPreferences? remindersField =
+        remindersTouched || !canHaveTaskReminders
         ? remindersForAlarms
         : baseTask.reminders;
 
@@ -1568,15 +1651,17 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     final bool attendeesTouched = _isTouched(_TaskEditField.attendees);
     final bool urlTouched = _isTouched(_TaskEditField.url);
     final bool geoTouched = _isTouched(_TaskEditField.geo);
-    final bool shouldUpdateIcsMeta =
-        categoriesTouched ||
-        organizerTouched ||
-        attendeesTouched ||
-        urlTouched ||
-        geoTouched ||
-        shouldUpdateAlarms;
-
-    CalendarIcsMeta? resolveIcsMeta(CalendarIcsMeta? base) {
+    CalendarIcsMeta? resolveIcsMeta(
+      CalendarIcsMeta? base, {
+      List<CalendarAlarm>? alarmsOverride,
+    }) {
+      final bool shouldUpdateIcsMeta =
+          categoriesTouched ||
+          organizerTouched ||
+          attendeesTouched ||
+          urlTouched ||
+          geoTouched ||
+          alarmsOverride != null;
       if (!shouldUpdateIcsMeta) {
         return base;
       }
@@ -1600,7 +1685,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       );
     }
 
-    final CalendarIcsMeta? icsMeta = resolveIcsMeta(baseTask.icsMeta);
+    final CalendarIcsMeta? icsMeta = resolveIcsMeta(
+      baseTask.icsMeta,
+      alarmsOverride: alarmsOverride,
+    );
 
     final CalendarTask updatedTask = baseTask.copyWith(
       title: title,
@@ -1631,11 +1719,50 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
 
       final CalendarTask? seriesTask = _resolveLatestSeriesSnapshot();
       if (seriesTask != null) {
-        final ReminderPreferences? seriesReminders = remindersTouched
-            ? remindersForAlarms
+        final AlarmReminderSplit seriesSplit = _splitTaskAlarms(seriesTask);
+        final DateTime? seriesDeadline = deadlineTouched
+            ? nextDeadline
+            : seriesTask.deadline;
+        final bool seriesCanHaveTaskReminders = taskCanHaveReminders(
+          scheduledTime: seriesTask.scheduledTime,
+          deadline: seriesDeadline,
+        );
+        final ReminderPreferences seriesRemindersForAlarms =
+            taskReminderPreferencesForAnchors(
+              remindersTouched ? _reminders : seriesSplit.reminders,
+              scheduledTime: seriesTask.scheduledTime,
+              deadline: seriesDeadline,
+            );
+        final bool seriesHasBaseIcsAlarms =
+            seriesTask.icsMeta?.alarms.isNotEmpty ?? false;
+        final bool seriesRemovedReminderAnchor =
+            seriesTask.deadline != null && seriesDeadline == null;
+        final List<CalendarAlarm> seriesAdvancedAlarmsForMerge =
+            seriesCanHaveTaskReminders
+            ? (advancedAlarmsTouched
+                  ? _advancedAlarms
+                  : seriesSplit.advancedAlarms)
+            : _emptyAdvancedAlarms;
+        final bool shouldUpdateSeriesAlarms =
+            remindersTouched ||
+            advancedAlarmsTouched ||
+            (seriesHasBaseIcsAlarms &&
+                deadlineTouched &&
+                (!seriesCanHaveTaskReminders || seriesRemovedReminderAnchor));
+        final List<CalendarAlarm>? seriesAlarmsOverride =
+            shouldUpdateSeriesAlarms
+            ? mergeAdvancedAlarms(
+                advancedAlarms: seriesAdvancedAlarmsForMerge,
+                reminders: seriesRemindersForAlarms,
+              )
+            : null;
+        final ReminderPreferences? seriesReminders =
+            remindersTouched || (deadlineTouched && !seriesCanHaveTaskReminders)
+            ? seriesRemindersForAlarms
             : seriesTask.reminders;
         final CalendarIcsMeta? seriesIcsMeta = resolveIcsMeta(
           seriesTask.icsMeta,
+          alarmsOverride: seriesAlarmsOverride,
         );
         final CalendarTask seriesFieldsUpdate = seriesTask.copyWith(
           title: titleTouched ? nextTitle : seriesTask.title,

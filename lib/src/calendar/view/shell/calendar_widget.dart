@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -15,6 +17,7 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_sync_warning_feedback.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_search.dart';
 import 'calendar_experience_state.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
@@ -118,6 +121,7 @@ class _CalendarWidgetState
 
   @override
   void dispose() {
+    CalendarSyncWarningFeedback.dismissSyncedReminderNotice();
     _clearHomeBottomDragState();
     mobileTabController.removeListener(_handleMobileTabIndexChanged);
     _hoverTitleController.dispose();
@@ -176,26 +180,7 @@ class _CalendarWidgetState
     }
     final warning = state.syncWarning;
     if (warning != null && mounted) {
-      final l10n = context.l10n;
-      final (String title, String message) = switch (warning.type) {
-        CalendarSyncWarningType.snapshotUnavailable => (
-          l10n.calendarSyncWarningSnapshotTitle,
-          l10n.calendarSyncWarningSnapshotMessage,
-        ),
-        CalendarSyncWarningType.archiveIncomplete => (
-          l10n.calendarSyncWarningArchiveTitle,
-          l10n.calendarSyncWarningArchiveMessage,
-        ),
-        CalendarSyncWarningType.snapshotPublishPending => (
-          l10n.calendarSyncWarningArchiveTitle,
-          l10n.calendarSyncWarningArchiveMessage,
-        ),
-        CalendarSyncWarningType.snapshotPublishBlocked => (
-          l10n.calendarSyncWarningSnapshotTitle,
-          l10n.calendarSyncWarningSnapshotMessage,
-        ),
-      };
-      FeedbackSystem.showWarning(context, message, title: title);
+      CalendarSyncWarningFeedback.show(context, warning: warning);
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }
   }

@@ -20,6 +20,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/interop/calendar_share.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_experience_state.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_sync_warning_feedback.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_transfer_sheet.dart';
@@ -68,6 +69,7 @@ class _GuestCalendarWidgetState
 
   @override
   void dispose() {
+    CalendarSyncWarningFeedback.dismissSyncedReminderNotice();
     _hoverTitleController.dispose();
     super.dispose();
   }
@@ -317,26 +319,7 @@ class _GuestCalendarWidgetState
     }
     final warning = state.syncWarning;
     if (warning != null && mounted) {
-      final l10n = context.l10n;
-      final (String title, String message) = switch (warning.type) {
-        CalendarSyncWarningType.snapshotUnavailable => (
-          l10n.calendarSyncWarningSnapshotTitle,
-          l10n.calendarSyncWarningSnapshotMessage,
-        ),
-        CalendarSyncWarningType.archiveIncomplete => (
-          l10n.calendarSyncWarningArchiveTitle,
-          l10n.calendarSyncWarningArchiveMessage,
-        ),
-        CalendarSyncWarningType.snapshotPublishPending => (
-          l10n.calendarSyncWarningArchiveTitle,
-          l10n.calendarSyncWarningArchiveMessage,
-        ),
-        CalendarSyncWarningType.snapshotPublishBlocked => (
-          l10n.calendarSyncWarningSnapshotTitle,
-          l10n.calendarSyncWarningSnapshotMessage,
-        ),
-      };
-      FeedbackSystem.showWarning(context, message, title: title);
+      CalendarSyncWarningFeedback.show(context, warning: warning);
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }
   }

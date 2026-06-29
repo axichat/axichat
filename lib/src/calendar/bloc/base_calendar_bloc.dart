@@ -17,6 +17,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/reminders/task_reminder_policy.dart';
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
@@ -42,6 +43,15 @@ class _CalendarUndoSnapshot {
 
 enum _LinkedTaskOperation { update, delete }
 
+typedef _FutureReminderSignature = ({
+  String kind,
+  String id,
+  DateTime? start,
+  DateTime? deadline,
+  RecurrenceRule? recurrence,
+  ReminderPreferences reminders,
+});
+
 abstract class BaseCalendarBloc
     extends HydratedBloc<CalendarEvent, CalendarState> {
   BaseCalendarBloc({
@@ -65,6 +75,7 @@ abstract class BaseCalendarBloc
     _assertStorageRegistered();
     on<CalendarStarted>(_onStarted);
     on<CalendarDataChanged>(_onDataChanged);
+    on<CalendarReminderPermissionsRequested>(_onReminderPermissionsRequested);
     on<CalendarTaskAdded>(_onTaskAdded);
     on<CalendarTaskUpdated>(_onTaskUpdated);
     on<CalendarTaskInteractionAcknowledged>(_onTaskInteractionAcknowledged);
@@ -128,7 +139,7 @@ abstract class BaseCalendarBloc
   final String _storageId;
   final Storage _storage;
   final NlScheduleParserService _nlParserService;
-  Future<void> _pendingReminderSync = Future.value();
+  Future<void> _reminderSyncQueue = Future<void>.value();
   static const int _undoHistoryLimit = 50;
   final ListQueue<_CalendarUndoSnapshot> _undoStack =
       ListQueue<_CalendarUndoSnapshot>();
@@ -206,6 +217,14 @@ abstract class BaseCalendarBloc
     suppressed.add(storageId);
   }
 
+  ReminderPermissionRequestMode _userInitiatedReminderPermissionRequestMode(
+    bool shouldRequest,
+  ) {
+    return shouldRequest
+        ? ReminderPermissionRequestMode.userInitiated
+        : ReminderPermissionRequestMode.none;
+  }
+
   void _handleLinkedTaskUpdate(CalendarLinkedTaskUpdate update) {
     if (update.sourceStorageId == id) {
       return;
@@ -218,7 +237,12 @@ abstract class BaseCalendarBloc
     switch (update.operation) {
       case CalendarLinkedTaskOperation.update:
         if (hasTask) {
-          add(CalendarEvent.taskUpdated(task: task));
+          add(
+            CalendarEvent.taskUpdated(
+              task: task,
+              origin: CalendarTaskUpdateOrigin.linkedPropagation,
+            ),
+          );
         }
       case CalendarLinkedTaskOperation.delete:
         if (hasTask) {
@@ -453,10 +477,10 @@ abstract class BaseCalendarBloc
     _redoStack.clear();
   }
 
-  void _restoreLastUndoSnapshot(
+  Future<void> _restoreLastUndoSnapshot(
     Emitter<CalendarState> emit, {
     bool clearRedo = true,
-  }) {
+  }) async {
     if (_undoStack.isEmpty) {
       return;
     }
@@ -474,6 +498,7 @@ abstract class BaseCalendarBloc
       focusedCriticalPathSpecified: true,
       isLoading: false,
     );
+    await _syncRemindersForModel(model: snapshot.model, emit: emit);
   }
 
   void _emitSelectionState({
@@ -502,6 +527,7 @@ abstract class BaseCalendarBloc
     Emitter<CalendarState> emit,
   ) async {
     emitModel(state.model, emit, selectedDate: state.selectedDate);
+    await _syncRemindersForModel(model: state.model, emit: emit);
   }
 
   Future<void> _onDataChanged(
@@ -511,6 +537,18 @@ abstract class BaseCalendarBloc
     // When hydration restores or an explicit refresh is requested, recompute
     // reminder snapshots without mutating the model.
     emitModel(state.model, emit, selectedDate: state.selectedDate);
+    await _syncRemindersForModel(model: state.model, emit: emit);
+  }
+
+  Future<void> _onReminderPermissionsRequested(
+    CalendarReminderPermissionsRequested event,
+    Emitter<CalendarState> emit,
+  ) async {
+    try {
+      await _reminderController?.requestReminderPermissions();
+    } on Exception catch (error) {
+      logError('Failed to request calendar reminder permissions', error);
+    }
   }
 
   Future<void> _onTaskAdded(
@@ -521,6 +559,10 @@ abstract class BaseCalendarBloc
     CalendarModel updatedModel = state.model;
     String? lastAddedPathId;
     String? lastAddedTaskId;
+    ReminderPermissionRequestMode reminderPermissionRequestMode =
+        ReminderPermissionRequestMode.none;
+    bool taskAddAttempted = false;
+    bool taskAdded = false;
     try {
       if (event.title.trim().isEmpty) {
         throw const CalendarValidationException(
@@ -583,10 +625,16 @@ abstract class BaseCalendarBloc
         event.priority,
         parsed.priority,
       );
-      final ReminderPreferences resolvedReminders = _resolveParsedReminders(
+      final ReminderPreferences parsedReminders = _resolveParsedReminders(
         event.reminders,
         parsed.reminders,
       );
+      final ReminderPreferences resolvedReminders =
+          taskReminderPreferencesForAnchors(
+            parsedReminders,
+            scheduledTime: scheduledTime,
+            deadline: deadline,
+          );
       final DateTime? computedEndDate =
           event.endDate ??
           (scheduledTime != null && duration != null
@@ -614,6 +662,10 @@ abstract class BaseCalendarBloc
 
       createdTask = task;
       updatedModel = state.model.addTask(task);
+      reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _hasFutureTaskReminder(task, now),
+          );
       var updatedPaths = const <CalendarCriticalPath>[];
       if (event.queuedCriticalPathIds.isNotEmpty) {
         final result = await _applyQueuedCriticalPathAdds(
@@ -638,8 +690,15 @@ abstract class BaseCalendarBloc
         lastCriticalPathTaskAddedPathId: lastAddedPathId,
         lastCriticalPathTaskAddedTaskId: lastAddedTaskId,
       );
+      taskAddAttempted = true;
       await onTaskAdded(task);
+      taskAdded = true;
       await _syncCriticalPathUpdates(updatedPaths);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       if (createdTask == null) {
         _emitTaskCreationError(error, 'Failed to add task', emit);
@@ -653,6 +712,17 @@ abstract class BaseCalendarBloc
         lastAddedTaskId: lastAddedTaskId,
         emit: emit,
       );
+      if (!taskAddAttempted) {
+        await onTaskAdded(createdTask);
+        taskAdded = true;
+      }
+      if (taskAdded) {
+        await _syncRemindersForModel(
+          model: updatedModel,
+          emit: emit,
+          permissionRequestMode: reminderPermissionRequestMode,
+        );
+      }
     }
   }
 
@@ -693,9 +763,14 @@ abstract class BaseCalendarBloc
         null,
       );
       final TaskPriority? priority = _normalizePriority(event.task.priority);
-      final ReminderPreferences reminders = _resolveParsedReminders(
+      final ReminderPreferences parsedReminders = _resolveParsedReminders(
         event.task.reminders,
         null,
+      );
+      final ReminderPreferences reminders = taskReminderPreferencesForAnchors(
+        parsedReminders,
+        scheduledTime: scheduledTime,
+        deadline: deadline,
       );
       final DateTime? computedEndDate =
           event.task.endDate ??
@@ -703,8 +778,9 @@ abstract class BaseCalendarBloc
               ? scheduledTime.add(duration)
               : null);
 
+      final DateTime now = _now();
       final updatedTask = event.task.copyWith(
-        modifiedAt: _now(),
+        modifiedAt: now,
         checklist: checklist,
         description: description,
         scheduledTime: scheduledTime,
@@ -717,9 +793,29 @@ abstract class BaseCalendarBloc
         reminders: reminders,
       );
       final updatedModel = state.model.updateTask(updatedTask);
+      final bool requestReminderSchedulingPermission =
+          _taskUpdateShouldRequestReminderSchedulingPermission(
+            before: existingTask,
+            after: updatedTask,
+            now: now,
+          );
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          requestReminderSchedulingPermission
+          ? switch (event.origin) {
+              CalendarTaskUpdateOrigin.userInitiated =>
+                ReminderPermissionRequestMode.userInitiated,
+              CalendarTaskUpdateOrigin.linkedPropagation =>
+                ReminderPermissionRequestMode.synced,
+            }
+          : ReminderPermissionRequestMode.none;
       emitModel(updatedModel, emit, isLoading: false);
 
       await _notifyTaskUpdated(updatedTask);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       await _handleError(error, 'Failed to update task', emit);
     }
@@ -773,6 +869,7 @@ abstract class BaseCalendarBloc
         );
 
         await _notifyTaskDeleted(task);
+        await _syncRemindersForModel(model: updatedModel, emit: emit);
         return;
       }
 
@@ -805,6 +902,7 @@ abstract class BaseCalendarBloc
         emitModel(updatedModel, emit, isLoading: false);
 
         await _notifyTaskUpdated(updatedTask);
+        await _syncRemindersForModel(model: updatedModel, emit: emit);
         return;
       }
 
@@ -829,6 +927,7 @@ abstract class BaseCalendarBloc
       );
 
       await _notifyTaskDeleted(deletedTask);
+      await _syncRemindersForModel(model: updatedModel, emit: emit);
     } catch (error) {
       await _handleError(error, 'Failed to delete task', emit);
     }
@@ -848,14 +947,28 @@ abstract class BaseCalendarBloc
 
       _recordUndoSnapshot();
 
+      final DateTime now = _now();
       final updatedTask = existingTask.copyWith(
         isCompleted: event.completed,
-        modifiedAt: _now(),
+        modifiedAt: now,
       );
       final updatedModel = state.model.updateTask(updatedTask);
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _taskUpdateShouldRequestReminderSchedulingPermission(
+              before: existingTask,
+              after: updatedTask,
+              now: now,
+            ),
+          );
       emitModel(updatedModel, emit, isLoading: false);
 
       await _notifyTaskCompleted(updatedTask);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       await _handleError(error, 'Failed to update task completion', emit);
     }
@@ -884,20 +997,34 @@ abstract class BaseCalendarBloc
             : const Duration(hours: 1);
         final DateTime newEndDate = newStart.add(ensuredDuration);
 
+        final DateTime now = _now();
         final CalendarTask scheduledTask = task.copyWith(
           scheduledTime: newStart,
           duration: ensuredDuration,
           endDate: newEndDate,
-          modifiedAt: _now(),
+          modifiedAt: now,
         );
 
         _recordUndoSnapshot();
         final CalendarModel updatedModel = state.model.updateTask(
           scheduledTask,
         );
+        final ReminderPermissionRequestMode reminderPermissionRequestMode =
+            _userInitiatedReminderPermissionRequestMode(
+              _taskUpdateShouldRequestReminderSchedulingPermission(
+                before: task,
+                after: scheduledTask,
+                now: now,
+              ),
+            );
         emitModel(updatedModel, emit);
 
         await _notifyTaskUpdated(scheduledTask);
+        await _syncRemindersForModel(
+          model: updatedModel,
+          emit: emit,
+          permissionRequestMode: reminderPermissionRequestMode,
+        );
         return;
       }
 
@@ -911,12 +1038,26 @@ abstract class BaseCalendarBloc
         return;
       }
 
-      final updatedTask = shifted.copyWith(modifiedAt: _now());
+      final DateTime now = _now();
+      final updatedTask = shifted.copyWith(modifiedAt: now);
       _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _taskUpdateShouldRequestReminderSchedulingPermission(
+              before: task,
+              after: updatedTask,
+              now: now,
+            ),
+          );
       emitModel(updatedModel, emit);
 
       await _notifyTaskUpdated(updatedTask);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       logError('Failed to drop task', error);
       emit(state.copyWith(error: error.toString()));
@@ -960,17 +1101,31 @@ abstract class BaseCalendarBloc
         newEndDate = newStart.add(newDuration);
       }
 
+      final DateTime now = _now();
       final updatedTask = task.copyWith(
         scheduledTime: newStart,
         duration: newDuration,
         endDate: newEndDate,
-        modifiedAt: _now(),
+        modifiedAt: now,
       );
       _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _taskUpdateShouldRequestReminderSchedulingPermission(
+              before: task,
+              after: updatedTask,
+              now: now,
+            ),
+          );
       emitModel(updatedModel, emit);
 
       await _notifyTaskUpdated(updatedTask);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       logError('Failed to resize task', error);
       emit(state.copyWith(error: error.toString()));
@@ -1026,15 +1181,30 @@ abstract class BaseCalendarBloc
         overrides[occurrenceKey] = updatedOverride;
       }
 
+      final DateTime now = _now();
       final updatedTask = task.copyWith(
         occurrenceOverrides: overrides,
-        modifiedAt: _now(),
+        modifiedAt: now,
       );
       _recordUndoSnapshot();
       final updatedModel = state.model.updateTask(updatedTask);
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _occurrenceUpdateShouldRequestReminderSchedulingPermission(
+              beforeBase: task,
+              afterBase: updatedTask,
+              occurrenceId: event.occurrenceId,
+              now: now,
+            ),
+          );
       emitModel(updatedModel, emit);
 
       await _notifyTaskUpdated(updatedTask);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       logError('Failed to update occurrence', error);
       emit(state.copyWith(error: error.toString()));
@@ -1159,10 +1329,23 @@ abstract class BaseCalendarBloc
           model = model.replaceTasks(updates);
           model = model.addTask(createdTask);
 
+          final ReminderPermissionRequestMode reminderPermissionRequestMode =
+              _userInitiatedReminderPermissionRequestMode(
+                _taskSplitShouldRequestReminderSchedulingPermission(
+                  updates: updates,
+                  createdTask: createdTask,
+                  now: now,
+                ),
+              );
           emitModel(model, emit, selectedTaskIds: state.selectedTaskIds);
 
           await _notifyTaskUpdated(updatedBase);
           await onTaskAdded(createdTask);
+          await _syncRemindersForModel(
+            model: model,
+            emit: emit,
+            permissionRequestMode: reminderPermissionRequestMode,
+          );
           return;
         }
       }
@@ -1189,10 +1372,23 @@ abstract class BaseCalendarBloc
         model = model.replaceTasks(updates);
         model = model.addTask(createdTask);
 
+        final ReminderPermissionRequestMode reminderPermissionRequestMode =
+            _userInitiatedReminderPermissionRequestMode(
+              _taskSplitShouldRequestReminderSchedulingPermission(
+                updates: updates,
+                createdTask: createdTask,
+                now: now,
+              ),
+            );
         emitModel(model, emit, selectedTaskIds: state.selectedTaskIds);
 
         await _notifyTaskUpdated(updatedOccurrence);
         await onTaskAdded(createdTask);
+        await _syncRemindersForModel(
+          model: model,
+          emit: emit,
+          permissionRequestMode: reminderPermissionRequestMode,
+        );
         return;
       }
 
@@ -1221,10 +1417,23 @@ abstract class BaseCalendarBloc
       model = model.replaceTasks(updates);
       model = model.addTask(createdTask);
 
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _taskSplitShouldRequestReminderSchedulingPermission(
+              updates: updates,
+              createdTask: createdTask,
+              now: now,
+            ),
+          );
       emitModel(model, emit, selectedTaskIds: state.selectedTaskIds);
 
       await _notifyTaskUpdated(updatedBaseTask);
       await onTaskAdded(createdTask);
+      await _syncRemindersForModel(
+        model: model,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       logError('Failed to split task', error);
       emit(state.copyWith(error: error.toString()));
@@ -1287,6 +1496,10 @@ abstract class BaseCalendarBloc
           ? <String>{...state.selectedTaskIds, newTask.id}
           : state.selectedTaskIds;
 
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _hasFutureTaskReminder(newTask, now),
+          );
       emitModel(
         updatedModel,
         emit,
@@ -1295,6 +1508,11 @@ abstract class BaseCalendarBloc
       );
 
       await onTaskAdded(newTask);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       logError('Failed to repeat task', error);
       emit(state.copyWith(error: error.toString()));
@@ -1335,11 +1553,21 @@ abstract class BaseCalendarBloc
       );
 
       final CalendarModel updatedModel = state.model.addDayEvent(dayEvent);
+      final DateTime now = _now();
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _hasFutureDayEventReminder(dayEvent, now),
+          );
       emitModel(updatedModel, emit, isLoading: false);
       await onDayEventAdded(dayEvent);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       if (snapshotRecorded) {
-        _restoreLastUndoSnapshot(emit);
+        await _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to add day event', emit);
     }
@@ -1373,15 +1601,27 @@ abstract class BaseCalendarBloc
         );
       }
 
-      final DayEvent normalized = event.event.normalizedCopy(
-        modifiedAt: _now(),
-      );
+      final DateTime now = _now();
+      final DayEvent normalized = event.event.normalizedCopy(modifiedAt: now);
       final CalendarModel updatedModel = state.model.updateDayEvent(normalized);
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _dayEventUpdateShouldRequestReminderSchedulingPermission(
+              before: existing,
+              after: normalized,
+              now: now,
+            ),
+          );
       emitModel(updatedModel, emit, isLoading: false);
       await onDayEventUpdated(normalized);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       if (snapshotRecorded) {
-        _restoreLastUndoSnapshot(emit);
+        await _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to update day event', emit);
     }
@@ -1407,9 +1647,10 @@ abstract class BaseCalendarBloc
       );
       emitModel(updatedModel, emit, isLoading: false);
       await onDayEventDeleted(deleted);
+      await _syncRemindersForModel(model: updatedModel, emit: emit);
     } catch (error) {
       if (snapshotRecorded) {
-        _restoreLastUndoSnapshot(emit);
+        await _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to delete day event', emit);
     }
@@ -1438,7 +1679,7 @@ abstract class BaseCalendarBloc
       await onAvailabilityChanged(updatedModel);
     } catch (error) {
       if (snapshotRecorded) {
-        _restoreLastUndoSnapshot(emit);
+        await _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to update availability', emit);
     }
@@ -1468,7 +1709,7 @@ abstract class BaseCalendarBloc
       await onAvailabilityChanged(updatedModel);
     } catch (error) {
       if (snapshotRecorded) {
-        _restoreLastUndoSnapshot(emit);
+        await _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to update overlay', emit);
     }
@@ -1500,7 +1741,7 @@ abstract class BaseCalendarBloc
       await onAvailabilityChanged(updatedModel);
     } catch (error) {
       if (snapshotRecorded) {
-        _restoreLastUndoSnapshot(emit);
+        await _restoreLastUndoSnapshot(emit);
       }
       await _handleError(error, 'Failed to remove overlay', emit);
     }
@@ -1514,6 +1755,10 @@ abstract class BaseCalendarBloc
     CalendarModel updatedModel = state.model;
     String? lastAddedPathId;
     String? lastAddedTaskId;
+    ReminderPermissionRequestMode reminderPermissionRequestMode =
+        ReminderPermissionRequestMode.none;
+    bool taskAddAttempted = false;
+    bool taskAdded = false;
     try {
       if (event.text.trim().isEmpty) {
         throw const CalendarValidationException(
@@ -1544,6 +1789,12 @@ abstract class BaseCalendarBloc
       );
       final CalendarTask parsed = parsedResult.task;
       final now = _now();
+      final ReminderPreferences resolvedReminders =
+          taskReminderPreferencesForAnchors(
+            _resolveParsedReminders(event.reminders, parsed.reminders),
+            scheduledTime: parsed.scheduledTime,
+            deadline: event.deadline ?? parsed.deadline,
+          );
       final task = parsed.copyWith(
         description: _resolveParsedText(event.description, parsed.description),
         deadline: event.deadline ?? parsed.deadline,
@@ -1552,11 +1803,15 @@ abstract class BaseCalendarBloc
             : event.priority,
         checklist: _normalizedChecklist(event.checklist),
         modifiedAt: now,
-        reminders: _resolveParsedReminders(event.reminders, parsed.reminders),
+        reminders: resolvedReminders,
       );
 
       createdTask = task;
       updatedModel = state.model.addTask(task);
+      reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _hasFutureTaskReminder(task, now),
+          );
       var updatedPaths = const <CalendarCriticalPath>[];
       if (event.queuedCriticalPathIds.isNotEmpty) {
         final result = await _applyQueuedCriticalPathAdds(
@@ -1581,8 +1836,15 @@ abstract class BaseCalendarBloc
         lastCriticalPathTaskAddedPathId: lastAddedPathId,
         lastCriticalPathTaskAddedTaskId: lastAddedTaskId,
       );
+      taskAddAttempted = true;
       await onTaskAdded(task);
+      taskAdded = true;
       await _syncCriticalPathUpdates(updatedPaths);
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       if (createdTask == null) {
         _emitTaskCreationError(error, 'Failed to add quick task', emit);
@@ -1596,6 +1858,17 @@ abstract class BaseCalendarBloc
         lastAddedTaskId: lastAddedTaskId,
         emit: emit,
       );
+      if (!taskAddAttempted) {
+        await onTaskAdded(createdTask);
+        taskAdded = true;
+      }
+      if (taskAdded) {
+        await _syncRemindersForModel(
+          model: updatedModel,
+          emit: emit,
+          permissionRequestMode: reminderPermissionRequestMode,
+        );
+      }
     }
   }
 
@@ -1788,6 +2061,7 @@ abstract class BaseCalendarBloc
     for (final task in mergedUpdates.values) {
       await _notifyTaskUpdated(task);
     }
+    await _syncRemindersForModel(model: updatedModel, emit: emit);
   }
 
   Future<void> _onSelectionDescriptionChanged(
@@ -1882,6 +2156,7 @@ abstract class BaseCalendarBloc
     for (final task in mergedUpdates.values) {
       await _notifyTaskUpdated(task);
     }
+    await _syncRemindersForModel(model: updatedModel, emit: emit);
   }
 
   Future<void> _onSelectionLocationChanged(
@@ -2162,11 +2437,27 @@ abstract class BaseCalendarBloc
     }
 
     final updatedModel = state.model.replaceTasks(mergedUpdates);
+    final ReminderPermissionRequestMode reminderPermissionRequestMode =
+        _userInitiatedReminderPermissionRequestMode(
+          _taskReplacementShouldRequestReminderSchedulingPermission(
+                updates: mergedUpdates,
+                now: now,
+              ) ||
+              _occurrenceReplacementShouldRequestReminderSchedulingPermission(
+                updates: mergedUpdates,
+                now: now,
+              ),
+        );
     emitModel(updatedModel, emit, selectedTaskIds: state.selectedTaskIds);
 
     for (final task in mergedUpdates.values) {
       await _notifyTaskUpdated(task);
     }
+    await _syncRemindersForModel(
+      model: updatedModel,
+      emit: emit,
+      permissionRequestMode: reminderPermissionRequestMode,
+    );
   }
 
   Future<void> _onSelectionRemindersChanged(
@@ -2186,19 +2477,41 @@ abstract class BaseCalendarBloc
       return;
     }
 
-    _recordUndoSnapshot();
     final Map<String, CalendarTask> updates = <String, CalendarTask>{};
     for (final String id in baseIds) {
       final CalendarTask? task = state.model.tasks[id];
       if (task == null) {
         continue;
       }
-      updates[id] = task.copyWith(reminders: normalized, modifiedAt: now);
+      if (!taskCanHaveReminders(
+        scheduledTime: task.scheduledTime,
+        deadline: task.deadline,
+      )) {
+        continue;
+      }
+      final ReminderPreferences taskReminders =
+          taskReminderPreferencesForSelectionAnchors(
+            normalized,
+            scheduledTime: task.scheduledTime,
+            deadline: task.deadline,
+          );
+      if (task.effectiveReminders == taskReminders) {
+        continue;
+      }
+      updates[id] = task.copyWith(reminders: taskReminders, modifiedAt: now);
     }
     if (updates.isEmpty) {
       return;
     }
+    _recordUndoSnapshot();
+    final bool requestReminderSchedulingPermission = updates.values.any(
+      (task) => _hasFutureTaskReminder(task, now),
+    );
     final CalendarModel updatedModel = state.model.replaceTasks(updates);
+    final ReminderPermissionRequestMode reminderPermissionRequestMode =
+        _userInitiatedReminderPermissionRequestMode(
+          requestReminderSchedulingPermission,
+        );
     emitModel(
       updatedModel,
       emit,
@@ -2209,6 +2522,11 @@ abstract class BaseCalendarBloc
     for (final task in updates.values) {
       await _notifyTaskUpdated(task);
     }
+    await _syncRemindersForModel(
+      model: updatedModel,
+      emit: emit,
+      permissionRequestMode: reminderPermissionRequestMode,
+    );
   }
 
   Set<String> _selectionGroupFor(String id) {
@@ -2519,10 +2837,19 @@ abstract class BaseCalendarBloc
         if (next.id.isEmpty || existingIds.contains(next.id)) {
           next = next.copyWith(id: const Uuid().v4());
         }
-        additions[next.id] = next.copyWith(modifiedAt: now);
+        additions[next.id] = _taskWithNormalizedReminderAnchors(
+          next,
+        ).copyWith(modifiedAt: now);
         existingIds.add(next.id);
       }
+      final bool requestReminderSchedulingPermission = additions.values.any(
+        (task) => _hasFutureTaskReminder(task, now),
+      );
       final updatedModel = state.model.replaceTasks(additions);
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            requestReminderSchedulingPermission,
+          );
       emitModel(
         updatedModel,
         emit,
@@ -2536,6 +2863,11 @@ abstract class BaseCalendarBloc
       for (final task in additions.values) {
         await onTaskAdded(task);
       }
+      await _syncRemindersForModel(
+        model: updatedModel,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       _emitImportError(error, 'Failed to import tasks', emit);
     }
@@ -2556,7 +2888,15 @@ abstract class BaseCalendarBloc
         ),
       );
       _recordUndoSnapshot();
-      final merged = state.model.mergeWith(event.model);
+      final now = _now();
+      final CalendarModel importModel = _modelWithNormalizedTaskReminders(
+        event.model,
+      );
+      final merged = state.model.mergeWith(importModel);
+      final ReminderPermissionRequestMode reminderPermissionRequestMode =
+          _userInitiatedReminderPermissionRequestMode(
+            _modelHasFutureReminder(importModel, now),
+          );
       emitModel(
         merged,
         emit,
@@ -2568,6 +2908,11 @@ abstract class BaseCalendarBloc
         lastImportedModelChecksum: merged.checksum,
       );
       await onModelImported(merged);
+      await _syncRemindersForModel(
+        model: merged,
+        emit: emit,
+        permissionRequestMode: reminderPermissionRequestMode,
+      );
     } catch (error) {
       _emitImportError(error, 'Failed to import calendar', emit);
     }
@@ -2982,6 +3327,17 @@ abstract class BaseCalendarBloc
     }
 
     final updatedModel = state.model.replaceTasks(mergedUpdates);
+    final ReminderPermissionRequestMode reminderPermissionRequestMode =
+        _userInitiatedReminderPermissionRequestMode(
+          _taskReplacementShouldRequestReminderSchedulingPermission(
+                updates: mergedUpdates,
+                now: now,
+              ) ||
+              _occurrenceReplacementShouldRequestReminderSchedulingPermission(
+                updates: mergedUpdates,
+                now: now,
+              ),
+        );
     emitModel(
       updatedModel,
       emit,
@@ -2992,6 +3348,11 @@ abstract class BaseCalendarBloc
     for (final task in mergedUpdates.values) {
       await _notifyTaskUpdated(task);
     }
+    await _syncRemindersForModel(
+      model: updatedModel,
+      emit: emit,
+      permissionRequestMode: reminderPermissionRequestMode,
+    );
   }
 
   Future<void> _onSelectionDeleted(
@@ -3082,6 +3443,7 @@ abstract class BaseCalendarBloc
     for (final task in baseTasksToDelete) {
       await _notifyTaskDeleted(task);
     }
+    await _syncRemindersForModel(model: model, emit: emit);
   }
 
   Future<void> _onSelectionRecurrenceChanged(
@@ -3154,6 +3516,13 @@ abstract class BaseCalendarBloc
     _recordUndoSnapshot();
 
     final updatedModel = state.model.replaceTasks(updates);
+    final ReminderPermissionRequestMode reminderPermissionRequestMode =
+        _userInitiatedReminderPermissionRequestMode(
+          _taskReplacementShouldRequestReminderSchedulingPermission(
+            updates: updates,
+            now: now,
+          ),
+        );
     emitModel(
       updatedModel,
       emit,
@@ -3164,12 +3533,17 @@ abstract class BaseCalendarBloc
     for (final task in updates.values) {
       await _notifyTaskUpdated(task);
     }
+    await _syncRemindersForModel(
+      model: updatedModel,
+      emit: emit,
+      permissionRequestMode: reminderPermissionRequestMode,
+    );
   }
 
-  void _onUndoRequested(
+  Future<void> _onUndoRequested(
     CalendarUndoRequested event,
     Emitter<CalendarState> emit,
-  ) {
+  ) async {
     if (_undoStack.isEmpty) {
       return;
     }
@@ -3193,12 +3567,13 @@ abstract class BaseCalendarBloc
       focusedCriticalPathId: previousSnapshot.focusedCriticalPathId,
       focusedCriticalPathSpecified: true,
     );
+    await _syncRemindersForModel(model: previousSnapshot.model, emit: emit);
   }
 
-  void _onRedoRequested(
+  Future<void> _onRedoRequested(
     CalendarRedoRequested event,
     Emitter<CalendarState> emit,
-  ) {
+  ) async {
     if (_redoStack.isEmpty) {
       return;
     }
@@ -3222,6 +3597,7 @@ abstract class BaseCalendarBloc
       focusedCriticalPathId: nextSnapshot.focusedCriticalPathId,
       focusedCriticalPathSpecified: true,
     );
+    await _syncRemindersForModel(model: nextSnapshot.model, emit: emit);
   }
 
   void _onViewChanged(CalendarViewChanged event, Emitter<CalendarState> emit) {
@@ -3293,6 +3669,293 @@ abstract class BaseCalendarBloc
     final dueReminders = _getDueReminders(state.model);
     final nextTask = _getNextTask(state.model);
     return state.copyWith(dueReminders: dueReminders, nextTask: nextTask);
+  }
+
+  CalendarTask _taskWithNormalizedReminderAnchors(CalendarTask task) {
+    final ReminderPreferences normalized = taskReminderPreferencesForAnchors(
+      task.effectiveReminders,
+      scheduledTime: task.scheduledTime,
+      deadline: task.deadline,
+    );
+    if (task.reminders == null &&
+        normalized == ReminderPreferences.defaults()) {
+      return task;
+    }
+    if (task.reminders == normalized) {
+      return task;
+    }
+    return task.copyWith(reminders: normalized);
+  }
+
+  CalendarModel _modelWithNormalizedTaskReminders(CalendarModel model) {
+    var changed = false;
+    final Map<String, CalendarTask> normalizedTasks = <String, CalendarTask>{};
+    for (final MapEntry<String, CalendarTask> entry in model.tasks.entries) {
+      final CalendarTask normalized = _taskWithNormalizedReminderAnchors(
+        entry.value,
+      );
+      normalizedTasks[entry.key] = normalized;
+      if (normalized != entry.value) {
+        changed = true;
+      }
+    }
+    if (!changed) {
+      return model;
+    }
+    final CalendarModel normalizedModel = model.copyWith(
+      tasks: normalizedTasks,
+      checksum: '',
+    );
+    return normalizedModel.copyWith(
+      checksum: normalizedModel.calculateChecksum(),
+    );
+  }
+
+  bool _modelHasFutureReminder(CalendarModel model, DateTime now) {
+    return model.tasks.values.any(
+          (task) => _hasFutureTaskReminder(task, now),
+        ) ||
+        model.dayEvents.values.any(
+          (event) => _hasFutureDayEventReminder(event, now),
+        );
+  }
+
+  bool _hasFutureTaskReminder(CalendarTask task, DateTime now) {
+    if (task.isCompleted) {
+      return false;
+    }
+    if (task.hasRecurrenceData) {
+      return taskReminderInstancesForSync(
+        task: task,
+        now: now,
+        hasFutureReminder: (CalendarTask instance) =>
+            _hasFutureSingleTaskReminder(instance, now),
+      ).isNotEmpty;
+    }
+    return _hasFutureSingleTaskReminder(task, now);
+  }
+
+  bool _hasFutureSingleTaskReminder(CalendarTask task, DateTime now) {
+    if (task.isCompleted) {
+      return false;
+    }
+    final ReminderPreferences reminders =
+        taskReminderPreferencesForSelectionAnchors(
+          task.effectiveReminders,
+          scheduledTime: task.scheduledTime,
+          deadline: task.deadline,
+        );
+    if (!reminders.isEnabled) {
+      return false;
+    }
+    final DateTime? scheduledTime = task.scheduledTime;
+    if (scheduledTime != null) {
+      for (final Duration offset in reminders.startOffsets) {
+        if (scheduledTime.subtract(offset).isAfter(now)) {
+          return true;
+        }
+      }
+    }
+    final DateTime? deadline = task.deadline;
+    if (deadline != null) {
+      for (final Duration offset in reminders.deadlineOffsets) {
+        if (deadline.subtract(offset).isAfter(now)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _hasFutureDayEventReminder(DayEvent event, DateTime now) {
+    final ReminderPreferences reminders = event.effectiveReminders;
+    if (!reminders.isEnabled) {
+      return false;
+    }
+    final DateTime start = event.normalizedStart;
+    for (final Duration offset in reminders.startOffsets) {
+      if (start.subtract(offset).isAfter(now)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _taskUpdateShouldRequestReminderSchedulingPermission({
+    required CalendarTask before,
+    required CalendarTask after,
+    required DateTime now,
+  }) {
+    if (!_hasFutureTaskReminder(after, now)) {
+      return false;
+    }
+    if (!_hasFutureTaskReminder(before, now)) {
+      return true;
+    }
+    return before.effectiveReminders != after.effectiveReminders ||
+        before.scheduledTime != after.scheduledTime ||
+        before.deadline != after.deadline ||
+        before.recurrence != after.recurrence;
+  }
+
+  bool _taskReplacementShouldRequestReminderSchedulingPermission({
+    required Map<String, CalendarTask> updates,
+    required DateTime now,
+  }) {
+    for (final MapEntry<String, CalendarTask> entry in updates.entries) {
+      final CalendarTask after = entry.value;
+      final CalendarTask? before = state.model.tasks[entry.key];
+      if (before == null) {
+        if (_hasFutureTaskReminder(after, now)) {
+          return true;
+        }
+        continue;
+      }
+      if (_taskUpdateShouldRequestReminderSchedulingPermission(
+        before: before,
+        after: after,
+        now: now,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @protected
+  bool modelChangeShouldRequestReminderSchedulingPermission({
+    required CalendarModel before,
+    required CalendarModel after,
+  }) {
+    final DateTime now = _now();
+    return _futureReminderSignatures(
+      after,
+      now,
+    ).difference(_futureReminderSignatures(before, now)).isNotEmpty;
+  }
+
+  Set<_FutureReminderSignature> _futureReminderSignatures(
+    CalendarModel model,
+    DateTime now,
+  ) {
+    return <_FutureReminderSignature>{
+      for (final CalendarTask task in model.tasks.values)
+        for (final CalendarTask instance in taskReminderInstancesForSync(
+          task: task,
+          now: now,
+          hasFutureReminder: (CalendarTask instance) =>
+              _hasFutureSingleTaskReminder(instance, now),
+        ))
+          if (_hasFutureSingleTaskReminder(instance, now))
+            (
+              kind: 'task',
+              id: instance.id,
+              start: instance.scheduledTime,
+              deadline: instance.deadline,
+              recurrence: instance.recurrence,
+              reminders: taskReminderPreferencesForSelectionAnchors(
+                instance.effectiveReminders,
+                scheduledTime: instance.scheduledTime,
+                deadline: instance.deadline,
+              ),
+            ),
+      for (final DayEvent event in model.dayEvents.values)
+        if (_hasFutureDayEventReminder(event, now))
+          (
+            kind: 'dayEvent',
+            id: event.id,
+            start: event.normalizedStart,
+            deadline: null,
+            recurrence: null,
+            reminders: event.effectiveReminders,
+          ),
+    };
+  }
+
+  bool _taskSplitShouldRequestReminderSchedulingPermission({
+    required Map<String, CalendarTask> updates,
+    required CalendarTask? createdTask,
+    required DateTime now,
+  }) {
+    if (_taskReplacementShouldRequestReminderSchedulingPermission(
+      updates: updates,
+      now: now,
+    )) {
+      return true;
+    }
+    if (_occurrenceReplacementShouldRequestReminderSchedulingPermission(
+      updates: updates,
+      now: now,
+    )) {
+      return true;
+    }
+    final CalendarTask? created = createdTask;
+    return created != null && _hasFutureTaskReminder(created, now);
+  }
+
+  bool _occurrenceReplacementShouldRequestReminderSchedulingPermission({
+    required Map<String, CalendarTask> updates,
+    required DateTime now,
+  }) {
+    for (final MapEntry<String, CalendarTask> entry in updates.entries) {
+      final CalendarTask? beforeBase = state.model.tasks[entry.key];
+      final CalendarTask afterBase = entry.value;
+      if (beforeBase == null) {
+        continue;
+      }
+      final Set<String> occurrenceKeys = <String>{
+        ...beforeBase.occurrenceOverrides.keys,
+        ...afterBase.occurrenceOverrides.keys,
+      };
+      for (final String occurrenceKey in occurrenceKeys) {
+        final String occurrenceId = '${afterBase.baseId}::$occurrenceKey';
+        if (_occurrenceUpdateShouldRequestReminderSchedulingPermission(
+          beforeBase: beforeBase,
+          afterBase: afterBase,
+          occurrenceId: occurrenceId,
+          now: now,
+        )) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _occurrenceUpdateShouldRequestReminderSchedulingPermission({
+    required CalendarTask beforeBase,
+    required CalendarTask afterBase,
+    required String occurrenceId,
+    required DateTime now,
+  }) {
+    final CalendarTask? after = afterBase.occurrenceForId(occurrenceId);
+    if (after == null) {
+      return false;
+    }
+    final CalendarTask? before = beforeBase.occurrenceForId(occurrenceId);
+    if (before == null) {
+      return _hasFutureTaskReminder(after, now);
+    }
+    return _taskUpdateShouldRequestReminderSchedulingPermission(
+      before: before,
+      after: after,
+      now: now,
+    );
+  }
+
+  bool _dayEventUpdateShouldRequestReminderSchedulingPermission({
+    required DayEvent before,
+    required DayEvent after,
+    required DateTime now,
+  }) {
+    if (!_hasFutureDayEventReminder(after, now)) {
+      return false;
+    }
+    if (!_hasFutureDayEventReminder(before, now)) {
+      return true;
+    }
+    return before.effectiveReminders != after.effectiveReminders ||
+        before.normalizedStart != after.normalizedStart;
   }
 
   @protected
@@ -3382,21 +4045,94 @@ abstract class BaseCalendarBloc
           state.lastCriticalPathTaskAddedTaskId,
     );
     emit(nextState);
-    _pendingReminderSync = _runReminderSync(
-      previous: _pendingReminderSync,
+  }
+
+  Future<void> _syncRemindersForModel({
+    required CalendarModel model,
+    required Emitter<CalendarState> emit,
+    ReminderPermissionRequestMode permissionRequestMode =
+        ReminderPermissionRequestMode.none,
+  }) {
+    return _queueReminderSync(
       model: model,
+      permissionRequestMode: permissionRequestMode,
+      emit: emit,
     );
   }
 
-  Future<void> _runReminderSync({
-    required Future<void> previous,
-    required CalendarModel model,
-  }) async {
-    await previous;
-    await _reminderController?.syncWithTasks(
-      model.tasks.values,
-      dayEvents: model.dayEvents.values,
+  @protected
+  Future<void> syncRemindersForModel(
+    CalendarModel model,
+    Emitter<CalendarState> emit, {
+    ReminderPermissionRequestMode permissionRequestMode =
+        ReminderPermissionRequestMode.none,
+  }) {
+    return _syncRemindersForModel(
+      model: model,
+      emit: emit,
+      permissionRequestMode: permissionRequestMode,
     );
+  }
+
+  Future<void> _queueReminderSync({
+    required CalendarModel model,
+    required ReminderPermissionRequestMode permissionRequestMode,
+    required Emitter<CalendarState> emit,
+  }) async {
+    final Future<void> previous = _reminderSyncQueue;
+    final completer = Completer<void>();
+    _reminderSyncQueue = completer.future;
+    try {
+      await previous;
+      await _runReminderSyncForModel(
+        model: model,
+        permissionRequestMode: permissionRequestMode,
+        emit: emit,
+      );
+    } finally {
+      completer.complete();
+    }
+  }
+
+  Future<void> _runReminderSyncForModel({
+    required CalendarModel model,
+    required ReminderPermissionRequestMode permissionRequestMode,
+    required Emitter<CalendarState> emit,
+  }) async {
+    try {
+      final CalendarReminderSyncResult? result = await _reminderController
+          ?.syncWithTasks(
+            model.tasks.values,
+            dayEvents: model.dayEvents.values,
+            permissionRequestMode: permissionRequestMode,
+          );
+      if (_shouldRaiseReminderDisplayPermissionWarning(
+        permissionRequestMode: permissionRequestMode,
+        result: result,
+      )) {
+        emit(
+          state.copyWith(
+            syncWarning: const CalendarSyncWarning(
+              type: CalendarSyncWarningType.reminderNotificationsDisabled,
+            ),
+          ),
+        );
+      }
+    } on Exception catch (error) {
+      logError('Failed to sync calendar reminders', error);
+    }
+  }
+
+  bool _shouldRaiseReminderDisplayPermissionWarning({
+    required ReminderPermissionRequestMode permissionRequestMode,
+    required CalendarReminderSyncResult? result,
+  }) {
+    if (result?.notificationPermissionNeeded != true) {
+      return false;
+    }
+    return permissionRequestMode ==
+            ReminderPermissionRequestMode.userInitiated ||
+        permissionRequestMode == ReminderPermissionRequestMode.synced;
   }
 
   void _emitTaskCreationError(
@@ -3605,7 +4341,7 @@ abstract class BaseCalendarBloc
 
   @override
   Future<void> close() async {
-    await _pendingReminderSync;
+    await _reminderSyncQueue;
     await _linkedTaskSubscription.cancel();
     _linkedTaskRegistry.unregisterActiveStorage(id);
     return super.close();

@@ -26,6 +26,8 @@ enum CalendarShareFailure {
   sendFailed,
 }
 
+enum CalendarTaskUpdateOrigin { userInitiated, linkedPropagation }
+
 class CalendarShareResult {
   const CalendarShareResult.success({this.partialFailure = false, this.record})
     : failure = null;
@@ -47,6 +49,9 @@ abstract class CalendarEvent with _$CalendarEvent {
 
   const factory CalendarEvent.dataChanged() = CalendarDataChanged;
 
+  const factory CalendarEvent.reminderPermissionsRequested() =
+      CalendarReminderPermissionsRequested;
+
   const factory CalendarEvent.taskAdded({
     required String title,
     DateTime? scheduledTime,
@@ -63,8 +68,11 @@ abstract class CalendarEvent with _$CalendarEvent {
     CalendarIcsMeta? icsMeta,
   }) = CalendarTaskAdded;
 
-  const factory CalendarEvent.taskUpdated({required CalendarTask task}) =
-      CalendarTaskUpdated;
+  const factory CalendarEvent.taskUpdated({
+    required CalendarTask task,
+    @Default(CalendarTaskUpdateOrigin.userInitiated)
+    CalendarTaskUpdateOrigin origin,
+  }) = CalendarTaskUpdated;
 
   const factory CalendarEvent.taskInteractionAcknowledged({
     required String taskId,

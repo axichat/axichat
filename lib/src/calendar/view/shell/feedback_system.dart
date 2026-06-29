@@ -32,6 +32,9 @@ class FeedbackMessage {
 }
 
 class FeedbackSystem {
+  static final Map<Object, OverlayEntry> _persistentFeedbackEntries =
+      <Object, OverlayEntry>{};
+
   static void showTaskCopiedForPaste(BuildContext context) {
     final String message = switch (defaultTargetPlatform) {
       TargetPlatform.android || TargetPlatform.iOS =>
@@ -89,6 +92,59 @@ class FeedbackSystem {
         onAction: onAction,
       ),
     );
+  }
+
+  static void showPersistentInfo(
+    BuildContext context,
+    String message, {
+    required Object id,
+    String? title,
+    VoidCallback? onTap,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    _showPersistentFeedback(
+      context,
+      FeedbackMessage(
+        title: title,
+        message: message,
+        tone: FeedbackTone.info,
+        onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+      id: id,
+    );
+  }
+
+  static void showPersistentError(
+    BuildContext context,
+    String message, {
+    required Object id,
+    String? title,
+    VoidCallback? onTap,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    _showPersistentFeedback(
+      context,
+      FeedbackMessage(
+        title: title,
+        message: message,
+        tone: FeedbackTone.error,
+        onTap: onTap,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ),
+      id: id,
+    );
+  }
+
+  static void dismissPersistent(Object id) {
+    final OverlayEntry? entry = _persistentFeedbackEntries.remove(id);
+    if (entry?.mounted == true) {
+      entry!.remove();
+    }
   }
 
   static void showWarning(
@@ -154,6 +210,49 @@ class FeedbackSystem {
       return;
     }
     _showSnackBar(context, feedback);
+  }
+
+  static void _showPersistentFeedback(
+    BuildContext context,
+    FeedbackMessage feedback, {
+    required Object id,
+  }) {
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) {
+      _showSnackBar(
+        context,
+        FeedbackMessage(
+          title: feedback.title,
+          message: feedback.message,
+          tone: feedback.tone,
+          duration: const Duration(days: 1),
+          onTap: feedback.onTap,
+          actionLabel: feedback.actionLabel,
+          onAction: feedback.onAction,
+        ),
+      );
+      return;
+    }
+
+    _persistentFeedbackEntries.remove(id)?.remove();
+
+    late final OverlayEntry entry;
+    void dismiss() {
+      final current = _persistentFeedbackEntries[id];
+      if (identical(current, entry)) {
+        _persistentFeedbackEntries.remove(id);
+      }
+      if (entry.mounted) {
+        entry.remove();
+      }
+    }
+
+    entry = OverlayEntry(
+      builder: (context) =>
+          _PersistentFeedbackEntry(feedback: feedback, onDismiss: dismiss),
+    );
+    _persistentFeedbackEntries[id] = entry;
+    overlay.insert(entry);
   }
 
   static void _showSnackBar(BuildContext context, FeedbackMessage feedback) {
@@ -241,6 +340,45 @@ class FeedbackSystem {
       case FeedbackTone.error:
         return Icons.error_outline;
     }
+  }
+}
+
+class _PersistentFeedbackEntry extends StatelessWidget {
+  const _PersistentFeedbackEntry({
+    required this.feedback,
+    required this.onDismiss,
+  });
+
+  final FeedbackMessage feedback;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool compactWidth = MediaQuery.sizeOf(context).width < smallScreen;
+    final Alignment alignment = compactWidth
+        ? Alignment.topCenter
+        : Alignment.topRight;
+    return Positioned.fill(
+      child: SafeArea(
+        child: Align(
+          alignment: alignment,
+          child: Padding(
+            padding: EdgeInsets.all(context.spacing.m),
+            child: FeedbackToast(
+              tone: feedback.tone,
+              title: feedback.title,
+              message: feedback.message,
+              onTap: feedback.onTap,
+              actionLabel: feedback.actionLabel,
+              onAction: feedback.onAction,
+              onDismiss: onDismiss,
+              alignment: alignment,
+              showCloseIconOnlyWhenHovered: false,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

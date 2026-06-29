@@ -40,6 +40,7 @@ enum CalendarSyncWarningType {
   archiveIncomplete,
   snapshotPublishPending,
   snapshotPublishBlocked,
+  reminderNotificationsDisabled,
 }
 
 @immutable

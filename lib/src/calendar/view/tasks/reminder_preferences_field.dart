@@ -17,14 +17,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 /// Declarative reminder selector that exposes start/deadline offsets as a set
 /// of toggleable chips. Designed to be reused by quick add, sidebar, and
 /// day-event composers.
-const String _reminderSectionTitle = 'Reminders';
-const String _reminderBeforeStartLabel = 'Before start';
-const String _reminderBeforeDeadlineLabel = 'Before deadline';
-const String _reminderAtStartLabel = 'At start';
-const String _reminderAtDeadlineLabel = 'At deadline';
-const String _reminderAdvancedLabel = 'Advanced alarms';
-const String _reminderAdvancedActiveLabel = 'Active';
-const String _reminderAdvancedSummary = 'Advanced alarms applied';
 const double _reminderAdvancedBadgeOpacity = 0.16;
 const double _reminderAdvancedBadgeRadius = 10;
 const List<CalendarAlarm> _emptyAdvancedAlarms = <CalendarAlarm>[];
@@ -34,7 +26,8 @@ class ReminderPreferencesField extends StatefulWidget {
     super.key,
     required this.value,
     required this.onChanged,
-    this.title = _reminderSectionTitle,
+    this.onPermissionRequested,
+    this.title,
     this.headerSize = TaskSectionLabelSize.medium,
     this.showHeader = true,
     this.anchor = ReminderAnchor.start,
@@ -51,7 +44,8 @@ class ReminderPreferencesField extends StatefulWidget {
 
   final ReminderPreferences value;
   final ValueChanged<ReminderPreferences> onChanged;
-  final String title;
+  final VoidCallback? onPermissionRequested;
+  final String? title;
   final TaskSectionLabelSize headerSize;
   final bool showHeader;
   final ReminderAnchor anchor;
@@ -96,6 +90,7 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final bool enabled = widget.enabled;
     final ReminderPreferences resolvedValue = widget.showBothAnchors
         ? widget.value.normalized()
@@ -117,11 +112,11 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
         ? resolvedValue.deadlineOffsets
         : resolvedValue.startOffsets;
     final String sectionLabel = usesDeadline
-        ? _reminderBeforeDeadlineLabel
-        : _reminderBeforeStartLabel;
+        ? l10n.calendarReminderBeforeDeadlineLabel
+        : l10n.calendarReminderBeforeStartLabel;
     final String zeroLabel = usesDeadline
-        ? _reminderAtDeadlineLabel
-        : _reminderAtStartLabel;
+        ? l10n.calendarReminderAtDeadlineLabel
+        : l10n.calendarReminderAtStartLabel;
     final List<CalendarAlarm>? advancedAlarms = widget.advancedAlarms;
     final ValueChanged<List<CalendarAlarm>>? baseAdvancedChanged =
         widget.onAdvancedAlarmsChanged;
@@ -143,7 +138,10 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (widget.showHeader) ...[
-          TaskSectionHeader(title: widget.title, size: widget.headerSize),
+          TaskSectionHeader(
+            title: widget.title ?? l10n.calendarRemindersSection,
+            size: widget.headerSize,
+          ),
           SizedBox(height: context.spacing.s),
         ],
         if (!widget.showBothAnchors)
@@ -151,14 +149,17 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
             label: sectionLabel,
             options: options,
             selected: selected,
-            onOptionToggled: (Duration offset) => onChanged(
-              _toggled(
-                resolvedValue,
-                offset,
-                anchor: widget.anchor,
-                preserveOtherAnchors: false,
-              ),
-            ),
+            onPermissionRequested: widget.onPermissionRequested,
+            onOptionToggled: (Duration offset) {
+              onChanged(
+                _toggled(
+                  resolvedValue,
+                  offset,
+                  anchor: widget.anchor,
+                  preserveOtherAnchors: false,
+                ),
+              );
+            },
             mixed: widget.mixed,
             zeroLabel: zeroLabel,
             chipPadding: EdgeInsets.symmetric(
@@ -168,19 +169,22 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
           )
         else ...[
           _ReminderSection(
-            label: _reminderBeforeStartLabel,
+            label: l10n.calendarReminderBeforeStartLabel,
             options: widget.startOptions,
             selected: resolvedValue.startOffsets,
-            onOptionToggled: (Duration offset) => onChanged(
-              _toggled(
-                resolvedValue,
-                offset,
-                anchor: ReminderAnchor.start,
-                preserveOtherAnchors: true,
-              ),
-            ),
+            onPermissionRequested: widget.onPermissionRequested,
+            onOptionToggled: (Duration offset) {
+              onChanged(
+                _toggled(
+                  resolvedValue,
+                  offset,
+                  anchor: ReminderAnchor.start,
+                  preserveOtherAnchors: true,
+                ),
+              );
+            },
             mixed: widget.mixed,
-            zeroLabel: _reminderAtStartLabel,
+            zeroLabel: l10n.calendarReminderAtStartLabel,
             chipPadding: EdgeInsets.symmetric(
               horizontal: context.spacing.m,
               vertical: context.spacing.s,
@@ -188,19 +192,22 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
           ),
           SizedBox(height: context.spacing.m),
           _ReminderSection(
-            label: _reminderBeforeDeadlineLabel,
+            label: l10n.calendarReminderBeforeDeadlineLabel,
             options: widget.deadlineOptions,
             selected: resolvedValue.deadlineOffsets,
-            onOptionToggled: (Duration offset) => onChanged(
-              _toggled(
-                resolvedValue,
-                offset,
-                anchor: ReminderAnchor.deadline,
-                preserveOtherAnchors: true,
-              ),
-            ),
+            onPermissionRequested: widget.onPermissionRequested,
+            onOptionToggled: (Duration offset) {
+              onChanged(
+                _toggled(
+                  resolvedValue,
+                  offset,
+                  anchor: ReminderAnchor.deadline,
+                  preserveOtherAnchors: true,
+                ),
+              );
+            },
             mixed: widget.mixed,
-            zeroLabel: _reminderAtDeadlineLabel,
+            zeroLabel: l10n.calendarReminderAtDeadlineLabel,
             chipPadding: EdgeInsets.symmetric(
               horizontal: context.spacing.m,
               vertical: context.spacing.s,
@@ -210,25 +217,36 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
         if (allowAdvanced) ...[
           SizedBox(height: context.spacing.m),
           TaskSectionExpander(
-            title: _reminderAdvancedLabel,
+            title: l10n.calendarReminderAdvancedAlarms,
             isExpanded: _advancedExpanded,
             onToggle: () => setState(() {
+              if (!_advancedExpanded) {
+                widget.onPermissionRequested?.call();
+              }
               _advancedExpanded = !_advancedExpanded;
             }),
             badge: hasAdvancedData
                 ? const _ReminderAdvancedActiveBadge()
                 : null,
             collapsedHint: hasAdvancedData
-                ? Text(_reminderAdvancedSummary, style: context.textTheme.muted)
+                ? Text(
+                    l10n.calendarReminderAdvancedAlarmsApplied,
+                    style: context.textTheme.muted,
+                  )
                 : null,
             enabled: enabled,
             child: CalendarAlarmsField(
               alarms: resolvedAdvancedAlarms,
-              title: _reminderAdvancedLabel,
+              title: l10n.calendarReminderAdvancedAlarms,
               referenceStart: widget.referenceStart,
               showReminderNote: false,
               showHeader: false,
-              onChanged: onAdvancedChanged,
+              onChanged: (value) {
+                if (value.isNotEmpty) {
+                  widget.onPermissionRequested?.call();
+                }
+                onAdvancedChanged(value);
+              },
             ),
           ),
         ],
@@ -294,7 +312,7 @@ class _ReminderAdvancedActiveBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(_reminderAdvancedBadgeRadius),
       ),
       child: Text(
-        _reminderAdvancedActiveLabel,
+        context.l10n.calendarReminderAdvancedAlarmsActive,
         style: context.textTheme.label.strong.copyWith(
           color: colors.mutedForeground,
         ),
@@ -308,6 +326,7 @@ class _ReminderSection extends StatelessWidget {
     required this.label,
     required this.options,
     required this.selected,
+    this.onPermissionRequested,
     required this.onOptionToggled,
     required this.zeroLabel,
     this.mixed = false,
@@ -317,6 +336,7 @@ class _ReminderSection extends StatelessWidget {
   final String label;
   final List<Duration> options;
   final List<Duration> selected;
+  final VoidCallback? onPermissionRequested;
   final ValueChanged<Duration> onOptionToggled;
   final bool mixed;
   final String zeroLabel;
@@ -347,7 +367,7 @@ class _ReminderSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(context.radii.container),
                 ),
                 child: Text(
-                  'Mixed',
+                  l10n.calendarReminderMixedLabel,
                   style: context.textTheme.label.strong.copyWith(
                     color: colors.mutedForeground,
                   ),
@@ -360,13 +380,19 @@ class _ReminderSection extends StatelessWidget {
           spacing: spacing.s,
           runSpacing: spacing.s,
           children: options
-              .map(
-                (Duration option) => _ReminderChip(
+              .map((Duration option) {
+                final bool optionSelected = selected.contains(option);
+                return _ReminderChip(
                   label: _labelFor(l10n, option),
-                  selected: selected.contains(option),
-                  onTap: () => onOptionToggled(option),
-                ),
-              )
+                  selected: optionSelected,
+                  onTap: () {
+                    if (!optionSelected) {
+                      onPermissionRequested?.call();
+                    }
+                    onOptionToggled(option);
+                  },
+                );
+              })
               .toList(growable: false),
         ),
       ],

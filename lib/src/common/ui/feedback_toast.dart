@@ -19,6 +19,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
+    this.onDismiss,
     Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : super.raw(
@@ -35,7 +36,7 @@ class FeedbackToast extends ShadToast {
                    overflow: TextOverflow.ellipsis,
                  ),
                ),
-         action: _actionWidget(actionLabel, onAction),
+         action: _actionWidget(actionLabel, onAction, onDismiss),
          alignment: alignment ?? _defaultAlignment,
          duration: duration ?? _defaultDurationForTone(tone),
          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
@@ -45,6 +46,7 @@ class FeedbackToast extends ShadToast {
   static const int _descriptionMaxLines = 2;
 
   final FeedbackTone tone;
+  final VoidCallback? onDismiss;
 
   @override
   State<FeedbackToast> createState() => _FeedbackToastState();
@@ -57,6 +59,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
+    VoidCallback? onDismiss,
     Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
@@ -68,6 +71,7 @@ class FeedbackToast extends ShadToast {
          onTap: onTap,
          actionLabel: actionLabel,
          onAction: onAction,
+         onDismiss: onDismiss,
          alignment: alignment,
          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
        );
@@ -80,6 +84,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
+    VoidCallback? onDismiss,
     Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
@@ -91,6 +96,7 @@ class FeedbackToast extends ShadToast {
          onTap: onTap,
          actionLabel: actionLabel,
          onAction: onAction,
+         onDismiss: onDismiss,
          alignment: alignment,
          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
        );
@@ -103,6 +109,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
+    VoidCallback? onDismiss,
     Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
@@ -114,6 +121,7 @@ class FeedbackToast extends ShadToast {
          onTap: onTap,
          actionLabel: actionLabel,
          onAction: onAction,
+         onDismiss: onDismiss,
          alignment: alignment,
          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
        );
@@ -126,6 +134,7 @@ class FeedbackToast extends ShadToast {
     VoidCallback? onTap,
     String? actionLabel,
     VoidCallback? onAction,
+    VoidCallback? onDismiss,
     Alignment? alignment,
     bool showCloseIconOnlyWhenHovered = false,
   }) {
@@ -138,6 +147,7 @@ class FeedbackToast extends ShadToast {
         onTap: onTap,
         actionLabel: actionLabel,
         onAction: onAction,
+        onDismiss: onDismiss,
         alignment: alignment,
         showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
       );
@@ -151,6 +161,7 @@ class FeedbackToast extends ShadToast {
       onTap: onTap,
       actionLabel: actionLabel,
       onAction: onAction,
+      onDismiss: onDismiss,
       alignment: alignment,
       showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
     );
@@ -195,7 +206,11 @@ class FeedbackToast extends ShadToast {
     return width < smallScreen;
   }
 
-  static Widget? _actionWidget(String? label, VoidCallback? onAction) {
+  static Widget? _actionWidget(
+    String? label,
+    VoidCallback? onAction,
+    VoidCallback? onDismiss,
+  ) {
     if (label == null || onAction == null) {
       return null;
     }
@@ -204,7 +219,12 @@ class FeedbackToast extends ShadToast {
         size: AxiButtonSize.sm,
         child: Text(label),
         onPressed: () {
-          ShadToaster.of(context).hide();
+          final dismiss = onDismiss;
+          if (dismiss == null) {
+            ShadToaster.of(context).hide();
+          } else {
+            dismiss();
+          }
           onAction();
         },
       ),
@@ -293,7 +313,14 @@ class _FeedbackToastState extends State<FeedbackToast> {
           pressedBackgroundColor: Colors.transparent,
           borderColor: Colors.transparent,
           semanticLabel: MaterialLocalizations.of(context).closeButtonTooltip,
-          onPressed: () => ShadToaster.of(context).hide(),
+          onPressed: () {
+            final dismiss = widget.onDismiss;
+            if (dismiss == null) {
+              ShadToaster.of(context).hide();
+            } else {
+              dismiss();
+            }
+          },
         );
     final effectiveTitleStyle =
         widget.titleStyle ??
@@ -371,7 +398,14 @@ class _FeedbackToastState extends State<FeedbackToast> {
         resizeDuration: null,
         background: const SizedBox.expand(),
         secondaryBackground: const SizedBox.expand(),
-        onDismissed: (_) => ShadToaster.of(context).hide(animate: false),
+        onDismissed: (_) {
+          final dismiss = widget.onDismiss;
+          if (dismiss == null) {
+            ShadToaster.of(context).hide(animate: false);
+          } else {
+            dismiss();
+          }
+        },
         child: UnconstrainedBox(
           constrainedAxis: Axis.horizontal,
           child: ConstrainedBox(
