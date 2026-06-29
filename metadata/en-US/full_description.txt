@@ -1,4 +1,4 @@
-Axichat is an open source email (SMTP) and chat (XMPP) client with first-party push notifications (without FCM) and a conversation-focused interface.
+Axichat is an open source email and chat client with first-party push notifications (without FCM) and a conversation-focused interface.
 
 Get your.name@axi.im now.
 
@@ -26,4 +26,4 @@ Feature highlights:
 
 <strong>Note:</strong> Axichat is still under active development, so things may break.
 
-Please report bugs at https://github.com/axichat/axichat/issues or GitLab.
+Please report bugs at https://github.com/axichat/axichat/issues.

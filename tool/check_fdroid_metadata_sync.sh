@@ -6,6 +6,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pubspec_path="${repo_root}/pubspec.yaml"
 fdroid_metadata_path="${repo_root}/fdroid/metadata/im.axi.axichat.yml"
 flutter_version_path="${repo_root}/.flutter-version"
+fdroid_patch_in_app_update_path="${repo_root}/tool/patch_fdroid_in_app_update.py"
+strip_dev_flutter_plugins_path="${repo_root}/tool/strip_dev_flutter_plugins.py"
+build_fdroid_linux_path="${repo_root}/tool/build_fdroid_linux.sh"
 
 if [[ ! -f "${pubspec_path}" ]]; then
   echo "Missing pubspec.yaml at ${pubspec_path}" >&2
@@ -22,6 +25,16 @@ if [[ ! -f "${flutter_version_path}" ]]; then
   exit 1
 fi
 
+for required_path in \
+  "${fdroid_patch_in_app_update_path}" \
+  "${strip_dev_flutter_plugins_path}" \
+  "${build_fdroid_linux_path}"; do
+  if [[ ! -f "${required_path}" ]]; then
+    echo "Missing F-Droid helper at ${required_path}" >&2
+    exit 1
+  fi
+done
+
 pubspec_version_line="$(awk '/^version:[[:space:]]*/ {print $2; exit}' "${pubspec_path}")"
 if [[ ! "${pubspec_version_line}" =~ ^([^+]+)\+([0-9]+)$ ]]; then
   echo "Unable to parse pubspec version '${pubspec_version_line}' (expected name+code)." >&2
@@ -32,6 +45,10 @@ pubspec_version_name="${BASH_REMATCH[1]}"
 pubspec_version_code="${BASH_REMATCH[2]}"
 expected_version_code="$((2000 + pubspec_version_code))"
 expected_release_tag="v${pubspec_version_name}"
+expected_source_code_url="https://github.com/axichat/axichat"
+expected_issue_tracker_url="https://github.com/axichat/axichat/issues"
+expected_changelog_url="https://github.com/axichat/axichat/releases"
+expected_repo_url="https://github.com/axichat/axichat.git"
 expected_binaries_url="https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk"
 expected_apk_signing_key="92d96304e82efa324f6aab21d731b32f05dbb3c8d42fc5514ea6755f33498d2e"
 expected_flutter_version="$(tr -d '\r\n' < "${flutter_version_path}")"
@@ -41,6 +58,10 @@ failed=0
 metadata_build_version_name="$(awk '/^[[:space:]]+- versionName:/ {print $3; exit}' "${fdroid_metadata_path}")"
 metadata_build_version_code="$(awk '/^[[:space:]]+versionCode:/ {print $2; exit}' "${fdroid_metadata_path}")"
 metadata_build_commit="$(awk '/^[[:space:]]+commit:/ {print $2; exit}' "${fdroid_metadata_path}")"
+metadata_source_code_url="$(awk -F': ' '/^SourceCode:/ {print $2; exit}' "${fdroid_metadata_path}")"
+metadata_issue_tracker_url="$(awk -F': ' '/^IssueTracker:/ {print $2; exit}' "${fdroid_metadata_path}")"
+metadata_changelog_url="$(awk -F': ' '/^Changelog:/ {print $2; exit}' "${fdroid_metadata_path}")"
+metadata_repo_url="$(awk -F': ' '/^Repo:/ {print $2; exit}' "${fdroid_metadata_path}")"
 metadata_binaries_url="$(
   awk '
     /^Binaries:/ {
@@ -81,6 +102,26 @@ if [[ -n "${expected_release_commit}" && "${metadata_build_commit}" != "${expect
   failed=1
 fi
 
+if [[ "${metadata_source_code_url}" != "${expected_source_code_url}" ]]; then
+  echo "Mismatch: SourceCode=${metadata_source_code_url} expected=${expected_source_code_url}" >&2
+  failed=1
+fi
+
+if [[ "${metadata_issue_tracker_url}" != "${expected_issue_tracker_url}" ]]; then
+  echo "Mismatch: IssueTracker=${metadata_issue_tracker_url} expected=${expected_issue_tracker_url}" >&2
+  failed=1
+fi
+
+if [[ "${metadata_changelog_url}" != "${expected_changelog_url}" ]]; then
+  echo "Mismatch: Changelog=${metadata_changelog_url} expected=${expected_changelog_url}" >&2
+  failed=1
+fi
+
+if [[ "${metadata_repo_url}" != "${expected_repo_url}" ]]; then
+  echo "Mismatch: Repo=${metadata_repo_url} expected=${expected_repo_url}" >&2
+  failed=1
+fi
+
 if [[ "${metadata_binaries_url}" != "${expected_binaries_url}" ]]; then
   echo "Mismatch: Binaries=${metadata_binaries_url} expected=${expected_binaries_url}" >&2
   failed=1
@@ -111,24 +152,26 @@ check_count() {
   local pattern="$2"
   local description="$3"
   local mode="${4:-fixed}"
+  local path="${5:-${fdroid_metadata_path}}"
   local actual
 
   if command -v rg >/dev/null 2>&1; then
     if [[ "${mode}" == "regex" ]]; then
-      actual="$(rg -c -- "${pattern}" "${fdroid_metadata_path}")"
+      actual="$(rg -c -- "${pattern}" "${path}" || true)"
     else
-      actual="$(rg -F -c -- "${pattern}" "${fdroid_metadata_path}")"
+      actual="$(rg -F -c -- "${pattern}" "${path}" || true)"
     fi
   else
     if [[ "${mode}" == "regex" ]]; then
-      actual="$(grep -E -c -- "${pattern}" "${fdroid_metadata_path}")"
+      actual="$(grep -E -c -- "${pattern}" "${path}" || true)"
     else
-      actual="$(grep -F -c -- "${pattern}" "${fdroid_metadata_path}")"
+      actual="$(grep -F -c -- "${pattern}" "${path}" || true)"
     fi
   fi
+  actual="${actual:-0}"
 
   if [[ "${actual}" != "${expected}" ]]; then
-    echo "Missing expected ${description} (expected ${expected}, found ${actual})" >&2
+    echo "Missing expected ${description} in ${path} (expected ${expected}, found ${actual})" >&2
     failed=1
   fi
 }
@@ -137,32 +180,33 @@ check_absent() {
   local pattern="$1"
   local description="$2"
   local mode="${3:-fixed}"
+  local path="${4:-${fdroid_metadata_path}}"
   local found=0
 
   if command -v rg >/dev/null 2>&1; then
     if [[ "${mode}" == "regex" ]]; then
-      if rg -q -- "${pattern}" "${fdroid_metadata_path}"; then
+      if rg -q -- "${pattern}" "${path}"; then
         found=1
       fi
     else
-      if rg -F -q -- "${pattern}" "${fdroid_metadata_path}"; then
+      if rg -F -q -- "${pattern}" "${path}"; then
         found=1
       fi
     fi
   else
     if [[ "${mode}" == "regex" ]]; then
-      if grep -E -q -- "${pattern}" "${fdroid_metadata_path}"; then
+      if grep -E -q -- "${pattern}" "${path}"; then
         found=1
       fi
     else
-      if grep -F -q -- "${pattern}" "${fdroid_metadata_path}"; then
+      if grep -F -q -- "${pattern}" "${path}"; then
         found=1
       fi
     fi
   fi
 
   if [[ "${found}" -ne 0 ]]; then
-    echo "Unexpected ${description}" >&2
+    echo "Unexpected ${description} in ${path}" >&2
     failed=1
   fi
 }
@@ -181,17 +225,18 @@ check_count 1 'rustup target add aarch64-linux-android' 'arm64 rust target'
 check_count 1 '^\s+ndk: 28\.2\.13676358$' 'NDK pin' regex
 check_count 1 'python3 tool/patch_fdroid_in_app_update.py "$PUB_CACHE"' 'repo in_app_update helper invocation'
 check_count 1 'python3 tool/strip_dev_flutter_plugins.py' 'repo dev-only Flutter plugin strip script'
-check_count 1 'com.google.android.play:app-update' 'Play Core dependency removal'
-check_count 1 'InAppUpdatePlugin.kt' 'in_app_update plugin stub target'
-check_count 1 'Play in-app updates are unavailable in this build.' 'in_app_update stub message'
-check_count 1 'dev_dependency' 'dev-only Flutter plugin filter'
-check_count 1 'dependencyGraph' 'Flutter plugin dependency graph cleanup'
+check_count 1 '    "com.google.android.play:app-update",' 'Play Core dependency removal' fixed "${fdroid_patch_in_app_update_path}"
+check_count 1 '    "com.google.android.play:app-update-ktx",' 'Play Core KTX dependency removal' fixed "${fdroid_patch_in_app_update_path}"
+check_count 1 'InAppUpdatePlugin.kt' 'in_app_update plugin stub target' fixed "${fdroid_patch_in_app_update_path}"
+check_count 1 'Play in-app updates are unavailable in this build.' 'in_app_update stub message' fixed "${fdroid_patch_in_app_update_path}"
+check_count 1 'dev_dependency' 'dev-only Flutter plugin filter' fixed "${strip_dev_flutter_plugins_path}"
+check_count 2 'dependencyGraph' 'Flutter plugin dependency graph cleanup' fixed "${strip_dev_flutter_plugins_path}"
 check_count 1 'patch_fdroid_in_app_update.py' 'repo in_app_update helper path'
 check_count 1 'strip_dev_flutter_plugins.py' 'repo Flutter plugin cleanup helper path'
-check_count 1 'find "$PUB_CACHE/hosted/pub.dev" -mindepth 2 -maxdepth 2' 'pub-cache pruning command'
-check_count 1 '-name extension' 'pub-cache pruning extension target'
-check_count 1 '-exec rm -rf {} +' 'pub-cache pruning delete action'
-check_count 1 'rm -rf .dart_tool/build android/.gradle .gradle-user-home' 'pre-Flutter cleanup before release build'
+check_count 1 'find "${PUB_CACHE}/hosted/pub.dev" -mindepth 2 -maxdepth 2' 'pub-cache pruning command' fixed "${build_fdroid_linux_path}"
+check_count 1 '-name extension' 'pub-cache pruning extension target' fixed "${build_fdroid_linux_path}"
+check_count 1 '-exec rm -rf {} +' 'pub-cache pruning delete action' fixed "${build_fdroid_linux_path}"
+check_count 1 'rm -rf .dart_tool/build android/.gradle .gradle-user-home' 'pre-Flutter cleanup before release build' fixed "${build_fdroid_linux_path}"
 check_count 1 '^\s+- \.pub-cache$' '.pub-cache scandelete entry' regex
 check_count 1 '^\s+- 2000 \+ %c$' 'VercodeOperation arm64 entry' regex
 

@@ -1,16 +1,16 @@
 <strong>Nota:</strong> Axichat sigue en desarrollo activo, por lo que algunas funciones pueden fallar.
 
-Si encuentras errores, repórtalos en https://github.com/axichat/axichat/issues para que pueda corregirlos. GitLab también sirve para reportar fallos.
+Si encuentras errores, repórtalos en https://github.com/axichat/axichat/issues para que pueda corregirlos.
 
 Sitio web: https://axi.chat
-Código fuente: https://gitlab.com/axichat/axichat
+Código fuente: https://github.com/axichat/axichat
 Licencia: AGPL-3.0-or-later
 
-Axichat es un cliente de correo y XMPP de código abierto, con notificaciones push de primera parte (nunca FCM) y sin dependencias de terceros.
+Axichat es un cliente de correo y chat de código abierto, con notificaciones push de primera parte (nunca FCM) y sin dependencias de terceros.
 
 Consigue ahora tu dirección username@axi.im.
 
-Puedes autoalojar tu propio servidor de correo + XMPP para Axichat siguiendo los pasos en https://github.com/axichat/selfhost.
+Puedes autoalojar tu propio servidor de correo y chat para Axichat siguiendo los pasos en https://github.com/axichat/selfhost.
 
 Características destacadas:
 - Bandeja unificada para chat y correo lado a lado.
@@ -37,7 +37,7 @@ Qué hace Axichat:
 Hermosa interfaz de chat:
 - Lee y envía mensajes y correos en una interfaz centrada en conversaciones.
 - Llega a personas en proveedores de correo comunes (por ejemplo Gmail, Outlook, Tuta) manteniendo tu flujo en Axichat.
-- Usa funciones XMPP avanzadas cuando ambos lados las soportan.
+- Usa funciones avanzadas de chat cuando ambos lados las soportan.
 
 Calendario intuitivo:
 - Escribe tareas y eventos en lenguaje natural y prográmalos rápido.
@@ -63,5 +63,5 @@ Permisos de Android explicados:
 
 Soporte y actualizaciones:
 - Sitio web: https://axi.chat
-- Notas de versión: https://gitlab.com/axichat/axichat/-/releases
+- Notas de versión: https://github.com/axichat/axichat/releases
 - Donaciones: https://axi.chat/donate

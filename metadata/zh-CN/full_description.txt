@@ -1,16 +1,16 @@
 <strong>说明：</strong> Axichat 仍在积极开发中，因此部分功能可能会出现问题。
 
-如果你发现任何 bug，请到 https://github.com/axichat/axichat/issues 提交反馈，这样我就能修复它们！GitLab 也可以用来反馈 bug。
+如果你发现任何 bug，请到 https://github.com/axichat/axichat/issues 提交反馈，这样我就能修复它们。
 
 官网：https://axi.chat
-源代码：https://gitlab.com/axichat/axichat
+源代码：https://github.com/axichat/axichat
 许可证：AGPL-3.0-or-later
 
-Axichat 是一款开源的电子邮件与 XMPP 客户端，提供第一方推送通知（绝不使用 FCM），且不依赖任何第三方服务。
+Axichat 是一款开源的电子邮件与聊天客户端，提供第一方推送通知（绝不使用 FCM），且不依赖任何第三方服务。
 
 立即获取你的 username@axi.im 地址。
 
-你可以按照 https://github.com/axichat/selfhost 的步骤，自行托管 Axichat 的邮件 + XMPP 服务器。
+你可以按照 https://github.com/axichat/selfhost 的步骤，自行托管 Axichat 的邮件 + 聊天服务器。
 
 功能亮点：
 - 聊天与邮件同屏统一收件箱。
@@ -37,7 +37,7 @@ Axichat 能做什么：
 美观的聊天界面：
 - 在会话中心界面中收发消息与邮件。
 - 可联系主流邮箱用户（如 Gmail、Outlook、Tuta），同时保持你在 Axichat 的工作流。
-- 双方支持时可使用更高级的 XMPP 功能。
+- 双方支持时可使用更高级的聊天功能。
 
 直观的日历：
 - 用自然语言输入任务和事件并快速排程。
@@ -63,5 +63,5 @@ Android 权限说明：
 
 支持与更新：
 - 官网：https://axi.chat
-- 版本说明：https://gitlab.com/axichat/axichat/-/releases
+- 版本说明：https://github.com/axichat/axichat/releases
 - 捐助：https://axi.chat/donate

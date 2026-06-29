@@ -5,13 +5,13 @@ Categories:
 License: AGPL-3.0-or-later
 AuthorName: Axichat Developers
 WebSite: https://axi.chat
-SourceCode: https://gitlab.com/axichat/axichat
-IssueTracker: https://gitlab.com/axichat/axichat/-/issues
-Changelog: https://gitlab.com/axichat/axichat/-/releases
+SourceCode: https://github.com/axichat/axichat
+IssueTracker: https://github.com/axichat/axichat/issues
+Changelog: https://github.com/axichat/axichat/releases
 Donate: https://axi.chat/donate
 
 RepoType: git
-Repo: https://gitlab.com/axichat/axichat.git
+Repo: https://github.com/axichat/axichat.git
 Binaries: 
   https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk
 

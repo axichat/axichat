@@ -1,16 +1,16 @@
 <strong>Note :</strong> Axichat est encore en développement actif ; certaines fonctions peuvent donc ne pas fonctionner correctement.
 
-Si vous trouvez des bugs, signalez-les sur https://github.com/axichat/axichat/issues afin que je puisse les corriger ! GitLab fonctionne aussi pour signaler des bugs.
+Si vous trouvez des bugs, signalez-les sur https://github.com/axichat/axichat/issues afin que je puisse les corriger.
 
 Site web: https://axi.chat
-Code source: https://gitlab.com/axichat/axichat
+Code source: https://github.com/axichat/axichat
 Licence: AGPL-3.0-or-later
 
-Axichat est un client e-mail et XMPP open source, avec des notifications push de première partie (jamais FCM) et sans dépendances tierces.
+Axichat est un client e-mail et chat open source, avec des notifications push de première partie (jamais FCM) et sans dépendances tierces.
 
 Obtenez dès maintenant votre adresse username@axi.im.
 
-Vous pouvez auto-héberger votre propre serveur e-mail + XMPP pour Axichat en suivant les étapes sur https://github.com/axichat/selfhost.
+Vous pouvez auto-héberger votre propre serveur e-mail et chat pour Axichat en suivant les étapes sur https://github.com/axichat/selfhost.
 
 Points forts:
 - Boîte unifiée : chat et e-mail côte à côte.
@@ -37,7 +37,7 @@ Ce que fait Axichat :
 Belle interface de chat:
 - Lire et envoyer messages et e-mails dans une interface centrée conversation.
 - Contacter des personnes sur des services e-mail classiques (par ex. Gmail, Outlook, Tuta) tout en gardant votre flux dans Axichat.
-- Utiliser des fonctions XMPP avancées quand les deux côtés les prennent en charge.
+- Utiliser des fonctions de chat avancées quand les deux côtés les prennent en charge.
 
 Calendrier intuitif:
 - Saisir tâches et événements en langage naturel et planifier vite.
@@ -63,5 +63,5 @@ Permissions Android expliquées:
 
 Support et mises à jour:
 - Site web: https://axi.chat
-- Notes de version: https://gitlab.com/axichat/axichat/-/releases
+- Notes de version: https://github.com/axichat/axichat/releases
 - Dons: https://axi.chat/donate
