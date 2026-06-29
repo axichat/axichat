@@ -1774,7 +1774,7 @@ class EmailService {
       case _EmailCatchUpReason.homeHistoryRefresh:
         return 'incrementalThenImport';
       case _EmailCatchUpReason.foregroundResume:
-        return 'freshOnlyAfterFetchOrWake';
+        return 'freshOnlyAfterFetchOrResume';
       case _EmailCatchUpReason.syncInboxAndSent:
       case _EmailCatchUpReason.backgroundFetchDone:
       case _EmailCatchUpReason.channelOverflow:
