@@ -1148,6 +1148,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         return;
       }
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        context: context,
         file: file,
         subject: subject,
         text: shareText,

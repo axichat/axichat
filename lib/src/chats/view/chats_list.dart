@@ -21,6 +21,7 @@ import 'package:axichat/src/chats/view/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/contact_rename_dialog.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/share_position.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/contacts/view/contacts_list.dart';
@@ -1549,7 +1550,8 @@ class _ChatListTileState extends State<ChatListTile> {
         return;
       }
       await SharePlus.instance.share(
-        ShareParams(
+        shareParamsForContext(
+          context,
           files: <XFile>[XFile(exportFile.path)],
           text: l10n.chatsExportShareText,
           subject: l10n.chatsExportShareSubject(chat.displayName),
@@ -1596,7 +1598,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
       AxiMenuAction(
         icon: LucideIcons.share2,
-        label: l10n.commonExport,
+        label: 'Share transcript',
         onPressed: () async {
           await _exportChatFromContextMenu(chat);
         },
@@ -1753,7 +1755,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           exporting: _exporting,
           onPressed: _exportChat,
           iconSize: iconSize,
-          readyLabel: l10n.commonExport,
+          readyLabel: 'Share transcript',
         ),
         ContextActionButton(
           icon: Icon(
@@ -1915,7 +1917,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
         return;
       }
       await SharePlus.instance.share(
-        ShareParams(
+        shareParamsForContext(
+          context,
           files: <XFile>[XFile(exportFile.path)],
           text: l10n.chatsExportShareText,
           subject: l10n.chatsExportShareSubject(widget.chat.displayName),

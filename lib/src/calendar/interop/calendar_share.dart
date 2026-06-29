@@ -4,6 +4,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/share_position.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -13,6 +15,7 @@ enum CalendarShareOutcome { shared, openedDirectory, copiedPath }
 const Duration _calendarExportCleanupDelay = Duration(hours: 1);
 
 Future<CalendarShareOutcome> shareCalendarExport({
+  required BuildContext context,
   required File file,
   required String subject,
   required String text,
@@ -28,7 +31,12 @@ Future<CalendarShareOutcome> shareCalendarExport({
   }
 
   await SharePlus.instance.share(
-    ShareParams(files: <XFile>[XFile(file.path)], subject: subject, text: text),
+    shareParamsForContext(
+      context,
+      files: <XFile>[XFile(file.path)],
+      subject: subject,
+      text: text,
+    ),
   );
   _scheduleExportCleanup(file);
   return CalendarShareOutcome.shared;

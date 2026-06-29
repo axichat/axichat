@@ -8,6 +8,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/view/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/selection_panel_shell.dart';
+import 'package:axichat/src/common/share_position.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -99,7 +100,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ),
               ChatExportActionButton(
                 exporting: _exporting,
-                readyLabel: l10n.commonExport,
+                readyLabel: 'Share transcript',
                 onPressed: () => _exportSelectedChats(context),
               ),
               ContextActionButton(
@@ -132,7 +133,8 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         ? null
         : l10n.chatsExportFileLabel;
     final confirmed = await _confirmChatExport();
-    if (!mounted || !confirmed) return;
+    if (!context.mounted || !confirmed) return;
+    final sharePositionOrigin = sharePositionOriginForContext(context);
     setState(() {
       _exporting = true;
     });
@@ -146,6 +148,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         fileLabel: fileLabel,
       );
       exportFile = result.file;
+      if (!mounted) return;
       if (exportFile == null) {
         showToast?.call(
           FeedbackToast.info(
@@ -156,10 +159,11 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         return;
       }
       await SharePlus.instance.share(
-        ShareParams(
+        shareParamsForOrigin(
           files: <XFile>[XFile(exportFile.path)],
           text: l10n.chatSelectionExportShareText,
           subject: l10n.chatSelectionExportShareSubject,
+          sharePositionOrigin: sharePositionOrigin,
         ),
       );
       showToast?.call(

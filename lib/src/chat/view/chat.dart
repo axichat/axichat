@@ -82,6 +82,7 @@ import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/share_position.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -8972,7 +8973,8 @@ class _ChatState extends State<Chat> {
         return;
       }
       await SharePlus.instance.share(
-        ShareParams(
+        shareParamsForContext(
+          context,
           text: content,
           subject: l10n.chatShareSubjectPrefix(
             context.read<ChatBloc>().state.chat?.title ??
@@ -9179,7 +9181,8 @@ class _ChatState extends State<Chat> {
         return;
       }
       await SharePlus.instance.share(
-        ShareParams(
+        shareParamsForContext(
+          context,
           text: joined,
           subject: l10n.chatShareSubjectPrefix(
             context.read<ChatBloc>().state.chat?.title ??

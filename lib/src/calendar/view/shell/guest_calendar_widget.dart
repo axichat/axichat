@@ -574,7 +574,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
               model: model,
               fileNamePrefix: _guestCalendarExportFilePrefix,
             );
+      if (!mounted) return;
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        context: context,
         file: file,
         subject: l10n.calendarGuestExportShareSubject,
         text: l10n.calendarGuestExportShareText(format.label),

@@ -14,6 +14,7 @@ import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/media_decode_safety.dart';
+import 'package:axichat/src/common/share_position.dart';
 import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -3501,7 +3502,7 @@ Future<void> shareAttachmentFromFile(
       return;
     }
     await SharePlus.instance.share(
-      ShareParams(files: <XFile>[XFile(sharedFile.path)]),
+      shareParamsForContext(context, files: <XFile>[XFile(sharedFile.path)]),
     );
   } on PlatformException {
     _showToast(

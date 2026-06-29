@@ -1257,7 +1257,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         format: format,
         fileNamePrefix: l10n.calendarExportTasksFilePrefix,
       );
+      if (!mounted) return;
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        context: context,
         file: file,
         subject: l10n.calendarExportSelected,
         text: '${l10n.calendarExportSelected} (${format.label})',
@@ -1285,7 +1287,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       final String subject = trimmedTitle.isEmpty
           ? l10n.calendarExportFormatIcsTitle
           : trimmedTitle;
+      if (!mounted) return;
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        context: context,
         file: file,
         subject: subject,
         text: '$subject (${l10n.calendarExportFormatIcsTitle})',

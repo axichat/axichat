@@ -451,6 +451,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       final file = await _transferService.exportDayEventIcs(event: event);
       if (!mounted) return;
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        context: context,
         file: file,
         subject: subject,
         text: shareText,

@@ -166,7 +166,9 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       final file = format == CalendarExportFormat.json
           ? await _transferService.exportModel(model: model)
           : await _transferService.exportIcs(model: model);
+      if (!mounted) return;
       final CalendarShareOutcome shareOutcome = await shareCalendarExport(
+        context: context,
         file: file,
         subject: l10n.calendarTransferExportSubject,
         text: l10n.calendarTransferExportText(format.label),
