@@ -1,8 +1,16 @@
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/view/home_screen.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
+
+import '../../mocks.dart';
 
 void main() {
   group('resolveHomeSecondaryPane', () {
@@ -150,6 +158,64 @@ void main() {
         expect(disposeCount, 1);
       },
     );
+
+    testWidgets(
+      'global keyed pane subtree survives adaptive breakpoint resize',
+      (tester) async {
+        tester.view
+          ..devicePixelRatio = 1
+          ..physicalSize = const Size(smallScreen - 80, 700);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+
+        final settingsCubit = _settingsCubit();
+        final paneKey = GlobalKey(debugLabel: 'home_chat_session_test');
+        var initCount = 0;
+        var disposeCount = 0;
+
+        Widget buildHost() {
+          final theme = AppTheme.build(
+            shadColor: ShadColor.blue,
+            brightness: Brightness.light,
+            platform: defaultTargetPlatform,
+          );
+          return BlocProvider<SettingsCubit>.value(
+            value: settingsCubit,
+            child: ShadApp(
+              theme: theme,
+              home: Scaffold(
+                body: AxiAdaptiveLayout(
+                  invertPriority: true,
+                  animatePaneChanges: false,
+                  primaryChild: const SizedBox(key: ValueKey('primary-pane')),
+                  secondaryChild: KeyedSubtree(
+                    key: paneKey,
+                    child: _PaneProbe(
+                      onInit: () => initCount += 1,
+                      onDispose: () => disposeCount += 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        await tester.pumpWidget(buildHost());
+        expect(initCount, 1);
+        expect(disposeCount, 0);
+
+        tester.view.physicalSize = const Size(smallScreen + 160, 700);
+        await tester.pump();
+        expect(initCount, 1);
+        expect(disposeCount, 0);
+
+        tester.view.physicalSize = const Size(smallScreen - 80, 700);
+        await tester.pump();
+        expect(initCount, 1);
+        expect(disposeCount, 0);
+      },
+    );
   });
 
   group('resolveHomeBottomBarLayoutForTesting', () {
@@ -201,6 +267,16 @@ void main() {
       expect(layout.removeBranchBottomPadding, isTrue);
     });
   });
+}
+
+MockSettingsCubit _settingsCubit() {
+  final settingsCubit = MockSettingsCubit();
+  when(() => settingsCubit.state).thenReturn(const SettingsState());
+  when(
+    () => settingsCubit.stream,
+  ).thenAnswer((_) => const Stream<SettingsState>.empty());
+  when(() => settingsCubit.animationDuration).thenReturn(Duration.zero);
+  return settingsCubit;
 }
 
 class _PaneProbe extends StatefulWidget {

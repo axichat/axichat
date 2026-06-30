@@ -2114,7 +2114,7 @@ class HomeBadgeCoordinator extends StatelessWidget {
   Widget build(BuildContext context) => builder(context, _resolveBadgeCounts());
 }
 
-class _HomeContent extends StatelessWidget {
+class _HomeContent extends StatefulWidget {
   const _HomeContent({
     required this.storageManager,
     required this.shortcutFocusNode,
@@ -2143,7 +2143,38 @@ class _HomeContent extends StatelessWidget {
   final ValueChanged<ChatsState> onSyncHomeHistoryEntries;
   final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
 
+  @override
+  State<_HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<_HomeContent> {
+  String? _chatSessionScopeKey;
+  GlobalKey? _chatSessionKey;
+
+  CalendarStorageManager get storageManager => widget.storageManager;
+  FocusNode get shortcutFocusNode => widget.shortcutFocusNode;
+  ValueListenable<int>? get bottomNavIndex => widget.bottomNavIndex;
+  bool get homeBranchActive => widget.homeBranchActive;
+  ValueNotifier<bool> get calendarCanHandleBack => widget.calendarCanHandleBack;
+  ValueNotifier<CalendarBottomDragSession?>? get calendarBottomDragSession =>
+      widget.calendarBottomDragSession;
+  List<HomeTabEntry> get tabs => widget.tabs;
+  bool get railCollapsed => widget.railCollapsed;
+  VoidCallback get onToggleNavRail => widget.onToggleNavRail;
+  ValueChanged<ChatsState> get onSyncHomeHistoryEntries =>
+      widget.onSyncHomeHistoryEntries;
+  KeyEventResult Function(FocusNode, KeyEvent) get onHomeKeyEvent =>
+      widget.onHomeKeyEvent;
+
   int _normalizeBottomNavIndex(int index) => index.clamp(0, 3).toInt();
+
+  GlobalKey _chatSessionKeyFor(String scopeKey) {
+    if (_chatSessionScopeKey != scopeKey) {
+      _chatSessionScopeKey = scopeKey;
+      _chatSessionKey = GlobalKey(debugLabel: 'home_chat_session_$scopeKey');
+    }
+    return _chatSessionKey!;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2195,18 +2226,32 @@ class _HomeContent extends StatelessWidget {
                     active: chatPaneActive,
                     transitionDuration: animationDuration,
                     builder: (context, initialLoadDelay) {
-                      final Widget chatPane = Align(
+                      final String? resolvedJid = pane.jid?.trim();
+                      Widget chatPane = Align(
                         alignment: Alignment.topLeft,
                         child: _HomeSecondaryChatPane(
-                          key: ValueKey(pane.scopeKey),
                           pane: pane,
-                          settings: settings,
-                          emailEnabled: emailEnabled,
                           active: chatPaneActive,
                           chatCalendarActive: chatCalendarActive,
-                          initialLoadDelay: initialLoadDelay,
                         ),
                       );
+                      if (resolvedJid != null && resolvedJid.isNotEmpty) {
+                        final locate = context.read;
+                        chatPane = ChatSessionProviders(
+                          key: _chatSessionKeyFor(pane.scopeKey),
+                          jid: resolvedJid,
+                          settings: settings,
+                          emailService: emailEnabled
+                              ? locate<EmailService>()
+                              : null,
+                          locate: locate,
+                          initialLoadDelay: initialLoadDelay,
+                          child: chatPane,
+                        );
+                      } else {
+                        _chatSessionScopeKey = null;
+                        _chatSessionKey = null;
+                      }
                       return Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -2493,21 +2538,14 @@ class _HomeChatInitialLoadDelayGateState
 
 class _HomeSecondaryChatPane extends StatelessWidget {
   const _HomeSecondaryChatPane({
-    super.key,
     required this.pane,
-    required this.settings,
-    required this.emailEnabled,
     required this.active,
     required this.chatCalendarActive,
-    required this.initialLoadDelay,
   });
 
   final HomeSecondaryPane pane;
-  final SettingsState settings;
-  final bool emailEnabled;
   final bool active;
   final bool chatCalendarActive;
-  final Duration initialLoadDelay;
 
   @override
   Widget build(BuildContext context) {
@@ -2515,18 +2553,10 @@ class _HomeSecondaryChatPane extends StatelessWidget {
     if (resolvedJid == null || resolvedJid.isEmpty) {
       return const SizedBox.shrink();
     }
-    final locate = context.read;
-    return ChatSessionProviders(
-      jid: resolvedJid,
-      settings: settings,
-      emailService: emailEnabled ? locate<EmailService>() : null,
-      locate: locate,
-      initialLoadDelay: initialLoadDelay,
-      child: Chat(
-        active: active,
-        syncWithOpenChatRoute: pane.syncWithOpenChatRoute,
-        calendarSurfaceActive: chatCalendarActive,
-      ),
+    return Chat(
+      active: active,
+      syncWithOpenChatRoute: pane.syncWithOpenChatRoute,
+      calendarSurfaceActive: chatCalendarActive,
     );
   }
 }
