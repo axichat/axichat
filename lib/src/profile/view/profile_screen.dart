@@ -457,7 +457,6 @@ class _ProfileMainView extends StatelessWidget {
           width: context.borderSide.width,
           color: context.colorScheme.border,
         ),
-        SizedBox(width: spacing.m),
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
@@ -468,7 +467,7 @@ class _ProfileMainView extends StatelessWidget {
             },
             child: SingleChildScrollView(
               controller: settingsScrollController,
-              padding: EdgeInsets.only(right: spacing.l, top: spacing.m),
+              padding: EdgeInsets.only(top: spacing.m),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   minWidth: sizing.profileWideSettingsMinWidth,
