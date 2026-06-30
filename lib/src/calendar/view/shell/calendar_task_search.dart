@@ -31,6 +31,7 @@ import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 typedef CalendarSearchTileBuilder =
     Widget Function(
       CalendarTask task, {
+      Widget? metadata,
       Widget? trailing,
       bool requiresLongPress,
       VoidCallback? onTap,
@@ -370,13 +371,15 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                                 return SizedBox(height: spacing.xxs);
                               }
                               final CalendarTask task = results[index ~/ 2];
-                              final Widget trailing = _ResultMetadata(task);
+                              final Widget? metadata = _hasResultMetadata(task)
+                                  ? _ResultMetadata(task)
+                                  : null;
                               final bool useCustomTile =
                                   widget.taskTileBuilder != null;
                               final Widget tile = useCustomTile
                                   ? widget.taskTileBuilder!.call(
                                       task,
-                                      trailing: trailing,
+                                      metadata: metadata,
                                       requiresLongPress:
                                           widget.requiresLongPressForDrag,
                                       onTap: () => _handleTaskSelected(task),
@@ -386,7 +389,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                                     )
                                   : _SearchResultTile(
                                       task: task,
-                                      trailing: trailing,
+                                      metadata: metadata,
                                       onTap: () => _handleTaskSelected(task),
                                     );
                               return tile;
@@ -760,12 +763,12 @@ class _SearchResultTile extends StatelessWidget {
   const _SearchResultTile({
     required this.task,
     required this.onTap,
-    this.trailing,
+    this.metadata,
   });
 
   final CalendarTask task;
   final VoidCallback onTap;
-  final Widget? trailing;
+  final Widget? metadata;
 
   @override
   Widget build(BuildContext context) {
@@ -789,11 +792,15 @@ class _SearchResultTile extends StatelessWidget {
         hoverColor: hoverColor,
         child: Padding(
           padding: EdgeInsets.only(left: context.spacing.xs),
-          child: CalendarTaskListTile(task: task, trailing: trailing),
+          child: CalendarTaskListTile(task: task, metadata: metadata),
         ),
       ),
     );
   }
+}
+
+bool _hasResultMetadata(CalendarTask task) {
+  return task.scheduledTime != null || task.deadline != null;
 }
 
 enum _QuickFilter {

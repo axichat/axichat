@@ -137,14 +137,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
     final List<String> removalQueue = <String>[];
 
     for (final entry in _entries) {
-      final String previousId = entry.operation.id;
-      var updated = incoming.remove(previousId);
-      final replacement = _takeDelayedReplacement(entry.operation, incoming);
-      if (replacement != null &&
-          (updated == null ||
-              updated.status != XmppOperationStatus.inProgress)) {
-        updated = replacement;
-      }
+      final updated = incoming.remove(entry.operation.id);
       if (updated == null) {
         if (_hasProtectedDelayedLifecycle(entry)) {
           continue;
@@ -154,11 +147,6 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
           removalQueue.add(entry.operation.id);
         }
         continue;
-      }
-      if (updated.id != previousId) {
-        _cancelExitTimer(previousId);
-        _cancelPendingRemoval(previousId);
-        _cancelStatusReveal(previousId);
       }
       shouldRebuild = _updateEntryOperation(entry, updated) || shouldRebuild;
     }
@@ -178,24 +166,6 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
     if (shouldRebuild) {
       setState(() {});
     }
-  }
-
-  XmppOperation? _takeDelayedReplacement(
-    XmppOperation current,
-    Map<String, XmppOperation> incoming,
-  ) {
-    if (!_usesDisplayDelay(current)) {
-      return null;
-    }
-    String? replacementId;
-    for (final operation in incoming.values) {
-      if (operation.kind == current.kind &&
-          operation.status == XmppOperationStatus.inProgress) {
-        replacementId = operation.id;
-        break;
-      }
-    }
-    return replacementId == null ? null : incoming.remove(replacementId);
   }
 
   bool _hasProtectedDelayedLifecycle(_ToastEntry entry) {
@@ -279,9 +249,6 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
         continue;
       }
       incomingDelayedKinds.add(operation.kind);
-      if (_entries.any((entry) => entry.operation.kind == operation.kind)) {
-        continue;
-      }
       final delayed = _delayedInsertions[operation.kind];
       if (delayed == null) {
         continue;
@@ -358,31 +325,26 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
 
   void _queueInsertion(XmppOperation operation) {
     if (operation.status != XmppOperationStatus.inProgress) {
+      if (operation.status == XmppOperationStatus.failure) {
+        if (_usesDisplayDelay(operation) &&
+            _hasActiveDelayedEntryForKind(operation.kind)) {
+          return;
+        }
+        _queuePendingInsertion(operation);
+      }
       return;
     }
     if (_usesDisplayDelay(operation)) {
       _queueDelayedInsertion(operation);
       return;
     }
-    if (_entries.any((entry) => entry.operation.id == operation.id)) {
-      return;
-    }
-    final int pendingIndex = _pendingInsertions.indexWhere(
-      (entry) => entry.operation.id == operation.id,
-    );
-    if (pendingIndex != -1) {
-      _pendingInsertions[pendingIndex].updateFrom(operation);
-      return;
-    }
-    _pendingInsertions.add(_PendingInsertion.fromOperation(operation));
-    _processInsertQueue();
+    _queuePendingInsertion(operation);
   }
 
   void _queueDelayedInsertion(XmppOperation operation) {
     final delay = _displayDelayFor(operation);
     if (delay == Duration.zero) {
-      _pendingInsertions.add(_PendingInsertion.fromOperation(operation));
-      _processInsertQueue();
+      _queuePendingInsertion(operation);
       return;
     }
 
@@ -414,10 +376,19 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
         return;
       }
       delayed.dispose(cancelTimer: false);
-      _pendingInsertions.add(
-        _PendingInsertion.fromOperation(delayed.operation),
-      );
-      _processInsertQueue();
+      if (_hasActiveDelayedEntryForKind(kind)) {
+        _delayedInsertions[kind] = _DelayedInsertion(
+          operation: delayed.operation,
+          timer: _createDelayedInsertionTimer(kind, _reconciliationInterval),
+        );
+        return;
+      }
+      if (delayed.operation.status != XmppOperationStatus.inProgress &&
+          delayed.operation.status != XmppOperationStatus.success &&
+          delayed.operation.status != XmppOperationStatus.failure) {
+        return;
+      }
+      _queuePendingInsertion(delayed.operation);
     });
   }
 
@@ -436,6 +407,29 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
   void _cancelDelayedInsertion(XmppOperationKind kind) {
     final delayed = _delayedInsertions.remove(kind);
     delayed?.dispose();
+  }
+
+  bool _hasActiveDelayedEntryForKind(XmppOperationKind kind) {
+    bool matches(_ToastEntry entry) {
+      return entry.operation.kind == kind && _usesDisplayDelay(entry.operation);
+    }
+
+    return _entries.any(matches) || _removingEntries.any(matches);
+  }
+
+  void _queuePendingInsertion(XmppOperation operation) {
+    if (_entries.any((entry) => entry.operation.id == operation.id)) {
+      return;
+    }
+    final int pendingIndex = _pendingInsertions.indexWhere(
+      (entry) => entry.operation.id == operation.id,
+    );
+    if (pendingIndex != -1) {
+      _pendingInsertions[pendingIndex].updateFrom(operation);
+      return;
+    }
+    _pendingInsertions.add(_PendingInsertion.fromOperation(operation));
+    _processInsertQueue();
   }
 
   void _processInsertQueue() {
@@ -586,6 +580,10 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay>
     }
     if (!_statusRevealTimers.containsKey(finalOperation.id)) {
       _restartStatusRevealTimer(entry);
+      if (entry.spinnerMinimumElapsed) {
+        _revealStatus(finalOperation);
+        return;
+      }
       entry.pendingFinalOperation = finalOperation;
     }
   }

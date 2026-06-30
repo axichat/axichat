@@ -2437,6 +2437,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   Widget buildSearchTaskTile(
     CalendarTask task, {
+    Widget? metadata,
     Widget? trailing,
     bool requiresLongPress = false,
     VoidCallback? onTap,
@@ -2447,6 +2448,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       host: this,
       task: task,
       uiState: _sidebarController.state,
+      metadata: metadata,
       trailing: trailing,
       requiresLongPress: requiresLongPress,
       enableInteraction: true,
@@ -2642,6 +2644,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       taskTileBuilder:
           (
             CalendarTask task, {
+            Widget? metadata,
             Widget? trailing,
             bool requiresLongPress = false,
             VoidCallback? onTap,
@@ -2649,6 +2652,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
             bool allowContextMenu = false,
           }) => buildSearchTaskTile(
             task,
+            metadata: metadata,
             trailing: trailing,
             requiresLongPress: requiresLongPress,
             onTap: onTap,
@@ -2670,6 +2674,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       taskTileBuilder:
           (
             CalendarTask task, {
+            Widget? metadata,
             Widget? trailing,
             bool requiresLongPress = false,
             VoidCallback? onTap,
@@ -2677,6 +2682,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
             bool allowContextMenu = false,
           }) => buildSearchTaskTile(
             task,
+            metadata: metadata,
             trailing: trailing,
             requiresLongPress: requiresLongPress,
             onTap: onTap,
@@ -4635,6 +4641,33 @@ class _AddTaskSection extends StatelessWidget {
                 ],
               ),
             ),
+            Padding(
+              padding: EdgeInsetsDirectional.only(
+                start: context.spacing.m,
+                top: context.spacing.m,
+                end: context.spacing.m,
+                bottom: uiState.showAdvancedOptions ? 0 : context.spacing.m,
+              ),
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: titleController,
+                builder: (context, value, _) {
+                  final bool canSubmit = quickTaskValidator(value.text) == null;
+                  return TaskFormActionsRow(
+                    padding: EdgeInsets.zero,
+                    gap: context.spacing.s,
+                    children: [
+                      Expanded(
+                        child: _AddTaskButton(
+                          onPressed: addTask,
+                          enabled: canSubmit && !isTaskFormActionLocked,
+                          loading: isTaskCreationSubmitting,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
             IgnorePointer(
               ignoring: isTaskFormActionLocked || !uiState.showAdvancedOptions,
               child: _AdvancedOptionsTransition(
@@ -4666,43 +4699,14 @@ class _AddTaskSection extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.all(context.spacing.m),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: titleController,
-                    builder: (context, value, _) {
-                      final bool canSubmit =
-                          quickTaskValidator(value.text) == null;
-                      return TaskFormActionsRow(
-                        padding: EdgeInsets.zero,
-                        gap: context.spacing.s,
-                        children: [
-                          Expanded(
-                            child: _AddTaskButton(
-                              onPressed: addTask,
-                              enabled: canSubmit && !isTaskFormActionLocked,
-                              loading: isTaskCreationSubmitting,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  if (uiState.showAdvancedOptions) ...[
-                    SizedBox(height: context.spacing.m),
-                    _AdvancedToggle(
-                      uiState: uiState,
-                      onPressed: isTaskFormActionLocked
-                          ? null
-                          : onAdvancedToggle,
-                    ),
-                  ],
-                ],
+            if (uiState.showAdvancedOptions)
+              Padding(
+                padding: EdgeInsets.all(context.spacing.m),
+                child: _AdvancedToggle(
+                  uiState: uiState,
+                  onPressed: isTaskFormActionLocked ? null : onAdvancedToggle,
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -5747,6 +5751,7 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
     required this.host,
     required this.task,
     required this.uiState,
+    this.metadata,
     this.trailing,
     this.requiresLongPress = false,
     this.enableInteraction = true,
@@ -5758,6 +5763,7 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
   final TaskSidebarState<B> host;
   final CalendarTask task;
   final CalendarSidebarState uiState;
+  final Widget? metadata;
   final Widget? trailing;
   final bool requiresLongPress;
   final bool enableInteraction;
@@ -5771,6 +5777,7 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
       host: host,
       task: task,
       uiState: uiState,
+      metadata: metadata,
       trailing: trailing,
       enableInteraction: enableInteraction,
       onTapOverride: onTapOverride,
@@ -5784,6 +5791,7 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
         host: host,
         task: task,
         uiState: uiState,
+        metadata: metadata,
         trailing: trailing,
         enableInteraction: false,
         allowContextMenu: allowContextMenu,
@@ -5801,6 +5809,7 @@ class _SidebarDraggableTaskTile<B extends BaseCalendarBloc>
             host: host,
             task: task,
             uiState: uiState,
+            metadata: metadata,
             trailing: trailing,
             enableInteraction: false,
             allowContextMenu: allowContextMenu,
@@ -5845,6 +5854,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatefulWidget {
     required this.task,
     required this.uiState,
     this.enableInteraction = true,
+    this.metadata,
     this.trailing,
     this.onToggleCompletion,
     this.onTapOverride,
@@ -5855,6 +5865,7 @@ class _SidebarTaskTile<B extends BaseCalendarBloc> extends StatefulWidget {
   final CalendarTask task;
   final CalendarSidebarState uiState;
   final bool enableInteraction;
+  final Widget? metadata;
   final Widget? trailing;
   final ValueChanged<bool>? onToggleCompletion;
   final VoidCallback? onTapOverride;
@@ -5898,6 +5909,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
     final CalendarTask task = widget.task;
     final CalendarSidebarState uiState = widget.uiState;
     final bool enableInteraction = widget.enableInteraction;
+    final Widget? metadata = widget.metadata;
     final Widget? trailing = widget.trailing;
     final ValueChanged<bool>? onToggleCompletion = widget.onToggleCompletion;
     final VoidCallback? onTapOverride = widget.onTapOverride;
@@ -5924,6 +5936,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
           padding: EdgeInsets.only(left: context.spacing.xs),
           child: CalendarTaskListTile(
             task: task,
+            metadata: metadata,
             trailing: trailing,
             onToggleCompletion: onToggleCompletion,
           ),

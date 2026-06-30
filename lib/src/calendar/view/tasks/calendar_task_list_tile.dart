@@ -16,6 +16,7 @@ class CalendarTaskListTile extends StatelessWidget {
     super.key,
     required this.task,
     this.scheduleLabel,
+    this.metadata,
     this.trailing,
     this.onToggleCompletion,
     this.fillWidth = true,
@@ -23,6 +24,7 @@ class CalendarTaskListTile extends StatelessWidget {
 
   final CalendarTask task;
   final String? scheduleLabel;
+  final Widget? metadata;
   final Widget? trailing;
   final ValueChanged<bool>? onToggleCompletion;
   final bool fillWidth;
@@ -88,6 +90,10 @@ class CalendarTaskListTile extends StatelessWidget {
               ),
             ],
           ),
+          if (metadata != null) ...[
+            SizedBox(height: context.spacing.xs),
+            metadata!,
+          ],
           if (task.description?.isNotEmpty == true) ...[
             SizedBox(height: context.spacing.xs),
             Text(

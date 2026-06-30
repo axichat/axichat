@@ -1445,12 +1445,15 @@ class _HomeShellState extends State<HomeShell> {
               final keyboardVisible =
                   MediaQuery.viewInsetsOf(context).bottom > 0;
               final composeRouteVisible = composeRouteDepth > 0;
-              final hideBottomBar =
-                  hideBottomBarForChat ||
-                  keyboardVisible ||
-                  composeRouteVisible;
+              final bottomBarLayout = _resolveHomeBottomBarLayout(
+                hideBottomBarForChat: hideBottomBarForChat,
+                keyboardVisible: keyboardVisible,
+                composeRouteVisible: composeRouteVisible,
+              );
+              final mountBottomBar = bottomBarLayout.mountBottomBar;
+              final showBottomBar = bottomBarLayout.showBottomBar;
               final removeBranchBottomPadding =
-                  !hideBottomBar || keyboardVisible;
+                  bottomBarLayout.removeBranchBottomPadding;
               return Column(
                 children: [
                   Expanded(
@@ -1468,13 +1471,17 @@ class _HomeShellState extends State<HomeShell> {
                       },
                     ),
                   ),
-                  if (!hideBottomBar)
-                    _HomeShellBottomBar(
-                      calendarBottomDragSession: _calendarBottomDragSession,
-                      homeBadgeCount: badgeCounts.home,
-                      selectedBottomIndex: safeSelectedBottomIndex,
-                      onBottomNavSelected: _onBottomNavSelected,
-                      calendarAvailable: calendarAvailable,
+                  if (mountBottomBar)
+                    Visibility(
+                      visible: showBottomBar,
+                      maintainState: true,
+                      child: _HomeShellBottomBar(
+                        calendarBottomDragSession: _calendarBottomDragSession,
+                        homeBadgeCount: badgeCounts.home,
+                        selectedBottomIndex: safeSelectedBottomIndex,
+                        onBottomNavSelected: _onBottomNavSelected,
+                        calendarAvailable: calendarAvailable,
+                      ),
                     ),
                 ],
               );
@@ -1484,6 +1491,35 @@ class _HomeShellState extends State<HomeShell> {
       ),
     );
   }
+}
+
+@visibleForTesting
+({bool mountBottomBar, bool showBottomBar, bool removeBranchBottomPadding})
+resolveHomeBottomBarLayoutForTesting({
+  required bool hideBottomBarForChat,
+  required bool keyboardVisible,
+  required bool composeRouteVisible,
+}) {
+  return _resolveHomeBottomBarLayout(
+    hideBottomBarForChat: hideBottomBarForChat,
+    keyboardVisible: keyboardVisible,
+    composeRouteVisible: composeRouteVisible,
+  );
+}
+
+({bool mountBottomBar, bool showBottomBar, bool removeBranchBottomPadding})
+_resolveHomeBottomBarLayout({
+  required bool hideBottomBarForChat,
+  required bool keyboardVisible,
+  required bool composeRouteVisible,
+}) {
+  final hiddenByRoute = hideBottomBarForChat || composeRouteVisible;
+  final showBottomBar = !hiddenByRoute && !keyboardVisible;
+  return (
+    mountBottomBar: !hiddenByRoute,
+    showBottomBar: showBottomBar,
+    removeBranchBottomPadding: showBottomBar || keyboardVisible,
+  );
 }
 
 String? _resolveWelcomeChatJid(List<m.Chat> items) {

@@ -402,6 +402,7 @@ class _CalendarWidgetState
           ? null
           : (
               CalendarTask task, {
+              Widget? metadata,
               Widget? trailing,
               bool requiresLongPress = false,
               VoidCallback? onTap,
@@ -409,6 +410,7 @@ class _CalendarWidgetState
               bool allowContextMenu = false,
             }) => sidebarState.buildSearchTaskTile(
               task,
+              metadata: metadata,
               trailing: trailing,
               requiresLongPress: requiresLongPress,
               onTap: onTap,
