@@ -5386,6 +5386,29 @@ WHERE stanza_i_d = ?
             pseudoMessageData: message.pseudoMessageData,
           )
         : null;
+    final Message? previousStoredLastMessage =
+        currentChat != null &&
+            shouldUpdateChatSummary &&
+            messageTimestamp.isBefore(currentChat.lastChangeTimestamp)
+        ? await getLastMessageForChat(
+            message.chatJid,
+            filter: MessageTimelineFilter.allWithContact,
+          )
+        : null;
+    final String? previousStoredLastMessagePreview =
+        previousStoredLastMessage == null
+        ? null
+        : await _messagePreview(
+            trimmedBody: previousStoredLastMessage.body?.trim(),
+            subject: previousStoredLastMessage.subject,
+            deltaChatId: previousStoredLastMessage.deltaChatId,
+            deltaMsgId: previousStoredLastMessage.deltaMsgId,
+            fileMetadataId: previousStoredLastMessage.fileMetadataID,
+            hasAttachment:
+                previousStoredLastMessage.fileMetadataID?.isNotEmpty == true,
+            pseudoMessageType: previousStoredLastMessage.pseudoMessageType,
+            pseudoMessageData: previousStoredLastMessage.pseudoMessageData,
+          );
     final chatTitle = _chatTitleForIdentifier(
       message.chatJid,
       selfJid: selfJid,
@@ -5478,6 +5501,9 @@ WHERE stanza_i_d = ?
             jid: message.chatJid,
             timestamp: messageTimestamp,
             lastMessage: lastMessagePreview,
+            previousStoredLastMessageTimestamp:
+                previousStoredLastMessage?.timestamp,
+            previousStoredLastMessagePreview: previousStoredLastMessagePreview,
           );
           chatSummaryChanged = true;
         }
@@ -5502,6 +5528,9 @@ WHERE stanza_i_d = ?
           jid: message.chatJid,
           timestamp: messageTimestamp,
           lastMessage: lastMessagePreview,
+          previousStoredLastMessageTimestamp:
+              previousStoredLastMessage?.timestamp,
+          previousStoredLastMessagePreview: previousStoredLastMessagePreview,
         );
         chatSummaryChanged = true;
       }
@@ -5754,25 +5783,38 @@ WHERE stanza_i_d = ?
     required String jid,
     required DateTime timestamp,
     required String? lastMessage,
+    DateTime? previousStoredLastMessageTimestamp,
+    String? previousStoredLastMessagePreview,
   }) async {
     final resolvedLastMessage = lastMessage?.trim().isEmpty == true
         ? null
         : lastMessage;
-    await customUpdate(
-      '''
-UPDATE chats
-SET last_change_timestamp = ?,
-    last_message = ?
-WHERE jid = ?
-  AND (last_change_timestamp IS NULL OR last_change_timestamp <= ?)
-''',
-      variables: [
-        Variable<DateTime>(timestamp),
-        Variable<String>(resolvedLastMessage),
-        Variable<String>(jid),
-        Variable<DateTime>(timestamp),
-      ],
-      updates: {chats},
+    final chat = await getChat(jid);
+    if (chat == null) {
+      return;
+    }
+    if (!timestamp.isBefore(chat.lastChangeTimestamp)) {
+      await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+        ChatsCompanion(
+          lastChangeTimestamp: Value(timestamp),
+          lastMessage: Value(resolvedLastMessage),
+        ),
+      );
+      return;
+    }
+
+    final previousPreview = previousStoredLastMessagePreview;
+    final previousTimestamp = previousStoredLastMessageTimestamp;
+    final canAdvanceBackfilledPreview =
+        previousPreview != null &&
+        previousTimestamp != null &&
+        chat.lastMessage == previousPreview &&
+        !timestamp.isBefore(previousTimestamp);
+    if (chat.lastMessage != null && !canAdvanceBackfilledPreview) {
+      return;
+    }
+    await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+      ChatsCompanion(lastMessage: Value(resolvedLastMessage)),
     );
   }
 
