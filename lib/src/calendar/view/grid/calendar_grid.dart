@@ -3924,30 +3924,41 @@ class _DayEventBulletRow extends StatelessWidget {
               clipBehavior: Clip.antiAlias,
               child: ShadGestureDetector(
                 cursor: SystemMouseCursors.click,
+                behavior: HitTestBehavior.opaque,
                 onTap: onTap,
-                child: Text.rich(
-                  TextSpan(
+                child: Container(
+                  width: double.infinity,
+                  constraints: BoxConstraints(
+                    minHeight: context.sizing.menuItemHeight,
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.spacing.xs,
+                    vertical: context.spacing.xxs,
+                  ),
+                  alignment: Alignment.centerLeft,
+                  child: Row(
                     children: [
-                      WidgetSpan(
-                        alignment: PlaceholderAlignment.middle,
-                        child: Container(
-                          width: context.spacing.s,
-                          height: context.spacing.s,
-                          decoration: BoxDecoration(
-                            color: colors.primary,
-                            shape: BoxShape.circle,
-                          ),
+                      Container(
+                        width: context.spacing.s,
+                        height: context.spacing.s,
+                        decoration: BoxDecoration(
+                          color: colors.primary,
+                          shape: BoxShape.circle,
                         ),
                       ),
-                      WidgetSpan(child: SizedBox(width: context.spacing.s)),
-                      TextSpan(text: event.title),
+                      SizedBox(width: context.spacing.s),
+                      Expanded(
+                        child: Text(
+                          event.title,
+                          style: textTheme.labelSm.strong.copyWith(
+                            color: colors.foreground,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
-                  style: textTheme.labelSm.strong.copyWith(
-                    color: colors.foreground,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             );

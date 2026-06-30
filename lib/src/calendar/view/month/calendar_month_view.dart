@@ -444,33 +444,45 @@ class _DayEventBullet extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: ShadGestureDetector(
                   cursor: SystemMouseCursors.click,
+                  behavior: HitTestBehavior.opaque,
                   onTap: onTap,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(top: spacing.xs),
-                        child: Container(
-                          width: spacing.s,
-                          height: spacing.s,
-                          decoration: BoxDecoration(
-                            color: colors.primary,
-                            shape: BoxShape.circle,
+                  child: Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(
+                      minHeight: context.sizing.menuItemHeight * 0.75,
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.xs,
+                      vertical: spacing.xxs,
+                    ),
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.only(top: spacing.xs),
+                          child: Container(
+                            width: spacing.s,
+                            height: spacing.s,
+                            decoration: BoxDecoration(
+                              color: colors.primary,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
-                      ),
-                      SizedBox(width: spacing.s),
-                      Expanded(
-                        child: Text(
-                          event.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.labelSm.strong.copyWith(
-                            color: colors.foreground,
+                        SizedBox(width: spacing.s),
+                        Expanded(
+                          child: Text(
+                            event.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.labelSm.strong.copyWith(
+                              color: colors.foreground,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );
