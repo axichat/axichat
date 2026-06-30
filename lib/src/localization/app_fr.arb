@@ -836,7 +836,7 @@
       "label": {}
     }
   },
-  "profileExportReadyMessage": "Export {label} prêt.",
+  "profileExportReadyMessage": "Export {label} enregistré.",
   "@profileExportReadyMessage": {
     "placeholders": {
       "label": {}
@@ -855,7 +855,9 @@
     }
   },
   "profileExportTooLargeForDeviceMessage": "L’export {label} est trop volumineux pour être enregistré sur cet appareil.",
-  "profileExportIncompleteMessage": "Impossible de créer un export {label} complet. Assurez-vous que tout le contenu e-mail et toutes les pièces jointes sont disponibles, puis réessayez.",
+  "profileExportIncompleteMessage": "Export {label} enregistré avec des avertissements. Certains contenus e-mail ou pièces jointes n'ont pas été inclus; consultez warnings.txt dans le ZIP.",
+  "profileMessageExportWarningTitle": "Exporter les messages",
+  "profileMessageExportWarningMessage": "Les exports de messages ne sont pas chiffrés et peuvent être lus par d'autres apps ou services cloud.",
   "profileExportShareUnsupportedMessage": "Le partage n’est pas disponible sur cette plateforme. Export {label} enregistré dans {path}.",
   "@profileExportShareUnsupportedMessage": {
     "placeholders": {
@@ -1241,9 +1243,12 @@
     }
   },
   "chatsExportSuccess": "Chat exporté",
+  "chatsExportIncomplete": "Export enregistré avec des avertissements",
+  "chatsExportIncompleteMessage": "Certains contenus e-mail ou pièces jointes n'ont pas été inclus; consultez warnings.txt dans le ZIP.",
+  "chatsExportTooLargeForDevice": "L'export est trop volumineux pour être enregistré sur cet appareil.",
   "chatsExportFailure": "Impossible d’exporter le chat",
-  "chatExportWarningTitle": "Exporter l’historique du chat ?",
-  "chatExportWarningMessage": "Les exports de chat ne sont pas chiffrés et peuvent être lus par d'autres apps ou services cloud. Continuer ?",
+  "chatExportWarningTitle": "Exporter l’historique du chat",
+  "chatExportWarningMessage": "Les exports de chat ne sont pas chiffrés et peuvent être lus par d'autres apps ou services cloud.",
   "chatsArchivedRestored": "Chat restauré",
   "chatsArchivedHint": "Chat archivé (Profil → Chats archivés)",
   "chatsVisibleNotice": "Le chat est à nouveau visible",
@@ -1266,8 +1271,8 @@
   "chatSelectionExportEmptyMessage": "Sélectionnez des chats avec du contenu texte",
   "chatSelectionExportShareText": "Exports de chat depuis Axichat",
   "chatSelectionExportShareSubject": "Export de chats Axichat",
-  "chatSelectionExportReadyTitle": "Export prêt",
-  "chatSelectionExportReadyMessage": "{count, plural, one {# chat partagé} other {# chats partagés}}",
+  "chatSelectionExportReadyTitle": "Export enregistré",
+  "chatSelectionExportReadyMessage": "{count, plural, one {# chat enregistré} other {# chats enregistrés}}",
   "@chatSelectionExportReadyMessage": {
     "placeholders": {
       "count": {}

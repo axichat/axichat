@@ -45,6 +45,7 @@ class ChatHistoryExporter {
       required int limit,
     })?
     loadHistoryPage,
+    bool Function(Message message)? messageFilter,
   }) async {
     if (chats.isEmpty) return const ChatExportResult.empty();
     final format = dateFormat ?? intl.DateFormat('y-MM-dd HH:mm');
@@ -64,6 +65,7 @@ class ChatHistoryExporter {
         countHistory: countHistory,
         loadHistoryPage: loadHistoryPage,
         lineFormatter: lineFormatter,
+        messageFilter: messageFilter,
       );
       if (appended == 0) {
         continue;
@@ -153,6 +155,7 @@ class ChatHistoryExporter {
       required intl.DateFormat format,
     })?
     lineFormatter,
+    bool Function(Message message)? messageFilter,
   }) async {
     if (loadHistoryPage != null && countHistory != null) {
       final total = await countHistory(chat.jid);
@@ -160,7 +163,7 @@ class ChatHistoryExporter {
       const pageSize = 200;
       var remaining = total;
       var appended = 0;
-      _writeChatHeader(sink, chat);
+      var wroteHeader = false;
       while (remaining > 0) {
         final offset = remaining > pageSize ? remaining - pageSize : 0;
         final limit = remaining - offset;
@@ -171,6 +174,9 @@ class ChatHistoryExporter {
         );
         if (page.isEmpty) break;
         for (final message in page.reversed) {
+          if (messageFilter != null && !messageFilter(message)) {
+            continue;
+          }
           final line = lineFormatter?.call(
             chat: chat,
             message: message,
@@ -178,6 +184,10 @@ class ChatHistoryExporter {
           );
           final content = line ?? _defaultMessageLine(message, format: format);
           if (content == null || content.isEmpty) continue;
+          if (!wroteHeader) {
+            _writeChatHeader(sink, chat);
+            wroteHeader = true;
+          }
           sink.writeln(content);
           appended++;
         }
@@ -189,8 +199,11 @@ class ChatHistoryExporter {
     final history = await loadHistory(chat.jid);
     if (history.isEmpty) return 0;
     var appended = 0;
-    _writeChatHeader(sink, chat);
+    var wroteHeader = false;
     for (final message in history) {
+      if (messageFilter != null && !messageFilter(message)) {
+        continue;
+      }
       final line = lineFormatter?.call(
         chat: chat,
         message: message,
@@ -198,6 +211,10 @@ class ChatHistoryExporter {
       );
       final content = line ?? _defaultMessageLine(message, format: format);
       if (content == null || content.isEmpty) continue;
+      if (!wroteHeader) {
+        _writeChatHeader(sink, chat);
+        wroteHeader = true;
+      }
       sink.writeln(content);
       appended++;
     }

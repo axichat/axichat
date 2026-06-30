@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/export_file_saver.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
@@ -63,7 +64,7 @@ class SettingsSectionAnchors {
 }
 
 @visibleForTesting
-const int profileExportPickerBytesMaxSize = 256 * 1024 * 1024;
+const int profileExportPickerBytesMaxSize = defaultExportPickerBytesMaxSize;
 
 class ProfileExportSaveFileTooLargeException implements Exception {
   const ProfileExportSaveFileTooLargeException({
@@ -75,15 +76,21 @@ class ProfileExportSaveFileTooLargeException implements Exception {
   final int maxBytes;
 }
 
+class _ProfileExportUi {
+  const _ProfileExportUi({
+    required this.l10n,
+    required this.showToast,
+    required this.platform,
+  });
+
+  final AppLocalizations l10n;
+  final void Function(ShadToast)? showToast;
+  final TargetPlatform platform;
+}
+
 @visibleForTesting
 bool profileExportSaveShouldWriteBytes(TargetPlatform platform) {
-  return switch (platform) {
-    TargetPlatform.android || TargetPlatform.iOS => true,
-    TargetPlatform.fuchsia ||
-    TargetPlatform.linux ||
-    TargetPlatform.macOS ||
-    TargetPlatform.windows => false,
-  };
+  return exportSaveShouldWriteBytes(platform);
 }
 
 @visibleForTesting
@@ -93,19 +100,20 @@ Future<String?> saveProfileExportFileWithPicker({
   required TargetPlatform platform,
   FilePicker? filePicker,
 }) async {
-  if (profileExportSaveShouldWriteBytes(platform)) {
-    final byteCount = await file.length();
-    if (byteCount > profileExportPickerBytesMaxSize) {
-      throw ProfileExportSaveFileTooLargeException(
-        byteCount: byteCount,
-        maxBytes: profileExportPickerBytesMaxSize,
-      );
-    }
-    final picker = filePicker ?? FilePicker.platform;
-    return picker.saveFile(fileName: filename, bytes: await file.readAsBytes());
+  try {
+    return await saveExportFileWithPicker(
+      file: file,
+      filename: filename,
+      platform: platform,
+      filePicker: filePicker,
+      maxBytesForBytesSave: profileExportPickerBytesMaxSize,
+    );
+  } on ExportSaveFileTooLargeException catch (error) {
+    throw ProfileExportSaveFileTooLargeException(
+      byteCount: error.byteCount,
+      maxBytes: error.maxBytes,
+    );
   }
-  final picker = filePicker ?? FilePicker.platform;
-  return picker.saveFile(fileName: filename);
 }
 
 class SettingsControls extends StatelessWidget {
@@ -224,7 +232,7 @@ class SettingsControls extends StatelessWidget {
             anchors?.accountKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAccount,
-                    showDivider: showDivider,
+                    showDivider: showDivider || showImportantSection,
                     dividerIndent: dividerIndent,
                     padding: sectionHeaderPadding,
                   )
@@ -232,7 +240,7 @@ class SettingsControls extends StatelessWidget {
                     key: anchors?.accountKey,
                     child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionAccount,
-                      showDivider: showDivider,
+                      showDivider: showDivider || showImportantSection,
                       dividerIndent: dividerIndent,
                       padding: sectionHeaderPadding,
                     ),
@@ -880,13 +888,10 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    final result = await context
-        .read<ProfileExportCubit>()
-        .exportXmppMessages();
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
+    final exportCubit = context.read<ProfileExportCubit>();
+    final exportUi = _captureProfileExportUi(context);
+    final result = await exportCubit.exportXmppMessages();
+    await _handleExportResult(exportUi, result);
   }
 
   Future<void> _handleEmailMessageExport(BuildContext context) async {
@@ -896,13 +901,10 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    final result = await context
-        .read<ProfileExportCubit>()
-        .exportEmailMessages();
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
+    final exportCubit = context.read<ProfileExportCubit>();
+    final exportUi = _captureProfileExportUi(context);
+    final result = await exportCubit.exportEmailMessages();
+    await _handleExportResult(exportUi, result);
   }
 
   Future<void> _handleEmailHistoryImport(BuildContext context) async {
@@ -960,14 +962,10 @@ class SettingsControls extends StatelessWidget {
       csvHeaderAddress: context.l10n.profileExportCsvHeaderAddress,
       fallbackLabel: context.l10n.profileExportContactsFilenameFallback,
     );
-    final result = await context.read<ProfileExportCubit>().exportXmppContacts(
-      format,
-      labels,
-    );
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
+    final exportCubit = context.read<ProfileExportCubit>();
+    final exportUi = _captureProfileExportUi(context);
+    final result = await exportCubit.exportXmppContacts(format, labels);
+    await _handleExportResult(exportUi, result);
   }
 
   Future<void> _handleEmailContactsExport(BuildContext context) async {
@@ -982,153 +980,103 @@ class SettingsControls extends StatelessWidget {
       csvHeaderAddress: context.l10n.profileExportCsvHeaderAddress,
       fallbackLabel: context.l10n.profileExportContactsFilenameFallback,
     );
-    final result = await context.read<ProfileExportCubit>().exportEmailContacts(
-      format,
-      labels,
-    );
-    if (!context.mounted) {
-      return;
-    }
-    await _handleExportResult(context, result);
+    final exportCubit = context.read<ProfileExportCubit>();
+    final exportUi = _captureProfileExportUi(context);
+    final result = await exportCubit.exportEmailContacts(format, labels);
+    await _handleExportResult(exportUi, result);
   }
 
   Future<bool> _confirmMessageExport(BuildContext context) async {
     final bool? confirmed = await confirm(
       context,
-      title: context.l10n.chatExportWarningTitle,
-      message: context.l10n.chatExportWarningMessage,
-      confirmLabel: context.l10n.commonContinue,
+      title: context.l10n.profileMessageExportWarningTitle,
+      message: context.l10n.profileMessageExportWarningMessage,
+      confirmLabel: context.l10n.commonExport,
       cancelLabel: context.l10n.commonCancel,
       destructiveConfirm: false,
     );
     return confirmed == true;
   }
 
+  _ProfileExportUi _captureProfileExportUi(BuildContext context) {
+    return _ProfileExportUi(
+      l10n: context.l10n,
+      showToast: ShadToaster.maybeOf(context)?.show,
+      platform: defaultTargetPlatform,
+    );
+  }
+
   Future<void> _handleExportResult(
-    BuildContext context,
+    _ProfileExportUi exportUi,
     ProfileExportResult result,
   ) async {
-    final showToast = ShadToaster.maybeOf(context)?.show;
-    final label = result.kind.label(context.l10n);
+    final l10n = exportUi.l10n;
+    final showToast = exportUi.showToast;
+    final label = result.kind.label(l10n);
     if (result.outcome.isEmpty) {
       showToast?.call(
-        FeedbackToast.info(
-          message: context.l10n.profileExportEmptyMessage(label),
-        ),
+        FeedbackToast.info(message: l10n.profileExportEmptyMessage(label)),
       );
       return;
     }
     if (result.outcome.isFailure || result.file == null) {
       showToast?.call(
-        FeedbackToast.error(
-          message: result.outcome.isIncomplete
-              ? context.l10n.profileExportIncompleteMessage(label)
-              : context.l10n.profileExportFailedMessage(label),
-        ),
+        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
       );
       return;
     }
     final exportFile = result.file!;
     final exportFileName = p.basename(exportFile.path);
     if (!await exportFile.exists()) {
-      if (!context.mounted) {
-        return;
-      }
       showToast?.call(
-        FeedbackToast.error(
-          message: context.l10n.profileExportFailedMessage(label),
-        ),
+        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
       );
-      return;
-    }
-    await WidgetsBinding.instance.endOfFrame;
-    if (!context.mounted) {
       return;
     }
     String? savePath;
-    final pickerWritesBytes = profileExportSaveShouldWriteBytes(
-      defaultTargetPlatform,
-    );
     try {
-      savePath = await saveProfileExportFileWithPicker(
+      savePath = await saveExportFileWithPicker(
         file: exportFile,
         filename: exportFileName,
-        platform: defaultTargetPlatform,
+        platform: exportUi.platform,
+        maxBytesForBytesSave: profileExportPickerBytesMaxSize,
+        deleteSource: true,
       );
-    } on ProfileExportSaveFileTooLargeException {
-      if (!context.mounted) {
-        return;
-      }
+    } on ExportSaveFileTooLargeException {
       showToast?.call(
         FeedbackToast.error(
-          message: context.l10n.profileExportTooLargeForDeviceMessage(label),
+          message: l10n.profileExportTooLargeForDeviceMessage(label),
         ),
       );
       return;
     } on Exception {
-      if (!context.mounted) {
-        return;
-      }
       showToast?.call(
-        FeedbackToast.error(
-          message: context.l10n.profileExportFailedMessage(label),
-        ),
+        FeedbackToast.error(message: l10n.profileExportFailedMessage(label)),
       );
-      return;
-    }
-    if (!context.mounted) {
       return;
     }
     if (savePath == null || savePath.trim().isEmpty) {
       return;
     }
-    try {
-      if (pickerWritesBytes) {
-        try {
-          await exportFile.delete();
-        } on Exception {
-          // Keep going even if temp cleanup fails.
-        }
-      } else {
-        final destination = File(savePath);
-        final samePath = p.equals(destination.path, exportFile.path);
-        if (!samePath) {
-          if (await destination.exists()) {
-            await destination.delete();
-          }
-          await exportFile.copy(destination.path);
-          try {
-            await exportFile.delete();
-          } on Exception {
-            // Keep going even if temp cleanup fails.
-          }
-        }
-      }
-    } on Exception {
-      if (!context.mounted) {
-        return;
-      }
-      showToast?.call(
-        FeedbackToast.error(
-          message: context.l10n.profileExportFailedMessage(label),
-        ),
-      );
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
+    _showProfileExportCompletionToast(exportUi, result, label);
+  }
+
+  void _showProfileExportCompletionToast(
+    _ProfileExportUi exportUi,
+    ProfileExportResult result,
+    String label,
+  ) {
+    final l10n = exportUi.l10n;
+    final showToast = exportUi.showToast;
     if (result.outcome.isIncomplete) {
       showToast?.call(
         FeedbackToast.warning(
-          message: context.l10n.profileExportIncompleteMessage(label),
+          message: l10n.profileExportIncompleteMessage(label),
         ),
       );
     } else {
       showToast?.call(
-        FeedbackToast.success(
-          message: context.l10n.profileExportReadyMessage(label),
-        ),
+        FeedbackToast.success(message: l10n.profileExportReadyMessage(label)),
       );
     }
   }

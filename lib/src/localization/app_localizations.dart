@@ -2482,7 +2482,7 @@ abstract class AppLocalizations {
   /// No description provided for @calendarExportReady.
   ///
   /// In en, this message translates to:
-  /// **'Export ready to share.'**
+  /// **'Export saved.'**
   String get calendarExportReady;
 
   /// No description provided for @calendarExportFailed.
@@ -4053,7 +4053,7 @@ abstract class AppLocalizations {
   /// No description provided for @profileExportReadyMessage.
   ///
   /// In en, this message translates to:
-  /// **'{label} export ready.'**
+  /// **'{label} export saved.'**
   String profileExportReadyMessage(Object label);
 
   /// No description provided for @profileExportEmptyMessage.
@@ -4077,8 +4077,20 @@ abstract class AppLocalizations {
   /// No description provided for @profileExportIncompleteMessage.
   ///
   /// In en, this message translates to:
-  /// **'Unable to create a complete {label} export. Make sure all email content and attachments are available, then try again.'**
+  /// **'{label} export saved with warnings. Some email content or attachments were not included; see warnings.txt in the ZIP.'**
   String profileExportIncompleteMessage(Object label);
+
+  /// No description provided for @profileMessageExportWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export messages'**
+  String get profileMessageExportWarningTitle;
+
+  /// No description provided for @profileMessageExportWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Message exports are unencrypted and may be readable by other apps or cloud services.'**
+  String get profileMessageExportWarningMessage;
 
   /// No description provided for @profileExportShareUnsupportedMessage.
   ///
@@ -6000,6 +6012,24 @@ abstract class AppLocalizations {
   /// **'Chat exported'**
   String get chatsExportSuccess;
 
+  /// No description provided for @chatsExportIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Export saved with warnings'**
+  String get chatsExportIncomplete;
+
+  /// No description provided for @chatsExportIncompleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Some email content or attachments were not included; see warnings.txt in the ZIP.'**
+  String get chatsExportIncompleteMessage;
+
+  /// No description provided for @chatsExportTooLargeForDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Export is too large to save on this device.'**
+  String get chatsExportTooLargeForDevice;
+
   /// No description provided for @chatsExportFailure.
   ///
   /// In en, this message translates to:
@@ -6009,13 +6039,13 @@ abstract class AppLocalizations {
   /// No description provided for @chatExportWarningTitle.
   ///
   /// In en, this message translates to:
-  /// **'Export chat history?'**
+  /// **'Export chat history'**
   String get chatExportWarningTitle;
 
   /// No description provided for @chatExportWarningMessage.
   ///
   /// In en, this message translates to:
-  /// **'Chat exports are unencrypted and may be readable by other apps or cloud services. Continue?'**
+  /// **'Chat exports are unencrypted and may be readable by other apps or cloud services.'**
   String get chatExportWarningMessage;
 
   /// No description provided for @chatsArchivedRestored.
@@ -6123,13 +6153,13 @@ abstract class AppLocalizations {
   /// No description provided for @chatSelectionExportReadyTitle.
   ///
   /// In en, this message translates to:
-  /// **'Export ready'**
+  /// **'Export saved'**
   String get chatSelectionExportReadyTitle;
 
   /// No description provided for @chatSelectionExportReadyMessage.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one {Shared # chat} other {Shared # chats}}'**
+  /// **'{count, plural, one {Saved # chat} other {Saved # chats}}'**
   String chatSelectionExportReadyMessage(num count);
 
   /// No description provided for @chatSelectionExportFailedTitle.
@@ -9699,7 +9729,7 @@ abstract class AppLocalizations {
   /// No description provided for @calendarTransferExportReady.
   ///
   /// In en, this message translates to:
-  /// **'Export ready to share.'**
+  /// **'Export saved.'**
   String get calendarTransferExportReady;
 
   /// No description provided for @calendarTransferExportFailed.

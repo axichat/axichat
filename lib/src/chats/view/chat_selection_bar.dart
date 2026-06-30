@@ -5,16 +5,17 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
+import 'package:axichat/src/chats/utils/message_exporter.dart';
 import 'package:axichat/src/chats/view/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/selection_panel_shell.dart';
-import 'package:axichat/src/common/share_position.dart';
+import 'package:axichat/src/common/export_file_saver.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatSelectionActionBar extends StatefulWidget {
@@ -100,7 +101,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
               ),
               ChatExportActionButton(
                 exporting: _exporting,
-                readyLabel: 'Share transcript',
+                readyLabel: l10n.commonExport,
                 onPressed: () => _exportSelectedChats(context),
               ),
               ContextActionButton(
@@ -119,36 +120,31 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
   Future<void> _exportSelectedChats(BuildContext context) async {
     if (_exporting) return;
     if (widget.selectedChats.isEmpty) return;
+    final selectedChats = List<Chat>.unmodifiable(widget.selectedChats);
+    final selectedChatCount = selectedChats.length;
     final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
-    final loadChatHistory = context.read<ChatsCubit>().loadChatHistory;
-    final countChatHistory = context
-        .read<ChatsCubit>()
-        .countChatHistoryMessages;
-    final loadChatHistoryPage = context.read<ChatsCubit>().loadChatHistoryPage;
-    final scheduleExportCleanup = context
-        .read<ChatsCubit>()
-        .scheduleExportCleanup;
-    final String? fileLabel = widget.selectedChats.length == 1
-        ? null
-        : l10n.chatsExportFileLabel;
+    final chatsCubit = context.read<ChatsCubit>();
     final confirmed = await _confirmChatExport();
-    if (!context.mounted || !confirmed) return;
-    final sharePositionOrigin = sharePositionOriginForContext(context);
+    if (!mounted || !confirmed) return;
     setState(() {
       _exporting = true;
     });
     File? exportFile;
     try {
-      final result = await ChatHistoryExporter.exportChats(
-        chats: widget.selectedChats,
-        loadHistory: loadChatHistory,
-        countHistory: countChatHistory,
-        loadHistoryPage: loadChatHistoryPage,
-        fileLabel: fileLabel,
-      );
+      final result = await chatsCubit.exportChats(selectedChats);
       exportFile = result.file;
-      if (!mounted) return;
+      if (result.outcome == MessageExportOutcome.failure ||
+          result.outcome == MessageExportOutcome.incomplete &&
+              exportFile == null) {
+        showToast?.call(
+          FeedbackToast.error(
+            title: l10n.chatSelectionExportFailedTitle,
+            message: l10n.chatSelectionExportFailedMessage,
+          ),
+        );
+        return;
+      }
       if (exportFile == null) {
         showToast?.call(
           FeedbackToast.info(
@@ -158,20 +154,35 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         );
         return;
       }
-      await SharePlus.instance.share(
-        shareParamsForOrigin(
-          files: <XFile>[XFile(exportFile.path)],
-          text: l10n.chatSelectionExportShareText,
-          subject: l10n.chatSelectionExportShareSubject,
-          sharePositionOrigin: sharePositionOrigin,
-        ),
+      final savePath = await saveExportFileWithPicker(
+        file: exportFile,
+        filename: p.basename(exportFile.path),
+        platform: defaultTargetPlatform,
+        maxBytesForBytesSave: defaultExportPickerBytesMaxSize,
+        deleteSource: true,
       );
-      showToast?.call(
-        FeedbackToast.success(
-          title: l10n.chatSelectionExportReadyTitle,
-          message: l10n.chatSelectionExportReadyMessage(
-            widget.selectedChats.length,
+      exportFile = null;
+      if (savePath == null || savePath.trim().isEmpty) return;
+      if (result.outcome == MessageExportOutcome.incomplete) {
+        showToast?.call(
+          FeedbackToast.warning(
+            title: l10n.chatsExportIncomplete,
+            message: l10n.chatsExportIncompleteMessage,
           ),
+        );
+      } else {
+        showToast?.call(
+          FeedbackToast.success(
+            title: l10n.chatSelectionExportReadyTitle,
+            message: l10n.chatSelectionExportReadyMessage(selectedChatCount),
+          ),
+        );
+      }
+    } on ExportSaveFileTooLargeException {
+      showToast?.call(
+        FeedbackToast.error(
+          title: l10n.chatSelectionExportFailedTitle,
+          message: l10n.chatsExportTooLargeForDevice,
         ),
       );
     } catch (_) {
@@ -183,7 +194,13 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
       );
     } finally {
       if (exportFile != null) {
-        scheduleExportCleanup(exportFile);
+        try {
+          if (await exportFile.exists()) {
+            await exportFile.delete();
+          }
+        } on Exception {
+          // Export temp cleanup is best-effort.
+        }
       }
       if (mounted) {
         setState(() {
@@ -217,7 +234,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
       context,
       title: l10n.chatExportWarningTitle,
       message: l10n.chatExportWarningMessage,
-      confirmLabel: l10n.commonContinue,
+      confirmLabel: l10n.commonExport,
       cancelLabel: l10n.commonCancel,
       destructiveConfirm: false,
     );

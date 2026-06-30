@@ -836,7 +836,7 @@
       "label": {}
     }
   },
-  "profileExportReadyMessage": "Exportación de {label} lista.",
+  "profileExportReadyMessage": "Exportación de {label} guardada.",
   "@profileExportReadyMessage": {
     "placeholders": {
       "label": {}
@@ -855,7 +855,9 @@
     }
   },
   "profileExportTooLargeForDeviceMessage": "La exportación de {label} es demasiado grande para guardarla en este dispositivo.",
-  "profileExportIncompleteMessage": "No se pudo crear una exportación completa de {label}. Asegúrate de que todo el contenido del correo y los archivos adjuntos estén disponibles, e inténtalo de nuevo.",
+  "profileExportIncompleteMessage": "Exportación de {label} guardada con advertencias. Parte del contenido del correo o de los archivos adjuntos no se incluyó; consulta warnings.txt en el ZIP.",
+  "profileMessageExportWarningTitle": "Exportar mensajes",
+  "profileMessageExportWarningMessage": "Las exportaciones de mensajes no están cifradas y otras apps o servicios en la nube pueden leerlas.",
   "profileExportShareUnsupportedMessage": "Compartir no está disponible en esta plataforma. Exportación de {label} guardada en {path}.",
   "@profileExportShareUnsupportedMessage": {
     "placeholders": {
@@ -1241,9 +1243,12 @@
     }
   },
   "chatsExportSuccess": "Chat exportado",
+  "chatsExportIncomplete": "Exportación guardada con advertencias",
+  "chatsExportIncompleteMessage": "Parte del contenido del correo o de los archivos adjuntos no se incluyó; consulta warnings.txt en el ZIP.",
+  "chatsExportTooLargeForDevice": "La exportación es demasiado grande para guardarla en este dispositivo.",
   "chatsExportFailure": "No se pudo exportar el chat",
-  "chatExportWarningTitle": "¿Exportar historial del chat?",
-  "chatExportWarningMessage": "Las exportaciones de chat no están cifradas y otras apps o servicios en la nube pueden leerlas. ¿Continuar?",
+  "chatExportWarningTitle": "Exportar historial del chat",
+  "chatExportWarningMessage": "Las exportaciones de chat no están cifradas y otras apps o servicios en la nube pueden leerlas.",
   "chatsArchivedRestored": "Chat restaurado",
   "chatsArchivedHint": "Chat archivado (Perfil → Chats archivados)",
   "chatsVisibleNotice": "El chat vuelve a ser visible",
@@ -1266,8 +1271,8 @@
   "chatSelectionExportEmptyMessage": "Selecciona chats con contenido de texto",
   "chatSelectionExportShareText": "Exportaciones de chat desde Axichat",
   "chatSelectionExportShareSubject": "Exportación de chats de Axichat",
-  "chatSelectionExportReadyTitle": "Exportación lista",
-  "chatSelectionExportReadyMessage": "{count, plural, one {# chat compartido} other {# chats compartidos}}",
+  "chatSelectionExportReadyTitle": "Exportación guardada",
+  "chatSelectionExportReadyMessage": "{count, plural, one {# chat guardado} other {# chats guardados}}",
   "@chatSelectionExportReadyMessage": {
     "placeholders": {
       "count": {}

@@ -840,7 +840,7 @@
       "label": {}
     }
   },
-  "profileExportReadyMessage": "{label}-Export bereit.",
+  "profileExportReadyMessage": "{label}-Export gespeichert.",
   "@profileExportReadyMessage": {
     "placeholders": {
       "label": {}
@@ -859,7 +859,9 @@
     }
   },
   "profileExportTooLargeForDeviceMessage": "Der Export für {label} ist zu groß, um auf diesem Gerät gespeichert zu werden.",
-  "profileExportIncompleteMessage": "Ein vollständiger Export für {label} konnte nicht erstellt werden. Stelle sicher, dass alle E-Mail-Inhalte und Anhänge verfügbar sind, und versuche es erneut.",
+  "profileExportIncompleteMessage": "{label}-Export mit Warnungen gespeichert. Einige E-Mail-Inhalte oder Anhänge wurden nicht eingeschlossen; siehe warnings.txt in der ZIP-Datei.",
+  "profileMessageExportWarningTitle": "Nachrichten exportieren",
+  "profileMessageExportWarningMessage": "Nachrichtenexporte sind unverschlüsselt und können von anderen Apps oder Cloud-Diensten gelesen werden.",
   "profileExportShareUnsupportedMessage": "Teilen ist auf dieser Plattform nicht verfügbar. {label}-Export gespeichert unter {path}.",
   "@profileExportShareUnsupportedMessage": {
     "placeholders": {
@@ -1245,9 +1247,12 @@
     }
   },
   "chatsExportSuccess": "Chat exportiert",
+  "chatsExportIncomplete": "Export mit Warnungen gespeichert",
+  "chatsExportIncompleteMessage": "Einige E-Mail-Inhalte oder Anhänge wurden nicht eingeschlossen; siehe warnings.txt in der ZIP-Datei.",
+  "chatsExportTooLargeForDevice": "Der Export ist zu groß, um auf diesem Gerät gespeichert zu werden.",
   "chatsExportFailure": "Chat kann nicht exportiert werden",
-  "chatExportWarningTitle": "Chatverlauf exportieren?",
-  "chatExportWarningMessage": "Chat-Exporte sind unverschlüsselt und können von anderen Apps oder Cloud-Diensten gelesen werden. Fortfahren?",
+  "chatExportWarningTitle": "Chatverlauf exportieren",
+  "chatExportWarningMessage": "Chat-Exporte sind unverschlüsselt und können von anderen Apps oder Cloud-Diensten gelesen werden.",
   "chatsArchivedRestored": "Chat wiederhergestellt",
   "chatsArchivedHint": "Chat archiviert (Profil → Archivierte Chats)",
   "chatsVisibleNotice": "Chat ist wieder sichtbar",
@@ -1270,8 +1275,8 @@
   "chatSelectionExportEmptyMessage": "Chats mit Textinhalt auswählen",
   "chatSelectionExportShareText": "Chat-Exporte von Axichat",
   "chatSelectionExportShareSubject": "Axichat-Chat-Export",
-  "chatSelectionExportReadyTitle": "Export bereit",
-  "chatSelectionExportReadyMessage": "{count, plural, one {# Chat geteilt} other {# Chats geteilt}}",
+  "chatSelectionExportReadyTitle": "Export gespeichert",
+  "chatSelectionExportReadyMessage": "{count, plural, one {# Chat gespeichert} other {# Chats gespeichert}}",
   "@chatSelectionExportReadyMessage": {
     "placeholders": {
       "count": {}

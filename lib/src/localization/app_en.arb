@@ -946,7 +946,7 @@
       "label": {}
     }
   },
-  "profileExportReadyMessage": "{label} export ready.",
+  "profileExportReadyMessage": "{label} export saved.",
   "@profileExportReadyMessage": {
     "placeholders": {
       "label": {}
@@ -970,12 +970,14 @@
       "label": {}
     }
   },
-  "profileExportIncompleteMessage": "Unable to create a complete {label} export. Make sure all email content and attachments are available, then try again.",
+  "profileExportIncompleteMessage": "{label} export saved with warnings. Some email content or attachments were not included; see warnings.txt in the ZIP.",
   "@profileExportIncompleteMessage": {
     "placeholders": {
       "label": {}
     }
   },
+  "profileMessageExportWarningTitle": "Export messages",
+  "profileMessageExportWarningMessage": "Message exports are unencrypted and may be readable by other apps or cloud services.",
   "profileExportShareUnsupportedMessage": "Sharing isn't available on this platform. {label} export saved to {path}.",
   "@profileExportShareUnsupportedMessage": {
     "placeholders": {
@@ -1410,9 +1412,12 @@
     }
   },
   "chatsExportSuccess": "Chat exported",
+  "chatsExportIncomplete": "Export saved with warnings",
+  "chatsExportIncompleteMessage": "Some email content or attachments were not included; see warnings.txt in the ZIP.",
+  "chatsExportTooLargeForDevice": "Export is too large to save on this device.",
   "chatsExportFailure": "Unable to export chat",
-  "chatExportWarningTitle": "Export chat history?",
-  "chatExportWarningMessage": "Chat exports are unencrypted and may be readable by other apps or cloud services. Continue?",
+  "chatExportWarningTitle": "Export chat history",
+  "chatExportWarningMessage": "Chat exports are unencrypted and may be readable by other apps or cloud services.",
   "chatsArchivedRestored": "Chat restored",
   "chatsArchivedHint": "Chat archived (Profile → Archived chats)",
   "chatsVisibleNotice": "Chat is visible again",
@@ -1435,8 +1440,8 @@
   "chatSelectionExportEmptyMessage": "Select chats with text content",
   "chatSelectionExportShareText": "Chat exports from Axichat",
   "chatSelectionExportShareSubject": "Axichat chats export",
-  "chatSelectionExportReadyTitle": "Export ready",
-  "chatSelectionExportReadyMessage": "{count, plural, one {Shared # chat} other {Shared # chats}}",
+  "chatSelectionExportReadyTitle": "Export saved",
+  "chatSelectionExportReadyMessage": "{count, plural, one {Saved # chat} other {Saved # chats}}",
   "@chatSelectionExportReadyMessage": {
     "placeholders": {
       "count": {}

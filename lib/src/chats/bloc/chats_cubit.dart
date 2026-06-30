@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
+import 'package:axichat/src/chats/utils/message_exporter.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
@@ -215,11 +216,11 @@ class ChatsCubit extends Cubit<ChatsState> {
     return stream.listen((items) => _updateChats(items));
   }
 
-  Future<void> _setSearchScope({required bool searchActive}) async {
-    if (_searchingAllChats == searchActive) {
+  Future<void> _setSearchScope({required bool useAllChats}) async {
+    if (_searchingAllChats == useAllChats) {
       return;
     }
-    _searchingAllChats = searchActive;
+    _searchingAllChats = useAllChats;
     final pending = _chatListResubscribeTask;
     if (pending != null) {
       await pending;
@@ -233,6 +234,13 @@ class ChatsCubit extends Cubit<ChatsState> {
         _chatListResubscribeTask = null;
       }
     }
+  }
+
+  static bool _chatFilterRequiresAllChats(SearchFilterId? filterId) {
+    return switch (filterId) {
+      SearchFilterId.hidden || SearchFilterId.favorites => true,
+      _ => false,
+    };
   }
 
   Future<List<Chat>> allChats() => _chatsService.allChats();
@@ -292,6 +300,13 @@ class ChatsCubit extends Cubit<ChatsState> {
     _exportCleanupTimers.add(timer);
   }
 
+  Future<MessageExportResult> exportChats(List<Chat> chats) {
+    return MessageExporter(
+      xmppService: _xmppService,
+      emailService: _emailService,
+    ).exportSelectedMessages(chats: chats);
+  }
+
   void updateSearchSnapshot({
     required bool active,
     required String query,
@@ -326,7 +341,14 @@ class ChatsCubit extends Cubit<ChatsState> {
         selectedChats: derived.selectedChats,
       ),
     );
-    unawaited(_setSearchScope(searchActive: active || state.spamSearchActive));
+    unawaited(
+      _setSearchScope(
+        useAllChats:
+            active ||
+            state.spamSearchActive ||
+            _chatFilterRequiresAllChats(filterId),
+      ),
+    );
   }
 
   void updateSpamSearchSnapshot({
@@ -358,7 +380,14 @@ class ChatsCubit extends Cubit<ChatsState> {
         spamVisibleItems: spamVisibleItems,
       ),
     );
-    unawaited(_setSearchScope(searchActive: active || state.searchActive));
+    unawaited(
+      _setSearchScope(
+        useAllChats:
+            active ||
+            state.searchActive ||
+            _chatFilterRequiresAllChats(state.searchFilter),
+      ),
+    );
   }
 
   void updateRosterContacts(Set<String> contacts) {
@@ -464,7 +493,7 @@ class ChatsCubit extends Cubit<ChatsState> {
               ),
         SearchFilterId.hidden => chat.hidden,
         SearchFilterId.all => !chat.hidden,
-        SearchFilterId.favorites => !chat.hidden,
+        SearchFilterId.favorites => !chat.hidden && chat.favorited,
         SearchFilterId.attachments => !chat.hidden,
       };
     }
@@ -986,6 +1015,9 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   Future<void> deleteChat({required String jid}) async {
+    if (state.openJid == jid) {
+      await closeAllChats();
+    }
     await _chatsService.deleteChat(jid: jid);
   }
 

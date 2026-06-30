@@ -16,12 +16,12 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
+import 'package:axichat/src/chats/utils/message_exporter.dart';
 import 'package:axichat/src/chats/view/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/contact_rename_dialog.dart';
+import 'package:axichat/src/common/export_file_saver.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/request_status.dart';
-import 'package:axichat/src/common/share_position.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/contacts/bloc/contacts_cubit.dart';
 import 'package:axichat/src/contacts/view/contacts_list.dart';
@@ -38,8 +38,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:share_plus/share_plus.dart';
 
 class ChatsList extends StatelessWidget {
   const ChatsList({
@@ -1530,41 +1530,53 @@ class _ChatListTileState extends State<ChatListTile> {
 
   Future<void> _exportChatFromContextMenu(Chat chat) async {
     final l10n = context.l10n;
-    final scheduleExportCleanup = context
-        .read<ChatsCubit>()
-        .scheduleExportCleanup;
     final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     File? exportFile;
     try {
-      final result = await ChatHistoryExporter.exportChats(
-        chats: [chat],
-        loadHistory: context.read<ChatsCubit>().loadChatHistory,
-        countHistory: context.read<ChatsCubit>().countChatHistoryMessages,
-        loadHistoryPage: context.read<ChatsCubit>().loadChatHistoryPage,
-      );
+      final result = await context.read<ChatsCubit>().exportChats([chat]);
       exportFile = result.file;
       if (!mounted) return;
+      if (result.outcome == MessageExportOutcome.failure ||
+          result.outcome == MessageExportOutcome.incomplete &&
+              exportFile == null) {
+        _showMessage(l10n.chatsExportFailure);
+        return;
+      }
       if (exportFile == null) {
         _showMessage(l10n.chatsExportNoContent);
         return;
       }
-      await SharePlus.instance.share(
-        shareParamsForContext(
-          context,
-          files: <XFile>[XFile(exportFile.path)],
-          text: l10n.chatsExportShareText,
-          subject: l10n.chatsExportShareSubject(chat.displayName),
-        ),
+      final savePath = await saveExportFileWithPicker(
+        file: exportFile,
+        filename: p.basename(exportFile.path),
+        platform: defaultTargetPlatform,
+        maxBytesForBytesSave: defaultExportPickerBytesMaxSize,
+        deleteSource: true,
       );
+      exportFile = null;
+      if (!mounted || savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) return;
-      _showMessage(l10n.chatsExportSuccess);
+      _showMessage(
+        result.outcome == MessageExportOutcome.incomplete
+            ? l10n.chatsExportIncomplete
+            : l10n.chatsExportSuccess,
+      );
+    } on ExportSaveFileTooLargeException {
+      if (!mounted) return;
+      _showMessage(l10n.chatsExportTooLargeForDevice);
     } catch (_) {
       if (!mounted) return;
       _showMessage(l10n.chatsExportFailure);
     } finally {
       if (exportFile != null) {
-        scheduleExportCleanup(exportFile);
+        try {
+          if (await exportFile.exists()) {
+            await exportFile.delete();
+          }
+        } on Exception {
+          // Export temp cleanup is best-effort.
+        }
       }
     }
   }
@@ -1598,7 +1610,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
       AxiMenuAction(
         icon: LucideIcons.share2,
-        label: 'Share transcript',
+        label: l10n.commonExport,
         onPressed: () async {
           await _exportChatFromContextMenu(chat);
         },
@@ -1755,7 +1767,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           exporting: _exporting,
           onPressed: _exportChat,
           iconSize: iconSize,
-          readyLabel: 'Share transcript',
+          readyLabel: l10n.commonExport,
         ),
         ContextActionButton(
           icon: Icon(
@@ -1894,9 +1906,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
 
   Future<void> _exportChat() async {
     final l10n = context.l10n;
-    final scheduleExportCleanup = context
-        .read<ChatsCubit>()
-        .scheduleExportCleanup;
     final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     setState(() {
@@ -1904,35 +1913,52 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     });
     File? exportFile;
     try {
-      final result = await ChatHistoryExporter.exportChats(
-        chats: [widget.chat],
-        loadHistory: context.read<ChatsCubit>().loadChatHistory,
-        countHistory: context.read<ChatsCubit>().countChatHistoryMessages,
-        loadHistoryPage: context.read<ChatsCubit>().loadChatHistoryPage,
-      );
+      final result = await context.read<ChatsCubit>().exportChats([
+        widget.chat,
+      ]);
       exportFile = result.file;
       if (!mounted) return;
+      if (result.outcome == MessageExportOutcome.failure ||
+          result.outcome == MessageExportOutcome.incomplete &&
+              exportFile == null) {
+        _showSnack(l10n.chatsExportFailure);
+        return;
+      }
       if (exportFile == null) {
         _showSnack(l10n.chatsExportNoContent);
         return;
       }
-      await SharePlus.instance.share(
-        shareParamsForContext(
-          context,
-          files: <XFile>[XFile(exportFile.path)],
-          text: l10n.chatsExportShareText,
-          subject: l10n.chatsExportShareSubject(widget.chat.displayName),
-        ),
+      final savePath = await saveExportFileWithPicker(
+        file: exportFile,
+        filename: p.basename(exportFile.path),
+        platform: defaultTargetPlatform,
+        maxBytesForBytesSave: defaultExportPickerBytesMaxSize,
+        deleteSource: true,
       );
+      exportFile = null;
+      if (!mounted || savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) return;
-      _showSnack(l10n.chatsExportSuccess);
+      _showSnack(
+        result.outcome == MessageExportOutcome.incomplete
+            ? l10n.chatsExportIncomplete
+            : l10n.chatsExportSuccess,
+      );
       widget.onClose();
+    } on ExportSaveFileTooLargeException {
+      if (!mounted) return;
+      _showSnack(l10n.chatsExportTooLargeForDevice);
     } catch (_) {
       if (!mounted) return;
       _showSnack(l10n.chatsExportFailure);
     } finally {
       if (exportFile != null) {
-        scheduleExportCleanup(exportFile);
+        try {
+          if (await exportFile.exists()) {
+            await exportFile.delete();
+          }
+        } on Exception {
+          // Export temp cleanup is best-effort.
+        }
       }
       if (mounted) {
         setState(() {
@@ -1956,7 +1982,7 @@ Future<bool> _confirmChatExport(BuildContext context) async {
     context,
     title: l10n.chatExportWarningTitle,
     message: l10n.chatExportWarningMessage,
-    confirmLabel: l10n.commonContinue,
+    confirmLabel: l10n.commonExport,
     cancelLabel: l10n.commonCancel,
     destructiveConfirm: false,
   );

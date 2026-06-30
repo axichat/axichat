@@ -14,15 +14,29 @@ import 'package:axichat/src/storage/database.dart' show MessageAttachmentData;
 import 'package:axichat/src/storage/models.dart';
 import 'package:path/path.dart' as p;
 
-const String profileEmailEmlExportTempDirectoryName = 'profile_email_exports';
+const String emailEmlExportTempDirectoryName = 'email_exports';
 const int _messageAttachmentLookupBatchSize = 900;
+const int _emailExportPageSize = 200;
 const int _emailContentResolutionConcurrency = 6;
 
-typedef ProfileEmailEmlExportProgressCallback =
-    void Function(ProfileEmailEmlExportProgress progress);
+typedef EmailEmlExportProgressCallback =
+    void Function(EmailEmlExportProgress progress);
+typedef EmailEmlHistoryPageLoader =
+    Future<List<Message>> Function({
+      required String jid,
+      required int offset,
+      required int limit,
+    });
+typedef EmailEmlPagePreparer =
+    Future<List<Message>> Function({
+      required Chat chat,
+      required List<Message> messages,
+    });
+typedef EmailEmlRfcGroupLoader =
+    Future<List<Message>> Function(Message message);
 
-class ProfileEmailEmlContent {
-  const ProfileEmailEmlContent({
+class EmailEmlContent {
+  const EmailEmlContent({
     this.mimeHeaders,
     this.rfc822PlainText,
     this.rfc822HtmlBody,
@@ -39,8 +53,8 @@ class ProfileEmailEmlContent {
   final String? warning;
 }
 
-class ProfileEmailEmlExportResult {
-  const ProfileEmailEmlExportResult({
+class EmailEmlExportResult {
+  const EmailEmlExportResult({
     required this.file,
     required this.messageCount,
     this.warnings = const <String>[],
@@ -51,8 +65,8 @@ class ProfileEmailEmlExportResult {
   final List<String> warnings;
 }
 
-class ProfileEmailEmlExportProgress {
-  const ProfileEmailEmlExportProgress({
+class EmailEmlExportProgress {
+  const EmailEmlExportProgress({
     required this.completedItems,
     required this.totalItems,
   });
@@ -61,12 +75,16 @@ class ProfileEmailEmlExportProgress {
   final int totalItems;
 }
 
-class ProfileEmailEmlExporter {
-  const ProfileEmailEmlExporter._();
+class EmailEmlExporter {
+  const EmailEmlExporter._();
 
-  static Future<ProfileEmailEmlExportResult> exportMessages({
+  static Future<EmailEmlExportResult> exportMessages({
     required List<Chat> chats,
     required Future<List<Message>> Function(String jid) loadHistory,
+    Future<int> Function(String jid)? countHistory,
+    EmailEmlHistoryPageLoader? loadHistoryPage,
+    EmailEmlPagePreparer? prepareEmailContentPage,
+    EmailEmlRfcGroupLoader? loadRfcEmailGroup,
     required Future<Map<String, List<MessageAttachmentData>>> Function(
       Iterable<String> messageIds,
     )
@@ -77,13 +95,12 @@ class ProfileEmailEmlExporter {
     loadMessageAttachmentsForGroup,
     required Future<List<FileMetadataData>> Function(Iterable<String> ids)
     loadFileMetadataByIds,
-    required Future<ProfileEmailEmlContent> Function(Message message)
-    loadEmailContent,
-    ProfileEmailEmlExportProgressCallback? onProgress,
+    required Future<EmailEmlContent> Function(Message message) loadEmailContent,
+    EmailEmlExportProgressCallback? onProgress,
     int contentResolutionConcurrency = _emailContentResolutionConcurrency,
   }) async {
     final directory = await appOwnedTemporaryDirectory(
-      profileEmailEmlExportTempDirectoryName,
+      emailEmlExportTempDirectoryName,
     );
     if (!await directory.exists()) {
       await directory.create(recursive: true);
@@ -94,150 +111,128 @@ class ProfileEmailEmlExporter {
     final zipEncoder = ZipFileEncoder();
     var zipOpen = false;
     var exportedMessages = 0;
+    var completedItems = 0;
     final warnings = <String>[];
 
     try {
       await emlDirectory.create(recursive: true);
-      final jobs = <_EmailExportJob>[];
-
-      for (final chat in chats) {
-        final messages = _messagesForEmailExport(
-          chat: chat,
-          messages: await loadHistory(chat.jid),
-        );
-        if (messages.isEmpty) {
-          continue;
-        }
-
-        final messageIds = messages
-            .map((message) => message.id)
-            .whereType<String>()
-            .where((id) => id.trim().isNotEmpty)
-            .toList(growable: false);
-        final attachmentsByMessage = <String, List<MessageAttachmentData>>{};
-        for (
-          var index = 0;
-          index < messageIds.length;
-          index += _messageAttachmentLookupBatchSize
-        ) {
-          final end =
-              index + _messageAttachmentLookupBatchSize < messageIds.length
-              ? index + _messageAttachmentLookupBatchSize
-              : messageIds.length;
-          attachmentsByMessage.addAll(
-            await loadMessageAttachmentsForMessages(
-              messageIds.sublist(index, end),
-            ),
-          );
-        }
-        final refsByStanzaId = <String, List<_EmailAttachmentRef>>{};
-        final metadataIds = <String>{};
-        for (final message in messages) {
-          var messageAttachments = attachmentsByMessage[message.id] ?? const [];
-          final transportGroupId = messageAttachments.isEmpty
-              ? null
-              : messageAttachments.first.transportGroupId?.trim();
-          if (transportGroupId != null && transportGroupId.isNotEmpty) {
-            messageAttachments = await loadMessageAttachmentsForGroup(
-              transportGroupId,
-            );
-          }
-          final refs = _attachmentRefsForMessage(
-            message: message,
-            attachments: messageAttachments,
-          );
-          if (refs.isNotEmpty) {
-            refsByStanzaId[message.stanzaID] = refs;
-            metadataIds.addAll(refs.map((ref) => ref.fileMetadataId));
-          }
-        }
-
-        final metadataItems = await loadFileMetadataByIds(metadataIds);
-        final metadataById = {
-          for (final metadata in metadataItems) metadata.id: metadata,
-        };
-        final exportItems = _emailExportItemsForMessages(
-          messages: messages,
-          refsByStanzaId: refsByStanzaId,
-        );
-
-        for (final item in exportItems) {
-          final itemWarnings = <String>[];
-          final attachments = await _attachmentsForExportItem(
-            item: item,
-            refsByStanzaId: refsByStanzaId,
-            metadataById: metadataById,
-            warnings: itemWarnings,
-          );
-          jobs.add(
-            _EmailExportJob(
-              chat: chat,
-              item: item,
-              attachments: attachments,
-              warnings: itemWarnings,
-            ),
-          );
-        }
-      }
-
-      if (jobs.isEmpty) {
-        throw const ProfileEmailEmlExportEmptyException();
-      }
-
-      onProgress?.call(
-        ProfileEmailEmlExportProgress(
-          completedItems: 0,
-          totalItems: jobs.length,
-        ),
+      final totalItems = await _countEmailExportItems(
+        chats: chats,
+        loadHistory: loadHistory,
+        countHistory: countHistory,
+        loadHistoryPage: loadHistoryPage,
+        loadRfcEmailGroup: loadRfcEmailGroup,
       );
-      final resolvedJobs = await _resolveEmailExportJobs(
-        jobs: jobs,
-        contentResolutionConcurrency: contentResolutionConcurrency,
-        loadEmailContent: loadEmailContent,
-        onProgress: onProgress,
-      );
-
+      if (totalItems == 0) {
+        throw const EmailEmlExportEmptyException();
+      }
       zipEncoder.create(zipFile.path);
       zipOpen = true;
+      onProgress?.call(
+        EmailEmlExportProgress(
+          completedItems: completedItems,
+          totalItems: totalItems,
+        ),
+      );
 
-      for (final resolvedJob in resolvedJobs) {
-        warnings.addAll(resolvedJob.warnings);
-        final source = resolvedJob.source;
-        if (source == null) {
-          continue;
+      for (final chat in chats) {
+        final renderedStanzaIds = <String>{};
+        final renderedRfcEmailGroupKeys = <String>{};
+        await for (final rawPage in _emailExportMessagePages(
+          chat: chat,
+          loadHistory: loadHistory,
+          countHistory: countHistory,
+          loadHistoryPage: loadHistoryPage,
+        )) {
+          final expandedPage = await _expandedEmailExportMessages(
+            chat: chat,
+            messages: rawPage,
+            loadRfcEmailGroup: loadRfcEmailGroup,
+            renderedStanzaIds: renderedStanzaIds,
+            renderedRfcEmailGroupKeys: renderedRfcEmailGroupKeys,
+          );
+          if (expandedPage.isEmpty) {
+            continue;
+          }
+          final preparedPage = prepareEmailContentPage == null
+              ? expandedPage
+              : await prepareEmailContentPage(
+                  chat: chat,
+                  messages: expandedPage,
+                );
+          final jobs = await _emailExportJobsForMessages(
+            chat: chat,
+            messages: preparedPage,
+            loadMessageAttachmentsForMessages:
+                loadMessageAttachmentsForMessages,
+            loadMessageAttachmentsForGroup: loadMessageAttachmentsForGroup,
+            loadFileMetadataByIds: loadFileMetadataByIds,
+            renderedStanzaIds: renderedStanzaIds,
+            renderedRfcEmailGroupKeys: renderedRfcEmailGroupKeys,
+          );
+          if (jobs.isEmpty) {
+            continue;
+          }
+          final resolvedJobs = await _resolveEmailExportJobs(
+            jobs: jobs,
+            contentResolutionConcurrency: contentResolutionConcurrency,
+            loadEmailContent: loadEmailContent,
+            onResolved: () {
+              completedItems++;
+              onProgress?.call(
+                EmailEmlExportProgress(
+                  completedItems: completedItems,
+                  totalItems: totalItems,
+                ),
+              );
+            },
+          );
+
+          for (final resolvedJob in resolvedJobs) {
+            warnings.addAll(resolvedJob.warnings);
+            final source = resolvedJob.source;
+            if (source == null) {
+              continue;
+            }
+            final message = source.message;
+            final content = source.content;
+            final emlFile = File(
+              p.join(
+                emlDirectory.path,
+                _emlFilename(message, exportedMessages + 1),
+              ),
+            );
+            await _writeEmlFile(
+              file: emlFile,
+              chat: resolvedJob.job.chat,
+              message: message,
+              content: content,
+              attachments: resolvedJob.job.attachments,
+            );
+            await zipEncoder.addFile(
+              emlFile,
+              'messages/${p.basename(emlFile.path)}',
+            );
+            exportedMessages++;
+          }
         }
-        final message = source.message;
-        final content = source.content;
-        final emlFile = File(
-          p.join(
-            emlDirectory.path,
-            _emlFilename(message, exportedMessages + 1),
-          ),
-        );
-        await _writeEmlFile(
-          file: emlFile,
-          chat: resolvedJob.job.chat,
-          message: message,
-          content: content,
-          attachments: resolvedJob.job.attachments,
-        );
-        await zipEncoder.addFile(
-          emlFile,
-          'messages/${p.basename(emlFile.path)}',
-        );
-        exportedMessages++;
       }
 
       if (exportedMessages == 0) {
         if (warnings.isNotEmpty) {
-          throw ProfileEmailEmlExportIncompleteException(warnings);
+          throw EmailEmlExportIncompleteException(warnings);
         }
-        throw const ProfileEmailEmlExportEmptyException();
+        throw const EmailEmlExportEmptyException();
+      }
+      if (warnings.isNotEmpty) {
+        final warningsFile = File(p.join(emlDirectory.path, 'warnings.txt'));
+        await _writeWarningsFile(file: warningsFile, warnings: warnings);
+        await zipEncoder.addFile(warningsFile, 'warnings.txt');
       }
 
       await zipEncoder.close();
       zipOpen = false;
-      return ProfileEmailEmlExportResult(
+      return EmailEmlExportResult(
         file: zipFile,
         messageCount: exportedMessages,
         warnings: warnings,
@@ -270,16 +265,246 @@ class ProfileEmailEmlExporter {
   }
 }
 
+Future<int> _countEmailExportItems({
+  required List<Chat> chats,
+  required Future<List<Message>> Function(String jid) loadHistory,
+  required Future<int> Function(String jid)? countHistory,
+  required EmailEmlHistoryPageLoader? loadHistoryPage,
+  required EmailEmlRfcGroupLoader? loadRfcEmailGroup,
+}) async {
+  var totalItems = 0;
+  for (final chat in chats) {
+    final renderedStanzaIds = <String>{};
+    final renderedRfcEmailGroupKeys = <String>{};
+    await for (final rawPage in _emailExportMessagePages(
+      chat: chat,
+      loadHistory: loadHistory,
+      countHistory: countHistory,
+      loadHistoryPage: loadHistoryPage,
+    )) {
+      final expandedPage = await _expandedEmailExportMessages(
+        chat: chat,
+        messages: rawPage,
+        loadRfcEmailGroup: loadRfcEmailGroup,
+        renderedStanzaIds: renderedStanzaIds,
+        renderedRfcEmailGroupKeys: renderedRfcEmailGroupKeys,
+      );
+      if (expandedPage.isEmpty) {
+        continue;
+      }
+      totalItems += _countEmailExportItemsForMessages(
+        chat: chat,
+        messages: expandedPage,
+        renderedStanzaIds: renderedStanzaIds,
+        renderedRfcEmailGroupKeys: renderedRfcEmailGroupKeys,
+      );
+    }
+  }
+  return totalItems;
+}
+
+Stream<List<Message>> _emailExportMessagePages({
+  required Chat chat,
+  required Future<List<Message>> Function(String jid) loadHistory,
+  required Future<int> Function(String jid)? countHistory,
+  required EmailEmlHistoryPageLoader? loadHistoryPage,
+}) async* {
+  if (loadHistoryPage == null || countHistory == null) {
+    yield await loadHistory(chat.jid);
+    return;
+  }
+  final total = await countHistory(chat.jid);
+  var remaining = total;
+  while (remaining > 0) {
+    final offset = remaining > _emailExportPageSize
+        ? remaining - _emailExportPageSize
+        : 0;
+    final limit = remaining - offset;
+    final page = await loadHistoryPage(
+      jid: chat.jid,
+      offset: offset,
+      limit: limit,
+    );
+    if (page.isEmpty) {
+      break;
+    }
+    yield page.reversed.toList(growable: false);
+    remaining = offset;
+  }
+}
+
+Future<List<Message>> _expandedEmailExportMessages({
+  required Chat chat,
+  required List<Message> messages,
+  required EmailEmlRfcGroupLoader? loadRfcEmailGroup,
+  required Set<String> renderedStanzaIds,
+  required Set<String> renderedRfcEmailGroupKeys,
+}) async {
+  final filtered = _messagesForEmailExport(chat: chat, messages: messages);
+  if (filtered.isEmpty) {
+    return const [];
+  }
+  final byStanzaId = <String, Message>{};
+  for (final message in filtered) {
+    if (renderedStanzaIds.contains(message.stanzaID)) {
+      continue;
+    }
+    final groupKey = message.emailRfcGroupKey;
+    if (groupKey != null && renderedRfcEmailGroupKeys.contains(groupKey)) {
+      continue;
+    }
+    if (groupKey == null || loadRfcEmailGroup == null) {
+      byStanzaId[message.stanzaID] = message;
+      continue;
+    }
+    List<Message> groupMessages;
+    try {
+      groupMessages = await loadRfcEmailGroup(message);
+    } on Exception {
+      groupMessages = [message];
+    }
+    final exportableGroupMessages = _messagesForEmailExport(
+      chat: chat,
+      messages: groupMessages,
+    );
+    var addedGroupMessage = false;
+    for (final candidate in exportableGroupMessages) {
+      if (candidate.emailRfcGroupKey != groupKey ||
+          renderedStanzaIds.contains(candidate.stanzaID)) {
+        continue;
+      }
+      byStanzaId[candidate.stanzaID] = candidate;
+      addedGroupMessage = true;
+    }
+    if (!addedGroupMessage) {
+      byStanzaId[message.stanzaID] = message;
+    }
+  }
+  return byStanzaId.values.toList(growable: false);
+}
+
+Future<List<_EmailExportJob>> _emailExportJobsForMessages({
+  required Chat chat,
+  required List<Message> messages,
+  required Future<Map<String, List<MessageAttachmentData>>> Function(
+    Iterable<String> messageIds,
+  )
+  loadMessageAttachmentsForMessages,
+  required Future<List<MessageAttachmentData>> Function(String transportGroupId)
+  loadMessageAttachmentsForGroup,
+  required Future<List<FileMetadataData>> Function(Iterable<String> ids)
+  loadFileMetadataByIds,
+  required Set<String> renderedStanzaIds,
+  required Set<String> renderedRfcEmailGroupKeys,
+}) async {
+  final exportMessages = _messagesForEmailExport(
+    chat: chat,
+    messages: messages,
+  );
+  if (exportMessages.isEmpty) {
+    return const [];
+  }
+
+  final messageIds = exportMessages
+      .map((message) => message.id)
+      .whereType<String>()
+      .where((id) => id.trim().isNotEmpty)
+      .toList(growable: false);
+  final attachmentsByMessage = <String, List<MessageAttachmentData>>{};
+  for (
+    var index = 0;
+    index < messageIds.length;
+    index += _messageAttachmentLookupBatchSize
+  ) {
+    final end = index + _messageAttachmentLookupBatchSize < messageIds.length
+        ? index + _messageAttachmentLookupBatchSize
+        : messageIds.length;
+    attachmentsByMessage.addAll(
+      await loadMessageAttachmentsForMessages(messageIds.sublist(index, end)),
+    );
+  }
+  final refsByStanzaId = <String, List<_EmailAttachmentRef>>{};
+  final metadataIds = <String>{};
+  for (final message in exportMessages) {
+    var messageAttachments = attachmentsByMessage[message.id] ?? const [];
+    final transportGroupId = messageAttachments.isEmpty
+        ? null
+        : messageAttachments.first.transportGroupId?.trim();
+    if (transportGroupId != null && transportGroupId.isNotEmpty) {
+      messageAttachments = await loadMessageAttachmentsForGroup(
+        transportGroupId,
+      );
+    }
+    final refs = _attachmentRefsForMessage(
+      message: message,
+      attachments: messageAttachments,
+    );
+    if (refs.isNotEmpty) {
+      refsByStanzaId[message.stanzaID] = refs;
+      metadataIds.addAll(refs.map((ref) => ref.fileMetadataId));
+    }
+  }
+
+  final metadataItems = await loadFileMetadataByIds(metadataIds);
+  final metadataById = {
+    for (final metadata in metadataItems) metadata.id: metadata,
+  };
+  final exportItems = _emailExportItemsForMessages(
+    messages: exportMessages,
+    refsByStanzaId: refsByStanzaId,
+    renderedStanzaIds: renderedStanzaIds,
+    renderedRfcEmailGroupKeys: renderedRfcEmailGroupKeys,
+  );
+  final jobs = <_EmailExportJob>[];
+  for (final item in exportItems) {
+    final itemWarnings = <String>[];
+    final attachments = await _attachmentsForExportItem(
+      item: item,
+      refsByStanzaId: refsByStanzaId,
+      metadataById: metadataById,
+      warnings: itemWarnings,
+    );
+    jobs.add(
+      _EmailExportJob(
+        chat: chat,
+        item: item,
+        attachments: attachments,
+        warnings: itemWarnings,
+      ),
+    );
+  }
+  return jobs;
+}
+
+int _countEmailExportItemsForMessages({
+  required Chat chat,
+  required List<Message> messages,
+  required Set<String> renderedStanzaIds,
+  required Set<String> renderedRfcEmailGroupKeys,
+}) {
+  final exportMessages = _messagesForEmailExport(
+    chat: chat,
+    messages: messages,
+  );
+  if (exportMessages.isEmpty) {
+    return 0;
+  }
+  return _emailExportItemsForMessages(
+    messages: exportMessages,
+    refsByStanzaId: const <String, List<_EmailAttachmentRef>>{},
+    renderedStanzaIds: renderedStanzaIds,
+    renderedRfcEmailGroupKeys: renderedRfcEmailGroupKeys,
+  ).length;
+}
+
 Future<List<_ResolvedEmailExportJob>> _resolveEmailExportJobs({
   required List<_EmailExportJob> jobs,
   required int contentResolutionConcurrency,
-  required Future<ProfileEmailEmlContent> Function(Message message)
-  loadEmailContent,
-  required ProfileEmailEmlExportProgressCallback? onProgress,
+  required Future<EmailEmlContent> Function(Message message) loadEmailContent,
+  required void Function() onResolved,
 }) async {
   final results = List<_ResolvedEmailExportJob?>.filled(jobs.length, null);
   var nextIndex = 0;
-  var completedItems = 0;
   final workerCount = _boundedWorkerCount(
     requested: contentResolutionConcurrency,
     totalItems: jobs.length,
@@ -296,13 +521,7 @@ Future<List<_ResolvedEmailExportJob>> _resolveEmailExportJobs({
         job: jobs[index],
         loadEmailContent: loadEmailContent,
       );
-      completedItems++;
-      onProgress?.call(
-        ProfileEmailEmlExportProgress(
-          completedItems: completedItems,
-          totalItems: jobs.length,
-        ),
-      );
+      onResolved();
     }
   }
 
@@ -324,13 +543,9 @@ int _boundedWorkerCount({required int requested, required int totalItems}) {
 
 Future<_ResolvedEmailExportJob> _resolveEmailExportJob({
   required _EmailExportJob job,
-  required Future<ProfileEmailEmlContent> Function(Message message)
-  loadEmailContent,
+  required Future<EmailEmlContent> Function(Message message) loadEmailContent,
 }) async {
   final warnings = List<String>.of(job.warnings);
-  if (warnings.isNotEmpty) {
-    return _ResolvedEmailExportJob(job: job, warnings: warnings);
-  }
   try {
     final source = await _loadEmailContentForExportItem(
       item: job.item,
@@ -353,19 +568,19 @@ Future<_ResolvedEmailExportJob> _resolveEmailExportJob({
   }
 }
 
-class ProfileEmailEmlExportEmptyException implements Exception {
-  const ProfileEmailEmlExportEmptyException();
+class EmailEmlExportEmptyException implements Exception {
+  const EmailEmlExportEmptyException();
 }
 
-class ProfileEmailEmlExportIncompleteException implements Exception {
-  ProfileEmailEmlExportIncompleteException(Iterable<String> warnings)
+class EmailEmlExportIncompleteException implements Exception {
+  EmailEmlExportIncompleteException(Iterable<String> warnings)
     : warnings = List<String>.unmodifiable(warnings);
 
   final List<String> warnings;
 
   @override
   String toString() =>
-      'ProfileEmailEmlExportIncompleteException: ${warnings.join(' ')}';
+      'EmailEmlExportIncompleteException: ${warnings.join(' ')}';
 }
 
 class _EmailAttachmentRef {
@@ -388,7 +603,7 @@ class _EmailExportSource {
   const _EmailExportSource({required this.message, required this.content});
 
   final Message message;
-  final ProfileEmailEmlContent content;
+  final EmailEmlContent content;
 }
 
 class _EmailExportJob {
@@ -440,6 +655,8 @@ List<Message> _messagesForEmailExport({
 List<_EmailExportItem> _emailExportItemsForMessages({
   required List<Message> messages,
   required Map<String, List<_EmailAttachmentRef>> refsByStanzaId,
+  required Set<String> renderedStanzaIds,
+  required Set<String> renderedRfcEmailGroupKeys,
 }) {
   final rfcEmailGroupsByStanzaId = buildRfcEmailGroupsByMessageStanzaId(
     messages: messages,
@@ -452,17 +669,23 @@ List<_EmailExportItem> _emailExportItemsForMessages({
     requireMeaningfulBody: false,
   );
   final items = <_EmailExportItem>[];
-  final renderedRfcEmailGroupKeys = <String>{};
   for (final message in messages) {
+    if (renderedStanzaIds.contains(message.stanzaID)) {
+      continue;
+    }
     final rfcEmailGroup = rfcEmailGroupsByStanzaId[message.stanzaID];
     final rfcEmailGroupKey = message.emailRfcGroupKey;
     if (rfcEmailGroup != null && rfcEmailGroupKey != null) {
       if (!renderedRfcEmailGroupKeys.add(rfcEmailGroupKey)) {
         continue;
       }
+      renderedStanzaIds.addAll(
+        rfcEmailGroup.messages.map((message) => message.stanzaID),
+      );
       items.add(_EmailExportItem(messages: rfcEmailGroup.messages));
       continue;
     }
+    renderedStanzaIds.add(message.stanzaID);
     items.add(_EmailExportItem(messages: [message]));
   }
   return items;
@@ -496,22 +719,42 @@ List<_EmailAttachmentRef> _attachmentRefsForMessage({
 Future<_EmailExportSource?> _loadEmailContentForExportItem({
   required _EmailExportItem item,
   required List<FileMetadataData> attachments,
-  required Future<ProfileEmailEmlContent> Function(Message message)
-  loadEmailContent,
+  required Future<EmailEmlContent> Function(Message message) loadEmailContent,
   required void Function(Message message, String warning) addWarning,
 }) async {
-  final contentByStanzaId = <String, ProfileEmailEmlContent>{};
+  final contentByStanzaId = <String, EmailEmlContent>{};
+  final warningsAddedForStanzaId = <String>{};
   for (final message in item.messages) {
     final content = await loadEmailContent(message);
     contentByStanzaId[message.stanzaID] = content;
+    final warning = _emailContentWarning(content);
+    if (warning != null && warningsAddedForStanzaId.add(message.stanzaID)) {
+      addWarning(message, warning);
+    }
+  }
+  final groupedBodySource = _groupedBodySource(
+    item: item,
+    contentByStanzaId: contentByStanzaId,
+  );
+  if (groupedBodySource != null &&
+      _hasCompleteEmailContentForExportItem(
+        item: item,
+        message: groupedBodySource.message,
+        content: groupedBodySource.content,
+        contentByStanzaId: contentByStanzaId,
+        attachments: attachments,
+      ) &&
+      _hasExportableEmlContent(
+        groupedBodySource.message,
+        groupedBodySource.content,
+        attachments,
+      )) {
+    return groupedBodySource;
   }
   for (final preferBody in const [true, false]) {
     for (final message in item.messages) {
       final content =
-          contentByStanzaId[message.stanzaID] ?? const ProfileEmailEmlContent();
-      if (_emailContentWarning(content) != null) {
-        continue;
-      }
+          contentByStanzaId[message.stanzaID] ?? const EmailEmlContent();
       final hasResolvedBody = _hasResolvedBodyContent(message, content);
       if (preferBody != hasResolvedBody) {
         continue;
@@ -534,16 +777,16 @@ Future<_EmailExportSource?> _loadEmailContentForExportItem({
 
   for (final message in item.messages) {
     final content =
-        contentByStanzaId[message.stanzaID] ?? const ProfileEmailEmlContent();
+        contentByStanzaId[message.stanzaID] ?? const EmailEmlContent();
     final warning = _emailContentWarning(content);
-    if (warning != null) {
+    if (warning != null && warningsAddedForStanzaId.add(message.stanzaID)) {
       addWarning(message, warning);
     }
   }
   final warningMessage = item.messages.first;
   if (!item.messages.any((message) {
     final content =
-        contentByStanzaId[message.stanzaID] ?? const ProfileEmailEmlContent();
+        contentByStanzaId[message.stanzaID] ?? const EmailEmlContent();
     return _hasCompleteEmailContentForExportItem(
       item: item,
       message: message,
@@ -556,7 +799,7 @@ Future<_EmailExportSource?> _loadEmailContentForExportItem({
   }
   if (!item.messages.any((message) {
     final content =
-        contentByStanzaId[message.stanzaID] ?? const ProfileEmailEmlContent();
+        contentByStanzaId[message.stanzaID] ?? const EmailEmlContent();
     return _hasExportableEmlContent(message, content, attachments);
   })) {
     addWarning(warningMessage, 'Email has no exportable content.');
@@ -564,7 +807,68 @@ Future<_EmailExportSource?> _loadEmailContentForExportItem({
   return null;
 }
 
-String? _emailContentWarning(ProfileEmailEmlContent content) {
+_EmailExportSource? _groupedBodySource({
+  required _EmailExportItem item,
+  required Map<String, EmailEmlContent> contentByStanzaId,
+}) {
+  if (item.messages.length < 2) {
+    return null;
+  }
+  final bodyParts = <({Message message, EmailEmlContent content})>[];
+  for (final message in item.messages) {
+    final content =
+        contentByStanzaId[message.stanzaID] ?? const EmailEmlContent();
+    if (_hasResolvedBodyContent(message, content)) {
+      bodyParts.add((message: message, content: content));
+    }
+  }
+  if (bodyParts.isEmpty) {
+    return null;
+  }
+  final primary = bodyParts.first;
+  if (bodyParts.length == 1) {
+    return _EmailExportSource(
+      message: primary.message,
+      content: primary.content,
+    );
+  }
+  final plainTextParts = <String>[];
+  final htmlParts = <String>[];
+  final seenPlainText = <String>{};
+  final seenHtml = <String>{};
+  for (final part in bodyParts) {
+    final plainText = _resolvedPlainText(part.message, part.content);
+    if (_hasValue(plainText) &&
+        seenPlainText.add(_canonicalExportBodyText(plainText!))) {
+      plainTextParts.add(plainText);
+    }
+    final htmlBody = _resolvedHtmlBody(part.message, part.content);
+    if (_hasValue(htmlBody) &&
+        seenHtml.add(_canonicalExportBodyText(htmlBody!))) {
+      htmlParts.add(htmlBody);
+    }
+  }
+  return _EmailExportSource(
+    message: primary.message,
+    content: EmailEmlContent(
+      mimeHeaders: primary.content.mimeHeaders,
+      rfc822PlainText: plainTextParts.isEmpty
+          ? primary.content.rfc822PlainText
+          : plainTextParts.join('\n\n'),
+      rfc822HtmlBody: htmlParts.isEmpty
+          ? primary.content.rfc822HtmlBody
+          : htmlParts.join('\n<br><br>\n'),
+      fullHtml: htmlParts.isEmpty ? primary.content.fullHtml : null,
+      bodyUnavailable: primary.content.bodyUnavailable,
+      warning: primary.content.warning,
+    ),
+  );
+}
+
+String _canonicalExportBodyText(String value) =>
+    value.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+String? _emailContentWarning(EmailEmlContent content) {
   final warning = content.warning?.trim();
   return warning == null || warning.isEmpty ? null : warning;
 }
@@ -572,8 +876,8 @@ String? _emailContentWarning(ProfileEmailEmlContent content) {
 bool _hasCompleteEmailContentForExportItem({
   required _EmailExportItem item,
   required Message message,
-  required ProfileEmailEmlContent content,
-  required Map<String, ProfileEmailEmlContent> contentByStanzaId,
+  required EmailEmlContent content,
+  required Map<String, EmailEmlContent> contentByStanzaId,
   required List<FileMetadataData> attachments,
 }) {
   if (!_hasCompleteEmailContent(message, content, attachments)) {
@@ -587,10 +891,7 @@ bool _hasCompleteEmailContentForExportItem({
       return true;
     }
     final candidateContent =
-        contentByStanzaId[candidate.stanzaID] ?? const ProfileEmailEmlContent();
-    if (_emailContentWarning(candidateContent) != null) {
-      return false;
-    }
+        contentByStanzaId[candidate.stanzaID] ?? const EmailEmlContent();
     return _hasResolvedBodyContent(candidate, candidateContent) ||
         candidate.rfc822BodyContentUnavailable ||
         candidateContent.bodyUnavailable;
@@ -632,7 +933,7 @@ Future<void> _writeEmlFile({
   required File file,
   required Chat chat,
   required Message message,
-  required ProfileEmailEmlContent content,
+  required EmailEmlContent content,
   required List<FileMetadataData> attachments,
 }) async {
   final sink = file.openWrite();
@@ -717,6 +1018,23 @@ Future<void> _writeEmlFile({
     }
 
     _writeSingleBody(sink, plainText: plainText, htmlBody: htmlBody);
+  } finally {
+    await sink.flush();
+    await sink.close();
+  }
+}
+
+Future<void> _writeWarningsFile({
+  required File file,
+  required List<String> warnings,
+}) async {
+  final sink = file.openWrite();
+  try {
+    sink.writeln('Axichat email export warnings');
+    sink.writeln();
+    for (final warning in warnings) {
+      sink.writeln('- $warning');
+    }
   } finally {
     await sink.flush();
     await sink.close();
@@ -856,7 +1174,7 @@ void _writeWrappedBase64(IOSink sink, String value) {
   }
 }
 
-String? _resolvedPlainText(Message message, ProfileEmailEmlContent content) {
+String? _resolvedPlainText(Message message, EmailEmlContent content) {
   if (_hasValue(content.rfc822PlainText)) {
     return content.rfc822PlainText;
   }
@@ -866,7 +1184,7 @@ String? _resolvedPlainText(Message message, ProfileEmailEmlContent content) {
   return null;
 }
 
-String? _resolvedHtmlBody(Message message, ProfileEmailEmlContent content) {
+String? _resolvedHtmlBody(Message message, EmailEmlContent content) {
   if (_hasValue(content.rfc822HtmlBody)) {
     return content.rfc822HtmlBody;
   }
@@ -887,14 +1205,14 @@ bool _canUseStoredBodyForEml(Message message) {
   return message.hasRfc822BodyContent || deltaMsgId == null || deltaMsgId <= 0;
 }
 
-bool _hasResolvedBodyContent(Message message, ProfileEmailEmlContent content) {
+bool _hasResolvedBodyContent(Message message, EmailEmlContent content) {
   return _hasValue(_resolvedPlainText(message, content)) ||
       _hasValue(_resolvedHtmlBody(message, content));
 }
 
 bool _hasCompleteEmailContent(
   Message message,
-  ProfileEmailEmlContent content,
+  EmailEmlContent content,
   List<FileMetadataData> attachments,
 ) {
   if (!message.isEmailBacked) {
@@ -920,7 +1238,7 @@ bool _hasCompleteEmailContent(
 
 bool _hasBodylessExportableEmlContent(
   Message message,
-  ProfileEmailEmlContent content,
+  EmailEmlContent content,
   List<FileMetadataData> attachments,
 ) {
   return _hasValue(message.subject) ||
@@ -930,7 +1248,7 @@ bool _hasBodylessExportableEmlContent(
 
 bool _hasExportableEmlContent(
   Message message,
-  ProfileEmailEmlContent content,
+  EmailEmlContent content,
   List<FileMetadataData> attachments,
 ) {
   return _hasValue(_resolvedPlainText(message, content)) ||

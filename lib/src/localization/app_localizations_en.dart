@@ -2244,7 +2244,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String profileExportReadyMessage(Object label) {
-    return '$label export ready.';
+    return '$label export saved.';
   }
 
   @override
@@ -2264,8 +2264,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String profileExportIncompleteMessage(Object label) {
-    return 'Unable to create a complete $label export. Make sure all email content and attachments are available, then try again.';
+    return '$label export saved with warnings. Some email content or attachments were not included; see warnings.txt in the ZIP.';
   }
+
+  @override
+  String get profileMessageExportWarningTitle => 'Export messages';
+
+  @override
+  String get profileMessageExportWarningMessage =>
+      'Message exports are unencrypted and may be readable by other apps or cloud services.';
 
   @override
   String profileExportShareUnsupportedMessage(Object label, Object path) {
@@ -3319,14 +3326,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatsExportSuccess => 'Chat exported';
 
   @override
+  String get chatsExportIncomplete => 'Export saved with warnings';
+
+  @override
+  String get chatsExportIncompleteMessage =>
+      'Some email content or attachments were not included; see warnings.txt in the ZIP.';
+
+  @override
+  String get chatsExportTooLargeForDevice =>
+      'Export is too large to save on this device.';
+
+  @override
   String get chatsExportFailure => 'Unable to export chat';
 
   @override
-  String get chatExportWarningTitle => 'Export chat history?';
+  String get chatExportWarningTitle => 'Export chat history';
 
   @override
   String get chatExportWarningMessage =>
-      'Chat exports are unencrypted and may be readable by other apps or cloud services. Continue?';
+      'Chat exports are unencrypted and may be readable by other apps or cloud services.';
 
   @override
   String get chatsArchivedRestored => 'Chat restored';
@@ -3390,15 +3408,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatSelectionExportShareSubject => 'Axichat chats export';
 
   @override
-  String get chatSelectionExportReadyTitle => 'Export ready';
+  String get chatSelectionExportReadyTitle => 'Export saved';
 
   @override
   String chatSelectionExportReadyMessage(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Shared # chats',
-      one: 'Shared # chat',
+      other: 'Saved # chats',
+      one: 'Saved # chat',
     );
     return '$_temp0';
   }

@@ -2149,7 +2149,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String profileExportReadyMessage(Object label) {
-    return '$label 导出已准备好。';
+    return '$label 导出已保存。';
   }
 
   @override
@@ -2169,8 +2169,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String profileExportIncompleteMessage(Object label) {
-    return '无法创建完整的$label导出。请确保所有电子邮件内容和附件均可用，然后重试。';
+    return '$label导出已保存，但有警告。部分电子邮件内容或附件未包含在内；请查看 ZIP 中的 warnings.txt。';
   }
+
+  @override
+  String get profileMessageExportWarningTitle => '导出消息';
+
+  @override
+  String get profileMessageExportWarningMessage => '消息导出未加密，可能会被其他应用或云服务读取。';
 
   @override
   String profileExportShareUnsupportedMessage(Object label, Object path) {
@@ -3192,13 +3198,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatsExportSuccess => '聊天已导出';
 
   @override
+  String get chatsExportIncomplete => '导出已保存，但有警告';
+
+  @override
+  String get chatsExportIncompleteMessage =>
+      '部分电子邮件内容或附件未包含在内；请查看 ZIP 中的 warnings.txt。';
+
+  @override
+  String get chatsExportTooLargeForDevice => '导出文件太大，无法保存在此设备上。';
+
+  @override
   String get chatsExportFailure => '无法导出聊天';
 
   @override
-  String get chatExportWarningTitle => '导出聊天记录？';
+  String get chatExportWarningTitle => '导出聊天记录';
 
   @override
-  String get chatExportWarningMessage => '聊天导出未加密，可能会被其他应用或云服务读取。继续？';
+  String get chatExportWarningMessage => '聊天导出未加密，可能会被其他应用或云服务读取。';
 
   @override
   String get chatsArchivedRestored => '聊天已恢复';
@@ -3260,15 +3276,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSelectionExportShareSubject => 'Axichat 聊天导出';
 
   @override
-  String get chatSelectionExportReadyTitle => '导出就绪';
+  String get chatSelectionExportReadyTitle => '导出已保存';
 
   @override
   String chatSelectionExportReadyMessage(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '已分享 # 个聊天',
-      one: '已分享 # 个聊天',
+      other: '已保存 # 个聊天',
+      one: '已保存 # 个聊天',
     );
     return '$_temp0';
   }
@@ -9588,7 +9604,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String profileExportReadyMessage(Object label) {
-    return '$label 匯出已準備好。';
+    return '$label 匯出已儲存。';
   }
 
   @override
@@ -9608,8 +9624,14 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String profileExportIncompleteMessage(Object label) {
-    return '無法建立完整的$label匯出。請確保所有電子郵件內容和附件均可用，然後再試一次。';
+    return '$label匯出已儲存，但有警告。部分電子郵件內容或附件未包含在內；請查看 ZIP 中的 warnings.txt。';
   }
+
+  @override
+  String get profileMessageExportWarningTitle => '匯出訊息';
+
+  @override
+  String get profileMessageExportWarningMessage => '訊息匯出未加密，可能會被其他應用程式或雲端服務讀取。';
 
   @override
   String profileExportShareUnsupportedMessage(Object label, Object path) {
@@ -10632,13 +10654,23 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatsExportSuccess => '聊天已匯出';
 
   @override
+  String get chatsExportIncomplete => '匯出已儲存，但有警告';
+
+  @override
+  String get chatsExportIncompleteMessage =>
+      '部分電子郵件內容或附件未包含在內；請查看 ZIP 中的 warnings.txt。';
+
+  @override
+  String get chatsExportTooLargeForDevice => '匯出檔案太大，無法儲存在此裝置上。';
+
+  @override
   String get chatsExportFailure => '無法匯出聊天';
 
   @override
-  String get chatExportWarningTitle => '匯出聊天記錄？';
+  String get chatExportWarningTitle => '匯出聊天記錄';
 
   @override
-  String get chatExportWarningMessage => '聊天匯出未加密，可能會被其他應用程式或雲端服務讀取。繼續？';
+  String get chatExportWarningMessage => '聊天匯出未加密，可能會被其他應用程式或雲端服務讀取。';
 
   @override
   String get chatsArchivedRestored => '聊天已還原';
@@ -10700,15 +10732,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatSelectionExportShareSubject => 'Axichat 聊天匯出';
 
   @override
-  String get chatSelectionExportReadyTitle => '匯出完成';
+  String get chatSelectionExportReadyTitle => '匯出已儲存';
 
   @override
   String chatSelectionExportReadyMessage(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '已分享 # 個聊天',
-      one: '已分享 # 個聊天',
+      other: '已儲存 # 個聊天',
+      one: '已儲存 # 個聊天',
     );
     return '$_temp0';
   }

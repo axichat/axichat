@@ -2292,7 +2292,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String profileExportReadyMessage(Object label) {
-    return 'Export $label prêt.';
+    return 'Export $label enregistré.';
   }
 
   @override
@@ -2312,8 +2312,15 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String profileExportIncompleteMessage(Object label) {
-    return 'Impossible de créer un export $label complet. Assurez-vous que tout le contenu e-mail et toutes les pièces jointes sont disponibles, puis réessayez.';
+    return 'Export $label enregistré avec des avertissements. Certains contenus e-mail ou pièces jointes n\'ont pas été inclus; consultez warnings.txt dans le ZIP.';
   }
+
+  @override
+  String get profileMessageExportWarningTitle => 'Exporter les messages';
+
+  @override
+  String get profileMessageExportWarningMessage =>
+      'Les exports de messages ne sont pas chiffrés et peuvent être lus par d\'autres apps ou services cloud.';
 
   @override
   String profileExportShareUnsupportedMessage(Object label, Object path) {
@@ -3391,14 +3398,26 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatsExportSuccess => 'Chat exporté';
 
   @override
+  String get chatsExportIncomplete =>
+      'Export enregistré avec des avertissements';
+
+  @override
+  String get chatsExportIncompleteMessage =>
+      'Certains contenus e-mail ou pièces jointes n\'ont pas été inclus; consultez warnings.txt dans le ZIP.';
+
+  @override
+  String get chatsExportTooLargeForDevice =>
+      'L\'export est trop volumineux pour être enregistré sur cet appareil.';
+
+  @override
   String get chatsExportFailure => 'Impossible d’exporter le chat';
 
   @override
-  String get chatExportWarningTitle => 'Exporter l’historique du chat ?';
+  String get chatExportWarningTitle => 'Exporter l’historique du chat';
 
   @override
   String get chatExportWarningMessage =>
-      'Les exports de chat ne sont pas chiffrés et peuvent être lus par d\'autres apps ou services cloud. Continuer ?';
+      'Les exports de chat ne sont pas chiffrés et peuvent être lus par d\'autres apps ou services cloud.';
 
   @override
   String get chatsArchivedRestored => 'Chat restauré';
@@ -3464,15 +3483,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatSelectionExportShareSubject => 'Export de chats Axichat';
 
   @override
-  String get chatSelectionExportReadyTitle => 'Export prêt';
+  String get chatSelectionExportReadyTitle => 'Export enregistré';
 
   @override
   String chatSelectionExportReadyMessage(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# chats partagés',
-      one: '# chat partagé',
+      other: '# chats enregistrés',
+      one: '# chat enregistré',
     );
     return '$_temp0';
   }

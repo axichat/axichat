@@ -2281,7 +2281,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String profileExportReadyMessage(Object label) {
-    return 'Exportación de $label lista.';
+    return 'Exportación de $label guardada.';
   }
 
   @override
@@ -2301,8 +2301,15 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String profileExportIncompleteMessage(Object label) {
-    return 'No se pudo crear una exportación completa de $label. Asegúrate de que todo el contenido del correo y los archivos adjuntos estén disponibles, e inténtalo de nuevo.';
+    return 'Exportación de $label guardada con advertencias. Parte del contenido del correo o de los archivos adjuntos no se incluyó; consulta warnings.txt en el ZIP.';
   }
+
+  @override
+  String get profileMessageExportWarningTitle => 'Exportar mensajes';
+
+  @override
+  String get profileMessageExportWarningMessage =>
+      'Las exportaciones de mensajes no están cifradas y otras apps o servicios en la nube pueden leerlas.';
 
   @override
   String profileExportShareUnsupportedMessage(Object label, Object path) {
@@ -3377,14 +3384,25 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatsExportSuccess => 'Chat exportado';
 
   @override
+  String get chatsExportIncomplete => 'Exportación guardada con advertencias';
+
+  @override
+  String get chatsExportIncompleteMessage =>
+      'Parte del contenido del correo o de los archivos adjuntos no se incluyó; consulta warnings.txt en el ZIP.';
+
+  @override
+  String get chatsExportTooLargeForDevice =>
+      'La exportación es demasiado grande para guardarla en este dispositivo.';
+
+  @override
   String get chatsExportFailure => 'No se pudo exportar el chat';
 
   @override
-  String get chatExportWarningTitle => '¿Exportar historial del chat?';
+  String get chatExportWarningTitle => 'Exportar historial del chat';
 
   @override
   String get chatExportWarningMessage =>
-      'Las exportaciones de chat no están cifradas y otras apps o servicios en la nube pueden leerlas. ¿Continuar?';
+      'Las exportaciones de chat no están cifradas y otras apps o servicios en la nube pueden leerlas.';
 
   @override
   String get chatsArchivedRestored => 'Chat restaurado';
@@ -3450,15 +3468,15 @@ class AppLocalizationsEs extends AppLocalizations {
       'Exportación de chats de Axichat';
 
   @override
-  String get chatSelectionExportReadyTitle => 'Exportación lista';
+  String get chatSelectionExportReadyTitle => 'Exportación guardada';
 
   @override
   String chatSelectionExportReadyMessage(num count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# chats compartidos',
-      one: '# chat compartido',
+      other: '# chats guardados',
+      one: '# chat guardado',
     );
     return '$_temp0';
   }

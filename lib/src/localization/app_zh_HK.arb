@@ -835,7 +835,7 @@
       "label": {}
     }
   },
-  "profileExportReadyMessage": "{label} 匯出已準備好。",
+  "profileExportReadyMessage": "{label} 匯出已儲存。",
   "@profileExportReadyMessage": {
     "placeholders": {
       "label": {}
@@ -854,7 +854,9 @@
     }
   },
   "profileExportTooLargeForDeviceMessage": "{label} 匯出檔案太大，無法儲存在此裝置上。",
-  "profileExportIncompleteMessage": "無法建立完整的{label}匯出。請確保所有電子郵件內容和附件均可用，然後再試一次。",
+  "profileExportIncompleteMessage": "{label}匯出已儲存，但有警告。部分電子郵件內容或附件未包含在內；請查看 ZIP 中的 warnings.txt。",
+  "profileMessageExportWarningTitle": "匯出訊息",
+  "profileMessageExportWarningMessage": "訊息匯出未加密，可能會被其他應用程式或雲端服務讀取。",
   "profileExportShareUnsupportedMessage": "此平台不支援分享。{label} 匯出已儲存至 {path}。",
   "@profileExportShareUnsupportedMessage": {
     "placeholders": {
@@ -1238,9 +1240,12 @@
     }
   },
   "chatsExportSuccess": "聊天已匯出",
+  "chatsExportIncomplete": "匯出已儲存，但有警告",
+  "chatsExportIncompleteMessage": "部分電子郵件內容或附件未包含在內；請查看 ZIP 中的 warnings.txt。",
+  "chatsExportTooLargeForDevice": "匯出檔案太大，無法儲存在此裝置上。",
   "chatsExportFailure": "無法匯出聊天",
-  "chatExportWarningTitle": "匯出聊天記錄？",
-  "chatExportWarningMessage": "聊天匯出未加密，可能會被其他應用程式或雲端服務讀取。繼續？",
+  "chatExportWarningTitle": "匯出聊天記錄",
+  "chatExportWarningMessage": "聊天匯出未加密，可能會被其他應用程式或雲端服務讀取。",
   "chatsArchivedRestored": "聊天已還原",
   "chatsArchivedHint": "聊天已封存（個人檔案 → 已封存聊天）",
   "chatsVisibleNotice": "聊天已重新可見",
@@ -1263,8 +1268,8 @@
   "chatSelectionExportEmptyMessage": "選擇包含文字內容的聊天",
   "chatSelectionExportShareText": "來自 Axichat 的聊天匯出",
   "chatSelectionExportShareSubject": "Axichat 聊天匯出",
-  "chatSelectionExportReadyTitle": "匯出完成",
-  "chatSelectionExportReadyMessage": "{count, plural, one {已分享 # 個聊天} other {已分享 # 個聊天}}",
+  "chatSelectionExportReadyTitle": "匯出已儲存",
+  "chatSelectionExportReadyMessage": "{count, plural, one {已儲存 # 個聊天} other {已儲存 # 個聊天}}",
   "@chatSelectionExportReadyMessage": {
     "placeholders": {
       "count": {}

@@ -3,13 +3,12 @@
 
 import 'dart:io';
 
-import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/profile/utils/contact_exporter.dart';
-import 'package:axichat/src/profile/utils/profile_email_eml_exporter.dart';
-import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/chats/utils/email_eml_exporter.dart';
+import 'package:axichat/src/chats/utils/message_exporter.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -181,7 +180,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         ),
       );
       return result;
-    } on ProfileEmailEmlExportEmptyException {
+    } on EmailEmlExportEmptyException {
       emit(
         state.copyWith(
           status: RequestStatus.none,
@@ -190,7 +189,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         ),
       );
       return ProfileExportResult.empty(kind: kind);
-    } on ProfileEmailEmlExportIncompleteException catch (error) {
+    } on EmailEmlExportIncompleteException catch (error) {
       emit(
         state.copyWith(
           status: RequestStatus.none,
@@ -215,82 +214,49 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
   }
 
   Future<ProfileExportResult> _exportXmppMessageTranscript() async {
-    const int chatExportStart = 0;
-    const int chatExportEnd = 0;
-    final chats = await _xmppService.loadChats(
-      start: chatExportStart,
-      end: chatExportEnd,
-    );
-    final selectedChats = chats
-        .where((chat) => chat.transport == MessageTransport.xmpp)
-        .toList(growable: false);
-    if (selectedChats.isEmpty) {
-      return const ProfileExportResult.empty(
-        kind: ProfileExportKind.xmppMessages,
-      );
-    }
-    final exportResult = await ChatHistoryExporter.exportChats(
-      chats: selectedChats,
-      loadHistory: (jid) => _xmppService.loadCompleteChatHistory(jid: jid),
-      fileLabel: 'xmpp-messages',
-    );
-    if (!exportResult.hasContent || exportResult.file == null) {
-      return const ProfileExportResult.empty(
-        kind: ProfileExportKind.xmppMessages,
-      );
-    }
-    return ProfileExportResult.success(
+    final result = await _messageExporter().exportAllXmppMessages();
+    return _profileResultFromMessageExport(
       kind: ProfileExportKind.xmppMessages,
-      file: exportResult.file!,
-      itemCount: exportResult.messageCount,
+      result: result,
     );
   }
 
   Future<ProfileExportResult> _exportEmailEmlMessages() async {
-    const int chatExportStart = 0;
-    const int chatExportEnd = 0;
-    final chats = await _xmppService.loadChats(
-      start: chatExportStart,
-      end: chatExportEnd,
-    );
-    final selectedChats = chats
-        .where(
-          (chat) =>
-              chat.transport == MessageTransport.email || chat.isEmailBacked,
-        )
-        .toList(growable: false);
-    if (selectedChats.isEmpty) {
-      return const ProfileExportResult.empty(
-        kind: ProfileExportKind.emailMessages,
-      );
-    }
-    final exportResult = await ProfileEmailEmlExporter.exportMessages(
-      chats: selectedChats,
-      loadHistory: (jid) => _xmppService.loadCompleteChatHistory(jid: jid),
-      loadMessageAttachmentsForMessages:
-          _xmppService.loadMessageAttachmentsForMessages,
-      loadMessageAttachmentsForGroup:
-          _xmppService.loadMessageAttachmentsForGroup,
-      loadFileMetadataByIds: _xmppService.loadFileMetadataByIds,
-      loadEmailContent: _loadEmailEmlContent,
-      onProgress: _updateEmailExportProgress,
-    );
-    if (exportResult.warnings.isNotEmpty) {
-      return ProfileExportResult.incomplete(
-        kind: ProfileExportKind.emailMessages,
-        file: exportResult.file,
-        itemCount: exportResult.messageCount,
-        warnings: exportResult.warnings,
-      );
-    }
-    return ProfileExportResult.success(
+    final result = await _messageExporter().exportAllEmailMessages();
+    return _profileResultFromMessageExport(
       kind: ProfileExportKind.emailMessages,
-      file: exportResult.file,
-      itemCount: exportResult.messageCount,
+      result: result,
     );
   }
 
-  void _updateEmailExportProgress(ProfileEmailEmlExportProgress progress) {
+  MessageExporter _messageExporter() => MessageExporter(
+    xmppService: _xmppService,
+    emailService: _emailService,
+    onEmailProgress: _updateEmailExportProgress,
+  );
+
+  ProfileExportResult _profileResultFromMessageExport({
+    required ProfileExportKind kind,
+    required MessageExportResult result,
+  }) {
+    return switch (result.outcome) {
+      MessageExportOutcome.success => ProfileExportResult.success(
+        kind: kind,
+        file: result.file!,
+        itemCount: result.itemCount,
+      ),
+      MessageExportOutcome.empty => ProfileExportResult.empty(kind: kind),
+      MessageExportOutcome.incomplete => ProfileExportResult.incomplete(
+        kind: kind,
+        file: result.file,
+        itemCount: result.itemCount,
+        warnings: result.warnings,
+      ),
+      MessageExportOutcome.failure => ProfileExportResult.failure(kind: kind),
+    };
+  }
+
+  void _updateEmailExportProgress(EmailEmlExportProgress progress) {
     if (!state.isBusy || state.activeKind != ProfileExportKind.emailMessages) {
       return;
     }
@@ -299,96 +265,6 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         completedItems: progress.completedItems,
         totalItems: progress.totalItems,
       ),
-    );
-  }
-
-  Future<ProfileEmailEmlContent> _loadEmailEmlContent(Message message) async {
-    final emailService = _emailService;
-    if (emailService == null || !message.isEmailBacked) {
-      return const ProfileEmailEmlContent();
-    }
-    var warning = '';
-    void addWarning(String value) {
-      if (warning.isEmpty) {
-        warning = value;
-      }
-    }
-
-    var preparedMessage = message;
-    try {
-      await emailService.requestEmailContentPreparation(
-        message,
-        priority: EmailContentPreparationPriority.manual,
-      );
-    } on Exception {
-      addWarning('Full email content could not be prepared.');
-    }
-    try {
-      preparedMessage =
-          await _xmppService.loadMessageByStanzaId(message.stanzaID) ?? message;
-    } catch (_) {
-      // Keep the original row if a best-effort refresh is unavailable.
-    }
-
-    String? mimeHeaders;
-    try {
-      mimeHeaders = await emailService.getMessageRawHeadersForMessage(
-        preparedMessage,
-      );
-    } on Exception {
-      addWarning('MIME headers could not be exported.');
-    }
-
-    String? rfc822PlainText;
-    String? rfc822HtmlBody;
-    try {
-      final rfc822Body = await emailService.getMessageRfc822Body(
-        preparedMessage,
-      );
-      rfc822PlainText = rfc822Body?.plainText;
-      rfc822HtmlBody = rfc822Body?.htmlBody;
-    } on Exception {
-      addWarning('RFC822 body content could not be exported.');
-    }
-    final deltaMsgId = preparedMessage.deltaMsgId;
-    if (preparedMessage.hasRfc822BodyContent ||
-        deltaMsgId == null ||
-        deltaMsgId <= 0) {
-      rfc822PlainText ??= preparedMessage.body;
-      rfc822HtmlBody ??= preparedMessage.htmlBody;
-    }
-
-    String? fullHtml;
-    final hasRfc822Body =
-        rfc822PlainText?.trim().isNotEmpty == true ||
-        rfc822HtmlBody?.trim().isNotEmpty == true;
-    final hasStoredHydratedBody =
-        preparedMessage.hasRfc822BodyContent &&
-        (preparedMessage.body?.trim().isNotEmpty == true ||
-            preparedMessage.htmlBody?.trim().isNotEmpty == true);
-    final bodyUnavailable = preparedMessage.rfc822BodyContentUnavailable;
-    if (!hasRfc822Body && !hasStoredHydratedBody && !bodyUnavailable) {
-      try {
-        fullHtml = await emailService.getMessageFullHtml(preparedMessage);
-      } on Exception {
-        addWarning('Full HTML content could not be exported.');
-      }
-    }
-
-    if (!hasRfc822Body &&
-        !hasStoredHydratedBody &&
-        (fullHtml?.trim().isNotEmpty != true) &&
-        preparedMessage.rfc822BodyStatus.isPendingDownload) {
-      addWarning('Full email body was not available.');
-    }
-
-    return ProfileEmailEmlContent(
-      mimeHeaders: mimeHeaders,
-      rfc822PlainText: rfc822PlainText,
-      rfc822HtmlBody: rfc822HtmlBody,
-      fullHtml: fullHtml,
-      bodyUnavailable: bodyUnavailable,
-      warning: warning.isEmpty ? null : warning,
     );
   }
 
