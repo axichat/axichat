@@ -44,6 +44,7 @@ class HomeSearchFilter extends Equatable {
 
 List<HomeSearchFilter> chatsSearchFilters(AppLocalizations l10n) => [
   HomeSearchFilter(id: SearchFilterId.all, label: l10n.chatsFilterAll),
+  HomeSearchFilter(id: SearchFilterId.favorites, label: l10n.commonFavorite),
   HomeSearchFilter(
     id: SearchFilterId.contacts,
     label: l10n.chatsFilterContacts,

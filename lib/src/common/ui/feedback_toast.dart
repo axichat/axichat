@@ -363,29 +363,42 @@ class _FeedbackToastState extends State<FeedbackToast> {
               )) ??
         effectiveToastTheme.backgroundColor ??
         theme.colorScheme.background;
+    final bool compactWidth = FeedbackToast._isCompactToastWidth(
+      MediaQuery.sizeOf(context).width,
+    );
     final effectivePadding =
         widget.padding ??
-        EdgeInsets.fromLTRB(
-          context.spacing.m,
-          context.spacing.xs,
-          context.spacing.l,
-          context.spacing.xs,
-        );
+        (compactWidth
+            ? EdgeInsets.fromLTRB(
+                context.spacing.m,
+                context.spacing.xs,
+                context.spacing.l,
+                context.spacing.xs,
+              )
+            : EdgeInsets.symmetric(
+                horizontal: context.spacing.m,
+                vertical: context.spacing.s,
+              ));
     final effectiveCrossAxisAlignment =
         widget.crossAxisAlignment ??
         effectiveToastTheme.crossAxisAlignment ??
         CrossAxisAlignment.center;
-    final effectiveCloseIconPosition =
-        widget.closeIconPosition ??
-        effectiveToastTheme.closeIconPosition ??
-        ShadPosition(top: context.spacing.xs, right: context.spacing.xs);
     final effectiveShowCloseIconOnlyWhenHovered =
         widget.showCloseIconOnlyWhenHovered ??
         effectiveToastTheme.showCloseIconOnlyWhenHovered ??
         true;
-    final bool compactWidth = FeedbackToast._isCompactToastWidth(
-      MediaQuery.sizeOf(context).width,
-    );
+    final desktopCloseIcon = !compactWidth
+        ? ValueListenableBuilder(
+            valueListenable: hovered,
+            builder: (context, hovered, child) {
+              if (!effectiveShowCloseIconOnlyWhenHovered) {
+                return child!;
+              }
+              return Visibility.maintain(visible: hovered, child: child!);
+            },
+            child: effectiveCloseIcon,
+          )
+        : null;
 
     return MouseRegion(
       onEnter: (_) => hovered.value = true,
@@ -427,77 +440,64 @@ class _FeedbackToastState extends State<FeedbackToast> {
                 boxShadow: effectiveShadows,
                 color: effectiveBackgroundColor,
               ),
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: effectivePadding,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (compactWidth) ...[
-                          Align(
-                            alignment: Alignment.center,
-                            child: _CompactToastDismissHint(
-                              color: effectiveForegroundColor,
-                            ),
-                          ),
-                          SizedBox(height: context.spacing.xxs),
-                        ],
-                        Row(
-                          textDirection: widget.textDirection,
-                          mainAxisSize: compactWidth
-                              ? MainAxisSize.max
-                              : MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: effectiveCrossAxisAlignment,
-                          children: [
-                            Flexible(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (widget.title != null)
-                                    DefaultTextStyle(
-                                      style: effectiveTitleStyle,
-                                      child: widget.title!,
-                                    ),
-                                  if (widget.description != null)
-                                    DefaultTextStyle(
-                                      style: effectiveDescriptionStyle,
-                                      child: widget.description!,
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (widget.action != null)
-                              Padding(
-                                padding: effectiveActionPadding,
-                                child: widget.action,
-                              ),
-                          ],
+              child: Padding(
+                padding: effectivePadding,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (compactWidth) ...[
+                      Align(
+                        alignment: Alignment.center,
+                        child: _CompactToastDismissHint(
+                          color: effectiveForegroundColor,
                         ),
-                        if (compactWidth) ...[
-                          SizedBox(height: context.spacing.xxs),
-                          SizedBox(height: context.sizing.inputSuffixIconSize),
-                        ],
+                      ),
+                      SizedBox(height: context.spacing.xxs),
+                    ],
+                    Row(
+                      textDirection: widget.textDirection,
+                      mainAxisSize: compactWidth
+                          ? MainAxisSize.max
+                          : MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: effectiveCrossAxisAlignment,
+                      children: [
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (widget.title != null)
+                                DefaultTextStyle(
+                                  style: effectiveTitleStyle,
+                                  child: widget.title!,
+                                ),
+                              if (widget.description != null)
+                                DefaultTextStyle(
+                                  style: effectiveDescriptionStyle,
+                                  child: widget.description!,
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (widget.action != null)
+                          Padding(
+                            padding: effectiveActionPadding,
+                            child: widget.action,
+                          ),
+                        if (desktopCloseIcon != null)
+                          Padding(
+                            padding: EdgeInsets.only(left: context.spacing.s),
+                            child: desktopCloseIcon,
+                          ),
                       ],
                     ),
-                  ),
-                  if (!compactWidth)
-                    ValueListenableBuilder(
-                      valueListenable: hovered,
-                      builder: (context, hovered, child) {
-                        if (!effectiveShowCloseIconOnlyWhenHovered) {
-                          return child!;
-                        }
-                        return Visibility.maintain(
-                          visible: hovered,
-                          child: child!,
-                        );
-                      },
-                      child: effectiveCloseIcon,
-                    ).positionedWith(effectiveCloseIconPosition),
-                ],
+                    if (compactWidth) ...[
+                      SizedBox(height: context.spacing.xxs),
+                      SizedBox(height: context.sizing.inputSuffixIconSize),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
