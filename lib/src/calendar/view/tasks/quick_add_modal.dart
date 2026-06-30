@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/env.dart';
@@ -938,7 +937,6 @@ class _QuickAddModalContent extends StatelessWidget {
                     validator: titleValidator,
                     autovalidateMode: titleAutovalidateMode,
                     onChanged: onTaskNameChanged,
-                    onSubmit: onTaskSubmit,
                   ),
                   SizedBox(height: spacing.m),
                   _QuickAddPriorityToggles(
@@ -1080,7 +1078,6 @@ class _QuickAddTaskNameField extends StatelessWidget {
     required this.validator,
     required this.autovalidateMode,
     required this.onChanged,
-    required this.onSubmit,
   });
 
   final TextEditingController controller;
@@ -1089,7 +1086,6 @@ class _QuickAddTaskNameField extends StatelessWidget {
   final FormFieldValidator<String> validator;
   final AutovalidateMode autovalidateMode;
   final ValueChanged<String> onChanged;
-  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -1098,26 +1094,15 @@ class _QuickAddTaskNameField extends StatelessWidget {
       horizontal: context.spacing.m,
       vertical: context.spacing.s,
     );
-    final field = Focus(
-      onKeyEvent: (node, event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.enter) {
-          onSubmit();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: TaskTitleField(
-        controller: controller,
-        focusNode: focusNode,
-        autofocus: false,
-        onChanged: onChanged,
-        validator: validator,
-        autovalidateMode: autovalidateMode,
-        onSubmitted: onSubmit,
-        hintText: l10n.calendarTaskNameHint,
-        textInputAction: TextInputAction.done,
-      ),
+    final field = TaskTitleField(
+      controller: controller,
+      focusNode: focusNode,
+      autofocus: false,
+      onChanged: onChanged,
+      validator: validator,
+      autovalidateMode: autovalidateMode,
+      hintText: l10n.calendarTaskNameHint,
+      textInputAction: TextInputAction.done,
     );
 
     final suggestionField = LocationInlineSuggestion(
@@ -1306,7 +1291,6 @@ class _QuickAddActions extends StatelessWidget {
             onPressed: disabled ? null : onSubmit,
             isBusy: isSubmitting,
             widthBehavior: AxiButtonWidth.expand,
-            showEnterKeyIndicator: true,
           ),
         ),
       ],

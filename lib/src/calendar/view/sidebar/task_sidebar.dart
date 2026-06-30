@@ -1052,9 +1052,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         quickTaskValidator: _validateQuickTaskTitle,
                         quickTaskAutovalidateMode: _quickTaskAutovalidateMode,
                         onQuickTaskChanged: _handleQuickTaskInputChanged,
-                        onQuickTaskSubmitted: () {
-                          _addTask();
-                        },
                         draftController: _draftController,
                         onImportantChanged: _onUserImportantChanged,
                         onUrgentChanged: _onUserUrgentChanged,
@@ -4467,7 +4464,6 @@ class _AddTaskSection extends StatelessWidget {
     required this.quickTaskValidator,
     required this.quickTaskAutovalidateMode,
     required this.onQuickTaskChanged,
-    required this.onQuickTaskSubmitted,
     required this.draftController,
     required this.onImportantChanged,
     required this.onUrgentChanged,
@@ -4510,7 +4506,6 @@ class _AddTaskSection extends StatelessWidget {
   final FormFieldValidator<String> quickTaskValidator;
   final AutovalidateMode quickTaskAutovalidateMode;
   final ValueChanged<String> onQuickTaskChanged;
-  final VoidCallback onQuickTaskSubmitted;
   final TaskDraftController draftController;
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
@@ -4623,7 +4618,6 @@ class _AddTaskSection extends StatelessWidget {
                     focusNode: titleFocusNode,
                     helper: locationHelper,
                     onChanged: onQuickTaskChanged,
-                    onSubmitted: onQuickTaskSubmitted,
                     validator: quickTaskValidator,
                     autovalidateMode: quickTaskAutovalidateMode,
                   ),
@@ -4732,7 +4726,6 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.quickTaskValidator,
     required this.quickTaskAutovalidateMode,
     required this.onQuickTaskChanged,
-    required this.onQuickTaskSubmitted,
     required this.draftController,
     required this.onImportantChanged,
     required this.onUrgentChanged,
@@ -4798,7 +4791,6 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final FormFieldValidator<String> quickTaskValidator;
   final AutovalidateMode quickTaskAutovalidateMode;
   final ValueChanged<String> onQuickTaskChanged;
-  final VoidCallback onQuickTaskSubmitted;
   final TaskDraftController draftController;
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onUrgentChanged;
@@ -4881,7 +4873,6 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             quickTaskValidator: quickTaskValidator,
             quickTaskAutovalidateMode: quickTaskAutovalidateMode,
             onQuickTaskChanged: onQuickTaskChanged,
-            onQuickTaskSubmitted: onQuickTaskSubmitted,
             draftController: draftController,
             onImportantChanged: onImportantChanged,
             onUrgentChanged: onUrgentChanged,
@@ -6185,7 +6176,6 @@ class _QuickTaskInput extends StatelessWidget {
     required this.focusNode,
     required this.helper,
     required this.onChanged,
-    required this.onSubmitted,
     required this.validator,
     required this.autovalidateMode,
   });
@@ -6194,7 +6184,6 @@ class _QuickTaskInput extends StatelessWidget {
   final FocusNode focusNode;
   final LocationAutocompleteHelper helper;
   final ValueChanged<String> onChanged;
-  final VoidCallback onSubmitted;
   final FormFieldValidator<String> validator;
   final AutovalidateMode autovalidateMode;
 
@@ -6212,7 +6201,6 @@ class _QuickTaskInput extends StatelessWidget {
       textCapitalization: TextCapitalization.sentences,
       textInputAction: TextInputAction.done,
       onChanged: onChanged,
-      onFieldSubmitted: (_) => onSubmitted(),
       contentPadding: padding,
       validator: validator,
       autovalidateMode: autovalidateMode,
@@ -6774,7 +6762,6 @@ class _AddTaskButton extends StatelessWidget {
         widthBehavior: AxiButtonWidth.expand,
         onPressed: enabled && !loading ? onPressed : null,
         isBusy: loading,
-        showEnterKeyIndicator: true,
       ),
     );
   }
