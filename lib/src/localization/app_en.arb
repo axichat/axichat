@@ -561,7 +561,7 @@
   "calendarSelectionUnsavedChangesTitle": "Pending selection changes",
   "calendarSelectionUnsavedChangesMessage": "Apply changes before leaving selection mode?",
   "calendarSelectionDiscardChanges": "Discard",
-  "calendarExportReady": "Export ready to share.",
+  "calendarExportReady": "Export saved.",
   "calendarExportFailed": "Failed to export selected tasks: {error}",
   "@calendarExportFailed": {
     "placeholders": {
@@ -2418,7 +2418,7 @@
       }
     }
   },
-  "calendarTransferExportReady": "Export ready to share.",
+  "calendarTransferExportReady": "Export saved.",
   "calendarTransferExportFailed": "Failed to export calendar: {error}",
   "@calendarTransferExportFailed": {
     "placeholders": {

@@ -18,7 +18,7 @@ import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
-import 'package:axichat/src/calendar/interop/calendar_share.dart';
+import 'package:axichat/src/calendar/interop/calendar_export_saver.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_transfer_sheet.dart';
@@ -268,21 +268,10 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
           ? await _transferService.exportModel(model: model)
           : await _transferService.exportIcs(model: model);
       if (!mounted) return;
-      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
-        context: context,
-        file: file,
-        subject: l10n.calendarTransferExportSubject,
-        text: l10n.calendarTransferExportText(format.label),
-      );
+      final savePath = await saveCalendarExport(file: file);
+      if (savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) return;
-      FeedbackSystem.showSuccess(
-        context,
-        calendarShareSuccessMessage(
-          outcome: shareOutcome,
-          filePath: file.path,
-          sharedText: l10n.calendarTransferExportReady,
-        ),
-      );
+      FeedbackSystem.showSuccess(context, l10n.calendarTransferExportReady);
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(

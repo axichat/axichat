@@ -1282,7 +1282,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get calendarSelectionDiscardChanges => '放弃';
 
   @override
-  String get calendarExportReady => '导出已准备好分享。';
+  String get calendarExportReady => '导出已保存。';
 
   @override
   String calendarExportFailed(Object error) {
@@ -5294,7 +5294,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get calendarTransferExportReady => '导出已准备好分享。';
+  String get calendarTransferExportReady => '导出已保存。';
 
   @override
   String calendarTransferExportFailed(String error) {
@@ -8721,7 +8721,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get calendarSelectionDiscardChanges => '放棄';
 
   @override
-  String get calendarExportReady => '匯出可供分享。';
+  String get calendarExportReady => '匯出已儲存。';
 
   @override
   String calendarExportFailed(Object error) {
@@ -12735,7 +12735,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
-  String get calendarTransferExportReady => '匯出已準備好分享。';
+  String get calendarTransferExportReady => '匯出已儲存。';
 
   @override
   String calendarTransferExportFailed(String error) {

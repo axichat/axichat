@@ -461,7 +461,7 @@
   "calendarSelectionUnsavedChangesTitle": "Ausstehende Auswahländerungen",
   "calendarSelectionUnsavedChangesMessage": "Änderungen anwenden, bevor du den Auswahlmodus verlässt?",
   "calendarSelectionDiscardChanges": "Verwerfen",
-  "calendarExportReady": "Export bereit zum Teilen.",
+  "calendarExportReady": "Export gespeichert.",
   "calendarExportFailed": "Ausgewählte Aufgaben konnten nicht exportiert werden: {error}",
   "commonBack": "Zurück",
   "composeTitle": "Verfassen",
@@ -2239,7 +2239,7 @@
       }
     }
   },
-  "calendarTransferExportReady": "Export bereit zum Teilen.",
+  "calendarTransferExportReady": "Export gespeichert.",
   "calendarTransferExportFailed": "Kalenderexport fehlgeschlagen: {error}",
   "@calendarTransferExportFailed": {
     "placeholders": {

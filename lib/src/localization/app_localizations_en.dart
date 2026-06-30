@@ -1343,7 +1343,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calendarSelectionDiscardChanges => 'Discard';
 
   @override
-  String get calendarExportReady => 'Export ready to share.';
+  String get calendarExportReady => 'Export saved.';
 
   @override
   String calendarExportFailed(Object error) {
@@ -5502,7 +5502,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get calendarTransferExportReady => 'Export ready to share.';
+  String get calendarTransferExportReady => 'Export saved.';
 
   @override
   String calendarTransferExportFailed(String error) {

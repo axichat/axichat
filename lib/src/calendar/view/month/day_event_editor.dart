@@ -10,7 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/reminders/alarm_reminder_bridge.dart';
-import 'package:axichat/src/calendar/interop/calendar_share.dart';
+import 'package:axichat/src/calendar/interop/calendar_export_saver.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/interop/calendar_ics_meta_utils.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_attachments_field.dart';
@@ -441,30 +441,13 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
             modifiedAt: DateTime.now(),
           );
     final l10n = context.l10n;
-    final String trimmedTitle = draft.title.trim();
-    final String subject = trimmedTitle.isEmpty
-        ? l10n.calendarExportFormatIcsTitle
-        : trimmedTitle;
-    final String shareText = '$subject (${l10n.calendarExportFormatIcsTitle})';
-
     try {
       final file = await _transferService.exportDayEventIcs(event: event);
       if (!mounted) return;
-      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
-        context: context,
-        file: file,
-        subject: subject,
-        text: shareText,
-      );
+      final savePath = await saveCalendarExport(file: file);
+      if (savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) return;
-      FeedbackSystem.showSuccess(
-        context,
-        calendarShareSuccessMessage(
-          outcome: shareOutcome,
-          filePath: file.path,
-          sharedText: l10n.calendarExportReady,
-        ),
-      );
+      FeedbackSystem.showSuccess(context, l10n.calendarExportReady);
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(context, l10n.calendarExportFailed('$error'));

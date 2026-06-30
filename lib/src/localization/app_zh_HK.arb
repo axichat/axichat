@@ -461,7 +461,7 @@
   "calendarSelectionUnsavedChangesTitle": "待處理的選取變更",
   "calendarSelectionUnsavedChangesMessage": "離開選取模式前套用變更？",
   "calendarSelectionDiscardChanges": "放棄",
-  "calendarExportReady": "匯出可供分享。",
+  "calendarExportReady": "匯出已儲存。",
   "calendarExportFailed": "匯出所選任務失敗：{error}",
   "commonBack": "返回",
   "composeTitle": "撰寫",
@@ -2232,7 +2232,7 @@
       }
     }
   },
-  "calendarTransferExportReady": "匯出已準備好分享。",
+  "calendarTransferExportReady": "匯出已儲存。",
   "calendarTransferExportFailed": "日曆匯出失敗：{error}",
   "@calendarTransferExportFailed": {
     "placeholders": {

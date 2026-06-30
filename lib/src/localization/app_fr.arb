@@ -462,7 +462,7 @@
   "calendarSelectionUnsavedChangesTitle": "Modifications de sélection en attente",
   "calendarSelectionUnsavedChangesMessage": "Appliquer les modifications avant de quitter le mode sélection ?",
   "calendarSelectionDiscardChanges": "Ignorer",
-  "calendarExportReady": "Export prêt à être partagé.",
+  "calendarExportReady": "Export enregistré.",
   "calendarExportFailed": "Échec de l’export des tâches sélectionnées : {error}",
   "commonBack": "Retour",
   "composeTitle": "Composer",
@@ -2235,7 +2235,7 @@
       }
     }
   },
-  "calendarTransferExportReady": "Export prêt à être partagé.",
+  "calendarTransferExportReady": "Export enregistré.",
   "calendarTransferExportFailed": "Échec de l’exportation du calendrier : {error}",
   "@calendarTransferExportFailed": {
     "placeholders": {

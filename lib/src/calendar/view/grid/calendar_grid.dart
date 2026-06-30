@@ -15,7 +15,7 @@ import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
-import 'package:axichat/src/calendar/interop/calendar_share.dart';
+import 'package:axichat/src/calendar/interop/calendar_export_saver.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/view/tasks/location_autocomplete.dart';
 import 'package:axichat/src/calendar/models/recurrence_utils.dart';
@@ -1138,33 +1138,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   Future<void> _exportTaskIcs(CalendarTask task) async {
     final l10n = context.l10n;
-    final String trimmedTitle = task.title.trim();
-    final String subject = trimmedTitle.isEmpty
-        ? l10n.calendarExportFormatIcsTitle
-        : trimmedTitle;
-    final String shareText = '$subject (${l10n.calendarExportFormatIcsTitle})';
     try {
       final file = await _transferService.exportTaskIcs(task: task);
       if (!mounted) {
         return;
       }
-      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
-        context: context,
-        file: file,
-        subject: subject,
-        text: shareText,
-      );
+      final savePath = await saveCalendarExport(file: file);
+      if (savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) {
         return;
       }
-      FeedbackSystem.showSuccess(
-        context,
-        calendarShareSuccessMessage(
-          outcome: shareOutcome,
-          filePath: file.path,
-          sharedText: l10n.calendarExportReady,
-        ),
-      );
+      FeedbackSystem.showSuccess(context, l10n.calendarExportReady);
     } catch (error) {
       if (!mounted) {
         return;

@@ -461,7 +461,7 @@
   "calendarSelectionUnsavedChangesTitle": "待处理的选择更改",
   "calendarSelectionUnsavedChangesMessage": "离开选择模式前应用更改？",
   "calendarSelectionDiscardChanges": "放弃",
-  "calendarExportReady": "导出已准备好分享。",
+  "calendarExportReady": "导出已保存。",
   "calendarExportFailed": "无法导出所选任务：{error}",
   "commonBack": "返回",
   "composeTitle": "撰写",
@@ -2239,7 +2239,7 @@
       }
     }
   },
-  "calendarTransferExportReady": "导出已准备好分享。",
+  "calendarTransferExportReady": "导出已保存。",
   "calendarTransferExportFailed": "日历导出失败：{error}",
   "@calendarTransferExportFailed": {
     "placeholders": {

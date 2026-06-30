@@ -462,7 +462,7 @@
   "calendarSelectionUnsavedChangesTitle": "Cambios de selección pendientes",
   "calendarSelectionUnsavedChangesMessage": "¿Aplicar cambios antes de salir del modo de selección?",
   "calendarSelectionDiscardChanges": "Descartar",
-  "calendarExportReady": "Exportación lista para compartir.",
+  "calendarExportReady": "Exportación guardada.",
   "calendarExportFailed": "No se pudo exportar las tareas seleccionadas: {error}",
   "commonBack": "Atrás",
   "composeTitle": "Redactar",
@@ -2235,7 +2235,7 @@
       }
     }
   },
-  "calendarTransferExportReady": "Exportación lista para compartir.",
+  "calendarTransferExportReady": "Exportación guardada.",
   "calendarTransferExportFailed": "Error al exportar el calendario: {error}",
   "@calendarTransferExportFailed": {
     "placeholders": {

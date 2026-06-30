@@ -10,7 +10,7 @@ import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/interop/calendar_ics_meta_utils.dart';
-import 'package:axichat/src/calendar/interop/calendar_share.dart';
+import 'package:axichat/src/calendar/interop/calendar_export_saver.dart';
 import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
@@ -1255,21 +1255,10 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         fileNamePrefix: l10n.calendarExportTasksFilePrefix,
       );
       if (!mounted) return;
-      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
-        context: context,
-        file: file,
-        subject: l10n.calendarExportSelected,
-        text: '${l10n.calendarExportSelected} (${format.label})',
-      );
+      final savePath = await saveCalendarExport(file: file);
+      if (savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) return;
-      FeedbackSystem.showSuccess(
-        context,
-        calendarShareSuccessMessage(
-          outcome: shareOutcome,
-          filePath: file.path,
-          sharedText: l10n.calendarExportReady,
-        ),
-      );
+      FeedbackSystem.showSuccess(context, l10n.calendarExportReady);
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(context, l10n.calendarExportFailed('$error'));
@@ -1280,26 +1269,11 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final l10n = context.l10n;
     try {
       final File file = await _transferService.exportTaskIcs(task: task);
-      final String trimmedTitle = task.title.trim();
-      final String subject = trimmedTitle.isEmpty
-          ? l10n.calendarExportFormatIcsTitle
-          : trimmedTitle;
       if (!mounted) return;
-      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
-        context: context,
-        file: file,
-        subject: subject,
-        text: '$subject (${l10n.calendarExportFormatIcsTitle})',
-      );
+      final savePath = await saveCalendarExport(file: file);
+      if (savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) return;
-      FeedbackSystem.showSuccess(
-        context,
-        calendarShareSuccessMessage(
-          outcome: shareOutcome,
-          filePath: file.path,
-          sharedText: l10n.calendarExportReady,
-        ),
-      );
+      FeedbackSystem.showSuccess(context, l10n.calendarExportReady);
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(context, l10n.calendarExportFailed('$error'));
