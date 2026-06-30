@@ -16,9 +16,8 @@ class TaskChecklist extends StatefulWidget {
   const TaskChecklist({
     super.key,
     required this.controller,
-    this.label = 'Checklist',
-    this.addPlaceholder =
-        'Add checklist item', // Note: overridden by callers with l10n
+    this.label,
+    this.addPlaceholder,
     this.headerSize = TaskSectionLabelSize.medium,
     this.showDivider = true,
     this.showHeader = true,
@@ -27,8 +26,8 @@ class TaskChecklist extends StatefulWidget {
   });
 
   final TaskChecklistController controller;
-  final String label;
-  final String addPlaceholder;
+  final String? label;
+  final String? addPlaceholder;
   final TaskSectionLabelSize headerSize;
   final bool showDivider;
   final bool showHeader;
@@ -142,7 +141,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
             if (widget.showDivider) const TaskSectionDivider(),
             if (widget.showHeader)
               TaskSectionHeader(
-                title: widget.label,
+                title: widget.label ?? context.l10n.calendarChecklistTitle,
                 size: widget.headerSize,
                 trailing: total > 0
                     ? Text('$completed / $total', style: textTheme.muted)
@@ -205,7 +204,9 @@ class _TaskChecklistState extends State<TaskChecklist> {
               padding: EdgeInsets.only(top: context.spacing.xxs),
               child: _ChecklistAddField(
                 controller: _newItemController,
-                placeholder: widget.addPlaceholder,
+                placeholder:
+                    widget.addPlaceholder ??
+                    context.l10n.calendarAddChecklistItem,
                 focusNode: _newItemFocusNode,
                 inputVariant: widget.inputVariant,
                 onSubmitted: () {

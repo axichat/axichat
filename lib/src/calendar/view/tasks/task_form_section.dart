@@ -234,20 +234,20 @@ class TaskCompletionToggle extends StatelessWidget {
     this.onChanged,
     this.isIndeterminate = false,
     this.enabled = true,
-    this.label = 'Mark as completed',
+    this.label,
   });
 
   final bool value;
   final ValueChanged<bool>? onChanged;
   final bool isIndeterminate;
   final bool enabled;
-  final String label;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     final ValueChanged<bool>? effectiveOnChanged = enabled ? onChanged : null;
     return PriorityCheckboxTile(
-      label: label,
+      label: label ?? context.l10n.calendarTaskMarkComplete,
       value: value,
       color: calendarPrimaryColor,
       isIndeterminate: isIndeterminate,

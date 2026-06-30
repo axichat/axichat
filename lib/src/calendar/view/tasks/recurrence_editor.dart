@@ -17,83 +17,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const String _recurrenceFrequencyYearlyLabel = 'Yearly';
-const String _recurrenceIntervalYearLabel = 'year(s)';
-const String _recurrenceRepeatEveryLabel = 'Repeat every';
-const String _recurrenceAdvancedLabel = 'Advanced rules';
-const String _recurrenceAdvancedSummary = 'Advanced rules applied';
-const String _recurrenceAdvancedActiveLabel = 'Active';
-const String _recurrenceAdvancedAddTooltip = 'Add';
-const String _recurrenceAdvancedByDayLabel = 'Weekday rules';
-const String _recurrenceAdvancedByDayHelper =
-    'Add weekday rules like every Monday or 1st Friday.';
-const String _recurrenceAdvancedMonthsLabel = 'Months';
-const String _recurrenceAdvancedMonthDaysLabel = 'Month days';
-const String _recurrenceAdvancedYearDaysLabel = 'Year days';
-const String _recurrenceAdvancedWeekNumbersLabel = 'Week numbers';
-const String _recurrenceAdvancedSetPositionsLabel = 'Set positions';
-const String _recurrenceAdvancedRDatesLabel = 'Additional dates';
-const String _recurrenceAdvancedExDatesLabel = 'Excluded dates';
-const String _recurrenceAdvancedNumberHint = 'e.g. 1, 15, -1';
-const String _recurrenceAdvancedMonthDaysHint = _recurrenceAdvancedNumberHint;
-const String _recurrenceAdvancedYearDaysHint = 'e.g. 1, 120, -1';
-const String _recurrenceAdvancedWeekNumbersHint = 'e.g. 1, 20, -1';
-const String _recurrenceAdvancedSetPositionsHint = 'e.g. 1, -1';
-const String _recurrenceAdvancedRDatesHint = 'Pick a date to add';
-const String _recurrenceAdvancedExDatesHint = 'Pick a date to exclude';
-const String _recurrenceAdvancedTimeSummaryLabel = 'Time filters';
-const String _recurrenceTimeHoursLabel = 'Hours';
-const String _recurrenceTimeMinutesLabel = 'Minutes';
-const String _recurrenceTimeSecondsLabel = 'Seconds';
 const String _recurrenceLabelSpacer = ' ';
 const String _recurrenceValueSeparator = ', ';
 const String _recurrenceValuePadChar = '0';
 const String _recurrenceEveryKey = 'every';
-const String _recurrenceEndHeaderLabel = 'Until';
-const String _recurrenceEndModeNeverLabel = 'Never';
-const String _recurrenceEndModeUntilLabel = 'On date';
-const String _recurrenceEndModeCountLabel = 'After';
-const String _recurrenceEndModeDerivedUntilLabel = 'Ends on';
-const String _recurrenceEndModeDerivedCountLabel = '≈';
-const String _recurrenceEndModeDerivedCountSuffix = 'occurrences';
 const String _recurrenceNumberSplitPattern = r'[,\s]+';
-const String _recurrenceMonthLabelJan = 'Jan';
-const String _recurrenceMonthLabelFeb = 'Feb';
-const String _recurrenceMonthLabelMar = 'Mar';
-const String _recurrenceMonthLabelApr = 'Apr';
-const String _recurrenceMonthLabelMay = 'May';
-const String _recurrenceMonthLabelJun = 'Jun';
-const String _recurrenceMonthLabelJul = 'Jul';
-const String _recurrenceMonthLabelAug = 'Aug';
-const String _recurrenceMonthLabelSep = 'Sep';
-const String _recurrenceMonthLabelOct = 'Oct';
-const String _recurrenceMonthLabelNov = 'Nov';
-const String _recurrenceMonthLabelDec = 'Dec';
-const String _recurrenceOrdinalEveryLabel = 'Every';
-const String _recurrenceOrdinalFirstLabel = '1st';
-const String _recurrenceOrdinalSecondLabel = '2nd';
-const String _recurrenceOrdinalThirdLabel = '3rd';
-const String _recurrenceOrdinalFourthLabel = '4th';
-const String _recurrenceOrdinalFifthLabel = '5th';
-const String _recurrenceOrdinalLastLabel = 'Last';
-const String _recurrenceOrdinalSecondLastLabel = '2nd last';
-const String _recurrenceOrdinalThirdLastLabel = '3rd last';
-const String _recurrenceOrdinalFourthLastLabel = '4th last';
-const String _recurrenceOrdinalFifthLastLabel = '5th last';
-const String _recurrenceWeekdayShortMon = 'Mon';
-const String _recurrenceWeekdayShortTue = 'Tue';
-const String _recurrenceWeekdayShortWed = 'Wed';
-const String _recurrenceWeekdayShortThu = 'Thu';
-const String _recurrenceWeekdayShortFri = 'Fri';
-const String _recurrenceWeekdayShortSat = 'Sat';
-const String _recurrenceWeekdayShortSun = 'Sun';
-const String _recurrenceWeekdayLongMonday = 'Monday';
-const String _recurrenceWeekdayLongTuesday = 'Tuesday';
-const String _recurrenceWeekdayLongWednesday = 'Wednesday';
-const String _recurrenceWeekdayLongThursday = 'Thursday';
-const String _recurrenceWeekdayLongFriday = 'Friday';
-const String _recurrenceWeekdayLongSaturday = 'Saturday';
-const String _recurrenceWeekdayLongSunday = 'Sunday';
 
 const int _recurrenceMonthMin = 1;
 const int _recurrenceMonthMax = 12;
@@ -123,69 +51,90 @@ const List<CalendarWeekday> _orderedWeekdays = <CalendarWeekday>[
 ];
 
 class _MonthOption {
-  const _MonthOption({required this.value, required this.label});
+  const _MonthOption({required this.value});
 
   final int value;
-  final String label;
 }
 
 const List<_MonthOption> _monthOptions = <_MonthOption>[
-  _MonthOption(value: 1, label: _recurrenceMonthLabelJan),
-  _MonthOption(value: 2, label: _recurrenceMonthLabelFeb),
-  _MonthOption(value: 3, label: _recurrenceMonthLabelMar),
-  _MonthOption(value: 4, label: _recurrenceMonthLabelApr),
-  _MonthOption(value: 5, label: _recurrenceMonthLabelMay),
-  _MonthOption(value: 6, label: _recurrenceMonthLabelJun),
-  _MonthOption(value: 7, label: _recurrenceMonthLabelJul),
-  _MonthOption(value: 8, label: _recurrenceMonthLabelAug),
-  _MonthOption(value: 9, label: _recurrenceMonthLabelSep),
-  _MonthOption(value: 10, label: _recurrenceMonthLabelOct),
-  _MonthOption(value: 11, label: _recurrenceMonthLabelNov),
-  _MonthOption(value: 12, label: _recurrenceMonthLabelDec),
+  _MonthOption(value: 1),
+  _MonthOption(value: 2),
+  _MonthOption(value: 3),
+  _MonthOption(value: 4),
+  _MonthOption(value: 5),
+  _MonthOption(value: 6),
+  _MonthOption(value: 7),
+  _MonthOption(value: 8),
+  _MonthOption(value: 9),
+  _MonthOption(value: 10),
+  _MonthOption(value: 11),
+  _MonthOption(value: 12),
 ];
 
 class _OrdinalOption {
-  const _OrdinalOption({required this.position, required this.label});
+  const _OrdinalOption({required this.position});
 
   final int? position;
-  final String label;
 }
 
 const List<_OrdinalOption> _ordinalOptions = <_OrdinalOption>[
-  _OrdinalOption(position: null, label: _recurrenceOrdinalEveryLabel),
-  _OrdinalOption(position: 1, label: _recurrenceOrdinalFirstLabel),
-  _OrdinalOption(position: 2, label: _recurrenceOrdinalSecondLabel),
-  _OrdinalOption(position: 3, label: _recurrenceOrdinalThirdLabel),
-  _OrdinalOption(position: 4, label: _recurrenceOrdinalFourthLabel),
-  _OrdinalOption(position: 5, label: _recurrenceOrdinalFifthLabel),
-  _OrdinalOption(position: -1, label: _recurrenceOrdinalLastLabel),
-  _OrdinalOption(position: -2, label: _recurrenceOrdinalSecondLastLabel),
-  _OrdinalOption(position: -3, label: _recurrenceOrdinalThirdLastLabel),
-  _OrdinalOption(position: -4, label: _recurrenceOrdinalFourthLastLabel),
-  _OrdinalOption(position: -5, label: _recurrenceOrdinalFifthLastLabel),
+  _OrdinalOption(position: null),
+  _OrdinalOption(position: 1),
+  _OrdinalOption(position: 2),
+  _OrdinalOption(position: 3),
+  _OrdinalOption(position: 4),
+  _OrdinalOption(position: 5),
+  _OrdinalOption(position: -1),
+  _OrdinalOption(position: -2),
+  _OrdinalOption(position: -3),
+  _OrdinalOption(position: -4),
+  _OrdinalOption(position: -5),
 ];
 
 extension CalendarWeekdayLabelX on CalendarWeekday {
-  String get shortLabel => switch (this) {
-    CalendarWeekday.monday => _recurrenceWeekdayShortMon,
-    CalendarWeekday.tuesday => _recurrenceWeekdayShortTue,
-    CalendarWeekday.wednesday => _recurrenceWeekdayShortWed,
-    CalendarWeekday.thursday => _recurrenceWeekdayShortThu,
-    CalendarWeekday.friday => _recurrenceWeekdayShortFri,
-    CalendarWeekday.saturday => _recurrenceWeekdayShortSat,
-    CalendarWeekday.sunday => _recurrenceWeekdayShortSun,
-  };
-
-  String get longLabel => switch (this) {
-    CalendarWeekday.monday => _recurrenceWeekdayLongMonday,
-    CalendarWeekday.tuesday => _recurrenceWeekdayLongTuesday,
-    CalendarWeekday.wednesday => _recurrenceWeekdayLongWednesday,
-    CalendarWeekday.thursday => _recurrenceWeekdayLongThursday,
-    CalendarWeekday.friday => _recurrenceWeekdayLongFriday,
-    CalendarWeekday.saturday => _recurrenceWeekdayLongSaturday,
-    CalendarWeekday.sunday => _recurrenceWeekdayLongSunday,
+  DateTime get sampleDate => switch (this) {
+    CalendarWeekday.monday => DateTime(2024),
+    CalendarWeekday.tuesday => DateTime(2024, 1, 2),
+    CalendarWeekday.wednesday => DateTime(2024, 1, 3),
+    CalendarWeekday.thursday => DateTime(2024, 1, 4),
+    CalendarWeekday.friday => DateTime(2024, 1, 5),
+    CalendarWeekday.saturday => DateTime(2024, 1, 6),
+    CalendarWeekday.sunday => DateTime(2024, 1, 7),
   };
 }
+
+String _monthLabel(AppLocalizations l10n, int month) {
+  return DateFormat.MMM(l10n.localeName).format(DateTime(2024, month));
+}
+
+String _weekdayNarrowLabel(AppLocalizations l10n, int weekday) {
+  final date = _orderedWeekdays[weekday - DateTime.monday].sampleDate;
+  return DateFormat('EEEEE', l10n.localeName).format(date);
+}
+
+String _weekdayShortLabel(AppLocalizations l10n, CalendarWeekday weekday) {
+  return DateFormat.E(l10n.localeName).format(weekday.sampleDate);
+}
+
+String _weekdayLongLabel(AppLocalizations l10n, CalendarWeekday weekday) {
+  return DateFormat.EEEE(l10n.localeName).format(weekday.sampleDate);
+}
+
+String _ordinalLabelForPosition(AppLocalizations l10n, int? position) =>
+    switch (position) {
+      null => l10n.calendarRecurrenceOrdinalEvery,
+      1 => l10n.calendarRecurrenceOrdinalFirst,
+      2 => l10n.calendarRecurrenceOrdinalSecond,
+      3 => l10n.calendarRecurrenceOrdinalThird,
+      4 => l10n.calendarRecurrenceOrdinalFourth,
+      5 => l10n.calendarRecurrenceOrdinalFifth,
+      -1 => l10n.calendarRecurrenceOrdinalLast,
+      -2 => l10n.calendarRecurrenceOrdinalSecondLast,
+      -3 => l10n.calendarRecurrenceOrdinalThirdLast,
+      -4 => l10n.calendarRecurrenceOrdinalFourthLast,
+      -5 => l10n.calendarRecurrenceOrdinalFifthLast,
+      _ => position.toString(),
+    };
 
 extension RecurrenceFrequencyX on RecurrenceFrequency {
   bool get isNone => this == RecurrenceFrequency.none;
@@ -767,6 +716,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final enabled = widget.enabled;
     final selectedFrequency = value.frequency;
     final DateTime? referenceStart = widget.referenceStart;
@@ -795,7 +745,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
                 isSelected: selectedFrequency == freq,
                 enabled: enabled,
                 padding: resolvedChipPadding,
-                label: _frequencyLabel(freq),
+                label: _frequencyLabel(l10n, freq),
                 onPressed: enabled
                     ? () => widget.onChanged(_normalizedForFrequency(freq))
                     : null,
@@ -827,7 +777,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
             currentInterval: value.interval,
             intervalWidth: widget.intervalSelectWidth,
             fieldGap: widget.fieldGap,
-            unitLabel: _intervalUnitLabel(value.frequency),
+            unitLabel: _intervalUnitLabel(l10n, value.frequency),
             onIntervalChanged: (newValue) =>
                 widget.onChanged(value.copyWith(interval: newValue)),
           ),
@@ -963,7 +913,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
           builder: (context, setSheetState) {
             return AxiSheetScaffold.sections(
               header: AxiSheetHeader(
-                title: Text(_recurrenceAdvancedLabel),
+                title: Text(context.l10n.calendarRecurrenceAdvancedRulesLabel),
                 onClose: () => Navigator.of(sheetContext).maybePop(),
               ),
               sections: [
@@ -1032,36 +982,39 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     widget.onChanged(value.copyWith(weekdays: updated));
   }
 
-  String _frequencyLabel(RecurrenceFrequency frequency) {
+  String _frequencyLabel(AppLocalizations l10n, RecurrenceFrequency frequency) {
     switch (frequency) {
       case RecurrenceFrequency.none:
-        return 'Never';
+        return l10n.calendarRecurrenceFrequencyNever;
       case RecurrenceFrequency.daily:
-        return 'Daily';
+        return l10n.calendarRecurrenceFrequencyDaily;
       case RecurrenceFrequency.weekdays:
-        return 'Weekdays';
+        return l10n.calendarRecurrenceFrequencyWeekdays;
       case RecurrenceFrequency.weekly:
-        return 'Weekly';
+        return l10n.calendarRecurrenceFrequencyWeekly;
       case RecurrenceFrequency.monthly:
-        return 'Monthly';
+        return l10n.calendarRecurrenceFrequencyMonthly;
       case RecurrenceFrequency.yearly:
-        return _recurrenceFrequencyYearlyLabel;
+        return l10n.calendarRecurrenceFrequencyYearly;
     }
   }
 
-  String _intervalUnitLabel(RecurrenceFrequency frequency) {
+  String _intervalUnitLabel(
+    AppLocalizations l10n,
+    RecurrenceFrequency frequency,
+  ) {
     switch (frequency) {
       case RecurrenceFrequency.monthly:
-        return 'month(s)';
+        return l10n.calendarRecurrenceIntervalMonths;
       case RecurrenceFrequency.yearly:
-        return _recurrenceIntervalYearLabel;
+        return l10n.calendarRecurrenceIntervalYears;
       case RecurrenceFrequency.weekly:
       case RecurrenceFrequency.weekdays:
-        return 'week(s)';
+        return l10n.calendarRecurrenceIntervalWeeks;
       case RecurrenceFrequency.daily:
-        return 'day(s)';
+        return l10n.calendarRecurrenceIntervalDays;
       case RecurrenceFrequency.none:
-        return 'time(s)';
+        return l10n.calendarRecurrenceIntervalTimes;
     }
   }
 }
@@ -1114,7 +1067,6 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
   final bool enabled;
   final ValueChanged<int> onWeekdayToggled;
 
-  static const _labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   static const _values = [
     DateTime.monday,
     DateTime.tuesday,
@@ -1127,6 +1079,7 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final EdgeInsets basePadding = AxiButtonSize.regular.padding(
       context.spacing,
     );
@@ -1148,7 +1101,10 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
               : AxiButtonVariant.outline,
           selected: isSelected,
           onPressed: enabled ? () => onWeekdayToggled(weekday) : null,
-          child: Padding(padding: extraPadding, child: Text(_labels[index])),
+          child: Padding(
+            padding: extraPadding,
+            child: Text(_weekdayNarrowLabel(l10n, weekday)),
+          ),
         );
       }),
     );
@@ -1187,7 +1143,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
     return Row(
       children: [
         Text(
-          _recurrenceRepeatEveryLabel,
+          context.l10n.calendarRecurrenceRepeatEveryLabel,
           style: context.textTheme.label.copyWith(color: calendarSubtitleColor),
         ),
         SizedBox(width: fieldGap),
@@ -1237,10 +1193,10 @@ extension _RecurrenceEndModeX on _RecurrenceEndMode {
 
   bool get isCount => this == _RecurrenceEndMode.count;
 
-  String get label => switch (this) {
-    _RecurrenceEndMode.never => _recurrenceEndModeNeverLabel,
-    _RecurrenceEndMode.until => _recurrenceEndModeUntilLabel,
-    _RecurrenceEndMode.count => _recurrenceEndModeCountLabel,
+  String label(AppLocalizations l10n) => switch (this) {
+    _RecurrenceEndMode.never => l10n.calendarRecurrenceEndModeNever,
+    _RecurrenceEndMode.until => l10n.calendarRecurrenceEndModeUntil,
+    _RecurrenceEndMode.count => l10n.calendarRecurrenceEndModeCount,
   };
 }
 
@@ -1291,7 +1247,10 @@ class _RecurrenceEndControls extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_recurrenceEndHeaderLabel.toUpperCase(), style: labelStyle),
+        Text(
+          l10n.calendarRecurrenceEndHeaderLabel.toUpperCase(),
+          style: labelStyle,
+        ),
         SizedBox(height: context.spacing.s),
         Wrap(
           spacing: context.spacing.s,
@@ -1301,7 +1260,7 @@ class _RecurrenceEndControls extends StatelessWidget {
                 (option) => _RecurrenceEndModeChip(
                   isSelected: option == mode,
                   enabled: enabled,
-                  label: option.label,
+                  label: option.label(l10n),
                   onPressed: enabled ? () => onModeChanged(option) : null,
                 ),
               )
@@ -1311,7 +1270,7 @@ class _RecurrenceEndControls extends StatelessWidget {
           SizedBox(height: context.spacing.s),
           CalendarDateTimeField(
             value: value.until,
-            placeholder: _recurrenceEndModeUntilLabel,
+            placeholder: l10n.calendarRecurrenceEndModeUntil,
             showStatusColors: false,
             showTimeSelectors: false,
             onChanged: enabled ? onUntilChanged : (_) {},
@@ -1319,11 +1278,7 @@ class _RecurrenceEndControls extends StatelessWidget {
           if (derivedCount != null) ...[
             SizedBox(height: context.spacing.xxs),
             Text(
-              '$_recurrenceEndModeDerivedCountLabel'
-              '$_recurrenceLabelSpacer'
-              '$derivedCount'
-              '$_recurrenceLabelSpacer'
-              '$_recurrenceEndModeDerivedCountSuffix',
+              l10n.calendarRecurrenceApproxOccurrences(derivedCount),
               style: helperStyle,
             ),
           ],
@@ -1346,7 +1301,7 @@ class _RecurrenceEndControls extends StatelessWidget {
               ),
               style: context.textTheme.label,
               trailing: Text(
-                _recurrenceEndModeDerivedCountSuffix,
+                l10n.calendarRecurrenceOccurrences,
                 style: suffixStyle,
               ),
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -1356,9 +1311,9 @@ class _RecurrenceEndControls extends StatelessWidget {
           if (derivedUntil != null) ...[
             SizedBox(height: context.spacing.xxs),
             Text(
-              '$_recurrenceEndModeDerivedUntilLabel'
-              '$_recurrenceLabelSpacer'
-              '${_formatDerivedDate(l10n, derivedUntil, referenceStart)}',
+              l10n.calendarRecurrenceEndsOn(
+                _formatDerivedDate(l10n, derivedUntil, referenceStart),
+              ),
               style: helperStyle,
             ),
           ],
@@ -1464,22 +1419,22 @@ DateTime _inclusiveDateLimit(DateTime date) {
   return DateTime(date.year, date.month, date.day, 23, 59, 59, 999, 999);
 }
 
-String _ordinalLabelForValue(int value) {
+String _ordinalLabelForValue(AppLocalizations l10n, int value) {
   for (final _OrdinalOption option in _ordinalOptions) {
     final int optionValue = option.position ?? _recurrenceOrdinalEveryValue;
     if (optionValue == value) {
-      return option.label;
+      return _ordinalLabelForPosition(l10n, option.position);
     }
   }
   return value.toString();
 }
 
-String _formatByDayEntry(RecurrenceWeekday entry) {
+String _formatByDayEntry(AppLocalizations l10n, RecurrenceWeekday entry) {
   final int? position = entry.position;
   final int resolvedValue = position ?? _recurrenceOrdinalEveryValue;
-  return '${_ordinalLabelForValue(resolvedValue)}'
+  return '${_ordinalLabelForValue(l10n, resolvedValue)}'
       '$_recurrenceLabelSpacer'
-      '${entry.weekday.shortLabel}';
+      '${_weekdayShortLabel(l10n, entry.weekday)}';
 }
 
 String _formatRecurrenceDateLabel(
@@ -1577,7 +1532,10 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: context.spacing.s),
       child: Row(
         children: [
-          Text(_recurrenceAdvancedLabel.toUpperCase(), style: labelStyle),
+          Text(
+            context.l10n.calendarRecurrenceAdvancedRulesLabel.toUpperCase(),
+            style: labelStyle,
+          ),
           if (hasAdvancedData) ...[
             SizedBox(width: context.spacing.xxs),
             _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
@@ -1615,7 +1573,7 @@ class _RecurrenceAdvancedActiveBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(_recurrenceCompactRadius),
       ),
       child: Text(
-        _recurrenceAdvancedActiveLabel,
+        context.l10n.calendarRecurrenceAdvancedActiveLabel,
         style: context.textTheme.labelSm.strong.copyWith(
           color: colors.mutedForeground,
         ),
@@ -1630,7 +1588,7 @@ class _RecurrenceAdvancedSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      _recurrenceAdvancedSummary,
+      context.l10n.calendarRecurrenceAdvancedAppliedLabel,
       style: context.textTheme.label.copyWith(
         color: context.colorScheme.mutedForeground,
       ),
@@ -1690,6 +1648,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final List<Widget> children = <Widget>[];
     final bool showByDays =
         value.frequency.isMonthlyOrYearly || value.byDays.isNotEmpty;
@@ -1712,8 +1671,8 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
       children
         ..add(
           _RecurrenceAdvancedSection(
-            label: _recurrenceAdvancedByDayLabel,
-            helper: _recurrenceAdvancedByDayHelper,
+            label: l10n.calendarRecurrenceWeekdayRulesLabel,
+            helper: l10n.calendarRecurrenceWeekdayRulesHelper,
             child: _RecurrenceOrdinalWeekdayEditor(
               enabled: enabled,
               value: value.byDays,
@@ -1728,7 +1687,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
       children
         ..add(
           _RecurrenceAdvancedSection(
-            label: _recurrenceAdvancedMonthsLabel,
+            label: l10n.calendarRecurrenceMonthsLabel,
             child: _RecurrenceMonthSelector(
               enabled: enabled,
               selectedMonths: value.byMonths,
@@ -1743,10 +1702,10 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
       children
         ..add(
           _RecurrenceAdvancedSection(
-            label: _recurrenceAdvancedMonthDaysLabel,
+            label: l10n.calendarRecurrenceMonthDaysLabel,
             child: _RecurrenceNumberListField(
               enabled: enabled,
-              hintText: _recurrenceAdvancedMonthDaysHint,
+              hintText: l10n.calendarRecurrenceMonthDaysHint,
               values: value.byMonthDays,
               min: _recurrenceMonthMin,
               max: _recurrenceMonthDayMax,
@@ -1762,10 +1721,10 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
       children
         ..add(
           _RecurrenceAdvancedSection(
-            label: _recurrenceAdvancedYearDaysLabel,
+            label: l10n.calendarRecurrenceYearDaysLabel,
             child: _RecurrenceNumberListField(
               enabled: enabled,
-              hintText: _recurrenceAdvancedYearDaysHint,
+              hintText: l10n.calendarRecurrenceYearDaysHint,
               values: value.byYearDays,
               min: _recurrenceMonthMin,
               max: _recurrenceYearDayMax,
@@ -1781,10 +1740,10 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
       children
         ..add(
           _RecurrenceAdvancedSection(
-            label: _recurrenceAdvancedWeekNumbersLabel,
+            label: l10n.calendarRecurrenceWeekNumbersLabel,
             child: _RecurrenceNumberListField(
               enabled: enabled,
-              hintText: _recurrenceAdvancedWeekNumbersHint,
+              hintText: l10n.calendarRecurrenceWeekNumbersHint,
               values: value.byWeekNumbers,
               min: _recurrenceMonthMin,
               max: _recurrenceWeekNumberMax,
@@ -1801,10 +1760,10 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
       children
         ..add(
           _RecurrenceAdvancedSection(
-            label: _recurrenceAdvancedSetPositionsLabel,
+            label: l10n.calendarRecurrenceSetPositionsLabel,
             child: _RecurrenceNumberListField(
               enabled: enabled,
-              hintText: _recurrenceAdvancedSetPositionsHint,
+              hintText: l10n.calendarRecurrenceSetPositionsHint,
               values: value.bySetPositions,
               min: _recurrenceMonthMin,
               max: _recurrenceSetPositionMax,
@@ -1820,10 +1779,10 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
     children
       ..add(
         _RecurrenceAdvancedSection(
-          label: _recurrenceAdvancedRDatesLabel,
+          label: l10n.calendarRecurrenceAdditionalDatesLabel,
           child: _RecurrenceDateListEditor(
             enabled: enabled,
-            hintText: _recurrenceAdvancedRDatesHint,
+            hintText: l10n.calendarRecurrenceAdditionalDatesHint,
             values: value.rDates,
             referenceStart: referenceStart,
             onChanged: (next) => onChanged(value.copyWith(rDates: next)),
@@ -1833,10 +1792,10 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
       ..add(SizedBox(height: context.spacing.m))
       ..add(
         _RecurrenceAdvancedSection(
-          label: _recurrenceAdvancedExDatesLabel,
+          label: l10n.calendarRecurrenceExcludedDatesLabel,
           child: _RecurrenceDateListEditor(
             enabled: enabled,
-            hintText: _recurrenceAdvancedExDatesHint,
+            hintText: l10n.calendarRecurrenceExcludedDatesHint,
             values: value.exDates,
             referenceStart: referenceStart,
             onChanged: (next) => onChanged(value.copyWith(exDates: next)),
@@ -1849,7 +1808,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
         ..add(SizedBox(height: context.spacing.m))
         ..add(
           _RecurrenceAdvancedSection(
-            label: _recurrenceAdvancedTimeSummaryLabel,
+            label: l10n.calendarRecurrenceTimeFiltersLabel,
             child: _RecurrenceTimeSummary(
               byHours: value.byHours,
               byMinutes: value.byMinutes,
@@ -1879,6 +1838,7 @@ class _RecurrenceMonthSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final Set<int> selected = selectedMonths.toSet();
     return Wrap(
       spacing: context.spacing.s,
@@ -1888,7 +1848,7 @@ class _RecurrenceMonthSelector extends StatelessWidget {
             (option) => _RecurrenceEndModeChip(
               isSelected: selected.contains(option.value),
               enabled: enabled,
-              label: option.label,
+              label: _monthLabel(l10n, option.value),
               onPressed: enabled
                   ? () {
                       final Set<int> next = Set<int>.from(selected);
@@ -2025,7 +1985,7 @@ class _RecurrenceNumberListFieldState
             SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
-              tooltip: _recurrenceAdvancedAddTooltip,
+              tooltip: context.l10n.commonAdd,
               onPressed: canSubmit ? _submitInput : null,
               color: canSubmit ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
@@ -2199,7 +2159,7 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
             SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
-              tooltip: _recurrenceAdvancedAddTooltip,
+              tooltip: context.l10n.commonAdd,
               onPressed: canSubmit ? _addDate : null,
               color: canSubmit ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
@@ -2331,6 +2291,7 @@ class _RecurrenceOrdinalWeekdayEditorState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final List<RecurrenceWeekday> entries = widget.value;
     final bool canSubmit = widget.enabled;
     return Column(
@@ -2352,13 +2313,15 @@ class _RecurrenceOrdinalWeekdayEditorState
                     .map(
                       (option) => AxiDropdownOption<int>(
                         value: option.position ?? _recurrenceOrdinalEveryValue,
-                        label: option.label,
-                        child: Text(option.label),
+                        label: _ordinalLabelForPosition(l10n, option.position),
+                        child: Text(
+                          _ordinalLabelForPosition(l10n, option.position),
+                        ),
                       ),
                     )
                     .toList(),
                 selectedBuilder: (context, selected) =>
-                    Text(_ordinalLabelForValue(selected)),
+                    Text(_ordinalLabelForValue(l10n, selected)),
                 decoration: ShadDecoration(
                   color: calendarContainerColor,
                   border: ShadBorder.all(
@@ -2393,13 +2356,13 @@ class _RecurrenceOrdinalWeekdayEditorState
                     .map(
                       (weekday) => AxiDropdownOption<CalendarWeekday>(
                         value: weekday,
-                        label: weekday.longLabel,
-                        child: Text(weekday.longLabel),
+                        label: _weekdayLongLabel(l10n, weekday),
+                        child: Text(_weekdayLongLabel(l10n, weekday)),
                       ),
                     )
                     .toList(),
                 selectedBuilder: (context, selected) =>
-                    Text(selected.longLabel),
+                    Text(_weekdayLongLabel(l10n, selected)),
                 decoration: ShadDecoration(
                   color: calendarContainerColor,
                   border: ShadBorder.all(
@@ -2422,7 +2385,7 @@ class _RecurrenceOrdinalWeekdayEditorState
             SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
-              tooltip: _recurrenceAdvancedAddTooltip,
+              tooltip: l10n.commonAdd,
               onPressed: canSubmit ? _addEntry : null,
               color: canSubmit ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
@@ -2462,7 +2425,7 @@ class _RecurrenceWeekdayChip extends StatelessWidget {
     final TextStyle labelStyle = context.textTheme.small.strong.copyWith(
       color: calendarTitleColor,
     );
-    final String label = _formatByDayEntry(entry);
+    final String label = _formatByDayEntry(context.l10n, entry);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.s,
@@ -2500,11 +2463,12 @@ class _RecurrenceTimeSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final List<_RecurrenceTimeSummaryRow> rows = <_RecurrenceTimeSummaryRow>[];
     if (byHours.isNotEmpty) {
       rows.add(
         _RecurrenceTimeSummaryRow(
-          label: _recurrenceTimeHoursLabel,
+          label: l10n.calendarRecurrenceHoursLabel,
           values: _formatTimeUnits(byHours, pad: 2),
         ),
       );
@@ -2512,7 +2476,7 @@ class _RecurrenceTimeSummary extends StatelessWidget {
     if (byMinutes.isNotEmpty) {
       rows.add(
         _RecurrenceTimeSummaryRow(
-          label: _recurrenceTimeMinutesLabel,
+          label: l10n.calendarRecurrenceMinutesLabel,
           values: _formatTimeUnits(byMinutes, pad: 2),
         ),
       );
@@ -2520,7 +2484,7 @@ class _RecurrenceTimeSummary extends StatelessWidget {
     if (bySeconds.isNotEmpty) {
       rows.add(
         _RecurrenceTimeSummaryRow(
-          label: _recurrenceTimeSecondsLabel,
+          label: l10n.calendarRecurrenceSecondsLabel,
           values: _formatTimeUnits(bySeconds, pad: 2),
         ),
       );

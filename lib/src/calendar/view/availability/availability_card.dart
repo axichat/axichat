@@ -24,15 +24,6 @@ const EdgeInsets _availabilityCardPadding = EdgeInsets.symmetric(
 const EdgeInsets _availabilityFooterPadding = EdgeInsets.only(top: 4);
 const EdgeInsets _availabilityActionPadding = EdgeInsets.only(top: 6);
 
-const String _availabilityShareLabel = 'Availability';
-const String _availabilityShareSubtitle = 'Tap to view free/busy.';
-const String _availabilityRequestLabel = 'Availability request';
-const String _availabilityAcceptedLabel = 'Availability accepted';
-const String _availabilityDeclinedLabel = 'Availability declined';
-const String _availabilityAcceptButtonLabel = 'Accept';
-const String _availabilityDeclineButtonLabel = 'Decline';
-const String _availabilityRequestTitleFallback = 'Requested time';
-
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
 class CalendarAvailabilityMessageCard extends StatelessWidget {
@@ -153,6 +144,7 @@ class _AvailabilityShareContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final textTheme = context.textTheme;
     final TextStyle helperStyle = textTheme.small.copyWith(
       color: context.colorScheme.mutedForeground,
@@ -163,7 +155,7 @@ class _AvailabilityShareContent extends StatelessWidget {
       spacing: _availabilitySectionSpacing,
       children: [
         Text(
-          _availabilityShareLabel,
+          l10n.calendarAvailabilityCardShareLabel,
           style: textTheme.large.copyWith(fontWeight: FontWeight.w600),
         ),
         Text(
@@ -172,7 +164,7 @@ class _AvailabilityShareContent extends StatelessWidget {
             color: context.colorScheme.mutedForeground,
           ),
         ),
-        Text(_availabilityShareSubtitle, style: helperStyle),
+        Text(l10n.calendarAvailabilityCardShareSubtitle, style: helperStyle),
       ],
     );
   }
@@ -197,14 +189,14 @@ class _AvailabilityRequestBody extends StatelessWidget {
     final description = request.description?.trim();
     final requestTitle = title?.isNotEmpty == true
         ? title!
-        : _availabilityRequestTitleFallback;
+        : l10n.calendarAvailabilityRequestTitleFallback;
     final bool hasActions = onAccept != null || onDecline != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _availabilitySectionSpacing,
       children: [
         Text(
-          _availabilityRequestLabel,
+          l10n.calendarAvailabilityRequestFallback,
           style: textTheme.large.copyWith(fontWeight: FontWeight.w600),
         ),
         Text(
@@ -240,13 +232,13 @@ class _AvailabilityRequestBody extends StatelessWidget {
                   AxiButton.primary(
                     size: AxiButtonSize.sm,
                     onPressed: onAccept,
-                    child: const Text(_availabilityAcceptButtonLabel),
+                    child: Text(l10n.calendarAvailabilityAcceptAction),
                   ),
                 if (onDecline != null)
                   AxiButton.outline(
                     size: AxiButtonSize.sm,
                     onPressed: onDecline,
-                    child: const Text(_availabilityDeclineButtonLabel),
+                    child: Text(l10n.calendarAvailabilityDeclineAction),
                   ),
               ],
             ),
@@ -264,9 +256,10 @@ class _AvailabilityResponseBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = context.textTheme;
+    final l10n = context.l10n;
     final label = response.status.isAccepted
-        ? _availabilityAcceptedLabel
-        : _availabilityDeclinedLabel;
+        ? l10n.calendarAvailabilityResponseAcceptedFallback
+        : l10n.calendarAvailabilityResponseDeclinedFallback;
     final note = response.note?.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -5178,8 +5178,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# días',
-      one: '# día',
+      other: '$count días',
+      one: '$count día',
     );
     return '$_temp0';
   }
@@ -5189,8 +5189,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# horas',
-      one: '# hora',
+      other: '$count horas',
+      one: '$count hora',
     );
     return '$_temp0';
   }
@@ -5200,8 +5200,8 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# minutos',
-      one: '# minuto',
+      other: '$count minutos',
+      one: '$count minuto',
     );
     return '$_temp0';
   }
@@ -7478,4 +7478,483 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get recoveryRemoveConfirmMessage =>
       '¿Quitar este método de recuperación?';
+
+  @override
+  String get calendarSyncedReminderNoticeTitle =>
+      'Alertas de recordatorio desactivadas';
+
+  @override
+  String get calendarSyncedReminderNoticeMessage =>
+      'Permite las notificaciones o los recordatorios no funcionarán.';
+
+  @override
+  String get calendarSyncedReminderEnableAction => 'Activar';
+
+  @override
+  String get calendarReminderBeforeStartLabel => 'Antes del inicio';
+
+  @override
+  String get calendarReminderBeforeDeadlineLabel => 'Antes del plazo';
+
+  @override
+  String get calendarReminderAtStartLabel => 'Al inicio';
+
+  @override
+  String get calendarReminderAtDeadlineLabel => 'Al vencer';
+
+  @override
+  String get calendarReminderAdvancedAlarms => 'Alarmas avanzadas';
+
+  @override
+  String get calendarReminderAdvancedAlarmsActive => 'Activo';
+
+  @override
+  String get calendarReminderAdvancedAlarmsApplied =>
+      'Alarmas avanzadas aplicadas';
+
+  @override
+  String get calendarReminderNotificationsRequiredTitle =>
+      'Los recordatorios necesitan notificaciones';
+
+  @override
+  String get calendarReminderNotificationsRequiredMessage =>
+      'Activa las notificaciones para añadir recordatorios en este dispositivo.';
+
+  @override
+  String get calendarReminderOpenSettings => 'Abrir ajustes';
+
+  @override
+  String get calendarReminderMixedLabel => 'Mixto';
+
+  @override
+  String get calendarLinkGeoSectionTitle => 'Enlace y ubicación';
+
+  @override
+  String get calendarLinkHint => 'Enlace';
+
+  @override
+  String get calendarLatitudeHint => 'Latitud';
+
+  @override
+  String get calendarLongitudeHint => 'Longitud';
+
+  @override
+  String get calendarAvailabilityCardShareLabel => 'Disponibilidad';
+
+  @override
+  String get calendarAvailabilityCardShareSubtitle =>
+      'Toca para ver libre/ocupado.';
+
+  @override
+  String get calendarAvailabilityAcceptAction => 'Aceptar';
+
+  @override
+  String get calendarAvailabilityDeclineAction => 'Rechazar';
+
+  @override
+  String get calendarAvailabilityViewerSourceLabel => 'Comparar con';
+
+  @override
+  String get calendarAvailabilityViewerPersonalLabel => 'Calendario personal';
+
+  @override
+  String get calendarAvailabilityViewerChatLabel => 'Calendario del chat';
+
+  @override
+  String calendarAvailabilityViewerChatLabelFor(String label) {
+    return 'Calendario del chat: $label';
+  }
+
+  @override
+  String get calendarAvailabilityViewerMutualHint =>
+      'Toca un horario común para solicitarlo.';
+
+  @override
+  String get calendarAvailabilityViewerTitleFallback => 'Libre/ocupado';
+
+  @override
+  String calendarAvailabilityViewerOwnerTitle(String owner) {
+    return 'Libre/ocupado de $owner';
+  }
+
+  @override
+  String calendarAvailabilityViewerBusyFor(String owner) {
+    return 'Ocupado: $owner';
+  }
+
+  @override
+  String get calendarAvailabilityViewerMutualLabel => 'Común';
+
+  @override
+  String commonDurationWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count semanas',
+      one: '$count semana',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String commonDurationDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count días',
+      one: '$count día',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarCategoriesSectionTitle => 'Categorías';
+
+  @override
+  String get calendarCategoriesHint => 'Añadir categoría';
+
+  @override
+  String get calendarAttachmentsTitle => 'Adjuntos';
+
+  @override
+  String get calendarChecklistTitle => 'Lista de comprobación';
+
+  @override
+  String get calendarParticipantsSectionTitle => 'Personas';
+
+  @override
+  String get calendarParticipantsOrganizerLabel => 'Organizador';
+
+  @override
+  String get calendarParticipantsAttendeesLabel => 'Asistentes';
+
+  @override
+  String get calendarParticipantsOrganizerNameHint => 'Nombre del organizador';
+
+  @override
+  String get calendarParticipantsOrganizerAddressHint =>
+      'Dirección del organizador';
+
+  @override
+  String get calendarParticipantsAttendeeAddressHint => 'Añadir asistente';
+
+  @override
+  String get calendarParticipantsAttendeeNameHint => 'Nombre (opcional)';
+
+  @override
+  String get calendarParticipantsAddAttendeeTooltip => 'Añadir asistente';
+
+  @override
+  String get calendarParticipantsRemoveAttendeeTooltip => 'Eliminar asistente';
+
+  @override
+  String get calendarParticipantsRoleLabel => 'Rol';
+
+  @override
+  String get calendarParticipantsStatusLabel => 'Estado';
+
+  @override
+  String get calendarParticipantsRsvpLabel => 'RSVP';
+
+  @override
+  String get calendarParticipantsDefaultLabel => 'Predeterminado';
+
+  @override
+  String get calendarParticipantsAcceptAction => 'Aceptar';
+
+  @override
+  String get calendarParticipantsDeclineAction => 'Rechazar';
+
+  @override
+  String get calendarParticipantsTentativeAction => 'Tentativo';
+
+  @override
+  String get calendarParticipantRoleChair => 'Preside';
+
+  @override
+  String get calendarParticipantRoleRequired => 'Obligatorio';
+
+  @override
+  String get calendarParticipantRoleOptional => 'Opcional';
+
+  @override
+  String get calendarParticipantRoleNonParticipant => 'No participante';
+
+  @override
+  String get calendarParticipantStatusNeedsAction => 'Necesita acción';
+
+  @override
+  String get calendarParticipantStatusAccepted => 'Aceptado';
+
+  @override
+  String get calendarParticipantStatusDeclined => 'Rechazado';
+
+  @override
+  String get calendarParticipantStatusTentative => 'Tentativo';
+
+  @override
+  String get calendarParticipantStatusDelegated => 'Delegado';
+
+  @override
+  String get calendarParticipantStatusCompleted => 'Completado';
+
+  @override
+  String get calendarParticipantStatusInProcess => 'En proceso';
+
+  @override
+  String get calendarInvitationStatusTitle => 'Estado de invitación';
+
+  @override
+  String get calendarInvitationMethodLabel => 'Método';
+
+  @override
+  String get calendarInvitationSequenceLabel => 'Secuencia';
+
+  @override
+  String get calendarInvitationRequestStatusLabel => 'Estado de solicitud';
+
+  @override
+  String get calendarMethodPublish => 'Publicar';
+
+  @override
+  String get calendarMethodRequest => 'Solicitar';
+
+  @override
+  String get calendarMethodReply => 'Responder';
+
+  @override
+  String get calendarMethodCancel => 'Cancelar';
+
+  @override
+  String get calendarMethodAdd => 'Añadir';
+
+  @override
+  String get calendarMethodRefresh => 'Actualizar';
+
+  @override
+  String get calendarMethodCounter => 'Contraoferta';
+
+  @override
+  String get calendarMethodDeclineCounter => 'Rechazar contraoferta';
+
+  @override
+  String get calendarIcsDiagnosticsTitle => 'Diagnóstico ICS';
+
+  @override
+  String get calendarIcsDiagnosticsMetadataTitle => 'Metadatos';
+
+  @override
+  String get calendarIcsDiagnosticsRawPropertiesTitle =>
+      'Propiedades sin procesar';
+
+  @override
+  String get calendarIcsDiagnosticsRawComponentsTitle =>
+      'Componentes sin procesar';
+
+  @override
+  String get calendarIcsDiagnosticsNotSetLabel => 'Sin definir';
+
+  @override
+  String get calendarIcsDiagnosticsParametersLabel => 'Parámetros';
+
+  @override
+  String get calendarIcsDiagnosticsComponentPropertiesLabel => 'Propiedades';
+
+  @override
+  String get calendarIcsDiagnosticsComponentChildrenLabel => 'Subcomponentes';
+
+  @override
+  String get calendarIcsDiagnosticsPropertyFallbackLabel => 'Propiedad';
+
+  @override
+  String get calendarIcsDiagnosticsComponentFallbackLabel => 'Componente';
+
+  @override
+  String get calendarIcsDiagnosticsParameterFallbackLabel => 'Parámetro';
+
+  @override
+  String calendarIcsDiagnosticsPropertyCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count propiedades',
+      one: '$count propiedad',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calendarIcsDiagnosticsSubcomponentCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count subcomponentes',
+      one: '$count subcomponente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calendarRecurrenceFrequencyNever => 'Nunca';
+
+  @override
+  String get calendarRecurrenceFrequencyDaily => 'Diario';
+
+  @override
+  String get calendarRecurrenceFrequencyWeekdays => 'Días laborables';
+
+  @override
+  String get calendarRecurrenceFrequencyWeekly => 'Semanal';
+
+  @override
+  String get calendarRecurrenceFrequencyMonthly => 'Mensual';
+
+  @override
+  String get calendarRecurrenceFrequencyYearly => 'Anual';
+
+  @override
+  String get calendarRecurrenceIntervalDays => 'día(s)';
+
+  @override
+  String get calendarRecurrenceIntervalWeeks => 'semana(s)';
+
+  @override
+  String get calendarRecurrenceIntervalMonths => 'mes(es)';
+
+  @override
+  String get calendarRecurrenceIntervalYears => 'año(s)';
+
+  @override
+  String get calendarRecurrenceIntervalTimes => 'vez/veces';
+
+  @override
+  String get calendarRecurrenceRepeatEveryLabel => 'Repetir cada';
+
+  @override
+  String get calendarRecurrenceAdvancedRulesLabel => 'Reglas avanzadas';
+
+  @override
+  String get calendarRecurrenceAdvancedAppliedLabel =>
+      'Reglas avanzadas aplicadas';
+
+  @override
+  String get calendarRecurrenceAdvancedActiveLabel => 'Activo';
+
+  @override
+  String get calendarRecurrenceWeekdayRulesLabel => 'Reglas de día';
+
+  @override
+  String get calendarRecurrenceWeekdayRulesHelper =>
+      'Añade reglas como cada lunes o 1.º viernes.';
+
+  @override
+  String get calendarRecurrenceMonthsLabel => 'Meses';
+
+  @override
+  String get calendarRecurrenceMonthDaysLabel => 'Días del mes';
+
+  @override
+  String get calendarRecurrenceMonthDaysHint => 'p. ej. 1, 15, -1';
+
+  @override
+  String get calendarRecurrenceYearDaysLabel => 'Días del año';
+
+  @override
+  String get calendarRecurrenceYearDaysHint => 'p. ej. 1, 120, -1';
+
+  @override
+  String get calendarRecurrenceWeekNumbersLabel => 'Números de semana';
+
+  @override
+  String get calendarRecurrenceWeekNumbersHint => 'p. ej. 1, 20, -1';
+
+  @override
+  String get calendarRecurrenceSetPositionsLabel => 'Posiciones';
+
+  @override
+  String get calendarRecurrenceSetPositionsHint => 'p. ej. 1, -1';
+
+  @override
+  String get calendarRecurrenceAdditionalDatesLabel => 'Fechas adicionales';
+
+  @override
+  String get calendarRecurrenceAdditionalDatesHint =>
+      'Elige una fecha para añadir';
+
+  @override
+  String get calendarRecurrenceExcludedDatesLabel => 'Fechas excluidas';
+
+  @override
+  String get calendarRecurrenceExcludedDatesHint =>
+      'Elige una fecha para excluir';
+
+  @override
+  String get calendarRecurrenceTimeFiltersLabel => 'Filtros de hora';
+
+  @override
+  String get calendarRecurrenceHoursLabel => 'Horas';
+
+  @override
+  String get calendarRecurrenceMinutesLabel => 'Minutos';
+
+  @override
+  String get calendarRecurrenceSecondsLabel => 'Segundos';
+
+  @override
+  String get calendarRecurrenceEndHeaderLabel => 'Hasta';
+
+  @override
+  String get calendarRecurrenceEndModeNever => 'Nunca';
+
+  @override
+  String get calendarRecurrenceEndModeUntil => 'En fecha';
+
+  @override
+  String get calendarRecurrenceEndModeCount => 'Después';
+
+  @override
+  String get calendarRecurrenceOccurrences => 'repeticiones';
+
+  @override
+  String calendarRecurrenceApproxOccurrences(int count) {
+    return '≈ $count repeticiones';
+  }
+
+  @override
+  String calendarRecurrenceEndsOn(String date) {
+    return 'Termina el $date';
+  }
+
+  @override
+  String get calendarRecurrenceOrdinalEvery => 'Cada';
+
+  @override
+  String get calendarRecurrenceOrdinalFirst => '1.º';
+
+  @override
+  String get calendarRecurrenceOrdinalSecond => '2.º';
+
+  @override
+  String get calendarRecurrenceOrdinalThird => '3.º';
+
+  @override
+  String get calendarRecurrenceOrdinalFourth => '4.º';
+
+  @override
+  String get calendarRecurrenceOrdinalFifth => '5.º';
+
+  @override
+  String get calendarRecurrenceOrdinalLast => 'Último';
+
+  @override
+  String get calendarRecurrenceOrdinalSecondLast => 'Penúltimo';
+
+  @override
+  String get calendarRecurrenceOrdinalThirdLast => 'Antepenúltimo';
+
+  @override
+  String get calendarRecurrenceOrdinalFourthLast => '4.º desde el final';
+
+  @override
+  String get calendarRecurrenceOrdinalFifthLast => '5.º desde el final';
 }

@@ -9027,19 +9027,19 @@ abstract class AppLocalizations {
   /// No description provided for @calendarReminderDurationDays.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one {# day} other {# days}}'**
+  /// **'{count, plural, one {{count} day} other {{count} days}}'**
   String calendarReminderDurationDays(num count);
 
   /// No description provided for @calendarReminderDurationHours.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one {# hour} other {# hours}}'**
+  /// **'{count, plural, one {{count} hour} other {{count} hours}}'**
   String calendarReminderDurationHours(num count);
 
   /// No description provided for @calendarReminderDurationMinutes.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one {# minute} other {# minutes}}'**
+  /// **'{count, plural, one {{count} minute} other {{count} minutes}}'**
   String calendarReminderDurationMinutes(num count);
 
   /// No description provided for @calendarExportCalendar.
@@ -12721,6 +12721,852 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove this recovery method?'**
   String get recoveryRemoveConfirmMessage;
+
+  /// No description provided for @calendarSyncedReminderNoticeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder alerts disabled'**
+  String get calendarSyncedReminderNoticeTitle;
+
+  /// No description provided for @calendarSyncedReminderNoticeMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow notifications or reminders won\'t work.'**
+  String get calendarSyncedReminderNoticeMessage;
+
+  /// No description provided for @calendarSyncedReminderEnableAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get calendarSyncedReminderEnableAction;
+
+  /// No description provided for @calendarReminderBeforeStartLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Before start'**
+  String get calendarReminderBeforeStartLabel;
+
+  /// No description provided for @calendarReminderBeforeDeadlineLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Before deadline'**
+  String get calendarReminderBeforeDeadlineLabel;
+
+  /// No description provided for @calendarReminderAtStartLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'At start'**
+  String get calendarReminderAtStartLabel;
+
+  /// No description provided for @calendarReminderAtDeadlineLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'At deadline'**
+  String get calendarReminderAtDeadlineLabel;
+
+  /// No description provided for @calendarReminderAdvancedAlarms.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced alarms'**
+  String get calendarReminderAdvancedAlarms;
+
+  /// No description provided for @calendarReminderAdvancedAlarmsActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get calendarReminderAdvancedAlarmsActive;
+
+  /// No description provided for @calendarReminderAdvancedAlarmsApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced alarms applied'**
+  String get calendarReminderAdvancedAlarmsApplied;
+
+  /// No description provided for @calendarReminderNotificationsRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminders need notifications'**
+  String get calendarReminderNotificationsRequiredTitle;
+
+  /// No description provided for @calendarReminderNotificationsRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on notifications to add reminders on this device.'**
+  String get calendarReminderNotificationsRequiredMessage;
+
+  /// No description provided for @calendarReminderOpenSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settings'**
+  String get calendarReminderOpenSettings;
+
+  /// No description provided for @calendarReminderMixedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Mixed'**
+  String get calendarReminderMixedLabel;
+
+  /// No description provided for @calendarLinkGeoSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Link & geo'**
+  String get calendarLinkGeoSectionTitle;
+
+  /// No description provided for @calendarLinkHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get calendarLinkHint;
+
+  /// No description provided for @calendarLatitudeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude'**
+  String get calendarLatitudeHint;
+
+  /// No description provided for @calendarLongitudeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Longitude'**
+  String get calendarLongitudeHint;
+
+  /// No description provided for @calendarAvailabilityCardShareLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability'**
+  String get calendarAvailabilityCardShareLabel;
+
+  /// No description provided for @calendarAvailabilityCardShareSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to view free/busy.'**
+  String get calendarAvailabilityCardShareSubtitle;
+
+  /// No description provided for @calendarAvailabilityAcceptAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get calendarAvailabilityAcceptAction;
+
+  /// No description provided for @calendarAvailabilityDeclineAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get calendarAvailabilityDeclineAction;
+
+  /// No description provided for @calendarAvailabilityViewerSourceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare with'**
+  String get calendarAvailabilityViewerSourceLabel;
+
+  /// No description provided for @calendarAvailabilityViewerPersonalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Personal calendar'**
+  String get calendarAvailabilityViewerPersonalLabel;
+
+  /// No description provided for @calendarAvailabilityViewerChatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat calendar'**
+  String get calendarAvailabilityViewerChatLabel;
+
+  /// No description provided for @calendarAvailabilityViewerChatLabelFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat calendar: {label}'**
+  String calendarAvailabilityViewerChatLabelFor(String label);
+
+  /// No description provided for @calendarAvailabilityViewerMutualHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap mutual time to request.'**
+  String get calendarAvailabilityViewerMutualHint;
+
+  /// No description provided for @calendarAvailabilityViewerTitleFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Free/busy'**
+  String get calendarAvailabilityViewerTitleFallback;
+
+  /// No description provided for @calendarAvailabilityViewerOwnerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Free/busy for {owner}'**
+  String calendarAvailabilityViewerOwnerTitle(String owner);
+
+  /// No description provided for @calendarAvailabilityViewerBusyFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy: {owner}'**
+  String calendarAvailabilityViewerBusyFor(String owner);
+
+  /// No description provided for @calendarAvailabilityViewerMutualLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Mutual'**
+  String get calendarAvailabilityViewerMutualLabel;
+
+  /// No description provided for @commonDurationWeeks.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} week} other {{count} weeks}}'**
+  String commonDurationWeeks(int count);
+
+  /// No description provided for @commonDurationDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} day} other {{count} days}}'**
+  String commonDurationDays(int count);
+
+  /// No description provided for @calendarCategoriesSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Categories'**
+  String get calendarCategoriesSectionTitle;
+
+  /// No description provided for @calendarCategoriesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add category'**
+  String get calendarCategoriesHint;
+
+  /// No description provided for @calendarAttachmentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments'**
+  String get calendarAttachmentsTitle;
+
+  /// No description provided for @calendarChecklistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get calendarChecklistTitle;
+
+  /// No description provided for @calendarParticipantsSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get calendarParticipantsSectionTitle;
+
+  /// No description provided for @calendarParticipantsOrganizerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Organizer'**
+  String get calendarParticipantsOrganizerLabel;
+
+  /// No description provided for @calendarParticipantsAttendeesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Attendees'**
+  String get calendarParticipantsAttendeesLabel;
+
+  /// No description provided for @calendarParticipantsOrganizerNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Organizer name'**
+  String get calendarParticipantsOrganizerNameHint;
+
+  /// No description provided for @calendarParticipantsOrganizerAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Organizer address'**
+  String get calendarParticipantsOrganizerAddressHint;
+
+  /// No description provided for @calendarParticipantsAttendeeAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Add attendee'**
+  String get calendarParticipantsAttendeeAddressHint;
+
+  /// No description provided for @calendarParticipantsAttendeeNameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Name (optional)'**
+  String get calendarParticipantsAttendeeNameHint;
+
+  /// No description provided for @calendarParticipantsAddAttendeeTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Add attendee'**
+  String get calendarParticipantsAddAttendeeTooltip;
+
+  /// No description provided for @calendarParticipantsRemoveAttendeeTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attendee'**
+  String get calendarParticipantsRemoveAttendeeTooltip;
+
+  /// No description provided for @calendarParticipantsRoleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Role'**
+  String get calendarParticipantsRoleLabel;
+
+  /// No description provided for @calendarParticipantsStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get calendarParticipantsStatusLabel;
+
+  /// No description provided for @calendarParticipantsRsvpLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'RSVP'**
+  String get calendarParticipantsRsvpLabel;
+
+  /// No description provided for @calendarParticipantsDefaultLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get calendarParticipantsDefaultLabel;
+
+  /// No description provided for @calendarParticipantsAcceptAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get calendarParticipantsAcceptAction;
+
+  /// No description provided for @calendarParticipantsDeclineAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get calendarParticipantsDeclineAction;
+
+  /// No description provided for @calendarParticipantsTentativeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Tentative'**
+  String get calendarParticipantsTentativeAction;
+
+  /// No description provided for @calendarParticipantRoleChair.
+  ///
+  /// In en, this message translates to:
+  /// **'Chair'**
+  String get calendarParticipantRoleChair;
+
+  /// No description provided for @calendarParticipantRoleRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get calendarParticipantRoleRequired;
+
+  /// No description provided for @calendarParticipantRoleOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get calendarParticipantRoleOptional;
+
+  /// No description provided for @calendarParticipantRoleNonParticipant.
+  ///
+  /// In en, this message translates to:
+  /// **'Non-participant'**
+  String get calendarParticipantRoleNonParticipant;
+
+  /// No description provided for @calendarParticipantStatusNeedsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs action'**
+  String get calendarParticipantStatusNeedsAction;
+
+  /// No description provided for @calendarParticipantStatusAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted'**
+  String get calendarParticipantStatusAccepted;
+
+  /// No description provided for @calendarParticipantStatusDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Declined'**
+  String get calendarParticipantStatusDeclined;
+
+  /// No description provided for @calendarParticipantStatusTentative.
+  ///
+  /// In en, this message translates to:
+  /// **'Tentative'**
+  String get calendarParticipantStatusTentative;
+
+  /// No description provided for @calendarParticipantStatusDelegated.
+  ///
+  /// In en, this message translates to:
+  /// **'Delegated'**
+  String get calendarParticipantStatusDelegated;
+
+  /// No description provided for @calendarParticipantStatusCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get calendarParticipantStatusCompleted;
+
+  /// No description provided for @calendarParticipantStatusInProcess.
+  ///
+  /// In en, this message translates to:
+  /// **'In process'**
+  String get calendarParticipantStatusInProcess;
+
+  /// No description provided for @calendarInvitationStatusTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation status'**
+  String get calendarInvitationStatusTitle;
+
+  /// No description provided for @calendarInvitationMethodLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Method'**
+  String get calendarInvitationMethodLabel;
+
+  /// No description provided for @calendarInvitationSequenceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sequence'**
+  String get calendarInvitationSequenceLabel;
+
+  /// No description provided for @calendarInvitationRequestStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Request status'**
+  String get calendarInvitationRequestStatusLabel;
+
+  /// No description provided for @calendarMethodPublish.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish'**
+  String get calendarMethodPublish;
+
+  /// No description provided for @calendarMethodRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Request'**
+  String get calendarMethodRequest;
+
+  /// No description provided for @calendarMethodReply.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get calendarMethodReply;
+
+  /// No description provided for @calendarMethodCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get calendarMethodCancel;
+
+  /// No description provided for @calendarMethodAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get calendarMethodAdd;
+
+  /// No description provided for @calendarMethodRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get calendarMethodRefresh;
+
+  /// No description provided for @calendarMethodCounter.
+  ///
+  /// In en, this message translates to:
+  /// **'Counter'**
+  String get calendarMethodCounter;
+
+  /// No description provided for @calendarMethodDeclineCounter.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline counter'**
+  String get calendarMethodDeclineCounter;
+
+  /// No description provided for @calendarIcsDiagnosticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'ICS diagnostics'**
+  String get calendarIcsDiagnosticsTitle;
+
+  /// No description provided for @calendarIcsDiagnosticsMetadataTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata'**
+  String get calendarIcsDiagnosticsMetadataTitle;
+
+  /// No description provided for @calendarIcsDiagnosticsRawPropertiesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw properties'**
+  String get calendarIcsDiagnosticsRawPropertiesTitle;
+
+  /// No description provided for @calendarIcsDiagnosticsRawComponentsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Raw components'**
+  String get calendarIcsDiagnosticsRawComponentsTitle;
+
+  /// No description provided for @calendarIcsDiagnosticsNotSetLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get calendarIcsDiagnosticsNotSetLabel;
+
+  /// No description provided for @calendarIcsDiagnosticsParametersLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Parameters'**
+  String get calendarIcsDiagnosticsParametersLabel;
+
+  /// No description provided for @calendarIcsDiagnosticsComponentPropertiesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Properties'**
+  String get calendarIcsDiagnosticsComponentPropertiesLabel;
+
+  /// No description provided for @calendarIcsDiagnosticsComponentChildrenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Subcomponents'**
+  String get calendarIcsDiagnosticsComponentChildrenLabel;
+
+  /// No description provided for @calendarIcsDiagnosticsPropertyFallbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Property'**
+  String get calendarIcsDiagnosticsPropertyFallbackLabel;
+
+  /// No description provided for @calendarIcsDiagnosticsComponentFallbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Component'**
+  String get calendarIcsDiagnosticsComponentFallbackLabel;
+
+  /// No description provided for @calendarIcsDiagnosticsParameterFallbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Parameter'**
+  String get calendarIcsDiagnosticsParameterFallbackLabel;
+
+  /// No description provided for @calendarIcsDiagnosticsPropertyCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} property} other {{count} properties}}'**
+  String calendarIcsDiagnosticsPropertyCount(int count);
+
+  /// No description provided for @calendarIcsDiagnosticsSubcomponentCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} subcomponent} other {{count} subcomponents}}'**
+  String calendarIcsDiagnosticsSubcomponentCount(int count);
+
+  /// No description provided for @calendarRecurrenceFrequencyNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never'**
+  String get calendarRecurrenceFrequencyNever;
+
+  /// No description provided for @calendarRecurrenceFrequencyDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get calendarRecurrenceFrequencyDaily;
+
+  /// No description provided for @calendarRecurrenceFrequencyWeekdays.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekdays'**
+  String get calendarRecurrenceFrequencyWeekdays;
+
+  /// No description provided for @calendarRecurrenceFrequencyWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get calendarRecurrenceFrequencyWeekly;
+
+  /// No description provided for @calendarRecurrenceFrequencyMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get calendarRecurrenceFrequencyMonthly;
+
+  /// No description provided for @calendarRecurrenceFrequencyYearly.
+  ///
+  /// In en, this message translates to:
+  /// **'Yearly'**
+  String get calendarRecurrenceFrequencyYearly;
+
+  /// No description provided for @calendarRecurrenceIntervalDays.
+  ///
+  /// In en, this message translates to:
+  /// **'day(s)'**
+  String get calendarRecurrenceIntervalDays;
+
+  /// No description provided for @calendarRecurrenceIntervalWeeks.
+  ///
+  /// In en, this message translates to:
+  /// **'week(s)'**
+  String get calendarRecurrenceIntervalWeeks;
+
+  /// No description provided for @calendarRecurrenceIntervalMonths.
+  ///
+  /// In en, this message translates to:
+  /// **'month(s)'**
+  String get calendarRecurrenceIntervalMonths;
+
+  /// No description provided for @calendarRecurrenceIntervalYears.
+  ///
+  /// In en, this message translates to:
+  /// **'year(s)'**
+  String get calendarRecurrenceIntervalYears;
+
+  /// No description provided for @calendarRecurrenceIntervalTimes.
+  ///
+  /// In en, this message translates to:
+  /// **'time(s)'**
+  String get calendarRecurrenceIntervalTimes;
+
+  /// No description provided for @calendarRecurrenceRepeatEveryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat every'**
+  String get calendarRecurrenceRepeatEveryLabel;
+
+  /// No description provided for @calendarRecurrenceAdvancedRulesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced rules'**
+  String get calendarRecurrenceAdvancedRulesLabel;
+
+  /// No description provided for @calendarRecurrenceAdvancedAppliedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced rules applied'**
+  String get calendarRecurrenceAdvancedAppliedLabel;
+
+  /// No description provided for @calendarRecurrenceAdvancedActiveLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get calendarRecurrenceAdvancedActiveLabel;
+
+  /// No description provided for @calendarRecurrenceWeekdayRulesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekday rules'**
+  String get calendarRecurrenceWeekdayRulesLabel;
+
+  /// No description provided for @calendarRecurrenceWeekdayRulesHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Add weekday rules like every Monday or 1st Friday.'**
+  String get calendarRecurrenceWeekdayRulesHelper;
+
+  /// No description provided for @calendarRecurrenceMonthsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Months'**
+  String get calendarRecurrenceMonthsLabel;
+
+  /// No description provided for @calendarRecurrenceMonthDaysLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Month days'**
+  String get calendarRecurrenceMonthDaysLabel;
+
+  /// No description provided for @calendarRecurrenceMonthDaysHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 1, 15, -1'**
+  String get calendarRecurrenceMonthDaysHint;
+
+  /// No description provided for @calendarRecurrenceYearDaysLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Year days'**
+  String get calendarRecurrenceYearDaysLabel;
+
+  /// No description provided for @calendarRecurrenceYearDaysHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 1, 120, -1'**
+  String get calendarRecurrenceYearDaysHint;
+
+  /// No description provided for @calendarRecurrenceWeekNumbersLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Week numbers'**
+  String get calendarRecurrenceWeekNumbersLabel;
+
+  /// No description provided for @calendarRecurrenceWeekNumbersHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 1, 20, -1'**
+  String get calendarRecurrenceWeekNumbersHint;
+
+  /// No description provided for @calendarRecurrenceSetPositionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Set positions'**
+  String get calendarRecurrenceSetPositionsLabel;
+
+  /// No description provided for @calendarRecurrenceSetPositionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 1, -1'**
+  String get calendarRecurrenceSetPositionsHint;
+
+  /// No description provided for @calendarRecurrenceAdditionalDatesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional dates'**
+  String get calendarRecurrenceAdditionalDatesLabel;
+
+  /// No description provided for @calendarRecurrenceAdditionalDatesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date to add'**
+  String get calendarRecurrenceAdditionalDatesHint;
+
+  /// No description provided for @calendarRecurrenceExcludedDatesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Excluded dates'**
+  String get calendarRecurrenceExcludedDatesLabel;
+
+  /// No description provided for @calendarRecurrenceExcludedDatesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a date to exclude'**
+  String get calendarRecurrenceExcludedDatesHint;
+
+  /// No description provided for @calendarRecurrenceTimeFiltersLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Time filters'**
+  String get calendarRecurrenceTimeFiltersLabel;
+
+  /// No description provided for @calendarRecurrenceHoursLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Hours'**
+  String get calendarRecurrenceHoursLabel;
+
+  /// No description provided for @calendarRecurrenceMinutesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes'**
+  String get calendarRecurrenceMinutesLabel;
+
+  /// No description provided for @calendarRecurrenceSecondsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Seconds'**
+  String get calendarRecurrenceSecondsLabel;
+
+  /// No description provided for @calendarRecurrenceEndHeaderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Until'**
+  String get calendarRecurrenceEndHeaderLabel;
+
+  /// No description provided for @calendarRecurrenceEndModeNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never'**
+  String get calendarRecurrenceEndModeNever;
+
+  /// No description provided for @calendarRecurrenceEndModeUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'On date'**
+  String get calendarRecurrenceEndModeUntil;
+
+  /// No description provided for @calendarRecurrenceEndModeCount.
+  ///
+  /// In en, this message translates to:
+  /// **'After'**
+  String get calendarRecurrenceEndModeCount;
+
+  /// No description provided for @calendarRecurrenceOccurrences.
+  ///
+  /// In en, this message translates to:
+  /// **'occurrences'**
+  String get calendarRecurrenceOccurrences;
+
+  /// No description provided for @calendarRecurrenceApproxOccurrences.
+  ///
+  /// In en, this message translates to:
+  /// **'≈ {count} occurrences'**
+  String calendarRecurrenceApproxOccurrences(int count);
+
+  /// No description provided for @calendarRecurrenceEndsOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends on {date}'**
+  String calendarRecurrenceEndsOn(String date);
+
+  /// No description provided for @calendarRecurrenceOrdinalEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'Every'**
+  String get calendarRecurrenceOrdinalEvery;
+
+  /// No description provided for @calendarRecurrenceOrdinalFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'1st'**
+  String get calendarRecurrenceOrdinalFirst;
+
+  /// No description provided for @calendarRecurrenceOrdinalSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'2nd'**
+  String get calendarRecurrenceOrdinalSecond;
+
+  /// No description provided for @calendarRecurrenceOrdinalThird.
+  ///
+  /// In en, this message translates to:
+  /// **'3rd'**
+  String get calendarRecurrenceOrdinalThird;
+
+  /// No description provided for @calendarRecurrenceOrdinalFourth.
+  ///
+  /// In en, this message translates to:
+  /// **'4th'**
+  String get calendarRecurrenceOrdinalFourth;
+
+  /// No description provided for @calendarRecurrenceOrdinalFifth.
+  ///
+  /// In en, this message translates to:
+  /// **'5th'**
+  String get calendarRecurrenceOrdinalFifth;
+
+  /// No description provided for @calendarRecurrenceOrdinalLast.
+  ///
+  /// In en, this message translates to:
+  /// **'Last'**
+  String get calendarRecurrenceOrdinalLast;
+
+  /// No description provided for @calendarRecurrenceOrdinalSecondLast.
+  ///
+  /// In en, this message translates to:
+  /// **'2nd last'**
+  String get calendarRecurrenceOrdinalSecondLast;
+
+  /// No description provided for @calendarRecurrenceOrdinalThirdLast.
+  ///
+  /// In en, this message translates to:
+  /// **'3rd last'**
+  String get calendarRecurrenceOrdinalThirdLast;
+
+  /// No description provided for @calendarRecurrenceOrdinalFourthLast.
+  ///
+  /// In en, this message translates to:
+  /// **'4th last'**
+  String get calendarRecurrenceOrdinalFourthLast;
+
+  /// No description provided for @calendarRecurrenceOrdinalFifthLast.
+  ///
+  /// In en, this message translates to:
+  /// **'5th last'**
+  String get calendarRecurrenceOrdinalFifthLast;
 }
 
 class _AppLocalizationsDelegate

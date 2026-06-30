@@ -9,26 +9,43 @@ import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
-const String _participantsSectionTitle = 'People';
-const String _organizerSectionLabel = 'Organizer';
-const String _attendeesSectionLabel = 'Attendees';
-const String _organizerNameHint = 'Organizer name';
-const String _organizerAddressHint = 'Organizer address';
-const String _attendeeAddressHint = 'Add attendee';
-const String _attendeeNameHint = 'Name (optional)';
-const String _attendeeAddTooltip = 'Add attendee';
-const String _attendeeRemoveTooltip = 'Remove attendee';
-const String _attendeeRoleLabel = 'Role';
-const String _attendeeStatusLabel = 'Status';
-const String _attendeeRsvpLabel = 'RSVP';
-const String _attendeeDefaultLabel = 'Default';
-const String _attendeeActionAcceptLabel = 'Accept';
-const String _attendeeActionDeclineLabel = 'Decline';
-const String _attendeeActionTentativeLabel = 'Tentative';
 const double _participantSelectIconSize = 16;
 const int _participantTextSelectionOffset = 0;
 const List<CalendarAttendee> _emptyAttendees = <CalendarAttendee>[];
+
+String _participantRoleLabel(
+  AppLocalizations l10n,
+  CalendarParticipantRole role,
+) => switch (role) {
+  CalendarParticipantRole.chair => l10n.calendarParticipantRoleChair,
+  CalendarParticipantRole.requiredParticipant =>
+    l10n.calendarParticipantRoleRequired,
+  CalendarParticipantRole.optionalParticipant =>
+    l10n.calendarParticipantRoleOptional,
+  CalendarParticipantRole.nonParticipant =>
+    l10n.calendarParticipantRoleNonParticipant,
+};
+
+String _participantStatusLabel(
+  AppLocalizations l10n,
+  CalendarParticipantStatus status,
+) => switch (status) {
+  CalendarParticipantStatus.needsAction =>
+    l10n.calendarParticipantStatusNeedsAction,
+  CalendarParticipantStatus.accepted => l10n.calendarParticipantStatusAccepted,
+  CalendarParticipantStatus.declined => l10n.calendarParticipantStatusDeclined,
+  CalendarParticipantStatus.tentative =>
+    l10n.calendarParticipantStatusTentative,
+  CalendarParticipantStatus.delegated =>
+    l10n.calendarParticipantStatusDelegated,
+  CalendarParticipantStatus.completed =>
+    l10n.calendarParticipantStatusCompleted,
+  CalendarParticipantStatus.inProcess =>
+    l10n.calendarParticipantStatusInProcess,
+};
 
 class CalendarParticipantsField extends StatefulWidget {
   const CalendarParticipantsField({
@@ -37,7 +54,7 @@ class CalendarParticipantsField extends StatefulWidget {
     required this.attendees,
     required this.onOrganizerChanged,
     required this.onAttendeesChanged,
-    this.title = _participantsSectionTitle,
+    this.title,
     this.headerSize = TaskSectionLabelSize.medium,
     this.inputVariant = AxiInputVariant.ghost,
     this.enabled = true,
@@ -47,7 +64,7 @@ class CalendarParticipantsField extends StatefulWidget {
   final List<CalendarAttendee> attendees;
   final ValueChanged<CalendarOrganizer?> onOrganizerChanged;
   final ValueChanged<List<CalendarAttendee>> onAttendeesChanged;
-  final String title;
+  final String? title;
   final TaskSectionLabelSize headerSize;
   final AxiInputVariant inputVariant;
   final bool enabled;
@@ -104,7 +121,7 @@ class _CalendarParticipantsFieldState extends State<CalendarParticipantsField> {
       ],
     );
     return TaskSectionExpander(
-      title: widget.title,
+      title: widget.title ?? context.l10n.calendarParticipantsSectionTitle,
       headerSize: widget.headerSize,
       isExpanded: _expanded,
       onToggle: () => setState(() => _expanded = !_expanded),
@@ -193,20 +210,24 @@ class _OrganizerFieldState extends State<_OrganizerField> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final bool enabled = widget.enabled;
     final TextStyle labelStyle = context.textTheme.labelSm.strong;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_organizerSectionLabel.toUpperCase(), style: labelStyle),
+        Text(
+          l10n.calendarParticipantsOrganizerLabel.toUpperCase(),
+          style: labelStyle,
+        ),
         SizedBox(height: context.spacing.xxs),
         Row(
           children: [
             Expanded(
               child: TaskTextField(
                 controller: _addressController,
-                hintText: _organizerAddressHint,
+                hintText: l10n.calendarParticipantsOrganizerAddressHint,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.none,
@@ -219,7 +240,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
             Expanded(
               child: TaskTextField(
                 controller: _nameController,
-                hintText: _organizerNameHint,
+                hintText: l10n.calendarParticipantsOrganizerNameHint,
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.words,
                 onChanged: (_) => _handleChange(),
@@ -328,36 +349,37 @@ class _AttendeesFieldState extends State<_AttendeesField> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final bool enabled = widget.enabled;
     final TextStyle labelStyle = context.textTheme.labelSm.strong;
     final List<CalendarAttendee> attendees = widget.attendees.isEmpty
         ? _emptyAttendees
         : widget.attendees;
     final List<AxiDropdownOption<CalendarParticipantRole?>> roleOptions = [
-      const AxiDropdownOption<CalendarParticipantRole?>(
+      AxiDropdownOption<CalendarParticipantRole?>(
         value: null,
-        label: _attendeeDefaultLabel,
-        child: Text(_attendeeDefaultLabel),
+        label: l10n.calendarParticipantsDefaultLabel,
+        child: Text(l10n.calendarParticipantsDefaultLabel),
       ),
       ...CalendarParticipantRole.values.map(
         (role) => AxiDropdownOption<CalendarParticipantRole?>(
           value: role,
-          label: role.label,
-          child: Text(role.label),
+          label: _participantRoleLabel(l10n, role),
+          child: Text(_participantRoleLabel(l10n, role)),
         ),
       ),
     ];
     final List<AxiDropdownOption<CalendarParticipantStatus?>> statusOptions = [
-      const AxiDropdownOption<CalendarParticipantStatus?>(
+      AxiDropdownOption<CalendarParticipantStatus?>(
         value: null,
-        label: _attendeeDefaultLabel,
-        child: Text(_attendeeDefaultLabel),
+        label: l10n.calendarParticipantsDefaultLabel,
+        child: Text(l10n.calendarParticipantsDefaultLabel),
       ),
       ...CalendarParticipantStatus.values.map(
         (status) => AxiDropdownOption<CalendarParticipantStatus?>(
           value: status,
-          label: status.label,
-          child: Text(status.label),
+          label: _participantStatusLabel(l10n, status),
+          child: Text(_participantStatusLabel(l10n, status)),
         ),
       ),
     ];
@@ -365,7 +387,10 @@ class _AttendeesFieldState extends State<_AttendeesField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(_attendeesSectionLabel.toUpperCase(), style: labelStyle),
+        Text(
+          l10n.calendarParticipantsAttendeesLabel.toUpperCase(),
+          style: labelStyle,
+        ),
         SizedBox(height: context.spacing.xxs),
         Row(
           children: [
@@ -373,7 +398,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
               child: TaskTextField(
                 controller: _addressController,
                 focusNode: _addressFocusNode,
-                hintText: _attendeeAddressHint,
+                hintText: l10n.calendarParticipantsAttendeeAddressHint,
                 textInputAction: TextInputAction.next,
                 keyboardType: TextInputType.emailAddress,
                 textCapitalization: TextCapitalization.none,
@@ -385,7 +410,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
             Expanded(
               child: TaskTextField(
                 controller: _nameController,
-                hintText: _attendeeNameHint,
+                hintText: l10n.calendarParticipantsAttendeeNameHint,
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.words,
                 enabled: enabled,
@@ -395,7 +420,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
             SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
-              tooltip: _attendeeAddTooltip,
+              tooltip: l10n.calendarParticipantsAddAttendeeTooltip,
               onPressed: enabled ? _addAttendee : null,
               color: enabled ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
@@ -445,6 +470,7 @@ class _AttendeeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final TextStyle titleStyle = context.textTheme.small.strong.copyWith(
       color: calendarTitleColor,
     );
@@ -494,10 +520,13 @@ class _AttendeeCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _ParticipantSelectField<CalendarParticipantRole?>(
-                  label: _attendeeRoleLabel,
+                  label: l10n.calendarParticipantsRoleLabel,
                   value: attendee.role,
                   options: roleOptions,
-                  selectedLabel: (role) => role?.label ?? _attendeeDefaultLabel,
+                  defaultLabel: l10n.calendarParticipantsDefaultLabel,
+                  selectedLabel: (role) => role == null
+                      ? l10n.calendarParticipantsDefaultLabel
+                      : _participantRoleLabel(l10n, role),
                   onChanged: (value) =>
                       onChanged(attendee.copyWith(role: value)),
                 ),
@@ -505,11 +534,13 @@ class _AttendeeCard extends StatelessWidget {
               SizedBox(width: context.spacing.s),
               Expanded(
                 child: _ParticipantSelectField<CalendarParticipantStatus?>(
-                  label: _attendeeStatusLabel,
+                  label: l10n.calendarParticipantsStatusLabel,
                   value: attendee.status,
                   options: statusOptions,
-                  selectedLabel: (status) =>
-                      status?.label ?? _attendeeDefaultLabel,
+                  defaultLabel: l10n.calendarParticipantsDefaultLabel,
+                  selectedLabel: (status) => status == null
+                      ? l10n.calendarParticipantsDefaultLabel
+                      : _participantStatusLabel(l10n, status),
                   onChanged: (value) =>
                       onChanged(attendee.copyWith(status: value)),
                 ),
@@ -518,7 +549,7 @@ class _AttendeeCard extends StatelessWidget {
           ),
           SizedBox(height: context.spacing.xxs),
           ShadSwitch(
-            label: const Text(_attendeeRsvpLabel),
+            label: Text(l10n.calendarParticipantsRsvpLabel),
             value: attendee.rsvp,
             onChanged: (value) => onChanged(attendee.copyWith(rsvp: value)),
           ),
@@ -546,6 +577,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
     required this.label,
     required this.value,
     required this.options,
+    required this.defaultLabel,
     required this.selectedLabel,
     required this.onChanged,
   });
@@ -553,6 +585,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
   final String label;
   final T value;
   final List<AxiDropdownOption<T>> options;
+  final String defaultLabel;
   final String Function(T value) selectedLabel;
   final ValueChanged<T?> onChanged;
 
@@ -570,9 +603,8 @@ class _ParticipantSelectField<T> extends StatelessWidget {
           widthBehavior: AxiButtonWidth.expand,
           onChanged: onChanged,
           options: options,
-          selectedBuilder: (context, selected) => Text(
-            selected == null ? _attendeeDefaultLabel : selectedLabel(selected),
-          ),
+          selectedBuilder: (context, selected) =>
+              Text(selected == null ? defaultLabel : selectedLabel(selected)),
           decoration: ShadDecoration(
             color: calendarContainerColor,
             border: ShadBorder.all(
@@ -617,15 +649,15 @@ class _ParticipantActionsRow extends StatelessWidget {
       children: [
         AxiButton.outline(
           onPressed: onAccept,
-          child: const Text(_attendeeActionAcceptLabel),
+          child: Text(context.l10n.calendarParticipantsAcceptAction),
         ),
         AxiButton.outline(
           onPressed: onDecline,
-          child: const Text(_attendeeActionDeclineLabel),
+          child: Text(context.l10n.calendarParticipantsDeclineAction),
         ),
         AxiButton.outline(
           onPressed: onTentative,
-          child: const Text(_attendeeActionTentativeLabel),
+          child: Text(context.l10n.calendarParticipantsTentativeAction),
         ),
       ],
     );
@@ -641,7 +673,7 @@ class _AttendeeRemoveButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiIconButton(
       iconData: Icons.close,
-      tooltip: _attendeeRemoveTooltip,
+      tooltip: context.l10n.calendarParticipantsRemoveAttendeeTooltip,
       onPressed: onPressed,
       color: calendarSubtitleColor,
       backgroundColor: calendarContainerColor,

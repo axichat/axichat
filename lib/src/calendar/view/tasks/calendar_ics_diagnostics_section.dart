@@ -8,30 +8,17 @@ import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
-const String _icsDiagnosticsTitle = 'ICS diagnostics';
-const String _icsDiagnosticsMetadataTitle = 'Metadata';
-const String _icsDiagnosticsRawPropertiesTitle = 'Raw properties';
-const String _icsDiagnosticsRawComponentsTitle = 'Raw components';
 const String _icsDiagnosticsUidLabel = 'UID';
 const String _icsDiagnosticsDtStampLabel = 'DTSTAMP';
 const String _icsDiagnosticsCreatedLabel = 'CREATED';
 const String _icsDiagnosticsLastModifiedLabel = 'LAST-MODIFIED';
 const String _icsDiagnosticsSequenceLabel = 'SEQUENCE';
-const String _icsDiagnosticsNotSetLabel = 'Not set';
-const String _icsDiagnosticsParametersLabel = 'Parameters';
-const String _icsDiagnosticsComponentPropertiesLabel = 'Properties';
-const String _icsDiagnosticsComponentChildrenLabel = 'Subcomponents';
-const String _icsDiagnosticsPropertyFallbackLabel = 'Property';
-const String _icsDiagnosticsComponentFallbackLabel = 'Component';
-const String _icsDiagnosticsParameterFallbackLabel = 'Parameter';
 const String _icsDiagnosticsParameterSeparator = ', ';
 const String _icsDiagnosticsParameterValueSeparator = '=';
 const String _icsDiagnosticsCountSeparator = ' | ';
-const String _icsDiagnosticsPropertySingular = 'property';
-const String _icsDiagnosticsPropertyPlural = 'properties';
-const String _icsDiagnosticsChildSingular = 'subcomponent';
-const String _icsDiagnosticsChildPlural = 'subcomponents';
 const double _icsDiagnosticsLabelLetterSpacing = 0.2;
 
 bool hasIcsDiagnosticsData(CalendarIcsMeta? meta) {
@@ -65,17 +52,18 @@ class CalendarIcsDiagnosticsSection extends StatelessWidget {
   const CalendarIcsDiagnosticsSection({
     super.key,
     required this.icsMeta,
-    this.title = _icsDiagnosticsTitle,
+    this.title,
   });
 
   final CalendarIcsMeta? icsMeta;
-  final String title;
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
     if (!hasIcsDiagnosticsData(icsMeta)) {
       return const SizedBox.shrink();
     }
+    final l10n = context.l10n;
     final CalendarIcsMeta meta = icsMeta!;
     final List<_IcsMetaEntry> metadataEntries = _collectMetadataEntries(meta);
     final List<CalendarRawProperty> rawProperties = meta.rawProperties;
@@ -84,25 +72,25 @@ class CalendarIcsDiagnosticsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(title: title),
+        TaskSectionHeader(title: title ?? l10n.calendarIcsDiagnosticsTitle),
         if (metadataEntries.isNotEmpty) ...[
           SizedBox(height: context.spacing.s),
           _DiagnosticsGroup(
-            label: _icsDiagnosticsMetadataTitle,
+            label: l10n.calendarIcsDiagnosticsMetadataTitle,
             child: _IcsMetadataList(entries: metadataEntries),
           ),
         ],
         if (rawProperties.isNotEmpty) ...[
           SizedBox(height: context.spacing.m),
           _DiagnosticsGroup(
-            label: _icsDiagnosticsRawPropertiesTitle,
+            label: l10n.calendarIcsDiagnosticsRawPropertiesTitle,
             child: _RawPropertiesList(properties: rawProperties),
           ),
         ],
         if (rawComponents.isNotEmpty) ...[
           SizedBox(height: context.spacing.m),
           _DiagnosticsGroup(
-            label: _icsDiagnosticsRawComponentsTitle,
+            label: l10n.calendarIcsDiagnosticsRawComponentsTitle,
             child: _RawComponentsList(components: rawComponents),
           ),
         ],
@@ -277,8 +265,9 @@ class _RawPropertyTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String name = _resolvePropertyName(property.name);
-    final String value = _resolvePropertyValue(property.value);
+    final l10n = context.l10n;
+    final String name = _resolvePropertyName(l10n, property.name);
+    final String value = _resolvePropertyValue(l10n, property.value);
     final List<CalendarPropertyParameter> parameters = property.parameters;
     final TextStyle titleStyle = context.textTheme.small.strong.copyWith(
       color: calendarTitleColor,
@@ -306,15 +295,18 @@ class _RawPropertyTile extends StatelessWidget {
           Text(value, style: valueStyle),
           if (parameters.isNotEmpty) ...[
             SizedBox(height: context.spacing.xxs),
-            const _DiagnosticsGroupLabel(label: _icsDiagnosticsParametersLabel),
+            _DiagnosticsGroupLabel(
+              label: l10n.calendarIcsDiagnosticsParametersLabel,
+            ),
             SizedBox(height: context.spacing.xxs),
             Wrap(
               spacing: context.spacing.xxs,
               runSpacing: context.spacing.xxs,
               children: parameters
                   .map(
-                    (parameter) =>
-                        _ParameterChip(label: parameter.labelForDiagnostics),
+                    (parameter) => _ParameterChip(
+                      label: parameter.labelForDiagnostics(l10n),
+                    ),
                   )
                   .toList(),
             ),
@@ -393,7 +385,8 @@ class _RawComponentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String name = _resolveComponentName(component.name);
+    final l10n = context.l10n;
+    final String name = _resolveComponentName(l10n, component.name);
     final List<CalendarRawProperty> properties = component.properties;
     final List<CalendarRawComponent> children = component.components;
     final EdgeInsets padding = EdgeInsets.only(
@@ -422,8 +415,8 @@ class _RawComponentTile extends StatelessWidget {
             ),
             if (properties.isNotEmpty) ...[
               SizedBox(height: context.spacing.xxs),
-              const _DiagnosticsGroupLabel(
-                label: _icsDiagnosticsComponentPropertiesLabel,
+              _DiagnosticsGroupLabel(
+                label: l10n.calendarIcsDiagnosticsComponentPropertiesLabel,
               ),
               SizedBox(height: context.spacing.xxs),
               ...properties.map(
@@ -435,8 +428,8 @@ class _RawComponentTile extends StatelessWidget {
             ],
             if (children.isNotEmpty) ...[
               SizedBox(height: context.spacing.xxs),
-              const _DiagnosticsGroupLabel(
-                label: _icsDiagnosticsComponentChildrenLabel,
+              _DiagnosticsGroupLabel(
+                label: l10n.calendarIcsDiagnosticsComponentChildrenLabel,
               ),
               SizedBox(height: context.spacing.xxs),
               _RawComponentsList(components: children, depth: depth + 1),
@@ -468,6 +461,7 @@ class _RawComponentHeader extends StatelessWidget {
       color: calendarSubtitleColor,
     );
     final String? counts = _formatComponentCounts(
+      l10n: context.l10n,
       propertyCount: propertyCount,
       childCount: childCount,
     );
@@ -486,27 +480,16 @@ class _RawComponentHeader extends StatelessWidget {
 }
 
 String? _formatComponentCounts({
+  required AppLocalizations l10n,
   required int propertyCount,
   required int childCount,
 }) {
   final List<String> parts = <String>[];
   if (propertyCount > 0) {
-    parts.add(
-      _formatCount(
-        propertyCount,
-        _icsDiagnosticsPropertySingular,
-        _icsDiagnosticsPropertyPlural,
-      ),
-    );
+    parts.add(l10n.calendarIcsDiagnosticsPropertyCount(propertyCount));
   }
   if (childCount > 0) {
-    parts.add(
-      _formatCount(
-        childCount,
-        _icsDiagnosticsChildSingular,
-        _icsDiagnosticsChildPlural,
-      ),
-    );
+    parts.add(l10n.calendarIcsDiagnosticsSubcomponentCount(childCount));
   }
   if (parts.isEmpty) {
     return null;
@@ -514,31 +497,30 @@ String? _formatComponentCounts({
   return parts.join(_icsDiagnosticsCountSeparator);
 }
 
-String _formatCount(int count, String singular, String plural) {
-  final String label = count == 1 ? singular : plural;
-  return '$count $label';
-}
-
-String _resolvePropertyName(String name) {
+String _resolvePropertyName(AppLocalizations l10n, String name) {
   final String trimmed = name.trim();
-  return trimmed.isEmpty ? _icsDiagnosticsPropertyFallbackLabel : trimmed;
+  return trimmed.isEmpty
+      ? l10n.calendarIcsDiagnosticsPropertyFallbackLabel
+      : trimmed;
 }
 
-String _resolveComponentName(String name) {
+String _resolveComponentName(AppLocalizations l10n, String name) {
   final String trimmed = name.trim();
-  return trimmed.isEmpty ? _icsDiagnosticsComponentFallbackLabel : trimmed;
+  return trimmed.isEmpty
+      ? l10n.calendarIcsDiagnosticsComponentFallbackLabel
+      : trimmed;
 }
 
-String _resolvePropertyValue(String value) {
+String _resolvePropertyValue(AppLocalizations l10n, String value) {
   final String trimmed = value.trim();
-  return trimmed.isEmpty ? _icsDiagnosticsNotSetLabel : trimmed;
+  return trimmed.isEmpty ? l10n.calendarIcsDiagnosticsNotSetLabel : trimmed;
 }
 
 extension CalendarPropertyParameterLabel on CalendarPropertyParameter {
-  String get labelForDiagnostics {
+  String labelForDiagnostics(AppLocalizations l10n) {
     final String trimmedName = name.trim();
     final String label = trimmedName.isEmpty
-        ? _icsDiagnosticsParameterFallbackLabel
+        ? l10n.calendarIcsDiagnosticsParameterFallbackLabel
         : trimmedName;
     final List<String> cleanedValues = values
         .map((value) => value.trim())

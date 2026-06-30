@@ -7,18 +7,17 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_attachment.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-
-const String _attachmentsSectionTitle = 'Attachments';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
 class CalendarAttachmentsField extends StatelessWidget {
   const CalendarAttachmentsField({
     super.key,
     required this.attachments,
-    this.title = _attachmentsSectionTitle,
+    this.title,
   });
 
   final List<CalendarAttachment> attachments;
-  final String title;
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +28,9 @@ class CalendarAttachmentsField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(title: title),
+        TaskSectionHeader(
+          title: title ?? context.l10n.calendarAttachmentsTitle,
+        ),
         SizedBox(height: spacing.s),
         ...attachments.map(
           (attachment) => Padding(

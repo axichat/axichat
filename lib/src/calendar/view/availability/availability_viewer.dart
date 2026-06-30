@@ -37,20 +37,9 @@ const EdgeInsets _availabilityViewerPadding = EdgeInsets.symmetric(
   vertical: _availabilityViewerVerticalPadding,
 );
 
-const String _availabilityViewerTitleFallback = 'Free/busy';
-const String _availabilityViewerOwnerPrefix = 'Free/busy for';
-const String _availabilityViewerSourceLabel = 'Compare with';
-const String _availabilityViewerPersonalLabel = 'Personal calendar';
-const String _availabilityViewerChatLabel = 'Chat calendar';
-const String _availabilityViewerMutualHint = 'Tap mutual time to request.';
 const String _availabilityViewerLocalOwner = 'local';
 const String _availabilityViewerRangeSeparator = ' - ';
-const String _availabilityViewerBusyLabel = 'Busy';
-const String _availabilityViewerFreeLabel = 'Free';
-const String _availabilityViewerMutualLabel = 'Mutual';
-const String _availabilityViewerBusyPrefix = 'Busy: ';
 const String _availabilityViewerTitleSeparator = ' | ';
-const String _availabilityViewerUnknownOwnerLabel = 'Unknown';
 
 const int _availabilityViewerMinutesPerHour = 60;
 const int _availabilityViewerHoursPerDay = 24;
@@ -148,12 +137,17 @@ class _CalendarAvailabilityShareViewerScreenState
     final DateTime rangeStart = share.overlay.rangeStart.value;
     final DateTime rangeEnd = share.overlay.rangeEnd.value;
     final String ownerLabel = _resolveOwnerLabel(
+      l10n: l10n,
       overrideLabel: widget.ownerLabel,
       fallbackLabel: share.overlay.owner,
     );
-    final String title = _formatOwnerTitle(ownerLabel);
+    final String title = _formatOwnerTitle(l10n, ownerLabel);
     final String rangeLabel = _formatRange(l10n, rangeStart, rangeEnd);
-    final String? rangeHint = _formatRangeDurationHint(rangeStart, rangeEnd);
+    final String? rangeHint = _formatRangeDurationHint(
+      l10n,
+      rangeStart,
+      rangeEnd,
+    );
     final bool canUseChat = widget.enableChatCalendar;
     final bool showRequestHint = widget.onRequest != null;
     final Widget header = _AvailabilityViewerHeader(
@@ -164,7 +158,7 @@ class _CalendarAvailabilityShareViewerScreenState
     );
     final Widget? sourceToggle = canUseChat
         ? _AvailabilityViewerSourceToggle(
-            label: _availabilityViewerSourceLabel,
+            label: l10n.calendarAvailabilityViewerSourceLabel,
             selected: _source,
             onSelected: _handleSourceSelected,
             chatLabel: widget.chatLabel,
@@ -329,7 +323,7 @@ class _AvailabilityViewerControls extends StatelessWidget {
       }
       children.add(
         Text(
-          _availabilityViewerMutualHint,
+          context.l10n.calendarAvailabilityViewerMutualHint,
           style: context.textTheme.small.copyWith(
             color: context.colorScheme.mutedForeground,
           ),
@@ -362,7 +356,10 @@ class _AvailabilityViewerSourceToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = context.textTheme;
-    final String resolvedChatLabel = _formatChatCalendarLabel(chatLabel);
+    final String resolvedChatLabel = _formatChatCalendarLabel(
+      context.l10n,
+      chatLabel,
+    );
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: _availabilityViewerSourceButtonSpacing,
@@ -376,7 +373,7 @@ class _AvailabilityViewerSourceToggle extends StatelessWidget {
           ),
         ),
         _AvailabilityViewerSourceButton(
-          label: _availabilityViewerPersonalLabel,
+          label: context.l10n.calendarAvailabilityViewerPersonalLabel,
           isSelected: selected.isPersonal,
           onPressed: () => onSelected(_AvailabilityViewerSource.personal),
         ),
@@ -441,8 +438,8 @@ class _AvailabilityViewerGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (source.isChat && !enableChatCalendar) {
-      return const _AvailabilityViewerEmptyState(
-        label: _availabilityViewerChatLabel,
+      return _AvailabilityViewerEmptyState(
+        label: context.l10n.calendarAvailabilityViewerChatLabel,
       );
     }
 
@@ -527,6 +524,7 @@ class _AvailabilityViewerGridContent extends StatelessWidget {
             start: start,
             end: end,
             ownerLabel: ownerLabel,
+            l10n: context.l10n,
           ),
         ).copyWithViewportHeight(height);
       },
@@ -555,6 +553,7 @@ class _AvailabilityViewerEmptyState extends StatelessWidget {
 }
 
 String _resolveOwnerLabel({
+  required AppLocalizations l10n,
   required String? overrideLabel,
   required String fallbackLabel,
 }) {
@@ -566,23 +565,23 @@ String _resolveOwnerLabel({
   if (trimmedFallback.isNotEmpty) {
     return trimmedFallback;
   }
-  return _availabilityViewerUnknownOwnerLabel;
+  return l10n.commonUnknownLabel;
 }
 
-String _formatOwnerTitle(String ownerLabel) {
+String _formatOwnerTitle(AppLocalizations l10n, String ownerLabel) {
   final String trimmedOwner = ownerLabel.trim();
   if (trimmedOwner.isEmpty) {
-    return _availabilityViewerTitleFallback;
+    return l10n.calendarAvailabilityViewerTitleFallback;
   }
-  return '$_availabilityViewerOwnerPrefix $trimmedOwner';
+  return l10n.calendarAvailabilityViewerOwnerTitle(trimmedOwner);
 }
 
-String _formatChatCalendarLabel(String? chatLabel) {
+String _formatChatCalendarLabel(AppLocalizations l10n, String? chatLabel) {
   final String trimmed = chatLabel?.trim() ?? '';
   if (trimmed.isEmpty) {
-    return _availabilityViewerChatLabel;
+    return l10n.calendarAvailabilityViewerChatLabel;
   }
-  return '$_availabilityViewerChatLabel: $trimmed';
+  return l10n.calendarAvailabilityViewerChatLabelFor(trimmed);
 }
 
 String _formatRange(AppLocalizations l10n, DateTime start, DateTime end) {
@@ -594,7 +593,11 @@ String _formatRange(AppLocalizations l10n, DateTime start, DateTime end) {
   return l10n.commonRangeLabel(startLabel, endLabel);
 }
 
-String? _formatRangeDurationHint(DateTime start, DateTime end) {
+String? _formatRangeDurationHint(
+  AppLocalizations l10n,
+  DateTime start,
+  DateTime end,
+) {
   final Duration duration = end.difference(start);
   final int minutes = duration.inMinutes;
   if (minutes <= 0 || minutes % _availabilityViewerMinutesPerDay != 0) {
@@ -606,9 +609,9 @@ String? _formatRangeDurationHint(DateTime start, DateTime end) {
   }
   if (days % _availabilityViewerDaysPerWeek == 0) {
     final int weeks = days ~/ _availabilityViewerDaysPerWeek;
-    return _pluralize(weeks, 'week');
+    return l10n.commonDurationWeeks(weeks);
   }
-  return _pluralize(days, 'day');
+  return l10n.commonDurationDays(days);
 }
 
 String _formatTileTitle({
@@ -616,11 +619,13 @@ String _formatTileTitle({
   required DateTime start,
   required DateTime end,
   required String ownerLabel,
+  required AppLocalizations l10n,
 }) {
   final String timeLabel = _formatTimeRange(start, end);
   final String baseLabel = _formatTileBaseLabel(
     type: type,
     ownerLabel: ownerLabel,
+    l10n: l10n,
   );
   if (timeLabel.isEmpty) {
     return baseLabel;
@@ -631,18 +636,19 @@ String _formatTileTitle({
 String _formatTileBaseLabel({
   required CalendarFreeBusyType type,
   required String ownerLabel,
+  required AppLocalizations l10n,
 }) {
   if (type.isBusy || type.isBusyUnavailable) {
     final String trimmedOwner = ownerLabel.trim();
     if (trimmedOwner.isEmpty) {
-      return _availabilityViewerBusyLabel;
+      return l10n.calendarFreeBusyBusy;
     }
-    return '$_availabilityViewerBusyPrefix$trimmedOwner';
+    return l10n.calendarAvailabilityViewerBusyFor(trimmedOwner);
   }
   if (type.isBusyTentative) {
-    return _availabilityViewerMutualLabel;
+    return l10n.calendarAvailabilityViewerMutualLabel;
   }
-  return _availabilityViewerFreeLabel;
+  return l10n.calendarFreeBusyFree;
 }
 
 String _formatTimeRange(DateTime start, DateTime end) {
@@ -652,13 +658,6 @@ String _formatTimeRange(DateTime start, DateTime end) {
     return startLabel;
   }
   return '$startLabel$_availabilityViewerRangeSeparator$endLabel';
-}
-
-String _pluralize(int value, String unit) {
-  if (value == 1) {
-    return '$value $unit';
-  }
-  return '$value ${unit}s';
 }
 
 extension _CalendarFreeBusyEditorViewportX on CalendarFreeBusyEditor {

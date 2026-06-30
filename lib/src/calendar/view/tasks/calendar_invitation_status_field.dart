@@ -8,15 +8,24 @@ import 'package:axichat/src/calendar/models/calendar_collection.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_raw.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
-const String _invitationSectionTitle = 'Invitation status';
-const String _invitationMethodLabel = 'Message';
-const String _invitationSequenceLabel = 'Sequence';
-const String _invitationRequestStatusLabel = 'Request status';
 const String _invitationRequestStatusProperty = 'REQUEST-STATUS';
 const String _invitationRequestStatusSeparator = ';';
-const String _invitationRequestStatusFallbackLabel = 'Request status';
 const double _invitationLabelLetterSpacing = 0.2;
+
+String _calendarMethodLabel(AppLocalizations l10n, CalendarMethod method) =>
+    switch (method) {
+      CalendarMethod.publish => l10n.calendarMethodPublish,
+      CalendarMethod.request => l10n.calendarMethodRequest,
+      CalendarMethod.reply => l10n.calendarMethodReply,
+      CalendarMethod.cancel => l10n.calendarMethodCancel,
+      CalendarMethod.add => l10n.calendarMethodAdd,
+      CalendarMethod.refresh => l10n.calendarMethodRefresh,
+      CalendarMethod.counter => l10n.calendarMethodCounter,
+      CalendarMethod.declineCounter => l10n.calendarMethodDeclineCounter,
+    };
 
 bool hasInvitationStatusData({
   required CalendarMethod? method,
@@ -38,16 +47,17 @@ class CalendarInvitationStatusField extends StatelessWidget {
     required this.method,
     required this.sequence,
     required this.rawProperties,
-    this.title = _invitationSectionTitle,
+    this.title,
   });
 
   final CalendarMethod? method;
   final int? sequence;
   final List<CalendarRawProperty> rawProperties;
-  final String title;
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final CalendarMethod? effectiveMethod = method != null && method!.isPublish
         ? null
         : method;
@@ -70,23 +80,26 @@ class CalendarInvitationStatusField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TaskSectionHeader(title: title),
+        TaskSectionHeader(title: title ?? l10n.calendarInvitationStatusTitle),
         SizedBox(height: context.spacing.s),
         if (effectiveMethod != null)
           _InvitationDetailRow(
-            label: _invitationMethodLabel,
-            value: effectiveMethod.label,
+            label: l10n.calendarInvitationMethodLabel,
+            value: _calendarMethodLabel(l10n, effectiveMethod),
           ),
         if (sequence != null) ...[
           if (effectiveMethod != null) SizedBox(height: context.spacing.xs),
           _InvitationDetailRow(
-            label: _invitationSequenceLabel,
+            label: l10n.calendarInvitationSequenceLabel,
             value: sequence!.toString(),
           ),
         ],
         if (entries.isNotEmpty) ...[
           SizedBox(height: context.spacing.xs),
-          Text(_invitationRequestStatusLabel.toUpperCase(), style: labelStyle),
+          Text(
+            l10n.calendarInvitationRequestStatusLabel.toUpperCase(),
+            style: labelStyle,
+          ),
           SizedBox(height: context.spacing.xxs),
           ...entries.map(
             (entry) => Padding(
@@ -189,7 +202,7 @@ class _RequestStatusTile extends StatelessWidget {
     );
     final String code = entry.code.isNotEmpty
         ? entry.code
-        : _invitationRequestStatusFallbackLabel;
+        : context.l10n.calendarInvitationRequestStatusLabel;
     final String description = entry.description ?? entry.rawValue;
 
     return Container(

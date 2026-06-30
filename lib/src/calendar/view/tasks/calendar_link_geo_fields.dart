@@ -8,11 +8,8 @@ import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/calendar/view/tasks/task_text_field.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
-const String _linkGeoSectionTitle = 'Link & geo';
-const String _linkFieldHint = 'Link';
-const String _latitudeFieldHint = 'Latitude';
-const String _longitudeFieldHint = 'Longitude';
 const String _geoSeparator = ', ';
 const int _geoPrecision = 4;
 
@@ -23,7 +20,7 @@ class CalendarLinkGeoFields extends StatefulWidget {
     required this.geo,
     required this.onUrlChanged,
     required this.onGeoChanged,
-    this.title = _linkGeoSectionTitle,
+    this.title,
     this.headerSize = TaskSectionLabelSize.medium,
     this.inputVariant = AxiInputVariant.ghost,
     this.enabled = true,
@@ -33,7 +30,7 @@ class CalendarLinkGeoFields extends StatefulWidget {
   final CalendarGeo? geo;
   final ValueChanged<String?> onUrlChanged;
   final ValueChanged<CalendarGeo?> onGeoChanged;
-  final String title;
+  final String? title;
   final TaskSectionLabelSize headerSize;
   final AxiInputVariant inputVariant;
   final bool enabled;
@@ -147,6 +144,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     const TextInputType geoKeyboard = TextInputType.numberWithOptions(
       decimal: true,
       signed: true,
@@ -182,7 +180,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
         ],
         TaskTextField(
           controller: _urlController,
-          hintText: _linkFieldHint,
+          hintText: l10n.calendarLinkHint,
           textInputAction: TextInputAction.next,
           textCapitalization: TextCapitalization.none,
           keyboardType: TextInputType.url,
@@ -196,7 +194,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
             Expanded(
               child: TaskTextField(
                 controller: _latitudeController,
-                hintText: _latitudeFieldHint,
+                hintText: l10n.calendarLatitudeHint,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.none,
                 keyboardType: geoKeyboard,
@@ -209,7 +207,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
             Expanded(
               child: TaskTextField(
                 controller: _longitudeController,
-                hintText: _longitudeFieldHint,
+                hintText: l10n.calendarLongitudeHint,
                 textInputAction: TextInputAction.done,
                 textCapitalization: TextCapitalization.none,
                 keyboardType: geoKeyboard,
@@ -223,7 +221,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
       ],
     );
     return TaskSectionExpander(
-      title: widget.title,
+      title: widget.title ?? l10n.calendarLinkGeoSectionTitle,
       headerSize: widget.headerSize,
       isExpanded: _expanded,
       onToggle: () => setState(() => _expanded = !_expanded),

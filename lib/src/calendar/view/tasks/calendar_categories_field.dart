@@ -6,9 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/view/tasks/task_form_section.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 
-const String _categoriesSectionTitle = 'Categories';
-const String _categoriesHintText = 'Add category';
 const String _categoriesSplitPattern = r'[,\n]';
 const double _categoryInputMinWidth = 140.0;
 const double _categoryInputMaxWidth = 260.0;
@@ -19,18 +18,18 @@ class CalendarCategoriesField extends StatefulWidget {
     super.key,
     required this.categories,
     required this.onChanged,
-    this.title = _categoriesSectionTitle,
+    this.title,
     this.headerSize = TaskSectionLabelSize.medium,
-    this.hintText = _categoriesHintText,
+    this.hintText,
     this.enabled = true,
     this.surfaceColor,
   });
 
   final List<String> categories;
   final ValueChanged<List<String>> onChanged;
-  final String title;
+  final String? title;
   final TaskSectionLabelSize headerSize;
-  final String hintText;
+  final String? hintText;
   final bool enabled;
   final Color? surfaceColor;
 
@@ -160,6 +159,7 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final colors = context.colorScheme;
     final Color barBackground = widget.surfaceColor ?? calendarContainerColor;
     final List<Widget> chipWidgets = <Widget>[
@@ -173,7 +173,7 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
       _CategoryInputField(
         controller: _controller,
         focusNode: _focusNode,
-        hintText: widget.hintText,
+        hintText: widget.hintText ?? l10n.calendarCategoriesHint,
         onSubmitted: _submitInput,
         enabled: widget.enabled,
       ),
@@ -197,7 +197,7 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
             colors: colors,
           );
     return TaskSectionExpander(
-      title: widget.title,
+      title: widget.title ?? l10n.calendarCategoriesSectionTitle,
       headerSize: widget.headerSize,
       isExpanded: _expanded,
       onToggle: () => setState(() => _expanded = !_expanded),

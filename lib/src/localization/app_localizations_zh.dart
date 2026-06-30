@@ -4886,8 +4886,8 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# 天',
-      one: '# 天',
+      other: '$count 天',
+      one: '$count 天',
     );
     return '$_temp0';
   }
@@ -4897,8 +4897,8 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# 小时',
-      one: '# 小时',
+      other: '$count 小时',
+      one: '$count 小时',
     );
     return '$_temp0';
   }
@@ -4908,8 +4908,8 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# 分钟',
-      one: '# 分钟',
+      other: '$count 分钟',
+      one: '$count 分钟',
     );
     return '$_temp0';
   }
@@ -6998,6 +6998,448 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get recoveryRemoveConfirmMessage => '移除此恢复方式？';
+
+  @override
+  String get calendarSyncedReminderNoticeTitle => '提醒通知已关闭';
+
+  @override
+  String get calendarSyncedReminderNoticeMessage => '允许通知，否则提醒将无法工作。';
+
+  @override
+  String get calendarSyncedReminderEnableAction => '启用';
+
+  @override
+  String get calendarReminderBeforeStartLabel => '开始前';
+
+  @override
+  String get calendarReminderBeforeDeadlineLabel => '截止前';
+
+  @override
+  String get calendarReminderAtStartLabel => '开始时';
+
+  @override
+  String get calendarReminderAtDeadlineLabel => '截止时';
+
+  @override
+  String get calendarReminderAdvancedAlarms => '高级提醒';
+
+  @override
+  String get calendarReminderAdvancedAlarmsActive => '已启用';
+
+  @override
+  String get calendarReminderAdvancedAlarmsApplied => '已应用高级提醒';
+
+  @override
+  String get calendarReminderNotificationsRequiredTitle => '提醒需要通知权限';
+
+  @override
+  String get calendarReminderNotificationsRequiredMessage =>
+      '打开通知，才能在此设备上添加提醒。';
+
+  @override
+  String get calendarReminderOpenSettings => '打开设置';
+
+  @override
+  String get calendarReminderMixedLabel => '混合';
+
+  @override
+  String get calendarLinkGeoSectionTitle => '链接与位置';
+
+  @override
+  String get calendarLinkHint => '链接';
+
+  @override
+  String get calendarLatitudeHint => '纬度';
+
+  @override
+  String get calendarLongitudeHint => '经度';
+
+  @override
+  String get calendarAvailabilityCardShareLabel => '空闲时间';
+
+  @override
+  String get calendarAvailabilityCardShareSubtitle => '点按查看空闲/忙碌。';
+
+  @override
+  String get calendarAvailabilityAcceptAction => '接受';
+
+  @override
+  String get calendarAvailabilityDeclineAction => '拒绝';
+
+  @override
+  String get calendarAvailabilityViewerSourceLabel => '比较对象';
+
+  @override
+  String get calendarAvailabilityViewerPersonalLabel => '个人日历';
+
+  @override
+  String get calendarAvailabilityViewerChatLabel => '聊天日历';
+
+  @override
+  String calendarAvailabilityViewerChatLabelFor(String label) {
+    return '聊天日历：$label';
+  }
+
+  @override
+  String get calendarAvailabilityViewerMutualHint => '点按共同空闲时间以请求。';
+
+  @override
+  String get calendarAvailabilityViewerTitleFallback => '空闲/忙碌';
+
+  @override
+  String calendarAvailabilityViewerOwnerTitle(String owner) {
+    return '$owner 的空闲/忙碌';
+  }
+
+  @override
+  String calendarAvailabilityViewerBusyFor(String owner) {
+    return '忙碌：$owner';
+  }
+
+  @override
+  String get calendarAvailabilityViewerMutualLabel => '共同';
+
+  @override
+  String commonDurationWeeks(int count) {
+    return '$count 周';
+  }
+
+  @override
+  String commonDurationDays(int count) {
+    return '$count 天';
+  }
+
+  @override
+  String get calendarCategoriesSectionTitle => '类别';
+
+  @override
+  String get calendarCategoriesHint => '添加类别';
+
+  @override
+  String get calendarAttachmentsTitle => '附件';
+
+  @override
+  String get calendarChecklistTitle => '清单';
+
+  @override
+  String get calendarParticipantsSectionTitle => '人员';
+
+  @override
+  String get calendarParticipantsOrganizerLabel => '组织者';
+
+  @override
+  String get calendarParticipantsAttendeesLabel => '参与者';
+
+  @override
+  String get calendarParticipantsOrganizerNameHint => '组织者姓名';
+
+  @override
+  String get calendarParticipantsOrganizerAddressHint => '组织者地址';
+
+  @override
+  String get calendarParticipantsAttendeeAddressHint => '添加参与者';
+
+  @override
+  String get calendarParticipantsAttendeeNameHint => '姓名（可选）';
+
+  @override
+  String get calendarParticipantsAddAttendeeTooltip => '添加参与者';
+
+  @override
+  String get calendarParticipantsRemoveAttendeeTooltip => '移除参与者';
+
+  @override
+  String get calendarParticipantsRoleLabel => '角色';
+
+  @override
+  String get calendarParticipantsStatusLabel => '状态';
+
+  @override
+  String get calendarParticipantsRsvpLabel => 'RSVP';
+
+  @override
+  String get calendarParticipantsDefaultLabel => '默认';
+
+  @override
+  String get calendarParticipantsAcceptAction => '接受';
+
+  @override
+  String get calendarParticipantsDeclineAction => '拒绝';
+
+  @override
+  String get calendarParticipantsTentativeAction => '暂定';
+
+  @override
+  String get calendarParticipantRoleChair => '主持人';
+
+  @override
+  String get calendarParticipantRoleRequired => '必需';
+
+  @override
+  String get calendarParticipantRoleOptional => '可选';
+
+  @override
+  String get calendarParticipantRoleNonParticipant => '非参与者';
+
+  @override
+  String get calendarParticipantStatusNeedsAction => '需要操作';
+
+  @override
+  String get calendarParticipantStatusAccepted => '已接受';
+
+  @override
+  String get calendarParticipantStatusDeclined => '已拒绝';
+
+  @override
+  String get calendarParticipantStatusTentative => '暂定';
+
+  @override
+  String get calendarParticipantStatusDelegated => '已委派';
+
+  @override
+  String get calendarParticipantStatusCompleted => '已完成';
+
+  @override
+  String get calendarParticipantStatusInProcess => '进行中';
+
+  @override
+  String get calendarInvitationStatusTitle => '邀请状态';
+
+  @override
+  String get calendarInvitationMethodLabel => '方法';
+
+  @override
+  String get calendarInvitationSequenceLabel => '序列';
+
+  @override
+  String get calendarInvitationRequestStatusLabel => '请求状态';
+
+  @override
+  String get calendarMethodPublish => '发布';
+
+  @override
+  String get calendarMethodRequest => '请求';
+
+  @override
+  String get calendarMethodReply => '回复';
+
+  @override
+  String get calendarMethodCancel => '取消';
+
+  @override
+  String get calendarMethodAdd => '添加';
+
+  @override
+  String get calendarMethodRefresh => '刷新';
+
+  @override
+  String get calendarMethodCounter => '反提议';
+
+  @override
+  String get calendarMethodDeclineCounter => '拒绝反提议';
+
+  @override
+  String get calendarIcsDiagnosticsTitle => 'ICS 诊断';
+
+  @override
+  String get calendarIcsDiagnosticsMetadataTitle => '元数据';
+
+  @override
+  String get calendarIcsDiagnosticsRawPropertiesTitle => '原始属性';
+
+  @override
+  String get calendarIcsDiagnosticsRawComponentsTitle => '原始组件';
+
+  @override
+  String get calendarIcsDiagnosticsNotSetLabel => '未设置';
+
+  @override
+  String get calendarIcsDiagnosticsParametersLabel => '参数';
+
+  @override
+  String get calendarIcsDiagnosticsComponentPropertiesLabel => '属性';
+
+  @override
+  String get calendarIcsDiagnosticsComponentChildrenLabel => '子组件';
+
+  @override
+  String get calendarIcsDiagnosticsPropertyFallbackLabel => '属性';
+
+  @override
+  String get calendarIcsDiagnosticsComponentFallbackLabel => '组件';
+
+  @override
+  String get calendarIcsDiagnosticsParameterFallbackLabel => '参数';
+
+  @override
+  String calendarIcsDiagnosticsPropertyCount(int count) {
+    return '$count 个属性';
+  }
+
+  @override
+  String calendarIcsDiagnosticsSubcomponentCount(int count) {
+    return '$count 个子组件';
+  }
+
+  @override
+  String get calendarRecurrenceFrequencyNever => '从不';
+
+  @override
+  String get calendarRecurrenceFrequencyDaily => '每天';
+
+  @override
+  String get calendarRecurrenceFrequencyWeekdays => '工作日';
+
+  @override
+  String get calendarRecurrenceFrequencyWeekly => '每周';
+
+  @override
+  String get calendarRecurrenceFrequencyMonthly => '每月';
+
+  @override
+  String get calendarRecurrenceFrequencyYearly => '每年';
+
+  @override
+  String get calendarRecurrenceIntervalDays => '天';
+
+  @override
+  String get calendarRecurrenceIntervalWeeks => '周';
+
+  @override
+  String get calendarRecurrenceIntervalMonths => '个月';
+
+  @override
+  String get calendarRecurrenceIntervalYears => '年';
+
+  @override
+  String get calendarRecurrenceIntervalTimes => '次';
+
+  @override
+  String get calendarRecurrenceRepeatEveryLabel => '每隔';
+
+  @override
+  String get calendarRecurrenceAdvancedRulesLabel => '高级规则';
+
+  @override
+  String get calendarRecurrenceAdvancedAppliedLabel => '已应用高级规则';
+
+  @override
+  String get calendarRecurrenceAdvancedActiveLabel => '已启用';
+
+  @override
+  String get calendarRecurrenceWeekdayRulesLabel => '星期规则';
+
+  @override
+  String get calendarRecurrenceWeekdayRulesHelper => '添加类似每周一或第 1 个周五的规则。';
+
+  @override
+  String get calendarRecurrenceMonthsLabel => '月份';
+
+  @override
+  String get calendarRecurrenceMonthDaysLabel => '每月日期';
+
+  @override
+  String get calendarRecurrenceMonthDaysHint => '例如 1, 15, -1';
+
+  @override
+  String get calendarRecurrenceYearDaysLabel => '每年日期';
+
+  @override
+  String get calendarRecurrenceYearDaysHint => '例如 1, 120, -1';
+
+  @override
+  String get calendarRecurrenceWeekNumbersLabel => '周数';
+
+  @override
+  String get calendarRecurrenceWeekNumbersHint => '例如 1, 20, -1';
+
+  @override
+  String get calendarRecurrenceSetPositionsLabel => '位置';
+
+  @override
+  String get calendarRecurrenceSetPositionsHint => '例如 1, -1';
+
+  @override
+  String get calendarRecurrenceAdditionalDatesLabel => '额外日期';
+
+  @override
+  String get calendarRecurrenceAdditionalDatesHint => '选择要添加的日期';
+
+  @override
+  String get calendarRecurrenceExcludedDatesLabel => '排除日期';
+
+  @override
+  String get calendarRecurrenceExcludedDatesHint => '选择要排除的日期';
+
+  @override
+  String get calendarRecurrenceTimeFiltersLabel => '时间筛选';
+
+  @override
+  String get calendarRecurrenceHoursLabel => '小时';
+
+  @override
+  String get calendarRecurrenceMinutesLabel => '分钟';
+
+  @override
+  String get calendarRecurrenceSecondsLabel => '秒';
+
+  @override
+  String get calendarRecurrenceEndHeaderLabel => '直到';
+
+  @override
+  String get calendarRecurrenceEndModeNever => '从不';
+
+  @override
+  String get calendarRecurrenceEndModeUntil => '指定日期';
+
+  @override
+  String get calendarRecurrenceEndModeCount => '之后';
+
+  @override
+  String get calendarRecurrenceOccurrences => '次';
+
+  @override
+  String calendarRecurrenceApproxOccurrences(int count) {
+    return '约 $count 次';
+  }
+
+  @override
+  String calendarRecurrenceEndsOn(String date) {
+    return '结束于 $date';
+  }
+
+  @override
+  String get calendarRecurrenceOrdinalEvery => '每个';
+
+  @override
+  String get calendarRecurrenceOrdinalFirst => '第 1 个';
+
+  @override
+  String get calendarRecurrenceOrdinalSecond => '第 2 个';
+
+  @override
+  String get calendarRecurrenceOrdinalThird => '第 3 个';
+
+  @override
+  String get calendarRecurrenceOrdinalFourth => '第 4 个';
+
+  @override
+  String get calendarRecurrenceOrdinalFifth => '第 5 个';
+
+  @override
+  String get calendarRecurrenceOrdinalLast => '最后一个';
+
+  @override
+  String get calendarRecurrenceOrdinalSecondLast => '倒数第 2 个';
+
+  @override
+  String get calendarRecurrenceOrdinalThirdLast => '倒数第 3 个';
+
+  @override
+  String get calendarRecurrenceOrdinalFourthLast => '倒数第 4 个';
+
+  @override
+  String get calendarRecurrenceOrdinalFifthLast => '倒数第 5 个';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -11885,8 +12327,8 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# 天',
-      one: '# 天',
+      other: '$count 天',
+      one: '$count 天',
     );
     return '$_temp0';
   }
@@ -11896,8 +12338,8 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# 小時',
-      one: '# 小時',
+      other: '$count 小時',
+      one: '$count 小時',
     );
     return '$_temp0';
   }
@@ -11907,8 +12349,8 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# 分鐘',
-      one: '# 分鐘',
+      other: '$count 分鐘',
+      one: '$count 分鐘',
     );
     return '$_temp0';
   }
@@ -13997,4 +14439,445 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get recoveryRemoveConfirmMessage => '移除此復原方式？';
+
+  @override
+  String get calendarSyncedReminderNoticeTitle => '提醒通知已關閉';
+
+  @override
+  String get calendarSyncedReminderNoticeMessage => '允許通知，否則提醒將無法運作。';
+
+  @override
+  String get calendarSyncedReminderEnableAction => '啟用';
+
+  @override
+  String get calendarReminderBeforeStartLabel => '開始前';
+
+  @override
+  String get calendarReminderBeforeDeadlineLabel => '截止前';
+
+  @override
+  String get calendarReminderAtStartLabel => '開始時';
+
+  @override
+  String get calendarReminderAtDeadlineLabel => '截止時';
+
+  @override
+  String get calendarReminderAdvancedAlarms => '進階提醒';
+
+  @override
+  String get calendarReminderAdvancedAlarmsActive => '已啟用';
+
+  @override
+  String get calendarReminderAdvancedAlarmsApplied => '已套用進階提醒';
+
+  @override
+  String get calendarReminderNotificationsRequiredTitle => '提醒需要通知權限';
+
+  @override
+  String get calendarReminderNotificationsRequiredMessage => '開啟通知，才能在此裝置加入提醒。';
+
+  @override
+  String get calendarReminderOpenSettings => '開啟設定';
+
+  @override
+  String get calendarReminderMixedLabel => '混合';
+
+  @override
+  String get calendarLinkGeoSectionTitle => '連結與位置';
+
+  @override
+  String get calendarLinkHint => '連結';
+
+  @override
+  String get calendarLatitudeHint => '緯度';
+
+  @override
+  String get calendarLongitudeHint => '經度';
+
+  @override
+  String get calendarAvailabilityCardShareLabel => '空閒時間';
+
+  @override
+  String get calendarAvailabilityCardShareSubtitle => '點一下查看空閒/忙碌。';
+
+  @override
+  String get calendarAvailabilityAcceptAction => '接受';
+
+  @override
+  String get calendarAvailabilityDeclineAction => '拒絕';
+
+  @override
+  String get calendarAvailabilityViewerSourceLabel => '比較對象';
+
+  @override
+  String get calendarAvailabilityViewerPersonalLabel => '個人日曆';
+
+  @override
+  String get calendarAvailabilityViewerChatLabel => '聊天日曆';
+
+  @override
+  String calendarAvailabilityViewerChatLabelFor(String label) {
+    return '聊天日曆：$label';
+  }
+
+  @override
+  String get calendarAvailabilityViewerMutualHint => '點一下共同空閒時間以請求。';
+
+  @override
+  String get calendarAvailabilityViewerTitleFallback => '空閒/忙碌';
+
+  @override
+  String calendarAvailabilityViewerOwnerTitle(String owner) {
+    return '$owner 的空閒/忙碌';
+  }
+
+  @override
+  String calendarAvailabilityViewerBusyFor(String owner) {
+    return '忙碌：$owner';
+  }
+
+  @override
+  String get calendarAvailabilityViewerMutualLabel => '共同';
+
+  @override
+  String commonDurationWeeks(int count) {
+    return '$count 週';
+  }
+
+  @override
+  String commonDurationDays(int count) {
+    return '$count 日';
+  }
+
+  @override
+  String get calendarCategoriesSectionTitle => '類別';
+
+  @override
+  String get calendarCategoriesHint => '加入類別';
+
+  @override
+  String get calendarAttachmentsTitle => '附件';
+
+  @override
+  String get calendarChecklistTitle => '清單';
+
+  @override
+  String get calendarParticipantsSectionTitle => '人員';
+
+  @override
+  String get calendarParticipantsOrganizerLabel => '組織者';
+
+  @override
+  String get calendarParticipantsAttendeesLabel => '參與者';
+
+  @override
+  String get calendarParticipantsOrganizerNameHint => '組織者姓名';
+
+  @override
+  String get calendarParticipantsOrganizerAddressHint => '組織者地址';
+
+  @override
+  String get calendarParticipantsAttendeeAddressHint => '加入參與者';
+
+  @override
+  String get calendarParticipantsAttendeeNameHint => '姓名（選填）';
+
+  @override
+  String get calendarParticipantsAddAttendeeTooltip => '加入參與者';
+
+  @override
+  String get calendarParticipantsRemoveAttendeeTooltip => '移除參與者';
+
+  @override
+  String get calendarParticipantsRoleLabel => '角色';
+
+  @override
+  String get calendarParticipantsStatusLabel => '狀態';
+
+  @override
+  String get calendarParticipantsRsvpLabel => 'RSVP';
+
+  @override
+  String get calendarParticipantsDefaultLabel => '預設';
+
+  @override
+  String get calendarParticipantsAcceptAction => '接受';
+
+  @override
+  String get calendarParticipantsDeclineAction => '拒絕';
+
+  @override
+  String get calendarParticipantsTentativeAction => '暫定';
+
+  @override
+  String get calendarParticipantRoleChair => '主持人';
+
+  @override
+  String get calendarParticipantRoleRequired => '必需';
+
+  @override
+  String get calendarParticipantRoleOptional => '選填';
+
+  @override
+  String get calendarParticipantRoleNonParticipant => '非參與者';
+
+  @override
+  String get calendarParticipantStatusNeedsAction => '需要操作';
+
+  @override
+  String get calendarParticipantStatusAccepted => '已接受';
+
+  @override
+  String get calendarParticipantStatusDeclined => '已拒絕';
+
+  @override
+  String get calendarParticipantStatusTentative => '暫定';
+
+  @override
+  String get calendarParticipantStatusDelegated => '已委派';
+
+  @override
+  String get calendarParticipantStatusCompleted => '已完成';
+
+  @override
+  String get calendarParticipantStatusInProcess => '進行中';
+
+  @override
+  String get calendarInvitationStatusTitle => '邀請狀態';
+
+  @override
+  String get calendarInvitationMethodLabel => '方法';
+
+  @override
+  String get calendarInvitationSequenceLabel => '序列';
+
+  @override
+  String get calendarInvitationRequestStatusLabel => '請求狀態';
+
+  @override
+  String get calendarMethodPublish => '發佈';
+
+  @override
+  String get calendarMethodRequest => '請求';
+
+  @override
+  String get calendarMethodReply => '回覆';
+
+  @override
+  String get calendarMethodCancel => '取消';
+
+  @override
+  String get calendarMethodAdd => '加入';
+
+  @override
+  String get calendarMethodRefresh => '重新整理';
+
+  @override
+  String get calendarMethodCounter => '反提議';
+
+  @override
+  String get calendarMethodDeclineCounter => '拒絕反提議';
+
+  @override
+  String get calendarIcsDiagnosticsTitle => 'ICS 診斷';
+
+  @override
+  String get calendarIcsDiagnosticsMetadataTitle => '元資料';
+
+  @override
+  String get calendarIcsDiagnosticsRawPropertiesTitle => '原始屬性';
+
+  @override
+  String get calendarIcsDiagnosticsRawComponentsTitle => '原始元件';
+
+  @override
+  String get calendarIcsDiagnosticsNotSetLabel => '未設定';
+
+  @override
+  String get calendarIcsDiagnosticsParametersLabel => '參數';
+
+  @override
+  String get calendarIcsDiagnosticsComponentPropertiesLabel => '屬性';
+
+  @override
+  String get calendarIcsDiagnosticsComponentChildrenLabel => '子元件';
+
+  @override
+  String get calendarIcsDiagnosticsPropertyFallbackLabel => '屬性';
+
+  @override
+  String get calendarIcsDiagnosticsComponentFallbackLabel => '元件';
+
+  @override
+  String get calendarIcsDiagnosticsParameterFallbackLabel => '參數';
+
+  @override
+  String calendarIcsDiagnosticsPropertyCount(int count) {
+    return '$count 個屬性';
+  }
+
+  @override
+  String calendarIcsDiagnosticsSubcomponentCount(int count) {
+    return '$count 個子元件';
+  }
+
+  @override
+  String get calendarRecurrenceFrequencyNever => '永不';
+
+  @override
+  String get calendarRecurrenceFrequencyDaily => '每日';
+
+  @override
+  String get calendarRecurrenceFrequencyWeekdays => '工作日';
+
+  @override
+  String get calendarRecurrenceFrequencyWeekly => '每週';
+
+  @override
+  String get calendarRecurrenceFrequencyMonthly => '每月';
+
+  @override
+  String get calendarRecurrenceFrequencyYearly => '每年';
+
+  @override
+  String get calendarRecurrenceIntervalDays => '日';
+
+  @override
+  String get calendarRecurrenceIntervalWeeks => '週';
+
+  @override
+  String get calendarRecurrenceIntervalMonths => '個月';
+
+  @override
+  String get calendarRecurrenceIntervalYears => '年';
+
+  @override
+  String get calendarRecurrenceIntervalTimes => '次';
+
+  @override
+  String get calendarRecurrenceRepeatEveryLabel => '每隔';
+
+  @override
+  String get calendarRecurrenceAdvancedRulesLabel => '進階規則';
+
+  @override
+  String get calendarRecurrenceAdvancedAppliedLabel => '已套用進階規則';
+
+  @override
+  String get calendarRecurrenceAdvancedActiveLabel => '已啟用';
+
+  @override
+  String get calendarRecurrenceWeekdayRulesLabel => '星期規則';
+
+  @override
+  String get calendarRecurrenceWeekdayRulesHelper => '加入類似每週一或第 1 個週五的規則。';
+
+  @override
+  String get calendarRecurrenceMonthsLabel => '月份';
+
+  @override
+  String get calendarRecurrenceMonthDaysLabel => '每月日期';
+
+  @override
+  String get calendarRecurrenceMonthDaysHint => '例如 1, 15, -1';
+
+  @override
+  String get calendarRecurrenceYearDaysLabel => '每年日期';
+
+  @override
+  String get calendarRecurrenceYearDaysHint => '例如 1, 120, -1';
+
+  @override
+  String get calendarRecurrenceWeekNumbersLabel => '週數';
+
+  @override
+  String get calendarRecurrenceWeekNumbersHint => '例如 1, 20, -1';
+
+  @override
+  String get calendarRecurrenceSetPositionsLabel => '位置';
+
+  @override
+  String get calendarRecurrenceSetPositionsHint => '例如 1, -1';
+
+  @override
+  String get calendarRecurrenceAdditionalDatesLabel => '額外日期';
+
+  @override
+  String get calendarRecurrenceAdditionalDatesHint => '選擇要加入的日期';
+
+  @override
+  String get calendarRecurrenceExcludedDatesLabel => '排除日期';
+
+  @override
+  String get calendarRecurrenceExcludedDatesHint => '選擇要排除的日期';
+
+  @override
+  String get calendarRecurrenceTimeFiltersLabel => '時間篩選';
+
+  @override
+  String get calendarRecurrenceHoursLabel => '小時';
+
+  @override
+  String get calendarRecurrenceMinutesLabel => '分鐘';
+
+  @override
+  String get calendarRecurrenceSecondsLabel => '秒';
+
+  @override
+  String get calendarRecurrenceEndHeaderLabel => '直到';
+
+  @override
+  String get calendarRecurrenceEndModeNever => '永不';
+
+  @override
+  String get calendarRecurrenceEndModeUntil => '指定日期';
+
+  @override
+  String get calendarRecurrenceEndModeCount => '之後';
+
+  @override
+  String get calendarRecurrenceOccurrences => '次';
+
+  @override
+  String calendarRecurrenceApproxOccurrences(int count) {
+    return '約 $count 次';
+  }
+
+  @override
+  String calendarRecurrenceEndsOn(String date) {
+    return '結束於 $date';
+  }
+
+  @override
+  String get calendarRecurrenceOrdinalEvery => '每個';
+
+  @override
+  String get calendarRecurrenceOrdinalFirst => '第 1 個';
+
+  @override
+  String get calendarRecurrenceOrdinalSecond => '第 2 個';
+
+  @override
+  String get calendarRecurrenceOrdinalThird => '第 3 個';
+
+  @override
+  String get calendarRecurrenceOrdinalFourth => '第 4 個';
+
+  @override
+  String get calendarRecurrenceOrdinalFifth => '第 5 個';
+
+  @override
+  String get calendarRecurrenceOrdinalLast => '最後一個';
+
+  @override
+  String get calendarRecurrenceOrdinalSecondLast => '倒數第 2 個';
+
+  @override
+  String get calendarRecurrenceOrdinalThirdLast => '倒數第 3 個';
+
+  @override
+  String get calendarRecurrenceOrdinalFourthLast => '倒數第 4 個';
+
+  @override
+  String get calendarRecurrenceOrdinalFifthLast => '倒數第 5 個';
 }
