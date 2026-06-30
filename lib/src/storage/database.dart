@@ -910,6 +910,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> updateChat(Chat chat);
 
+  Future<void> updateChatContactDisplayName({
+    required String jid,
+    required String? displayName,
+  });
+
   Future<void> markDirectChatXmppCapable(String jid);
 
   Future<void> updateChatSettingsSyncState(Chat chat);
@@ -920,7 +925,9 @@ abstract interface class XmppDatabase implements Database {
     required bool muted,
     required bool favorited,
     required bool archived,
-    required String contactJid,
+    bool? hidden,
+    String? contactJid,
+    bool markDirectXmppCapable = true,
   });
 
   Future<void> updateConversationIndexArchived({
@@ -2316,7 +2323,7 @@ class XmppDrift extends _$XmppDrift
   }
 
   @override
-  int get schemaVersion => 74;
+  int get schemaVersion => 75;
 
   @override
   MigrationStrategy get migration {
@@ -3594,8 +3601,6 @@ WHERE stanza_i_d = ?
     final direction = newestFirst ? 'DESC' : 'ASC';
     return '''
       $alias.timestamp $direction,
-      CASE WHEN $alias.delta_msg_id IS NOT NULL THEN 1 ELSE 0 END $direction,
-      $alias.delta_msg_id $direction,
       $alias.rowid $direction
     ''';
   }
@@ -3604,8 +3609,6 @@ WHERE stanza_i_d = ?
     final mode = newestFirst ? OrderingMode.desc : OrderingMode.asc;
     return [
       OrderingTerm(expression: messages.timestamp, mode: mode),
-      OrderingTerm(expression: messages.deltaMsgId.isNotNull(), mode: mode),
-      OrderingTerm(expression: messages.deltaMsgId, mode: mode),
       OrderingTerm(expression: messages.rowId, mode: mode),
     ];
   }
@@ -3616,8 +3619,6 @@ WHERE stanza_i_d = ?
     final mode = newestFirst ? OrderingMode.desc : OrderingMode.asc;
     return [
       (tbl) => OrderingTerm(expression: tbl.timestamp, mode: mode),
-      (tbl) => OrderingTerm(expression: tbl.deltaMsgId.isNotNull(), mode: mode),
-      (tbl) => OrderingTerm(expression: tbl.deltaMsgId, mode: mode),
       (tbl) => OrderingTerm(expression: tbl.rowId, mode: mode),
     ];
   }
@@ -3639,22 +3640,9 @@ WHERE stanza_i_d = ?
       beforeStanzaId: throughStanzaId,
       beforeDeltaMsgId: throughDeltaMsgId,
     );
-    final Expression<bool> sameTimestampThrough;
-    if (throughDeltaMsgId != null && throughDeltaMsgId > 0) {
-      final rowCursor = throughRowId ?? -1;
-      sameTimestampThrough =
-          messages.deltaMsgId.isNotNull() &
-          (messages.deltaMsgId.isBiggerThanValue(throughDeltaMsgId) |
-              (messages.deltaMsgId.equals(throughDeltaMsgId) &
-                  messages.rowId.isBiggerOrEqualValue(rowCursor)));
-    } else if (throughRowId != null) {
-      sameTimestampThrough =
-          messages.deltaMsgId.isNotNull() |
-          (messages.deltaMsgId.isNull() &
-              messages.rowId.isBiggerOrEqualValue(throughRowId));
-    } else {
-      sameTimestampThrough = const Constant(false);
-    }
+    final sameTimestampThrough = throughRowId == null
+        ? const Constant(false)
+        : messages.rowId.isBiggerOrEqualValue(throughRowId);
     final countExpression = messages.rowId.count(distinct: true);
     final query = _chatMessagesCountJoin(jid: jid, filter: filter)
       ..addColumns([countExpression])
@@ -3736,17 +3724,8 @@ WHERE stanza_i_d = ?
     required int? beforeDeltaMsgId,
   }) {
     final Expression<bool> sameTimestampBefore;
-    if (beforeDeltaMsgId != null && beforeDeltaMsgId > 0) {
-      final rowCursor = beforeRowId ?? -1;
-      sameTimestampBefore =
-          messages.deltaMsgId.isNull() |
-          messages.deltaMsgId.isSmallerThanValue(beforeDeltaMsgId) |
-          (messages.deltaMsgId.equals(beforeDeltaMsgId) &
-              messages.rowId.isSmallerThanValue(rowCursor));
-    } else if (beforeRowId != null) {
-      sameTimestampBefore =
-          messages.deltaMsgId.isNull() &
-          messages.rowId.isSmallerThanValue(beforeRowId);
+    if (beforeRowId != null) {
+      sameTimestampBefore = messages.rowId.isSmallerThanValue(beforeRowId);
     } else {
       sameTimestampBefore = const Constant(false);
     }
@@ -9438,6 +9417,21 @@ ORDER BY pinned_at DESC, message_reference_id DESC
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
 
   @override
+  Future<void> updateChatContactDisplayName({
+    required String jid,
+    required String? displayName,
+  }) {
+    final trimmed = displayName?.trim();
+    return (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+      ChatsCompanion(
+        contactDisplayName: Value(
+          trimmed == null || trimmed.isEmpty ? null : trimmed,
+        ),
+      ),
+    );
+  }
+
+  @override
   Future<void> markDirectChatXmppCapable(String jid) async {
     await _markDirectChatsXmppCapable([jid]);
   }
@@ -9588,37 +9582,39 @@ WHERE transport = ?
     required bool muted,
     required bool favorited,
     required bool archived,
-    required String contactJid,
+    bool? hidden,
+    String? contactJid,
+    bool markDirectXmppCapable = true,
   }) async {
     await transaction(() async {
-      await _markDirectChatsXmppCapable([jid]);
+      if (markDirectXmppCapable) {
+        await _markDirectChatsXmppCapable([jid]);
+      }
+      final hiddenSql = hidden == null ? '' : ',\n    hidden = ?';
+      final contactJidSql = contactJid == null ? '' : ',\n    contact_jid = ?';
+      final variables = <Variable>[
+        Variable<DateTime>(lastChangeTimestamp),
+        Variable<DateTime>(lastChangeTimestamp),
+        Variable<bool>(muted),
+        Variable<bool>(favorited),
+        Variable<bool>(archived),
+        if (hidden != null) Variable<bool>(hidden),
+        if (contactJid != null) Variable<String>(contactJid),
+        Variable<String>(jid),
+      ];
       await customUpdate(
         '''
 UPDATE chats
-SET last_message = CASE
-      WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN NULL
-      ELSE last_message
-    END,
-    last_change_timestamp = CASE
+SET last_change_timestamp = CASE
       WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
       ELSE last_change_timestamp
     END,
     muted = ?,
     favorited = ?,
-    archived = ?,
-    contact_jid = ?
+    archived = ?$hiddenSql$contactJidSql
 WHERE jid = ?
 ''',
-        variables: [
-          Variable<DateTime>(lastChangeTimestamp),
-          Variable<DateTime>(lastChangeTimestamp),
-          Variable<DateTime>(lastChangeTimestamp),
-          Variable<bool>(muted),
-          Variable<bool>(favorited),
-          Variable<bool>(archived),
-          Variable<String>(contactJid),
-          Variable<String>(jid),
-        ],
+        variables: variables,
         updates: {chats},
       );
     });
@@ -9629,9 +9625,7 @@ WHERE jid = ?
     required String jid,
     required bool archived,
   }) async {
-    await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
-      ChatsCompanion(archived: Value(archived)),
-    );
+    await markChatArchived(jid: jid, archived: archived);
   }
 
   Future<int> collapseDuplicateDeltaPairRows() async {
@@ -11255,7 +11249,7 @@ WHERE (delta_msg_id IS NOT NULL OR delta_chat_id IS NOT NULL)
       return;
     }
     final timestamp = lastMessage.timestamp;
-    if (timestamp == null || timestamp.isBefore(chat.lastChangeTimestamp)) {
+    if (timestamp == null) {
       return;
     }
     final lastMessagePreview = await _messagePreview(
@@ -11268,6 +11262,15 @@ WHERE (delta_msg_id IS NOT NULL OR delta_chat_id IS NOT NULL)
       pseudoMessageType: lastMessage.pseudoMessageType,
       pseudoMessageData: lastMessage.pseudoMessageData,
     );
+    if (timestamp.isBefore(chat.lastChangeTimestamp)) {
+      if (!clearStaleLastMessage || chat.lastMessage == lastMessagePreview) {
+        return;
+      }
+      await chatsAccessor.updateOne(
+        chat.copyWith(lastMessage: lastMessagePreview),
+      );
+      return;
+    }
     final updated = chat.copyWith(
       lastMessage: lastMessagePreview,
       lastChangeTimestamp: timestamp,

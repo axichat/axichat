@@ -833,7 +833,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get chatContactRenameDescription =>
-      'Elige cómo aparece este contacto en Axichat.';
+      'Elige cómo aparece este contacto en este dispositivo.';
 
   @override
   String get chatContactRenamePlaceholder => 'Nombre para mostrar';
@@ -845,7 +845,8 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatContactRenameSave => 'Guardar';
 
   @override
-  String get chatContactRenameSuccess => 'Nombre para mostrar actualizado';
+  String get chatContactRenameSuccess =>
+      'Nombre para mostrar actualizado localmente';
 
   @override
   String get chatContactRenameFailure => 'No se pudo renombrar el contacto';
@@ -3360,14 +3361,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String chatsDeleteConfirmMessage(Object chatTitle) {
-    return 'Eliminar chat: $chatTitle';
+    return 'Eliminar este chat en este dispositivo: $chatTitle';
   }
 
   @override
   String get chatsDeleteMessagesOption => 'Eliminar mensajes permanentemente';
 
   @override
-  String get chatsDeleteSuccess => 'Chat eliminado';
+  String get chatsDeleteSuccess => 'Chat eliminado localmente';
 
   @override
   String get chatsExportNoContent => 'No hay texto para exportar';
@@ -3496,8 +3497,10 @@ class AppLocalizationsEs extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Esto elimina # chats y todos sus mensajes. No se puede deshacer.',
-      one: 'Esto elimina 1 chat y todos sus mensajes. No se puede deshacer.',
+      other:
+          'Esto elimina # chats y todos sus mensajes de este dispositivo. No se puede deshacer aquí.',
+      one:
+          'Esto elimina 1 chat y todos sus mensajes de este dispositivo. No se puede deshacer aquí.',
     );
     return '$_temp0';
   }

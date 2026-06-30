@@ -264,11 +264,11 @@
   "chatContactRenameTooltip": "Renombrar contacto",
   "chatVerifiedServerAnnouncementTooltip": "Anuncio verificado del servidor",
   "chatContactRenameTitle": "Renombrar contacto",
-  "chatContactRenameDescription": "Elige cómo aparece este contacto en Axichat.",
+  "chatContactRenameDescription": "Elige cómo aparece este contacto en este dispositivo.",
   "chatContactRenamePlaceholder": "Nombre para mostrar",
   "chatContactRenameReset": "Restablecer al valor predeterminado",
   "chatContactRenameSave": "Guardar",
-  "chatContactRenameSuccess": "Nombre para mostrar actualizado",
+  "chatContactRenameSuccess": "Nombre para mostrar actualizado localmente",
   "chatContactRenameFailure": "No se pudo renombrar el contacto",
   "chatComposerSemantics": "Entrada de mensaje",
   "draftSaved": "Borrador guardado",
@@ -1226,14 +1226,14 @@
   "mucActionGrantModerator": "Conceder moderador",
   "mucActionRevokeModerator": "Revocar moderador",
   "chatsEmptyList": "Aún no hay chats",
-  "chatsDeleteConfirmMessage": "Eliminar chat: {chatTitle}",
+  "chatsDeleteConfirmMessage": "Eliminar este chat en este dispositivo: {chatTitle}",
   "@chatsDeleteConfirmMessage": {
     "placeholders": {
       "chatTitle": {}
     }
   },
   "chatsDeleteMessagesOption": "Eliminar mensajes permanentemente",
-  "chatsDeleteSuccess": "Chat eliminado",
+  "chatsDeleteSuccess": "Chat eliminado localmente",
   "chatsExportNoContent": "No hay texto para exportar",
   "chatsExportShareText": "Exportación de chat desde Axichat",
   "chatsExportShareSubject": "Chat con {chatTitle}",
@@ -1281,7 +1281,7 @@
   "chatSelectionExportFailedTitle": "Error de exportación",
   "chatSelectionExportFailedMessage": "No se pudieron exportar los chats seleccionados",
   "chatSelectionDeleteConfirmTitle": "¿Eliminar chats?",
-  "chatSelectionDeleteConfirmMessage": "{count, plural, one {Esto elimina 1 chat y todos sus mensajes. No se puede deshacer.} other {Esto elimina # chats y todos sus mensajes. No se puede deshacer.}}",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {Esto elimina 1 chat y todos sus mensajes de este dispositivo. No se puede deshacer aquí.} other {Esto elimina # chats y todos sus mensajes de este dispositivo. No se puede deshacer aquí.}}",
   "@chatSelectionDeleteConfirmMessage": {
     "placeholders": {
       "count": {}

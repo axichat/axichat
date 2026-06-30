@@ -114,8 +114,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
-  static const int _conversationIndexSnapshotStart = 0;
-  static const int _conversationIndexSnapshotEnd = 0;
   static const int _chatPreloadStart = 0;
   static const int _defaultChatPreloadLimit = basePageItemLimit;
   static const int _chatPreloadDisabledLimit = 0;
@@ -144,6 +142,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   List<Chat>? _cachedChatList;
   bool? _lastMarkerResponsive;
   bool _conversationIndexSnapshotResolved = false;
+  bool _conversationAnnotationsSnapshotResolved = false;
 
   List<Chat>? get cachedChatList => _cachedChatList;
 
@@ -344,6 +343,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   List<mox.XmppManagerBase> get pubSubFeatureManagers => <mox.XmppManagerBase>[
     ...super.pubSubFeatureManagers,
     ConversationIndexManager(),
+    ConversationAnnotationsManager(),
     ChatSettingsPubSubManager(),
   ];
 
@@ -351,11 +351,15 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   List<String> get discoFeatures => <String>[
     ...super.discoFeatures,
     conversationIndexNotifyFeature,
+    conversationAnnotationsNotifyFeature,
     chatSettingsNotifyFeature,
   ];
 
   ChatSettingsPubSubManager? get _chatSettingsManager =>
       _connection.getManager<ChatSettingsPubSubManager>();
+
+  ConversationAnnotationsManager? get _conversationAnnotationsManager =>
+      _connection.getManager<ConversationAnnotationsManager>();
 
   Future<List<ConvItem>> syncConversationIndexSnapshot() async {
     final pendingSync = _conversationIndexLoginSync;
@@ -388,6 +392,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
           throw XmppAbortedException();
         }
         _conversationIndexSnapshotResolved = true;
+        _conversationAnnotationsSnapshotResolved = true;
         _pendingConversationIndexSeeds.clear();
         return _emptyConversationIndexSnapshot;
       }
@@ -400,11 +405,26 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       await manager.ensureNode();
       await manager.subscribe();
       final snapshot = await manager.fetchAllWithStatus();
+      final annotationsManager = _conversationAnnotationsManager;
+      ({List<ConvItem> items, bool isSuccess, bool isComplete})?
+      annotationsSnapshot;
+      if (annotationsManager != null) {
+        await annotationsManager.ensureNode();
+        await annotationsManager.subscribe();
+        annotationsSnapshot = await annotationsManager.fetchAllWithStatus();
+      }
       if (_bootstrapRunAborted(syncEpoch)) {
         throw XmppAbortedException();
       }
-      await applyConversationIndexSnapshot(snapshot);
-      return snapshot.items;
+      await applyConversationIndexSnapshot(
+        snapshot,
+        annotationsSnapshot: annotationsSnapshot,
+      );
+      return [
+        ...snapshot.items,
+        if (annotationsSnapshot?.isSuccess == true)
+          ...annotationsSnapshot!.items,
+      ];
     } on XmppAbortedException {
       return _emptyConversationIndexSnapshot;
     }
@@ -713,6 +733,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     _typingParticipantSessions.clear();
     _pendingConversationIndexSeeds.clear();
     _conversationIndexSnapshotResolved = false;
+    _conversationAnnotationsSnapshotResolved = false;
     _conversationIndexLoginSync = null;
     _conversationIndexLoginSyncEpoch = null;
     _chatSettingsLoginSync = null;
@@ -1384,10 +1405,19 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required String jid,
     required bool archived,
   }) async {
+    final previous = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(jid),
+    );
     await _dbOp<XmppDatabase>(
       (db) => db.markChatArchived(jid: jid, archived: archived),
     );
-    await _syncConversationIndexMeta(jid: jid);
+    if (previous == null) {
+      await _syncConversationIndexMeta(jid: jid);
+      return;
+    }
+    await _syncConversationIndexMetaForChat(
+      previous.copyWith(archived: archived),
+    );
   }
 
   Future<void> toggleChatHidden({
@@ -1397,6 +1427,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     await _dbOp<XmppDatabase>(
       (db) => db.markChatHidden(jid: jid, hidden: hidden),
     );
+    await _syncConversationIndexMeta(jid: jid);
   }
 
   Future<void> toggleChatSpam({required String jid, required bool spam}) async {
@@ -1501,39 +1532,16 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     required String displayName,
   }) async {
     final trimmed = displayName.trim();
-    MessageTransport? transport;
-    String? rosterTitle;
     await _dbOp<XmppDatabase>((db) async {
       final chat = await db.getChat(jid);
-      transport = chat?.transport;
-      if (chat != null) {
-        rosterTitle = chat.title.trim().isNotEmpty ? chat.title : null;
-        final updated = chat.copyWith(
-          contactDisplayName: trimmed.isNotEmpty ? trimmed : null,
-        );
-        await db.updateChat(updated);
+      if (chat == null) {
+        return;
       }
-      final rosterItem = await db.getRosterItem(jid);
-      if (rosterItem != null) {
-        rosterTitle ??= rosterItem.title;
-        if (trimmed.isNotEmpty) {
-          rosterTitle = trimmed;
-          await db.updateRosterItem(rosterItem.copyWith(title: trimmed));
-        } else if (rosterTitle != null) {
-          await db.updateRosterItem(rosterItem.copyWith(title: rosterTitle!));
-        }
-      }
+      await db.updateChatContactDisplayName(
+        jid: chat.jid,
+        displayName: trimmed.isEmpty ? null : trimmed,
+      );
     });
-    if (_isLocalOnlyChatJid(jid)) {
-      return;
-    }
-    rosterTitle ??= addressDisplayLabel(jid) ?? mox.JID.fromString(jid).local;
-    if (transport?.isXmpp == true && rosterTitle != null) {
-      final renamed = await _connection.addToRoster(jid, title: rosterTitle);
-      if (!renamed) {
-        throw XmppRosterException();
-      }
-    }
   }
 
   Future<void> applyConversationIndexItems(List<ConvItem> items) async {
@@ -1541,71 +1549,107 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     final now = DateTime.timestamp();
     await _dbOp<XmppDatabase>((db) async {
       for (final item in items) {
-        final peerJid = item.peerBare.toBare().toString();
-        if (peerJid.isEmpty) continue;
-        if (_isConversationIndexLocalOnlyChatJid(peerJid)) continue;
-        final isSelfChat = peerJid == myJid;
+        final peer = _conversationIndexPeerForItem(item);
+        if (peer == null || peer.isEmpty) continue;
+        if ((item.isDirect || item.isGroup) &&
+            _isConversationIndexLocalOnlyChatJid(peer)) {
+          continue;
+        }
+        final isSelfChat = item.isDirect && peer == myJid;
 
-        final archived = item.archived;
-        final pinned = item.pinned;
         final muted = item.mutedUntil?.toLocal().isAfter(now) ?? false;
         final messageTimestamp = item.lastTimestamp.toUtc();
-        final lastVisibleSelfMessage = isSelfChat
-            ? await db.getLastMessageForChat(peerJid)
-            : null;
-        final lastVisibleSelfTimestamp = lastVisibleSelfMessage?.timestamp
-            ?.toUtc();
-        final lastChangeCandidate =
-            isSelfChat &&
-                lastVisibleSelfTimestamp != null &&
-                messageTimestamp.isAfter(lastVisibleSelfTimestamp)
-            ? lastVisibleSelfTimestamp
-            : messageTimestamp;
+        var lastChangeCandidate = messageTimestamp;
 
-        final existing = await db.getChat(peerJid);
+        final existing = await _findConversationIndexChatForItem(db, item);
         if (existing == null) {
-          final isSelfChat = peerJid == myJid;
+          if (!item.isDirect) {
+            continue;
+          }
+          final lastVisibleSelfMessage = isSelfChat
+              ? await db.getLastMessageForChat(peer)
+              : null;
+          final lastVisibleSelfTimestamp = lastVisibleSelfMessage?.timestamp
+              ?.toUtc();
+          if (isSelfChat &&
+              lastVisibleSelfTimestamp != null &&
+              messageTimestamp.isAfter(lastVisibleSelfTimestamp)) {
+            lastChangeCandidate = lastVisibleSelfTimestamp;
+          }
           await db.createChat(
             Chat(
-              jid: peerJid,
+              jid: peer,
               title: isSelfChat
                   ? 'Saved Messages'
-                  : addressDisplayLabel(peerJid) ??
-                        mox.JID.fromString(peerJid).local,
+                  : addressDisplayLabel(peer) ?? mox.JID.fromString(peer).local,
               type: ChatType.chat,
               lastChangeTimestamp: lastChangeCandidate,
               transport: MessageTransport.xmpp,
               muted: muted,
-              favorited: pinned,
-              archived: archived,
-              contactJid: peerJid,
+              favorited: item.pinned,
+              archived: item.archived,
+              hidden: item.hidden ?? false,
+              contactJid: peer,
             ),
           );
           continue;
         }
 
-        if (existing.type != ChatType.chat) continue;
+        if (item.isDirect && existing.type != ChatType.chat) continue;
+        if (item.isEmail &&
+            (existing.type != ChatType.chat ||
+                !existing.defaultTransport.isEmail)) {
+          continue;
+        }
+        if (item.isGroup && existing.type != ChatType.groupChat) continue;
+
+        if (isSelfChat) {
+          final lastVisibleSelfMessage = await db.getLastMessageForChat(
+            existing.jid,
+          );
+          final lastVisibleSelfTimestamp = lastVisibleSelfMessage?.timestamp
+              ?.toUtc();
+          if (lastVisibleSelfTimestamp != null &&
+              messageTimestamp.isAfter(lastVisibleSelfTimestamp)) {
+            lastChangeCandidate = lastVisibleSelfTimestamp;
+          }
+        }
+
+        var target = existing;
+        if (target.archived != item.archived) {
+          await db.markChatArchived(jid: target.jid, archived: item.archived);
+          final moved = await _findConversationIndexChatForItem(db, item);
+          if (moved == null) {
+            continue;
+          }
+          target = moved;
+        }
 
         final effectiveLastChange = isSelfChat
             ? lastChangeCandidate
-            : (lastChangeCandidate.isAfter(existing.lastChangeTimestamp)
+            : (lastChangeCandidate.isAfter(target.lastChangeTimestamp)
                   ? lastChangeCandidate
-                  : existing.lastChangeTimestamp);
+                  : target.lastChangeTimestamp);
+        final desiredContactJid = item.isEmail ? null : peer;
 
-        final shouldUpdateMuted = existing.muted != muted;
-        final shouldUpdatePinned = existing.favorited != pinned;
-        final shouldUpdateArchived = existing.archived != archived;
+        final shouldUpdateMuted = target.muted != muted;
+        final shouldUpdatePinned = target.favorited != item.pinned;
+        final shouldUpdateArchived = target.archived != item.archived;
+        final shouldUpdateHidden =
+            item.hidden != null && target.hidden != item.hidden;
         final shouldUpdateTimestamp =
-            effectiveLastChange != existing.lastChangeTimestamp;
-        final shouldUpdateContactJid = existing.contactJid != peerJid;
+            effectiveLastChange != target.lastChangeTimestamp;
+        final shouldUpdateContactJid =
+            desiredContactJid != null && target.contactJid != desiredContactJid;
         final shouldNormalizeSelfTitle =
             isSelfChat &&
-            existing.contactDisplayName?.trim().isNotEmpty != true &&
-            existing.title.trim() != 'Saved Messages';
+            target.contactDisplayName?.trim().isNotEmpty != true &&
+            target.title.trim() != 'Saved Messages';
 
         if (!shouldUpdateMuted &&
             !shouldUpdatePinned &&
             !shouldUpdateArchived &&
+            !shouldUpdateHidden &&
             !shouldUpdateTimestamp &&
             !shouldUpdateContactJid &&
             !shouldNormalizeSelfTitle) {
@@ -1614,49 +1658,89 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
 
         if (shouldNormalizeSelfTitle) {
           await db.updateChat(
-            existing.copyWith(
+            target.copyWith(
               title: 'Saved Messages',
-              lastMessage: shouldUpdateTimestamp ? null : existing.lastMessage,
+              lastMessage: shouldUpdateTimestamp ? null : target.lastMessage,
               lastChangeTimestamp: effectiveLastChange,
               muted: muted,
-              favorited: pinned,
-              archived: archived,
-              contactJid: peerJid,
+              favorited: item.pinned,
+              archived: item.archived,
+              hidden: item.hidden ?? target.hidden,
+              contactJid: desiredContactJid ?? target.contactJid,
             ),
           );
           if (shouldUpdateTimestamp) {
-            await db.repairChatSummaryFromMessages(peerJid);
+            await db.repairChatSummaryFromMessages(
+              target.jid,
+              clearStaleLastMessage: true,
+            );
           }
           continue;
         }
 
         await db.updateConversationIndexChatMeta(
-          jid: peerJid,
+          jid: target.jid,
           lastChangeTimestamp: effectiveLastChange,
           muted: muted,
-          favorited: pinned,
-          archived: archived,
-          contactJid: peerJid,
+          favorited: item.pinned,
+          archived: item.archived,
+          hidden: item.hidden,
+          contactJid: desiredContactJid,
+          markDirectXmppCapable: item.isDirect,
         );
         if (shouldUpdateTimestamp) {
-          await db.repairChatSummaryFromMessages(peerJid);
+          await db.repairChatSummaryFromMessages(
+            target.jid,
+            clearStaleLastMessage: true,
+          );
         }
       }
     }, awaitDatabase: true);
   }
 
   Future<void> applyConversationIndexSnapshot(
-    ({List<ConvItem> items, bool isSuccess, bool isComplete}) snapshot,
-  ) async {
+    ({List<ConvItem> items, bool isSuccess, bool isComplete}) snapshot, {
+    ({List<ConvItem> items, bool isSuccess, bool isComplete})?
+    annotationsSnapshot,
+  }) async {
     if (!snapshot.isSuccess) return;
-    final items = snapshot.items;
+    final items = snapshot.items
+        .where((item) => item.isDirect)
+        .toList(growable: false);
+    final annotationItems = annotationsSnapshot?.isSuccess == true
+        ? annotationsSnapshot!.items
+              .where((item) => !item.isDirect)
+              .toList(growable: false)
+        : const <ConvItem>[];
     _connection.getManager<ConversationIndexManager>()?.cacheSnapshot(
       items,
       isComplete: snapshot.isComplete,
     );
-    await applyConversationIndexItems(items);
+    if (annotationsSnapshot?.isSuccess == true) {
+      _conversationAnnotationsManager?.cacheSnapshot(
+        annotationItems,
+        isComplete: annotationsSnapshot!.isComplete,
+      );
+    }
+    final annotationsSnapshotComplete =
+        annotationsSnapshot?.isSuccess == true &&
+        annotationsSnapshot!.isComplete;
+    if (annotationsSnapshotComplete) {
+      _conversationAnnotationsSnapshotResolved = true;
+    }
+    final combinedItems = <ConvItem>[...items, ...annotationItems];
+    await applyConversationIndexItems(combinedItems);
     if (snapshot.isComplete) {
-      await _queueMissingLocalConversationIndexSeeds(items);
+      await _queueMissingLocalConversationIndexSeeds(
+        items,
+        kinds: const {ConvItemKind.direct},
+      );
+      if (annotationsSnapshotComplete) {
+        await _queueMissingLocalConversationIndexSeeds(
+          annotationItems,
+          kinds: const {ConvItemKind.email, ConvItemKind.group},
+        );
+      }
       await _reconcileConversationIndexRemovals(items);
       _conversationIndexSnapshotResolved = true;
       await _flushPendingConversationIndexSeeds();
@@ -1664,33 +1748,30 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   }
 
   Future<void> _queueMissingLocalConversationIndexSeeds(
-    List<ConvItem> items,
-  ) async {
-    final knownPeers = items
-        .map((item) => item.peerBare.toBare().toString())
-        .toSet();
+    List<ConvItem> items, {
+    required Set<ConvItemKind> kinds,
+  }) async {
+    final knownItemIds = items.map((item) => item.itemId).toSet();
     final selfJid = myJid;
-    final localMissingPeers = await _dbOpReturning<XmppDatabase, Set<String>>((
-      db,
-    ) async {
-      final chats = await db.getChats(
-        start: _conversationIndexSnapshotStart,
-        end: _conversationIndexSnapshotEnd,
-      );
-      final peers = <String>{};
-      for (final chat in chats) {
-        if (chat.archived) continue;
-        final normalized = _conversationIndexPeerForLocalChat(
-          chat,
-          selfJid: selfJid,
-        );
-        if (normalized == null) continue;
-        if (knownPeers.contains(normalized)) continue;
-        peers.add(normalized);
-      }
-      return peers;
-    });
-    _pendingConversationIndexSeeds.addAll(localMissingPeers);
+    final localMissingItemIds = await _dbOpReturning<XmppDatabase, Set<String>>(
+      (db) async {
+        final chats = await db.getAllChats();
+        final itemIds = <String>{};
+        for (final chat in chats) {
+          final item = _conversationIndexItemForLocalChat(
+            chat,
+            selfJid: selfJid,
+            excludeSelf: false,
+          );
+          if (item == null) continue;
+          if (!kinds.contains(item.kind)) continue;
+          if (knownItemIds.contains(item.itemId)) continue;
+          itemIds.add(item.itemId);
+        }
+        return itemIds;
+      },
+    );
+    _pendingConversationIndexSeeds.addAll(localMissingItemIds);
   }
 
   Future<void> _reconcileConversationIndexRemovals(List<ConvItem> items) async {
@@ -1701,26 +1782,27 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
       return;
     }
     final knownPeers = items
-        .map((item) => item.peerBare.toBare().toString())
+        .where((item) => item.isDirect)
+        .map(_conversationIndexPeerForItem)
+        .whereType<String>()
         .toSet();
     knownPeers.addAll(
       _pendingConversationIndexSeeds
+          .where((itemId) => !itemId.contains(':'))
           .map(_normalizeBareChatJid)
           .whereType<String>(),
     );
     final selfJid = myJid;
     await _dbOp<XmppDatabase>((db) async {
-      final chats = await db.getChats(
-        start: _conversationIndexSnapshotStart,
-        end: _conversationIndexSnapshotEnd,
-      );
+      final chats = await db.getAllChats();
       for (final chat in chats) {
-        final normalized = _conversationIndexPeerForLocalChat(
+        final identity = _conversationIndexIdentityForLocalChat(
           chat,
           selfJid: selfJid,
+          excludeSelf: true,
         );
-        if (normalized == null) continue;
-        if (knownPeers.contains(normalized)) continue;
+        if (identity == null || identity.kind != ConvItemKind.direct) continue;
+        if (knownPeers.contains(identity.peer)) continue;
         if (chat.archived) continue;
         await db.updateConversationIndexArchived(jid: chat.jid, archived: true);
       }
@@ -1732,7 +1814,13 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     if (peer.isEmpty) return;
     if (_isConversationIndexLocalOnlyChatJid(peer)) return;
     await _dbOp<XmppDatabase>((db) async {
-      final existing = await db.getChat(peer);
+      final existing = await _findConversationIndexChatForItem(
+        db,
+        ConvItem(
+          peerBare: peerBare.toBare(),
+          lastTimestamp: DateTime.timestamp().toUtc(),
+        ),
+      );
       if (existing == null || existing.type != ChatType.chat) return;
       if (existing.archived) return;
       await db.updateConversationIndexArchived(
@@ -1745,35 +1833,29 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   Future<void> _syncConversationIndexMeta({required String jid}) async {
     final normalizedJid = jid.trim();
     if (normalizedJid.isEmpty) return;
-    if (_isConversationIndexLocalOnlyChatJid(normalizedJid)) return;
-
-    final manager = await _conversationIndexManagerForSync();
-    if (manager == null) return;
 
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(normalizedJid),
     );
-    if (chat == null || chat.type != ChatType.chat) return;
-    if (!chat.transport.isXmpp) return;
+    if (chat == null) return;
+    await _syncConversationIndexMetaForChat(chat);
+  }
 
-    final peer = mox.JID.fromString(normalizedJid).toBare();
-    final cached = manager.cachedForPeer(peer);
-    final lastTimestamp =
-        cached?.lastTimestamp ?? chat.lastChangeTimestamp.toUtc();
-    final mutedUntil = chat.muted
-        ? DateTime.timestamp().add(_mutedForeverDuration).toUtc()
-        : null;
-
-    await manager.upsert(
-      ConvItem(
-        peerBare: peer,
-        lastTimestamp: lastTimestamp,
-        lastId: cached?.lastId,
-        pinned: chat.favorited,
-        archived: chat.archived,
-        mutedUntil: mutedUntil,
-      ),
+  Future<void> _syncConversationIndexMetaForChat(Chat chat) async {
+    final item = _conversationIndexItemForLocalChat(chat);
+    if (item == null) return;
+    final manager = item.isDirect
+        ? await _conversationIndexManagerForSync()
+        : await _conversationAnnotationsManagerForSync();
+    if (manager == null) return;
+    final cached = manager.cachedForIdentity(kind: item.kind, peer: item.peer);
+    final lastTimestamp = cached?.lastTimestamp ?? item.lastTimestamp.toUtc();
+    final published = await manager.upsert(
+      item.copyWith(lastTimestamp: lastTimestamp, lastId: cached?.lastId),
     );
+    if (published && !item.isDirect) {
+      await conversationIndexManager?.retract(item.itemId);
+    }
   }
 
   @override
@@ -1782,32 +1864,31 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   }
 
   Future<void> _enqueueConversationIndexSeed(String jid) async {
-    final normalizedJid = jid.trim();
-    if (normalizedJid.isEmpty) return;
-    if (_isConversationIndexLocalOnlyChatJid(normalizedJid)) return;
-    _pendingConversationIndexSeeds.add(normalizedJid);
+    final itemId = _normalizeBareChatJid(jid);
+    if (itemId == null || itemId.isEmpty) return;
+    if (_isConversationIndexLocalOnlyChatJid(itemId)) return;
+    _pendingConversationIndexSeeds.add(itemId);
     if (!_conversationIndexSnapshotResolved) {
       return;
     }
-    if (await _publishConversationIndexSeedIfMissing(normalizedJid)) {
-      _pendingConversationIndexSeeds.remove(normalizedJid);
+    if (await _publishConversationIndexSeedIfMissing(itemId)) {
+      _pendingConversationIndexSeeds.remove(itemId);
     }
   }
 
   Future<void> _flushPendingConversationIndexSeeds() async {
     if (_pendingConversationIndexSeeds.isEmpty) return;
     final pending = _pendingConversationIndexSeeds.toList(growable: false);
-    for (final jid in pending) {
-      if (await _publishConversationIndexSeedIfMissing(jid)) {
-        _pendingConversationIndexSeeds.remove(jid);
+    for (final itemId in pending) {
+      if (await _publishConversationIndexSeedIfMissing(itemId)) {
+        _pendingConversationIndexSeeds.remove(itemId);
       }
     }
   }
 
-  Future<bool> _publishConversationIndexSeedIfMissing(String jid) async {
-    final normalizedJid = jid.trim();
-    if (normalizedJid.isEmpty) return true;
-    if (_isConversationIndexLocalOnlyChatJid(normalizedJid)) return true;
+  Future<bool> _publishConversationIndexSeedIfMissing(String itemId) async {
+    final normalizedItemId = itemId.trim();
+    if (normalizedItemId.isEmpty) return true;
     if (!_conversationIndexSnapshotResolved) return false;
 
     final decision = await _conversationIndexSyncDecision();
@@ -1817,38 +1898,48 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     if (manager == null) return false;
 
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
-      (db) => db.getChat(normalizedJid),
+      (db) => _findLocalConversationIndexChatByItemId(db, normalizedItemId),
     );
-    if (chat == null || chat.type != ChatType.chat) return true;
-    if (!chat.transport.isXmpp) return true;
+    if (chat == null) return true;
 
-    late final mox.JID peer;
-    try {
-      peer = mox.JID.fromString(normalizedJid).toBare();
-    } on Exception {
+    final item = _conversationIndexItemForLocalChat(chat);
+    if (item == null) return true;
+    if (item.isDirect) {
+      if (manager.cachedForIdentity(kind: item.kind, peer: item.peer) != null) {
+        return true;
+      }
+      return manager.upsert(item);
+    }
+    if (!_conversationAnnotationsSnapshotResolved) return false;
+
+    final annotationsManager = _conversationAnnotationsManager;
+    if (annotationsManager == null) return false;
+    if (annotationsManager.cachedForIdentity(
+          kind: item.kind,
+          peer: item.peer,
+        ) !=
+        null) {
+      await manager.retract(item.itemId);
       return true;
     }
-    if (manager.cachedForPeer(peer) != null) return true;
-
-    final mutedUntil = chat.muted
-        ? DateTime.timestamp().add(_mutedForeverDuration).toUtc()
-        : null;
-    return manager.upsert(
-      ConvItem(
-        peerBare: peer,
-        lastTimestamp: chat.lastChangeTimestamp.toUtc(),
-        lastId: null,
-        pinned: chat.favorited,
-        archived: chat.archived,
-        mutedUntil: mutedUntil,
-      ),
-    );
+    final published = await annotationsManager.upsert(item);
+    if (published) {
+      await manager.retract(item.itemId);
+    }
+    return published;
   }
 
   Future<ConversationIndexManager?> _conversationIndexManagerForSync() async {
     final decision = await _conversationIndexSyncDecision();
     if (!decision.isAllowed) return null;
     return conversationIndexManager;
+  }
+
+  Future<ConversationAnnotationsManager?>
+  _conversationAnnotationsManagerForSync() async {
+    final decision = await _conversationIndexSyncDecision();
+    if (!decision.isAllowed) return null;
+    return _conversationAnnotationsManager;
   }
 
   Future<CapabilityDecision> _conversationIndexSyncDecision() async {
@@ -1859,17 +1950,148 @@ mixin ChatsService on XmppBase, BaseStreamService, MessageService {
     );
   }
 
-  String? _conversationIndexPeerForLocalChat(
+  String? _conversationIndexPeerForItem(ConvItem item) {
+    if (item.isEmail) {
+      return _normalizeEmailConversationPeer(item.peer);
+    }
+    return _normalizeBareChatJid(item.peer);
+  }
+
+  Future<Chat?> _findConversationIndexChatForItem(
+    XmppDatabase db,
+    ConvItem item,
+  ) async {
+    final peer = _conversationIndexPeerForItem(item);
+    if (peer == null || peer.isEmpty) return null;
+    if (item.isDirect) {
+      final existing = await db.getChat(peer);
+      if (existing != null && existing.type == ChatType.chat) {
+        return existing;
+      }
+    }
+
+    final chats = await db.getAllChats();
+    for (final chat in chats) {
+      final identity = _conversationIndexIdentityForLocalChat(chat);
+      if (identity == null) continue;
+      if (identity.kind != item.kind) continue;
+      if (identity.peer != peer) continue;
+      return chat;
+    }
+    return null;
+  }
+
+  Future<Chat?> _findLocalConversationIndexChatByItemId(
+    XmppDatabase db,
+    String itemId,
+  ) async {
+    if (!itemId.contains(':')) {
+      final existing = await db.getChat(itemId);
+      final item = existing == null
+          ? null
+          : _conversationIndexItemForLocalChat(existing);
+      if (item?.itemId == itemId) {
+        return existing;
+      }
+    }
+
+    final chats = await db.getAllChats();
+    for (final chat in chats) {
+      final item = _conversationIndexItemForLocalChat(chat);
+      if (item?.itemId == itemId) {
+        return chat;
+      }
+    }
+    return null;
+  }
+
+  ConvItem? _conversationIndexItemForLocalChat(
     Chat chat, {
-    required String? selfJid,
+    String? selfJid,
+    bool excludeSelf = false,
   }) {
-    if (chat.type != ChatType.chat) return null;
-    if (!chat.defaultTransport.isXmpp) return null;
-    final normalized = _normalizeBareChatJid(chat.jid);
+    final identity = _conversationIndexIdentityForLocalChat(
+      chat,
+      selfJid: selfJid,
+      excludeSelf: excludeSelf,
+    );
+    if (identity == null) return null;
+    final mutedUntil = chat.muted
+        ? DateTime.timestamp().add(_mutedForeverDuration).toUtc()
+        : null;
+    return switch (identity.kind) {
+      ConvItemKind.direct => ConvItem(
+        peerBare: mox.JID.fromString(identity.peer).toBare(),
+        lastTimestamp: chat.lastChangeTimestamp.toUtc(),
+        lastId: null,
+        pinned: chat.favorited,
+        archived: chat.archived,
+        hidden: chat.hidden,
+        mutedUntil: mutedUntil,
+      ),
+      ConvItemKind.email => ConvItem.email(
+        peer: identity.peer,
+        lastTimestamp: chat.lastChangeTimestamp.toUtc(),
+        lastId: null,
+        pinned: chat.favorited,
+        archived: chat.archived,
+        hidden: chat.hidden,
+        mutedUntil: mutedUntil,
+      ),
+      ConvItemKind.group => ConvItem.group(
+        peerBare: mox.JID.fromString(identity.peer).toBare(),
+        lastTimestamp: chat.lastChangeTimestamp.toUtc(),
+        lastId: null,
+        pinned: chat.favorited,
+        archived: chat.archived,
+        hidden: chat.hidden,
+        mutedUntil: mutedUntil,
+      ),
+    };
+  }
+
+  ({ConvItemKind kind, String peer})? _conversationIndexIdentityForLocalChat(
+    Chat chat, {
+    String? selfJid,
+    bool excludeSelf = false,
+  }) {
+    if (chat.type == ChatType.note) return null;
+    if (chat.type == ChatType.chat && chat.defaultTransport.isEmail) {
+      final peer = _conversationIndexEmailPeerForLocalChat(chat);
+      if (peer == null) return null;
+      return (kind: ConvItemKind.email, peer: peer);
+    }
+    if (chat.type == ChatType.chat) {
+      if (!chat.defaultTransport.isXmpp) return null;
+      final normalized = _normalizeBareChatJid(chat.contactJid ?? chat.jid);
+      if (normalized == null || normalized.isEmpty) return null;
+      if (excludeSelf && normalized == selfJid) return null;
+      if (_isConversationIndexLocalOnlyChatJid(normalized)) return null;
+      return (kind: ConvItemKind.direct, peer: normalized);
+    }
+    if (chat.type == ChatType.groupChat) {
+      final normalized = _normalizeBareChatJid(chat.contactJid ?? chat.jid);
+      if (normalized == null || normalized.isEmpty) return null;
+      if (_isConversationIndexLocalOnlyChatJid(normalized)) return null;
+      return (kind: ConvItemKind.group, peer: normalized);
+    }
+    return null;
+  }
+
+  String? _conversationIndexEmailPeerForLocalChat(Chat chat) {
+    for (final candidate in [chat.emailAddress, chat.contactJid, chat.jid]) {
+      final normalized = _normalizeEmailConversationPeer(candidate);
+      if (normalized != null) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  String? _normalizeEmailConversationPeer(String? address) {
+    final normalized = address?.trim().toLowerCase();
     if (normalized == null || normalized.isEmpty) return null;
-    if (normalized == selfJid) return null;
-    if (_isConversationIndexLocalOnlyChatJid(normalized)) return null;
-    return normalized;
+    return normalized.isValidEmailAddress ? normalized : null;
   }
 
   String? _normalizeBareChatJid(String jid) {

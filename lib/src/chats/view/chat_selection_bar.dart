@@ -212,6 +212,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
 
   Future<void> _confirmDelete() async {
     final l10n = context.l10n;
+    final showToast = ShadToaster.maybeOf(context)?.show;
     final deleteSelectedChats = context
         .read<ChatsCubit>()
         .bulkDeleteSelectedChats;
@@ -226,6 +227,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     );
     if (!mounted || confirmed != true) return;
     await deleteSelectedChats();
+    showToast?.call(FeedbackToast.success(message: l10n.chatsDeleteSuccess));
   }
 
   Future<bool> _confirmChatExport() async {

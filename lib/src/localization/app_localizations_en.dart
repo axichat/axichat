@@ -814,7 +814,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatContactRenameDescription =>
-      'Choose how this contact appears across Axichat.';
+      'Choose how this contact appears on this device.';
 
   @override
   String get chatContactRenamePlaceholder => 'Display name';
@@ -826,7 +826,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatContactRenameSave => 'Save';
 
   @override
-  String get chatContactRenameSuccess => 'Display name updated';
+  String get chatContactRenameSuccess => 'Display name updated locally';
 
   @override
   String get chatContactRenameFailure => 'Could not rename contact';
@@ -1432,7 +1432,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authToggleLogin => 'Already registered? Log in';
 
   @override
-  String get authGuestCalendarCta => 'Try Calendar (Guest Mode)';
+  String get authGuestCalendarCta => 'Guest calendar';
 
   @override
   String get authLogin => 'Log in';
@@ -3302,14 +3302,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String chatsDeleteConfirmMessage(Object chatTitle) {
-    return 'Delete chat: $chatTitle';
+    return 'Delete this chat on this device: $chatTitle';
   }
 
   @override
   String get chatsDeleteMessagesOption => 'Permanently delete messages';
 
   @override
-  String get chatsDeleteSuccess => 'Chat deleted';
+  String get chatsDeleteSuccess => 'Chat deleted locally';
 
   @override
   String get chatsExportNoContent => 'No text content to export';
@@ -3437,9 +3437,9 @@ class AppLocalizationsEn extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'This removes # chats and all of their messages. This cannot be undone.',
+          'This removes # chats and all of their messages from this device. This cannot be undone here.',
       one:
-          'This removes 1 chat and all of its messages. This cannot be undone.',
+          'This removes 1 chat and all of its messages from this device. This cannot be undone here.',
     );
     return '$_temp0';
   }

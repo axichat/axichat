@@ -838,7 +838,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatContactRenameDescription =>
-      'Wähle, wie dieser Kontakt in Axichat angezeigt wird.';
+      'Wähle, wie dieser Kontakt auf diesem Gerät angezeigt wird.';
 
   @override
   String get chatContactRenamePlaceholder => 'Anzeigename';
@@ -850,7 +850,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatContactRenameSave => 'Speichern';
 
   @override
-  String get chatContactRenameSuccess => 'Anzeigename aktualisiert';
+  String get chatContactRenameSuccess => 'Anzeigename lokal aktualisiert';
 
   @override
   String get chatContactRenameFailure =>
@@ -3372,14 +3372,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String chatsDeleteConfirmMessage(Object chatTitle) {
-    return 'Chat löschen: $chatTitle';
+    return 'Diesen Chat auf diesem Gerät löschen: $chatTitle';
   }
 
   @override
   String get chatsDeleteMessagesOption => 'Nachrichten dauerhaft löschen';
 
   @override
-  String get chatsDeleteSuccess => 'Chat gelöscht';
+  String get chatsDeleteSuccess => 'Chat lokal gelöscht';
 
   @override
   String get chatsExportNoContent => 'Kein Textinhalt zum Exportieren';
@@ -3509,9 +3509,9 @@ class AppLocalizationsDe extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'Dadurch werden # Chats mit allen Nachrichten gelöscht. Dies kann nicht rückgängig gemacht werden.',
+          'Dadurch werden # Chats mit allen Nachrichten von diesem Gerät gelöscht. Dies kann hier nicht rückgängig gemacht werden.',
       one:
-          'Dadurch wird 1 Chat mit allen Nachrichten gelöscht. Dies kann nicht rückgängig gemacht werden.',
+          'Dadurch wird 1 Chat mit allen Nachrichten von diesem Gerät gelöscht. Dies kann hier nicht rückgängig gemacht werden.',
     );
     return '$_temp0';
   }

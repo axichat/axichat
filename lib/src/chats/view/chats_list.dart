@@ -1298,7 +1298,6 @@ class _ChatListTileState extends State<ChatListTile> {
                         spamUpdating: widget.spamUpdating,
                         onMoveToInbox: widget.onMoveToInbox,
                         onEditContact: _editContact,
-                        onClose: _hideActions,
                         onDelete: () => _confirmDelete(item),
                       ),
                     ),
@@ -1433,15 +1432,6 @@ class _ChatListTileState extends State<ChatListTile> {
     });
   }
 
-  void _hideActions() {
-    if (!_showActions || !mounted) {
-      return;
-    }
-    setState(() {
-      _showActions = false;
-    });
-  }
-
   Future<void> _handleTap(Chat chat) async {
     if (widget.archivedContext && chat.archived) {
       final handler = widget.onArchivedTap;
@@ -1454,7 +1444,6 @@ class _ChatListTileState extends State<ChatListTile> {
   }
 
   Future<void> _editContact(ContactDirectoryEntry contact) async {
-    _hideActions();
     await showContactDetailsSheet(context: context, contact: contact);
   }
 
@@ -1688,7 +1677,6 @@ class _ChatActionPanel extends StatefulWidget {
     required this.spamUpdating,
     required this.onMoveToInbox,
     required this.onEditContact,
-    required this.onClose,
     required this.onDelete,
   });
 
@@ -1699,7 +1687,6 @@ class _ChatActionPanel extends StatefulWidget {
   final bool spamUpdating;
   final Future<void> Function()? onMoveToInbox;
   final Future<void> Function(ContactDirectoryEntry contact) onEditContact;
-  final VoidCallback onClose;
   final VoidCallback onDelete;
 
   @override
@@ -1729,7 +1716,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           label: l10n.commonSelect,
           onPressed: () {
             context.read<ChatsCubit>().ensureChatSelected(widget.chat.jid);
-            widget.onClose();
           },
         ),
         if (widget.chat.type == ChatType.chat &&
@@ -1759,8 +1745,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
               jid: widget.chat.jid,
               favorited: !widget.chat.favorited,
             );
-            if (!mounted) return;
-            widget.onClose();
           },
         ),
         ChatExportActionButton(
@@ -1787,8 +1771,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
                   ? l10n.chatsArchivedRestored
                   : l10n.chatsArchivedHint,
             );
-            if (!mounted) return;
-            widget.onClose();
           },
         ),
         if (widget.spamContext)
@@ -1814,8 +1796,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
                     ? l10n.chatsVisibleNotice
                     : l10n.chatsHiddenNotice,
               );
-              if (!mounted) return;
-              widget.onClose();
             },
           ),
         ContextActionButton(
@@ -1826,8 +1806,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
               jid: widget.chat.jid,
               route: ChatRouteIndex.settings,
             );
-            if (!mounted) return;
-            widget.onClose();
           },
         ),
         ContextActionButton(
@@ -1870,8 +1848,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
       return;
     }
     await moveToInbox();
-    if (!mounted) return;
-    widget.onClose();
   }
 
   Future<void> _renameContact() async {
@@ -1889,7 +1865,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
       );
       if (!mounted) return;
       _showSnack(l10n.chatContactRenameSuccess);
-      widget.onClose();
     } on Exception {
       if (!mounted) return;
       _showSnack(l10n.chatContactRenameFailure);
@@ -1943,7 +1918,6 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             ? l10n.chatsExportIncomplete
             : l10n.chatsExportSuccess,
       );
-      widget.onClose();
     } on ExportSaveFileTooLargeException {
       if (!mounted) return;
       _showSnack(l10n.chatsExportTooLargeForDevice);

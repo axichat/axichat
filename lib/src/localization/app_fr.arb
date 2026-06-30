@@ -264,11 +264,11 @@
   "chatContactRenameTooltip": "Renommer le contact",
   "chatVerifiedServerAnnouncementTooltip": "Annonce serveur vérifiée",
   "chatContactRenameTitle": "Renommer le contact",
-  "chatContactRenameDescription": "Choisissez comment ce contact s’affiche dans Axichat.",
+  "chatContactRenameDescription": "Choisissez comment ce contact s’affiche sur cet appareil.",
   "chatContactRenamePlaceholder": "Nom affiché",
   "chatContactRenameReset": "Réinitialiser par défaut",
   "chatContactRenameSave": "Enregistrer",
-  "chatContactRenameSuccess": "Nom affiché mis à jour",
+  "chatContactRenameSuccess": "Nom affiché mis à jour localement",
   "chatContactRenameFailure": "Impossible de renommer le contact",
   "chatComposerSemantics": "Saisie du message",
   "draftSaved": "Brouillon enregistré",
@@ -1226,14 +1226,14 @@
   "mucActionGrantModerator": "Donner le statut modérateur",
   "mucActionRevokeModerator": "Retirer le statut modérateur",
   "chatsEmptyList": "Pas encore de chats",
-  "chatsDeleteConfirmMessage": "Supprimer le chat : {chatTitle}",
+  "chatsDeleteConfirmMessage": "Supprimer ce chat sur cet appareil : {chatTitle}",
   "@chatsDeleteConfirmMessage": {
     "placeholders": {
       "chatTitle": {}
     }
   },
   "chatsDeleteMessagesOption": "Supprimer définitivement les messages",
-  "chatsDeleteSuccess": "Chat supprimé",
+  "chatsDeleteSuccess": "Chat supprimé localement",
   "chatsExportNoContent": "Aucun texte à exporter",
   "chatsExportShareText": "Export de chat depuis Axichat",
   "chatsExportShareSubject": "Chat avec {chatTitle}",
@@ -1281,7 +1281,7 @@
   "chatSelectionExportFailedTitle": "Échec de l’export",
   "chatSelectionExportFailedMessage": "Impossible d’exporter les chats sélectionnés",
   "chatSelectionDeleteConfirmTitle": "Supprimer les chats ?",
-  "chatSelectionDeleteConfirmMessage": "{count, plural, one {Ceci supprime 1 chat et tous ses messages. Action irréversible.} other {Ceci supprime # chats et tous leurs messages. Action irréversible.}}",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {Ceci supprime 1 chat et tous ses messages de cet appareil. Action irréversible ici.} other {Ceci supprime # chats et tous leurs messages de cet appareil. Action irréversible ici.}}",
   "@chatSelectionDeleteConfirmMessage": {
     "placeholders": {
       "count": {}

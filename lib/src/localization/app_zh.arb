@@ -263,11 +263,11 @@
   "chatContactRenameTooltip": "重命名联系人",
   "chatVerifiedServerAnnouncementTooltip": "已验证的服务器公告",
   "chatContactRenameTitle": "重命名联系人",
-  "chatContactRenameDescription": "选择此联系人在 Axichat 中的显示方式。",
+  "chatContactRenameDescription": "选择此联系人在此设备上的显示方式。",
   "chatContactRenamePlaceholder": "显示名称",
   "chatContactRenameReset": "恢复默认",
   "chatContactRenameSave": "保存",
-  "chatContactRenameSuccess": "显示名称已更新",
+  "chatContactRenameSuccess": "显示名称已在本地更新",
   "chatContactRenameFailure": "无法重命名联系人",
   "chatComposerSemantics": "消息输入框",
   "draftSaved": "草稿已保存",
@@ -1230,14 +1230,14 @@
   "mucActionGrantModerator": "授予版主",
   "mucActionRevokeModerator": "撤销版主",
   "chatsEmptyList": "暂时没有聊天",
-  "chatsDeleteConfirmMessage": "删除聊天：{chatTitle}",
+  "chatsDeleteConfirmMessage": "在此设备上删除聊天：{chatTitle}",
   "@chatsDeleteConfirmMessage": {
     "placeholders": {
       "chatTitle": {}
     }
   },
   "chatsDeleteMessagesOption": "永久删除消息",
-  "chatsDeleteSuccess": "聊天已删除",
+  "chatsDeleteSuccess": "聊天已在本地删除",
   "chatsExportNoContent": "没有可导出的文本内容",
   "chatsExportShareText": "来自 Axichat 的聊天导出",
   "chatsExportShareSubject": "与 {chatTitle} 的聊天",
@@ -1285,7 +1285,7 @@
   "chatSelectionExportFailedTitle": "导出失败",
   "chatSelectionExportFailedMessage": "无法导出所选聊天",
   "chatSelectionDeleteConfirmTitle": "删除聊天？",
-  "chatSelectionDeleteConfirmMessage": "{count, plural, one {将删除 1 个聊天及其全部消息，无法恢复。} other {将删除 # 个聊天及其全部消息，无法恢复。}}",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {将从此设备删除 1 个聊天及其全部消息，此处无法恢复。} other {将从此设备删除 # 个聊天及其全部消息，此处无法恢复。}}",
   "@chatSelectionDeleteConfirmMessage": {
     "placeholders": {
       "count": {}

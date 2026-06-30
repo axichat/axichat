@@ -2716,10 +2716,10 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
     if (existingByAddress != null) {
       final merged = existingByAddress.copyWith(
         deltaChatId: existingByAddress.deltaChatId ?? chatId,
+        title: chat.title,
         emailAddress: chat.emailAddress,
         emailFromAddress:
             existingByAddress.emailFromAddress ?? chat.emailFromAddress,
-        contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
         contactJid: existingByAddress.contactJid ?? chat.contactJid,
       );
@@ -2747,14 +2747,16 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
   }) {
     final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
     final emailAddress = _normalizedAddress(remote?.contactAddress, chatId);
-    final title = remote?.name ?? remote?.contactName ?? emailAddress;
+    final type = _mapChatType(remote?.type);
+    final title = type == ChatType.chat
+        ? remote?.contactName ?? remote?.name ?? emailAddress
+        : remote?.name ?? remote?.contactName ?? emailAddress;
     return Chat(
       jid: emailAddress,
       title: title,
-      type: _mapChatType(remote?.type),
+      type: type,
       lastChangeTimestamp: emptyTimestamp,
       encryptionProtocol: EncryptionProtocol.none,
-      contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,
       contactJid: emailAddress,
       emailAddress: emailAddress,

@@ -4764,7 +4764,6 @@ class EmailService {
         : selectedAddress;
     return Chat.fromJid(selectedAddress).copyWith(
       title: resolvedTitle,
-      contactDisplayName: resolvedTitle,
       emailAddress: address.isNotEmpty ? address : selectedAddress,
       transport: MessageTransport.email,
       lastChangeTimestamp: demoNow(),
@@ -5806,11 +5805,8 @@ class EmailService {
         continue;
       }
       final trimmedName = contact.name?.trim();
-      final displayName = trimmedName?.isNotEmpty == true
-          ? trimmedName
-          : chat.contactDisplayName;
       final updated = chat.copyWith(
-        contactDisplayName: displayName,
+        title: trimmedName?.isNotEmpty == true ? trimmedName! : chat.title,
         contactID: address,
         contactJid: address,
         emailAddress: address,

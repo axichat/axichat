@@ -915,14 +915,14 @@ class ChatsCubit extends Cubit<ChatsState> {
     required bool archived,
   }) async {
     if (archived && state.openJid == jid) {
-      await _chatsService.closeChat();
+      await closeAllChats();
     }
     await _chatsService.toggleChatArchived(jid: jid, archived: archived);
   }
 
   Future<void> toggleHidden({required String jid, required bool hidden}) async {
     if (hidden && state.openJid == jid) {
-      await _chatsService.closeChat();
+      await closeAllChats();
     }
     await _chatsService.toggleChatHidden(jid: jid, hidden: hidden);
   }
@@ -1115,7 +1115,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
     if (archived && targets.contains(state.openJid)) {
-      await _chatsService.closeChat();
+      await closeAllChats();
     }
     await Future.wait(
       targets.map(
@@ -1129,7 +1129,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
     if (hidden && targets.contains(state.openJid)) {
-      await _chatsService.closeChat();
+      await closeAllChats();
     }
     await Future.wait(
       targets.map(
@@ -1143,7 +1143,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final targets = state.selectedJids.toList();
     if (targets.isEmpty) return;
     if (targets.contains(state.openJid)) {
-      await _chatsService.closeChat();
+      await closeAllChats();
     }
     await Future.wait(targets.map((jid) => _chatsService.deleteChat(jid: jid)));
     clearSelection();

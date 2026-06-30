@@ -4000,10 +4000,10 @@ class DeltaEventConsumer {
     if (existingByAddress != null) {
       final merged = existingByAddress.copyWith(
         deltaChatId: existingByAddress.deltaChatId ?? chatId,
+        title: chat.title,
         emailAddress: chat.emailAddress,
         emailFromAddress:
             existingByAddress.emailFromAddress ?? chat.emailFromAddress,
-        contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
       );
       await db.updateChat(merged);
@@ -4029,15 +4029,17 @@ class DeltaEventConsumer {
     String? emailFromAddress,
   }) {
     final emailAddress = _normalizedAddress(remote?.contactAddress, chatId);
-    final title = remote?.name ?? remote?.contactName ?? emailAddress;
+    final type = _mapChatType(remote?.type);
+    final title = type == ChatType.chat
+        ? remote?.contactName ?? remote?.name ?? emailAddress
+        : remote?.name ?? remote?.contactName ?? emailAddress;
     return Chat(
       jid: emailAddress,
       title: title,
-      type: _mapChatType(remote?.type),
+      type: type,
       lastChangeTimestamp: DateTime.fromMillisecondsSinceEpoch(0),
       transport: MessageTransport.email,
       encryptionProtocol: EncryptionProtocol.none,
-      contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,
       contactJid: emailAddress,
       emailAddress: emailAddress,
@@ -4068,10 +4070,10 @@ class DeltaEventConsumer {
       if (existingByAddress != null) {
         final merged = existingByAddress.copyWith(
           deltaChatId: existingByAddress.deltaChatId ?? chatId,
+          title: chat.title,
           emailAddress: chat.emailAddress,
           emailFromAddress:
               existingByAddress.emailFromAddress ?? chat.emailFromAddress,
-          contactDisplayName: chat.contactDisplayName,
           contactID: chat.contactID,
         );
         await db.updateChat(merged);
@@ -4090,13 +4092,15 @@ class DeltaEventConsumer {
       );
       return;
     }
+    final type = _mapChatType(remote.type);
+    final title = type == ChatType.chat
+        ? remote.contactName ?? remote.name ?? existing.title
+        : remote.name ?? remote.contactName ?? existing.title;
     final updated = existing.copyWith(
-      title: remote.name ?? remote.contactName ?? existing.title,
-      contactDisplayName:
-          remote.contactName ?? remote.name ?? existing.contactDisplayName,
+      title: title,
       contactID: remote.contactAddress ?? existing.contactID,
       emailAddress: remote.contactAddress ?? existing.emailAddress,
-      type: _mapChatType(remote.type),
+      type: type,
     );
     if (updated != existing) {
       await db.updateChat(updated);

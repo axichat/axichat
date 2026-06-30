@@ -771,7 +771,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatContactRenameTitle => '重命名联系人';
 
   @override
-  String get chatContactRenameDescription => '选择此联系人在 Axichat 中的显示方式。';
+  String get chatContactRenameDescription => '选择此联系人在此设备上的显示方式。';
 
   @override
   String get chatContactRenamePlaceholder => '显示名称';
@@ -783,7 +783,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatContactRenameSave => '保存';
 
   @override
-  String get chatContactRenameSuccess => '显示名称已更新';
+  String get chatContactRenameSuccess => '显示名称已在本地更新';
 
   @override
   String get chatContactRenameFailure => '无法重命名联系人';
@@ -3174,14 +3174,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String chatsDeleteConfirmMessage(Object chatTitle) {
-    return '删除聊天：$chatTitle';
+    return '在此设备上删除聊天：$chatTitle';
   }
 
   @override
   String get chatsDeleteMessagesOption => '永久删除消息';
 
   @override
-  String get chatsDeleteSuccess => '聊天已删除';
+  String get chatsDeleteSuccess => '聊天已在本地删除';
 
   @override
   String get chatsExportNoContent => '没有可导出的文本内容';
@@ -3303,8 +3303,8 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '将删除 # 个聊天及其全部消息，无法恢复。',
-      one: '将删除 1 个聊天及其全部消息，无法恢复。',
+      other: '将从此设备删除 # 个聊天及其全部消息，此处无法恢复。',
+      one: '将从此设备删除 1 个聊天及其全部消息，此处无法恢复。',
     );
     return '$_temp0';
   }
@@ -8225,7 +8225,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatContactRenameTitle => '重新命名聯絡人';
 
   @override
-  String get chatContactRenameDescription => '選擇此聯絡人在 Axichat 的顯示方式。';
+  String get chatContactRenameDescription => '選擇此聯絡人在此裝置上的顯示方式。';
 
   @override
   String get chatContactRenamePlaceholder => '顯示名稱';
@@ -8237,7 +8237,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatContactRenameSave => '儲存';
 
   @override
-  String get chatContactRenameSuccess => '顯示名稱已更新';
+  String get chatContactRenameSuccess => '顯示名稱已在本機更新';
 
   @override
   String get chatContactRenameFailure => '無法重新命名聯絡人';
@@ -10630,14 +10630,14 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String chatsDeleteConfirmMessage(Object chatTitle) {
-    return '刪除聊天：$chatTitle';
+    return '在此裝置上刪除聊天：$chatTitle';
   }
 
   @override
   String get chatsDeleteMessagesOption => '永久刪除訊息';
 
   @override
-  String get chatsDeleteSuccess => '聊天已刪除';
+  String get chatsDeleteSuccess => '聊天已在本機刪除';
 
   @override
   String get chatsExportNoContent => '沒有可匯出的文字內容';
@@ -10759,8 +10759,8 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '將刪除 # 個聊天及其所有訊息，無法復原。',
-      one: '將刪除 1 個聊天及其所有訊息，無法復原。',
+      other: '將從此裝置刪除 # 個聊天及其所有訊息，此處無法復原。',
+      one: '將從此裝置刪除 1 個聊天及其所有訊息，此處無法復原。',
     );
     return '$_temp0';
   }

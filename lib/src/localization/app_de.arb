@@ -263,11 +263,11 @@
   "chatContactRenameTooltip": "Kontakt umbenennen",
   "chatVerifiedServerAnnouncementTooltip": "Verifizierte Server-Ankündigung",
   "chatContactRenameTitle": "Kontakt umbenennen",
-  "chatContactRenameDescription": "Wähle, wie dieser Kontakt in Axichat angezeigt wird.",
+  "chatContactRenameDescription": "Wähle, wie dieser Kontakt auf diesem Gerät angezeigt wird.",
   "chatContactRenamePlaceholder": "Anzeigename",
   "chatContactRenameReset": "Auf Standard zurücksetzen",
   "chatContactRenameSave": "Speichern",
-  "chatContactRenameSuccess": "Anzeigename aktualisiert",
+  "chatContactRenameSuccess": "Anzeigename lokal aktualisiert",
   "chatContactRenameFailure": "Kontakt konnte nicht umbenannt werden",
   "chatComposerSemantics": "Nachrichteneingabe",
   "draftSaved": "Entwurf gespeichert",
@@ -1230,14 +1230,14 @@
   "mucActionGrantModerator": "Moderatorrechte vergeben",
   "mucActionRevokeModerator": "Moderatorrechte entziehen",
   "chatsEmptyList": "Noch keine Chats",
-  "chatsDeleteConfirmMessage": "Chat löschen: {chatTitle}",
+  "chatsDeleteConfirmMessage": "Diesen Chat auf diesem Gerät löschen: {chatTitle}",
   "@chatsDeleteConfirmMessage": {
     "placeholders": {
       "chatTitle": {}
     }
   },
   "chatsDeleteMessagesOption": "Nachrichten dauerhaft löschen",
-  "chatsDeleteSuccess": "Chat gelöscht",
+  "chatsDeleteSuccess": "Chat lokal gelöscht",
   "chatsExportNoContent": "Kein Textinhalt zum Exportieren",
   "chatsExportShareText": "Chat-Export von Axichat",
   "chatsExportShareSubject": "Chat mit {chatTitle}",
@@ -1285,7 +1285,7 @@
   "chatSelectionExportFailedTitle": "Export fehlgeschlagen",
   "chatSelectionExportFailedMessage": "Ausgewählte Chats können nicht exportiert werden",
   "chatSelectionDeleteConfirmTitle": "Chats löschen?",
-  "chatSelectionDeleteConfirmMessage": "{count, plural, one {Dadurch wird 1 Chat mit allen Nachrichten gelöscht. Dies kann nicht rückgängig gemacht werden.} other {Dadurch werden # Chats mit allen Nachrichten gelöscht. Dies kann nicht rückgängig gemacht werden.}}",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {Dadurch wird 1 Chat mit allen Nachrichten von diesem Gerät gelöscht. Dies kann hier nicht rückgängig gemacht werden.} other {Dadurch werden # Chats mit allen Nachrichten von diesem Gerät gelöscht. Dies kann hier nicht rückgängig gemacht werden.}}",
   "@chatSelectionDeleteConfirmMessage": {
     "placeholders": {
       "count": {}

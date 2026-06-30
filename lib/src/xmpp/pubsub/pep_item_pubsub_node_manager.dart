@@ -49,6 +49,7 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
   bool get emitRetractionsFromCompleteSnapshot => true;
 
   TPayload? parsePayload(mox.XMLNode payload, {String? itemId});
+  bool ignoreUnparsedPayload(mox.XMLNode payload, {String? itemId}) => false;
   String itemIdOf(TPayload payload);
   mox.XMLNode payloadToXml(TPayload payload);
   void emitUpdatePayload(TPayload payload);
@@ -313,7 +314,9 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
       }
       final parsedPayload = parsePayload(payload, itemId: item.id);
       if (parsedPayload == null) {
-        hadParseFailure = true;
+        if (!ignoreUnparsedPayload(payload, itemId: item.id)) {
+          hadParseFailure = true;
+        }
         continue;
       }
       parsed.add(parsedPayload);

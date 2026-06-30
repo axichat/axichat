@@ -55,6 +55,8 @@ class PubSubManager extends mox.PubSubManager {
   static const String _nodeAttr = 'node';
   static const String _bookmarksNode = bookmarksNodeXmlns;
   static const String _conversationIndexNode = 'urn:axi:conversations';
+  static const String _conversationAnnotationsNode =
+      'urn:axi:conversation-annotations:1';
   static const String _draftsNode = 'urn:axi:drafts';
   static const String _spamNode = 'urn:axi:spam';
   static const String _addressBlockNode = 'urn:axi:address-blocklist';
@@ -131,6 +133,7 @@ class PubSubManager extends mox.PubSubManager {
     return switch (trimmed) {
       _bookmarksNode => XmppOperationKind.pubSubBookmarks,
       _conversationIndexNode => XmppOperationKind.pubSubConversations,
+      _conversationAnnotationsNode => XmppOperationKind.pubSubConversations,
       _draftsNode => XmppOperationKind.pubSubDrafts,
       _spamNode => XmppOperationKind.pubSubSpam,
       _addressBlockNode => XmppOperationKind.pubSubAddressBlock,

@@ -1548,7 +1548,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatContactRenameDescription.
   ///
   /// In en, this message translates to:
-  /// **'Choose how this contact appears across Axichat.'**
+  /// **'Choose how this contact appears on this device.'**
   String get chatContactRenameDescription;
 
   /// No description provided for @chatContactRenamePlaceholder.
@@ -1572,7 +1572,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatContactRenameSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Display name updated'**
+  /// **'Display name updated locally'**
   String get chatContactRenameSuccess;
 
   /// No description provided for @chatContactRenameFailure.
@@ -2638,7 +2638,7 @@ abstract class AppLocalizations {
   /// No description provided for @authGuestCalendarCta.
   ///
   /// In en, this message translates to:
-  /// **'Try Calendar (Guest Mode)'**
+  /// **'Guest calendar'**
   String get authGuestCalendarCta;
 
   /// No description provided for @authLogin.
@@ -5973,7 +5973,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatsDeleteConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'Delete chat: {chatTitle}'**
+  /// **'Delete this chat on this device: {chatTitle}'**
   String chatsDeleteConfirmMessage(Object chatTitle);
 
   /// No description provided for @chatsDeleteMessagesOption.
@@ -5985,7 +5985,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatsDeleteSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Chat deleted'**
+  /// **'Chat deleted locally'**
   String get chatsDeleteSuccess;
 
   /// No description provided for @chatsExportNoContent.
@@ -6183,7 +6183,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatSelectionDeleteConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one {This removes 1 chat and all of its messages. This cannot be undone.} other {This removes # chats and all of their messages. This cannot be undone.}}'**
+  /// **'{count, plural, one {This removes 1 chat and all of its messages from this device. This cannot be undone here.} other {This removes # chats and all of their messages from this device. This cannot be undone here.}}'**
   String chatSelectionDeleteConfirmMessage(num count);
 
   /// No description provided for @chatsCreateGroupChatTooltip.

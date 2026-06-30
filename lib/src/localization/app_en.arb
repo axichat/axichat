@@ -330,11 +330,11 @@
   "chatContactRenameTooltip": "Rename contact",
   "chatVerifiedServerAnnouncementTooltip": "Verified server announcement",
   "chatContactRenameTitle": "Rename contact",
-  "chatContactRenameDescription": "Choose how this contact appears across Axichat.",
+  "chatContactRenameDescription": "Choose how this contact appears on this device.",
   "chatContactRenamePlaceholder": "Display name",
   "chatContactRenameReset": "Reset to default",
   "chatContactRenameSave": "Save",
-  "chatContactRenameSuccess": "Display name updated",
+  "chatContactRenameSuccess": "Display name updated locally",
   "chatContactRenameFailure": "Could not rename contact",
   "chatComposerSemantics": "Message input",
   "draftSaved": "Draft saved",
@@ -592,7 +592,7 @@
   "authLoggingIn": "Logging you in…",
   "authToggleSignup": "New? Sign up",
   "authToggleLogin": "Already registered? Log in",
-  "authGuestCalendarCta": "Try Calendar (Guest Mode)",
+  "authGuestCalendarCta": "Guest calendar",
   "authLogin": "Log in",
   "authRememberMeLabel": "Remember me on this device",
   "authSignUp": "Sign up",
@@ -1395,14 +1395,14 @@
   "mucActionGrantModerator": "Grant moderator",
   "mucActionRevokeModerator": "Revoke moderator",
   "chatsEmptyList": "No chats yet",
-  "chatsDeleteConfirmMessage": "Delete chat: {chatTitle}",
+  "chatsDeleteConfirmMessage": "Delete this chat on this device: {chatTitle}",
   "@chatsDeleteConfirmMessage": {
     "placeholders": {
       "chatTitle": {}
     }
   },
   "chatsDeleteMessagesOption": "Permanently delete messages",
-  "chatsDeleteSuccess": "Chat deleted",
+  "chatsDeleteSuccess": "Chat deleted locally",
   "chatsExportNoContent": "No text content to export",
   "chatsExportShareText": "Chat export from Axichat",
   "chatsExportShareSubject": "Chat with {chatTitle}",
@@ -1450,7 +1450,7 @@
   "chatSelectionExportFailedTitle": "Export failed",
   "chatSelectionExportFailedMessage": "Unable to export selected chats",
   "chatSelectionDeleteConfirmTitle": "Delete chats?",
-  "chatSelectionDeleteConfirmMessage": "{count, plural, one {This removes 1 chat and all of its messages. This cannot be undone.} other {This removes # chats and all of their messages. This cannot be undone.}}",
+  "chatSelectionDeleteConfirmMessage": "{count, plural, one {This removes 1 chat and all of its messages from this device. This cannot be undone here.} other {This removes # chats and all of their messages from this device. This cannot be undone here.}}",
   "@chatSelectionDeleteConfirmMessage": {
     "placeholders": {
       "count": {}

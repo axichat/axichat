@@ -839,7 +839,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatContactRenameDescription =>
-      'Choisissez comment ce contact s’affiche dans Axichat.';
+      'Choisissez comment ce contact s’affiche sur cet appareil.';
 
   @override
   String get chatContactRenamePlaceholder => 'Nom affiché';
@@ -851,7 +851,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatContactRenameSave => 'Enregistrer';
 
   @override
-  String get chatContactRenameSuccess => 'Nom affiché mis à jour';
+  String get chatContactRenameSuccess => 'Nom affiché mis à jour localement';
 
   @override
   String get chatContactRenameFailure => 'Impossible de renommer le contact';
@@ -3373,7 +3373,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String chatsDeleteConfirmMessage(Object chatTitle) {
-    return 'Supprimer le chat : $chatTitle';
+    return 'Supprimer ce chat sur cet appareil : $chatTitle';
   }
 
   @override
@@ -3381,7 +3381,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Supprimer définitivement les messages';
 
   @override
-  String get chatsDeleteSuccess => 'Chat supprimé';
+  String get chatsDeleteSuccess => 'Chat supprimé localement';
 
   @override
   String get chatsExportNoContent => 'Aucun texte à exporter';
@@ -3512,8 +3512,9 @@ class AppLocalizationsFr extends AppLocalizations {
       count,
       locale: localeName,
       other:
-          'Ceci supprime # chats et tous leurs messages. Action irréversible.',
-      one: 'Ceci supprime 1 chat et tous ses messages. Action irréversible.',
+          'Ceci supprime # chats et tous leurs messages de cet appareil. Action irréversible ici.',
+      one:
+          'Ceci supprime 1 chat et tous ses messages de cet appareil. Action irréversible ici.',
     );
     return '$_temp0';
   }
