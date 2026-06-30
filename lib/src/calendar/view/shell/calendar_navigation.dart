@@ -58,7 +58,39 @@ const List<CalendarView> _viewOrder = <CalendarView>[
   CalendarView.month,
 ];
 
-class CalendarNavigation extends StatelessWidget {
+@immutable
+class CalendarNavigationLayoutState {
+  const CalendarNavigationLayoutState({
+    required this.showInlineViewControls,
+    required this.showOverflowViewActions,
+    required this.includeWeekViewAction,
+    required this.useHeaderDateControls,
+  });
+
+  final bool showInlineViewControls;
+  final bool showOverflowViewActions;
+  final bool includeWeekViewAction;
+  final bool useHeaderDateControls;
+
+  @override
+  bool operator ==(Object other) {
+    return other is CalendarNavigationLayoutState &&
+        other.showInlineViewControls == showInlineViewControls &&
+        other.showOverflowViewActions == showOverflowViewActions &&
+        other.includeWeekViewAction == includeWeekViewAction &&
+        other.useHeaderDateControls == useHeaderDateControls;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    showInlineViewControls,
+    showOverflowViewActions,
+    includeWeekViewAction,
+    useHeaderDateControls,
+  );
+}
+
+class CalendarNavigation extends StatefulWidget {
   const CalendarNavigation({
     super.key,
     required this.state,
@@ -75,6 +107,7 @@ class CalendarNavigation extends StatelessWidget {
     this.onSearchRequested,
     this.chatAcl,
     this.chatTitle,
+    this.onLayoutStateChanged,
   });
 
   final CalendarState state;
@@ -91,25 +124,66 @@ class CalendarNavigation extends StatelessWidget {
   final VoidCallback? onSearchRequested;
   final CalendarChatAcl? chatAcl;
   final String? chatTitle;
+  final ValueChanged<CalendarNavigationLayoutState>? onLayoutStateChanged;
+
+  @override
+  State<CalendarNavigation> createState() => _CalendarNavigationState();
+}
+
+class _CalendarNavigationState extends State<CalendarNavigation> {
+  static const double _measurementWidthEpsilon = 1.0;
+
+  final GlobalKey _navRowKey = GlobalKey(debugLabel: 'calendar-nav-row');
+  final GlobalKey _viewToggleKey = GlobalKey(
+    debugLabel: 'calendar-view-toggle',
+  );
+  bool _viewToggleOverflowed = false;
+  bool _measurementScheduled = false;
+  double? _lastMeasuredViewToggleWidth;
+  CalendarNavigationLayoutState? _lastNotifiedLayoutState;
+
+  @override
+  void didUpdateWidget(covariant CalendarNavigation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.onLayoutStateChanged != widget.onLayoutStateChanged) {
+      _lastNotifiedLayoutState = null;
+    }
+    final bool layoutInputsChanged =
+        oldWidget.state.viewMode != widget.state.viewMode ||
+        oldWidget.state.selectedDate != widget.state.selectedDate ||
+        oldWidget.sidebarVisible != widget.sidebarVisible ||
+        (oldWidget.leadingActions == null) != (widget.leadingActions == null) ||
+        (oldWidget.trailingActions == null) !=
+            (widget.trailingActions == null) ||
+        (oldWidget.onSearchRequested == null) !=
+            (widget.onSearchRequested == null) ||
+        (oldWidget.onUndo != null || oldWidget.onRedo != null) !=
+            (widget.onUndo != null || widget.onRedo != null);
+    if (!layoutInputsChanged) {
+      return;
+    }
+    _viewToggleOverflowed = false;
+    _lastMeasuredViewToggleWidth = null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
-    final double basePadding = sidebarVisible ? spec.gridHorizontalPadding : 0;
+    final double basePadding = widget.sidebarVisible
+        ? spec.gridHorizontalPadding
+        : 0;
     final spacing = context.spacing;
     final double horizontalPadding = math.max(spacing.m, basePadding);
-    final CalendarView viewMode = state.viewMode;
-    final bool hasUndoRedo = onUndo != null || onRedo != null;
+    final CalendarView viewMode = widget.state.viewMode;
+    final bool hasUndoRedo = widget.onUndo != null || widget.onRedo != null;
     final l10n = context.l10n;
     final String unitLabel = calendarUnitLabel(viewMode, l10n);
-    final bool placeChevronsInHeader =
-        spec.sizeClass != CalendarSizeClass.expanded;
     final double verticalPadding = spacing.xxs;
     final Widget undoRedoGroup = _UndoRedoGroup(
-      onUndo: onUndo,
-      onRedo: onRedo,
-      canUndo: canUndo,
-      canRedo: canRedo,
+      onUndo: widget.onUndo,
+      onRedo: widget.onRedo,
+      canUndo: widget.canUndo,
+      canRedo: widget.canRedo,
     );
     final colors = context.colorScheme;
     return LayoutBuilder(
@@ -119,51 +193,94 @@ class CalendarNavigation extends StatelessWidget {
             : MediaQuery.of(context).size.width;
         final double availableWidth = (safeMaxWidth - (horizontalPadding * 2))
             .clamp(0.0, double.infinity);
-        final bool isCompact = availableWidth < smallScreen;
+        final bool useCompactViewControls =
+            calendarNavigationUsesCompactViewControls(
+              context: context,
+              maxWidth: safeMaxWidth,
+              sidebarVisible: widget.sidebarVisible,
+            );
+        final bool useHeaderDateControls =
+            calendarNavigationUsesHeaderDateControls(
+              context: context,
+              maxWidth: safeMaxWidth,
+              sidebarVisible: widget.sidebarVisible,
+            );
+        final bool supportsWeekView = calendarNavigationSupportsWeekView(
+          context,
+        );
+        final bool canShowInlineViewControls = !useCompactViewControls;
+        final bool shouldProbeInlineViewControls =
+            canShowInlineViewControls && _shouldProbeViewToggle(availableWidth);
+        final bool showInlineViewControls =
+            canShowInlineViewControls &&
+            (!_viewToggleOverflowed || shouldProbeInlineViewControls);
+        final layoutState = CalendarNavigationLayoutState(
+          showInlineViewControls: showInlineViewControls,
+          showOverflowViewActions: !showInlineViewControls,
+          includeWeekViewAction: supportsWeekView,
+          useHeaderDateControls: useHeaderDateControls,
+        );
+        _notifyLayoutStateChanged(context, layoutState);
+        final bool showNavChevrons = !layoutState.useHeaderDateControls;
+        final Widget? scopedTrailingActions = widget.trailingActions == null
+            ? null
+            : CalendarNavigationOverflowScope(
+                showViewActions: layoutState.showOverflowViewActions,
+                includeWeekViewAction: layoutState.includeWeekViewAction,
+                child: widget.trailingActions!,
+              );
         final List<Widget> navButtons = [
-          if (!placeChevronsInHeader)
+          if (showNavChevrons)
             _IconNavButton(
               icon: Icons.chevron_left,
               tooltip: l10n.calendarPreviousUnit(unitLabel),
-              compact: isCompact,
               onPressed: () => _jumpRelative(-1),
             ),
           _NavigationButton(
             label: l10n.calendarToday,
             icon: null,
-            highlighted: !_isToday(state.selectedDate),
+            highlighted: !_isToday(widget.state.selectedDate),
             tooltip: l10n.calendarToday,
-            compact: isCompact,
+            compact: useCompactViewControls,
             showLabelInCompact: true,
-            onPressed: _isToday(state.selectedDate)
+            onPressed: _isToday(widget.state.selectedDate)
                 ? null
-                : () => onDateSelected(DateTime.now()),
+                : () => widget.onDateSelected(DateTime.now()),
           ),
-          if (!placeChevronsInHeader)
+          if (showNavChevrons)
             _IconNavButton(
               icon: Icons.chevron_right,
               tooltip: l10n.calendarNextUnit(unitLabel),
-              compact: isCompact,
               onPressed: () => _jumpRelative(1),
             ),
         ];
         final bool collapseDateText =
-            isCompact || availableWidth < _compactDateLabelCollapseWidth;
-        final double navSpacing = isCompact ? spacing.s : spacing.m;
+            useCompactViewControls ||
+            availableWidth < _compactDateLabelCollapseWidth;
+        final double navSpacing = useCompactViewControls
+            ? spacing.s
+            : spacing.m;
         final Widget navRow = _NavigationButtonRow(
           navButtons: navButtons,
+          rowKey: _navRowKey,
+          viewToggleKey: _viewToggleKey,
           spacing: navSpacing,
-        );
-        final Widget trailingRow = _TrailingControls(
-          state: state,
-          onDateSelected: onDateSelected,
+          state: widget.state,
+          onDateSelected: widget.onDateSelected,
           collapseDateText: collapseDateText,
-          isCompact: isCompact,
+          isCompact: useCompactViewControls,
+          onViewChanged: widget.onViewChanged,
+          availableWidth: availableWidth,
+          showViewToggle: layoutState.showInlineViewControls,
+        );
+        if (layoutState.showInlineViewControls) {
+          _scheduleViewToggleMeasurement(context, availableWidth);
+        }
+        final Widget trailingRow = _TrailingControls(
+          isCompact: useCompactViewControls,
           hasUndoRedo: hasUndoRedo,
           undoRedoGroup: undoRedoGroup,
-          onSearchRequested: onSearchRequested,
-          onViewChanged: onViewChanged,
-          availableWidth: availableWidth,
+          onSearchRequested: widget.onSearchRequested,
         );
 
         final Border border = Border(bottom: BorderSide(color: colors.border));
@@ -196,8 +313,8 @@ class CalendarNavigation extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    if (leadingActions != null) ...[
-                      leadingActions!,
+                    if (widget.leadingActions != null) ...[
+                      widget.leadingActions!,
                       SizedBox(width: navSpacing),
                     ],
                     Expanded(
@@ -214,9 +331,9 @@ class CalendarNavigation extends StatelessWidget {
                         child: trailingRow,
                       ),
                     ),
-                    if (trailingActions != null) ...[
+                    if (scopedTrailingActions != null) ...[
                       SizedBox(width: navSpacing),
-                      trailingActions!,
+                      scopedTrailingActions,
                     ],
                   ],
                 ),
@@ -229,7 +346,85 @@ class CalendarNavigation extends StatelessWidget {
   }
 
   void _jumpRelative(int steps) {
-    onDateSelected(shiftedCalendarDate(state, steps));
+    widget.onDateSelected(shiftedCalendarDate(widget.state, steps));
+  }
+
+  void _notifyLayoutStateChanged(
+    BuildContext context,
+    CalendarNavigationLayoutState layoutState,
+  ) {
+    final callback = widget.onLayoutStateChanged;
+    if (callback == null) {
+      return;
+    }
+    if (_lastNotifiedLayoutState == layoutState) {
+      return;
+    }
+    _lastNotifiedLayoutState = layoutState;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) {
+        return;
+      }
+      callback(layoutState);
+    });
+  }
+
+  bool _shouldProbeViewToggle(double availableWidth) {
+    final lastWidth = _lastMeasuredViewToggleWidth;
+    if (lastWidth == null) {
+      return true;
+    }
+    return availableWidth > lastWidth + _measurementWidthEpsilon;
+  }
+
+  void _scheduleViewToggleMeasurement(
+    BuildContext context,
+    double availableWidth,
+  ) {
+    if (_measurementScheduled) {
+      return;
+    }
+    _measurementScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measurementScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      final rowContext = _navRowKey.currentContext;
+      final toggleContext = _viewToggleKey.currentContext;
+      if (rowContext == null || toggleContext == null) {
+        return;
+      }
+      final rowBox = rowContext.findRenderObject();
+      final toggleBox = toggleContext.findRenderObject();
+      if (rowBox is! RenderBox ||
+          toggleBox is! RenderBox ||
+          !rowBox.hasSize ||
+          !toggleBox.hasSize) {
+        return;
+      }
+      final Offset rowTopLeft = rowBox.localToGlobal(Offset.zero);
+      final Offset toggleTopLeft = toggleBox.localToGlobal(Offset.zero);
+      final double rowRight = rowTopLeft.dx + rowBox.size.width;
+      final double toggleRight = toggleTopLeft.dx + toggleBox.size.width;
+      _handleViewToggleMeasured(
+        availableWidth: availableWidth,
+        overflowed: toggleRight > rowRight + _measurementWidthEpsilon,
+      );
+    });
+  }
+
+  void _handleViewToggleMeasured({
+    required double availableWidth,
+    required bool overflowed,
+  }) {
+    _lastMeasuredViewToggleWidth = availableWidth;
+    if (_viewToggleOverflowed == overflowed) {
+      return;
+    }
+    setState(() {
+      _viewToggleOverflowed = overflowed;
+    });
   }
 
   bool _isToday(DateTime date) {
@@ -237,6 +432,29 @@ class CalendarNavigation extends StatelessWidget {
     return now.year == date.year &&
         now.month == date.month &&
         now.day == date.day;
+  }
+}
+
+class CalendarNavigationOverflowScope extends InheritedWidget {
+  const CalendarNavigationOverflowScope({
+    super.key,
+    required this.showViewActions,
+    required this.includeWeekViewAction,
+    required super.child,
+  });
+
+  final bool showViewActions;
+  final bool includeWeekViewAction;
+
+  static CalendarNavigationOverflowScope? maybeOf(
+    BuildContext context,
+  ) => context
+      .dependOnInheritedWidgetOfExactType<CalendarNavigationOverflowScope>();
+
+  @override
+  bool updateShouldNotify(CalendarNavigationOverflowScope oldWidget) {
+    return showViewActions != oldWidget.showViewActions ||
+        includeWeekViewAction != oldWidget.includeWeekViewAction;
   }
 }
 
@@ -279,7 +497,7 @@ class _NavigationButton extends StatelessWidget {
             icon: icon,
           )
         : TaskSecondaryButton(label: label, onPressed: onPressed, icon: icon);
-    return button;
+    return SizedBox(height: context.sizing.buttonHeightRegular, child: button);
   }
 }
 
@@ -287,13 +505,11 @@ class _IconNavButton extends StatelessWidget {
   const _IconNavButton({
     required this.icon,
     required this.tooltip,
-    required this.compact,
     required this.onPressed,
   });
 
   final IconData icon;
   final String tooltip;
-  final bool compact;
   final VoidCallback? onPressed;
 
   @override
@@ -304,7 +520,6 @@ class _IconNavButton extends StatelessWidget {
       onPressed: onPressed,
       highlighted: false,
       enabled: onPressed != null,
-      dense: compact,
     );
   }
 }
@@ -376,6 +591,9 @@ class _CompactNavButton extends StatelessWidget {
     final double tapTarget = dense
         ? context.sizing.menuItemHeight
         : context.sizing.iconButtonTapTarget;
+    final double iconSize = dense
+        ? context.sizing.menuItemIconSize
+        : context.sizing.iconButtonIconSize;
     return AxiIconButton(
       iconData: icon,
       onPressed: active ? onPressed : null,
@@ -383,7 +601,7 @@ class _CompactNavButton extends StatelessWidget {
       color: foreground,
       backgroundColor: background,
       borderColor: border,
-      iconSize: context.sizing.menuItemIconSize,
+      iconSize: iconSize,
       buttonSize: buttonSize,
       tapTargetSize: tapTarget,
     );
@@ -490,87 +708,121 @@ class _UndoRedoGroup extends StatelessWidget {
 }
 
 class _NavigationButtonRow extends StatelessWidget {
-  const _NavigationButtonRow({required this.navButtons, required this.spacing});
-
-  final List<Widget> navButtons;
-  final double spacing;
-
-  @override
-  Widget build(BuildContext context) {
-    if (navButtons.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Wrap(
-      spacing: spacing,
-      runSpacing: context.spacing.s,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: navButtons,
-    );
-  }
-}
-
-class _TrailingControls extends StatelessWidget {
-  const _TrailingControls({
+  const _NavigationButtonRow({
+    required this.navButtons,
+    required this.rowKey,
+    required this.viewToggleKey,
+    required this.spacing,
     required this.state,
     required this.onDateSelected,
     required this.collapseDateText,
     required this.isCompact,
-    required this.hasUndoRedo,
-    required this.undoRedoGroup,
     required this.onViewChanged,
     required this.availableWidth,
-    this.onSearchRequested,
+    required this.showViewToggle,
   });
 
+  final List<Widget> navButtons;
+  final GlobalKey rowKey;
+  final GlobalKey viewToggleKey;
+  final double spacing;
   final CalendarState state;
   final void Function(DateTime) onDateSelected;
   final bool collapseDateText;
   final bool isCompact;
-  final bool hasUndoRedo;
-  final Widget undoRedoGroup;
   final ValueChanged<CalendarView> onViewChanged;
   final double availableWidth;
-  final VoidCallback? onSearchRequested;
+  final bool showViewToggle;
 
   @override
   Widget build(BuildContext context) {
-    final double trailingGap = isCompact
-        ? context.spacing.s
-        : context.spacing.m;
     final double maxDateLabelWidth = isCompact
         ? _compactDateLabelMaxWidth
         : _defaultDateLabelMaxWidth;
-
-    final bool showViewToggle = !isCompact;
-
-    final trailingChildren = <Widget>[
-      ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxDateLabelWidth),
-        child: _DateLabel(
-          state: state,
-          onDateSelected: onDateSelected,
-          collapseText: collapseDateText,
-        ),
+    final Widget dateLabel = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxDateLabelWidth),
+      child: _DateLabel(
+        state: state,
+        onDateSelected: onDateSelected,
+        collapseText: collapseDateText,
       ),
+    );
+    final children = _withSpacing([
+      ...navButtons,
+      dateLabel,
       if (showViewToggle)
         CalendarViewModeToggle(
+          key: viewToggleKey,
           selectedView: state.viewMode,
           onChanged: onViewChanged,
           compact: isCompact,
           availableWidth: availableWidth,
         ),
+    ]);
+    return Row(
+      key: rowKey,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: children,
+    );
+  }
+
+  List<Widget> _withSpacing(List<Widget> children) {
+    if (children.length < 2) {
+      return children;
+    }
+    return [
+      for (int index = 0; index < children.length; index++) ...[
+        if (index > 0) SizedBox(width: spacing),
+        children[index],
+      ],
+    ];
+  }
+}
+
+class _TrailingControls extends StatelessWidget {
+  const _TrailingControls({
+    required this.isCompact,
+    required this.hasUndoRedo,
+    required this.undoRedoGroup,
+    this.onSearchRequested,
+  });
+
+  final bool isCompact;
+  final bool hasUndoRedo;
+  final Widget undoRedoGroup;
+  final VoidCallback? onSearchRequested;
+
+  @override
+  Widget build(BuildContext context) {
+    final double gap = isCompact ? context.spacing.s : context.spacing.m;
+
+    final children = <Widget>[
       if (onSearchRequested != null)
         _SearchButton(onPressed: onSearchRequested!, compact: isCompact),
       if (hasUndoRedo) undoRedoGroup,
     ];
 
-    return Wrap(
-      spacing: trailingGap,
-      runSpacing: context.spacing.s,
-      alignment: WrapAlignment.end,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: trailingChildren,
+    if (children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: _withHorizontalSpacing(children, gap),
     );
+  }
+
+  List<Widget> _withHorizontalSpacing(List<Widget> children, double gap) {
+    if (children.length < 2) {
+      return children;
+    }
+    return [
+      for (int index = 0; index < children.length; index++) ...[
+        if (index > 0) SizedBox(width: gap),
+        children[index],
+      ],
+    ];
   }
 }
 

@@ -459,15 +459,12 @@ class _DayEventBullet extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Padding(
-                          padding: EdgeInsets.only(top: spacing.xs),
-                          child: Container(
-                            width: spacing.s,
-                            height: spacing.s,
-                            decoration: BoxDecoration(
-                              color: colors.primary,
-                              shape: BoxShape.circle,
-                            ),
+                        Container(
+                          width: spacing.s,
+                          height: spacing.s,
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            shape: BoxShape.circle,
                           ),
                         ),
                         SizedBox(width: spacing.s),

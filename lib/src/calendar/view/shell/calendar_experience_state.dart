@@ -731,6 +731,11 @@ abstract class CalendarExperienceState<
       onSearchRequested: searchAction,
       chatAcl: chatAcl,
       chatTitle: chatTitle,
+      onLayoutStateChanged: buildNavigationLayoutStateListener(
+        context,
+        state,
+        usesDesktopLayout,
+      ),
     );
     final EdgeInsets? padding = navigationPadding(spec, usesDesktopLayout);
     if (padding == null) {
@@ -768,6 +773,14 @@ abstract class CalendarExperienceState<
 
   @protected
   VoidCallback? buildNavigationSearchAction(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) => null;
+
+  @protected
+  ValueChanged<CalendarNavigationLayoutState>?
+  buildNavigationLayoutStateListener(
     BuildContext context,
     CalendarState state,
     bool usesDesktopLayout,

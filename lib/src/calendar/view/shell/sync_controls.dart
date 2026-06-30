@@ -23,9 +23,109 @@ import 'package:axichat/src/calendar/interop/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/calendar/view/tasks/calendar_transfer_sheet.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
+import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
 
 const bool _defaultShowTransferMenu = true;
 const bool _defaultTransferMenuGhost = false;
+const List<CalendarView> _calendarTransferMenuViewOrder = <CalendarView>[
+  CalendarView.day,
+  CalendarView.week,
+  CalendarView.month,
+];
+const List<CalendarView> _calendarCompactTransferMenuViewOrder = <CalendarView>[
+  CalendarView.day,
+  CalendarView.month,
+];
+
+bool calendarOverflowViewActionsIncludeWeek(BuildContext context) {
+  return ResponsiveHelper.spec(context).sizeClass != CalendarSizeClass.compact;
+}
+
+bool calendarNavigationUsesCompactViewControls({
+  required BuildContext context,
+  required double maxWidth,
+  required bool sidebarVisible,
+}) {
+  return _calendarNavigationAvailableWidth(
+        context: context,
+        maxWidth: maxWidth,
+        sidebarVisible: sidebarVisible,
+      ) <
+      smallScreen;
+}
+
+bool calendarNavigationUsesHeaderDateControls({
+  required BuildContext context,
+  required double maxWidth,
+  required bool sidebarVisible,
+}) {
+  return _calendarNavigationAvailableWidth(
+        context: context,
+        maxWidth: maxWidth,
+        sidebarVisible: sidebarVisible,
+      ) <
+      compactDeviceBreakpoint;
+}
+
+bool calendarNavigationSupportsWeekView(BuildContext context) {
+  return calendarOverflowViewActionsIncludeWeek(context);
+}
+
+double _calendarNavigationAvailableWidth({
+  required BuildContext context,
+  required double maxWidth,
+  required bool sidebarVisible,
+}) {
+  final spec = ResponsiveHelper.spec(context);
+  final double basePadding = sidebarVisible ? spec.gridHorizontalPadding : 0;
+  final double horizontalPadding = basePadding > context.spacing.m
+      ? basePadding
+      : context.spacing.m;
+  return (maxWidth - (horizontalPadding * 2)).clamp(0.0, double.infinity);
+}
+
+List<AxiMenuAction> calendarViewMenuActions({
+  required BuildContext context,
+  required CalendarView selectedView,
+  required ValueChanged<CalendarView> onChanged,
+  required bool includeWeek,
+}) {
+  final l10n = context.l10n;
+  final views = includeWeek
+      ? _calendarTransferMenuViewOrder
+      : _calendarCompactTransferMenuViewOrder;
+  return [
+    for (final view in views)
+      AxiMenuAction(
+        icon: _calendarViewMenuIcon(view),
+        label: _calendarViewMenuLabel(view, l10n),
+        enabled: view != selectedView,
+        onPressed: view == selectedView ? null : () => onChanged(view),
+      ),
+  ];
+}
+
+String _calendarViewMenuLabel(CalendarView view, AppLocalizations l10n) {
+  switch (view) {
+    case CalendarView.day:
+      return l10n.calendarViewDay;
+    case CalendarView.week:
+      return l10n.calendarViewWeek;
+    case CalendarView.month:
+      return l10n.calendarViewMonth;
+  }
+}
+
+IconData _calendarViewMenuIcon(CalendarView view) {
+  switch (view) {
+    case CalendarView.day:
+      return Icons.calendar_view_day;
+    case CalendarView.week:
+      return Icons.view_week;
+    case CalendarView.month:
+      return Icons.calendar_view_month;
+  }
+}
 
 class SyncControls extends StatelessWidget {
   const SyncControls({
@@ -354,11 +454,10 @@ class _InlineSyncControls extends StatelessWidget {
       ),
     ];
 
-    return Wrap(
-      spacing: context.spacing.s,
-      runSpacing: context.spacing.xs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: children,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: _withSyncControlSpacing(children, context.spacing.s),
     );
   }
 }
@@ -376,13 +475,24 @@ class _CompactSyncControls extends StatelessWidget {
       SyncStatusIndicator(state: state),
     ];
 
-    return Wrap(
-      spacing: context.spacing.s,
-      runSpacing: context.spacing.xs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: children,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: _withSyncControlSpacing(children, context.spacing.s),
     );
   }
+}
+
+List<Widget> _withSyncControlSpacing(List<Widget> children, double gap) {
+  if (children.length < 2) {
+    return children;
+  }
+  return [
+    for (int index = 0; index < children.length; index++) ...[
+      if (index > 0) SizedBox(width: gap),
+      children[index],
+    ],
+  ];
 }
 
 String _statusTextFor(CalendarState state, AppLocalizations l10n) {
@@ -426,6 +536,7 @@ class CalendarTransferMenuButton extends StatelessWidget {
     final bool canImport = !busy;
     return AxiMore(
       actions: [
+        ...?additionalActions,
         AxiMenuAction(
           icon: LucideIcons.upload,
           label: l10n.calendarExportCalendar,
@@ -438,7 +549,6 @@ class CalendarTransferMenuButton extends StatelessWidget {
           enabled: canImport,
           onPressed: canImport ? onImport : null,
         ),
-        ...?additionalActions,
       ],
       ghost: ghost,
       selected: selected,

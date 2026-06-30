@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_experience_state.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_navigation.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
@@ -245,23 +246,41 @@ class _ChatCalendarWidgetState
     CalendarState state,
     bool usesDesktopLayout,
   ) {
-    return CalendarTransferMenu(
-      state: state,
-      ghost: true,
-      additionalActions: [
-        AxiMenuAction(
-          icon: context.watch<SettingsCubit>().state.hideCompletedScheduled
-              ? Icons.visibility
-              : Icons.visibility_off,
-          label: context.watch<SettingsCubit>().state.hideCompletedScheduled
-              ? context.l10n.calendarShowCompleted
-              : context.l10n.calendarHideCompleted,
-          onPressed: () =>
-              context.read<SettingsCubit>().toggleHideCompletedScheduled(
-                !context.read<SettingsCubit>().state.hideCompletedScheduled,
+    return Builder(
+      builder: (context) {
+        final settings = context.watch<SettingsCubit>().state;
+        final overflowScope = CalendarNavigationOverflowScope.maybeOf(context);
+        final bool showViewActions = overflowScope?.showViewActions ?? false;
+        final bool includeWeekViewAction =
+            overflowScope?.includeWeekViewAction ??
+            calendarOverflowViewActionsIncludeWeek(context);
+        return CalendarTransferMenu(
+          state: state,
+          ghost: true,
+          additionalActions: [
+            if (showViewActions)
+              ...calendarViewMenuActions(
+                context: context,
+                selectedView: state.viewMode,
+                includeWeek: includeWeekViewAction,
+                onChanged: (view) =>
+                    calendarBloc.add(CalendarEvent.viewChanged(view: view)),
               ),
-        ),
-      ],
+            AxiMenuAction(
+              icon: settings.hideCompletedScheduled
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+              label: settings.hideCompletedScheduled
+                  ? context.l10n.calendarShowCompleted
+                  : context.l10n.calendarHideCompleted,
+              onPressed: () =>
+                  context.read<SettingsCubit>().toggleHideCompletedScheduled(
+                    !context.read<SettingsCubit>().state.hideCompletedScheduled,
+                  ),
+            ),
+          ],
+        );
+      },
     );
   }
 

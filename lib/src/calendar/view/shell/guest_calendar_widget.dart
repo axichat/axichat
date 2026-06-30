@@ -17,9 +17,10 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/interop/calendar_share.dart';
+import 'package:axichat/src/calendar/interop/calendar_export_saver.dart';
 import 'package:axichat/src/calendar/view/shell/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_experience_state.dart';
+import 'package:axichat/src/calendar/view/shell/calendar_navigation.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_sync_warning_feedback.dart';
 import 'package:axichat/src/calendar/view/shell/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
@@ -38,10 +39,12 @@ class GuestCalendarWidget extends StatefulWidget {
   const GuestCalendarWidget({
     super.key,
     this.showBackButton = true,
+    this.showPreviewOverlay = false,
     bool? handleSystemBackToLogin,
   }) : handleSystemBackToLogin = handleSystemBackToLogin ?? showBackButton;
 
   final bool showBackButton;
+  final bool showPreviewOverlay;
   final bool handleSystemBackToLogin;
 
   @override
@@ -57,7 +60,9 @@ class _GuestCalendarWidgetState
   );
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
       GlobalKey<NavigatorState>();
-  bool _desktopOverlayDismissed = false;
+  bool _previewOverlayDismissed = false;
+  bool _showOverflowViewActions = false;
+  bool _includeWeekViewAction = false;
 
   @override
   BuildContext get calendarModalContext {
@@ -88,6 +93,29 @@ class _GuestCalendarWidgetState
     CalendarResponsiveSpec spec,
     bool usesDesktopLayout,
   ) => spec.modalMargin;
+
+  @override
+  ValueChanged<CalendarNavigationLayoutState>?
+  buildNavigationLayoutStateListener(
+    BuildContext context,
+    CalendarState state,
+    bool usesDesktopLayout,
+  ) {
+    return _handleNavigationLayoutStateChanged;
+  }
+
+  void _handleNavigationLayoutStateChanged(
+    CalendarNavigationLayoutState layoutState,
+  ) {
+    if (_showOverflowViewActions == layoutState.showOverflowViewActions &&
+        _includeWeekViewAction == layoutState.includeWeekViewAction) {
+      return;
+    }
+    setState(() {
+      _showOverflowViewActions = layoutState.showOverflowViewActions;
+      _includeWeekViewAction = layoutState.includeWeekViewAction;
+    });
+  }
 
   @override
   CalendarMobileTabShell buildMobileTabShell(
@@ -165,7 +193,11 @@ class _GuestCalendarWidgetState
               _GuestBanner(
                 onNavigateBack: _handleBannerBackNavigation,
                 showBackButton: widget.showBackButton,
-                transferMenu: _GuestTransferMenu(state: state),
+                transferMenu: _GuestTransferMenu(
+                  state: state,
+                  showViewActions: _showOverflowViewActions,
+                  includeWeekViewAction: _includeWeekViewAction,
+                ),
               ),
               Expanded(child: layout),
             ],
@@ -173,7 +205,7 @@ class _GuestCalendarWidgetState
         ),
       ),
     );
-    if (!usesDesktopLayout || _desktopOverlayDismissed) {
+    if (!widget.showPreviewOverlay || _previewOverlayDismissed) {
       return _GuestSystemBackScope(
         handleSystemBackToLogin: widget.handleSystemBackToLogin,
         onNavigateBack: _handleSystemBackNavigation,
@@ -189,7 +221,7 @@ class _GuestCalendarWidgetState
           Positioned.fill(
             child: _GuestDesktopOverlay(
               onPressed: () {
-                setState(() => _desktopOverlayDismissed = true);
+                setState(() => _previewOverlayDismissed = true);
               },
             ),
           ),
@@ -487,9 +519,15 @@ class _GuestDesktopOverlay extends StatelessWidget {
 }
 
 class _GuestTransferMenu extends StatefulWidget {
-  const _GuestTransferMenu({required this.state});
+  const _GuestTransferMenu({
+    required this.state,
+    required this.showViewActions,
+    required this.includeWeekViewAction,
+  });
 
   final CalendarState state;
+  final bool showViewActions;
+  final bool includeWeekViewAction;
 
   @override
   State<_GuestTransferMenu> createState() => _GuestTransferMenuState();
@@ -515,6 +553,16 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         hasCalendarData: hasCalendarData,
         onExport: _handleExportAll,
         onImport: _handleImportCalendar,
+        additionalActions: widget.showViewActions
+            ? calendarViewMenuActions(
+                context: context,
+                selectedView: widget.state.viewMode,
+                includeWeek: widget.includeWeekViewAction,
+                onChanged: (view) => context.read<GuestCalendarBloc>().add(
+                  CalendarEvent.viewChanged(view: view),
+                ),
+              )
+            : null,
         busy: busy,
       ),
     );
@@ -577,21 +625,10 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
               fileNamePrefix: _guestCalendarExportFilePrefix,
             );
       if (!mounted) return;
-      final CalendarShareOutcome shareOutcome = await shareCalendarExport(
-        context: context,
-        file: file,
-        subject: l10n.calendarGuestExportShareSubject,
-        text: l10n.calendarGuestExportShareText(format.label),
-      );
+      final savePath = await saveCalendarExport(file: file);
+      if (savePath == null || savePath.trim().isEmpty) return;
       if (!mounted) return;
-      FeedbackSystem.showSuccess(
-        context,
-        calendarShareSuccessMessage(
-          outcome: shareOutcome,
-          filePath: file.path,
-          sharedText: l10n.calendarExportReady,
-        ),
-      );
+      FeedbackSystem.showSuccess(context, l10n.calendarExportReady);
     } catch (error) {
       if (!mounted) return;
       FeedbackSystem.showError(

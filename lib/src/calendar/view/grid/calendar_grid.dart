@@ -46,6 +46,7 @@ import 'package:axichat/src/calendar/view/grid/task_interaction_controller.dart'
 import 'package:axichat/src/calendar/view/tasks/task_popover_controller.dart';
 import 'package:axichat/src/calendar/view/tasks/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/shell/feedback_system.dart';
+import 'package:axichat/src/calendar/view/shell/sync_controls.dart';
 import 'package:axichat/src/calendar/view/grid/calendar_layout.dart'
     show
         CalendarLayoutMetrics,
@@ -3549,8 +3550,6 @@ class _CalendarWeekView extends StatelessWidget {
                 gridState.widget.state.viewMode == CalendarView.week &&
                 (!compact || allowWeekViewInCompact);
             final responsive = ResponsiveHelper.spec(context);
-            final bool showHeaderNavigation =
-                responsive.sizeClass != CalendarSizeClass.expanded;
             final headerDates = isWeekView
                 ? weekDates
                 : [gridState.widget.state.selectedDate];
@@ -3566,6 +3565,13 @@ class _CalendarWeekView extends StatelessWidget {
             final gridBody = LayoutBuilder(
               builder: (context, outerConstraints) {
                 final double viewportWidth = outerConstraints.maxWidth;
+                final bool showHeaderNavigation =
+                    compact &&
+                    calendarNavigationUsesHeaderDateControls(
+                      context: context,
+                      maxWidth: viewportWidth,
+                      sidebarVisible: !compact,
+                    );
                 final double navControlsWidth = showHeaderNavigation
                     ? _headerNavButtonExtent * 2
                     : 0;
