@@ -9,21 +9,17 @@ class Capability {
   bool get canFssBatchOperation => !Platform.isWindows;
 
   String get discoClient {
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (Platform.isAndroid) {
       return 'phone';
     }
     return 'pc';
   }
 
-  bool get canBackgroundMessaging =>
-      canForegroundService || Platform.isIOS || Platform.isMacOS;
+  bool get canBackgroundMessaging => canForegroundService;
 
   bool get canForegroundService => Platform.isAndroid;
 
   bool get usesPlatformForegroundService => canForegroundService;
-
-  bool get usesHiddenWindowBackgroundMessaging =>
-      !canForegroundService && Platform.isMacOS;
 
   bool get defaultsBackgroundMessagingEnabled => false;
 }

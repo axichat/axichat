@@ -63,7 +63,6 @@ import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
-import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
@@ -147,9 +146,7 @@ part 'presence/presence_service.dart';
 
 part 'roster/roster_service.dart';
 
-part 'push/xmpp_push_manager.dart';
 
-part 'push/xmpp_push_registration_service.dart';
 
 part 'connection/xmpp_connection.dart';
 
@@ -181,7 +178,6 @@ final class XmppUnknownException extends XmppException {
   XmppUnknownException([super.wrapped]);
 }
 
-enum _PushRegistrationDrainResult { drained, enableFailed, cleanupFailed }
 
 final class XmppAbortedException extends XmppException {}
 
@@ -1177,12 +1173,6 @@ class XmppService extends XmppBase
       StreamController<XmppMailPushHint>.broadcast(sync: true);
   StreamController<mox.OmemoActivityEvent> _omemoActivityController =
       StreamController<mox.OmemoActivityEvent>.broadcast();
-  XmppPushRegistrationService? _xmppPushRegistrationService;
-  XmppPushRegistrationIntent? _desiredPushRegistration;
-  Future<void> Function(XmppPushRegistrationIntent intent)?
-  _desiredPushRegistrationConfirmed;
-  Future<int>? _pushRegistrationDrainTask;
-  var _pushRegistrationDrainGeneration = 0;
   StreamSubscription<mox.OmemoActivityEvent>? _omemoActivitySubscription;
   late final StreamSubscription<List<String>>
   _foregroundNotificationShownSubscription;
@@ -1228,60 +1218,6 @@ class XmppService extends XmppBase
   void emitMailPushHint(XmppMailPushHint hint) {
     if (_mailPushHintController.isClosed) return;
     _mailPushHintController.add(hint);
-  }
-
-  void updatePushRegistrationService(
-    XmppPushRegistrationService? pushRegistrationService,
-  ) {
-    _xmppPushRegistrationService = pushRegistrationService;
-    if (pushRegistrationService == null) {
-      _desiredPushRegistrationConfirmed = null;
-    }
-    _schedulePushRegistrationDrain();
-  }
-
-  void setDesiredPushRegistration(XmppPushRegistrationIntent? intent) {
-    _desiredPushRegistration = intent;
-    _desiredPushRegistrationConfirmed = null;
-    _schedulePushRegistrationDrain();
-  }
-
-  Future<bool> commitDesiredPushRegistration({
-    required XmppPushRegistrationIntent desired,
-    Iterable<XmppPushRegistrationIntent> cleanupTargets = const [],
-    required bool Function() isCurrent,
-    Future<void> Function(XmppPushRegistrationIntent intent)? onEnabled,
-  }) async {
-    final targets = cleanupTargets.toList(growable: false);
-    final service = _xmppPushRegistrationService;
-    if (service == null) {
-      throw XmppPushRegistrationException();
-    }
-    if (!isCurrent()) {
-      return false;
-    }
-    for (final target in targets) {
-      if (!isCurrent()) {
-        return false;
-      }
-      await service.enqueuePendingCleanup(target);
-    }
-    if (!isCurrent()) {
-      return false;
-    }
-    _desiredPushRegistration = desired;
-    _desiredPushRegistrationConfirmed = onEnabled;
-    _schedulePushRegistrationDrain();
-    return true;
-  }
-
-  Future<void> enqueuePushCleanup(XmppPushRegistrationIntent target) async {
-    final service = _xmppPushRegistrationService;
-    if (service == null) {
-      throw XmppPushRegistrationException();
-    }
-    await service.enqueuePendingCleanup(target);
-    _schedulePushRegistrationDrain();
   }
 
   @override
@@ -1542,7 +1478,6 @@ class XmppService extends XmppBase
         mox.CryptographicHashManager(),
         mox.OccupantIdManager(),
         MucJoinBootstrapManager(),
-        XmppPushManager(),
       ]);
 
     return managers;
@@ -1764,154 +1699,12 @@ class XmppService extends XmppBase
       _streamNegotiationsDone.complete();
     }
     await _connection.completeReconnect();
-    _schedulePushRegistrationDrain();
     await _runAutomaticPostNegotiationWork(
       event.resumed
           ? XmppBootstrapTrigger.resumedNegotiation
           : XmppBootstrapTrigger.fullNegotiation,
     );
     // Connection handling is automatic in moxxmpp v0.5.0.
-  }
-
-  void _schedulePushRegistrationDrain() {
-    _pushRegistrationDrainGeneration += 1;
-    if (connectionState != ConnectionState.connected) {
-      return;
-    }
-    _ensurePushRegistrationDrainTask();
-  }
-
-  void _ensurePushRegistrationDrainTask() {
-    if (_pushRegistrationDrainTask != null) {
-      return;
-    }
-    late final Future<int> task;
-    task = _drainPushRegistrationRequests();
-    _pushRegistrationDrainTask = task;
-    unawaited(
-      task.then<void>(
-        (consumedGeneration) {
-          if (_pushRegistrationDrainTask == task) {
-            _pushRegistrationDrainTask = null;
-          }
-          if (_pushRegistrationDrainGeneration != consumedGeneration &&
-              connectionState == ConnectionState.connected) {
-            _ensurePushRegistrationDrainTask();
-          }
-        },
-        onError: (Object error, StackTrace stackTrace) {
-          if (_pushRegistrationDrainTask == task) {
-            _pushRegistrationDrainTask = null;
-          }
-          if (error is! Exception) {
-            Error.throwWithStackTrace(error, stackTrace);
-          }
-          _xmppLogger.warning(
-            'XMPP push registration drain failed.',
-            error,
-            stackTrace,
-          );
-        },
-      ),
-    );
-  }
-
-  Future<int> _drainPushRegistrationRequests() async {
-    var consumedGeneration = _pushRegistrationDrainGeneration;
-    while (connectionState == ConnectionState.connected) {
-      final result = await _attemptPushRegistrationDrain();
-      if (result != _PushRegistrationDrainResult.drained) {
-        final retryResult = await _attemptPushRegistrationDrain();
-        if (retryResult == result) {
-          return consumedGeneration;
-        }
-      }
-      if (consumedGeneration == _pushRegistrationDrainGeneration) {
-        return consumedGeneration;
-      }
-      consumedGeneration = _pushRegistrationDrainGeneration;
-    }
-    return consumedGeneration;
-  }
-
-  Future<_PushRegistrationDrainResult> _attemptPushRegistrationDrain() async {
-    final service = _xmppPushRegistrationService;
-    if (service == null) {
-      return _PushRegistrationDrainResult.drained;
-    }
-    final activeBareJid = normalizedAddressKey(myJid);
-    if (activeBareJid == null) {
-      return _PushRegistrationDrainResult.drained;
-    }
-    final desiredBeforeEnable = _desiredPushRegistration;
-    if (desiredBeforeEnable != null &&
-        desiredBeforeEnable.bareJid == activeBareJid) {
-      try {
-        await service.enable(
-          bareJid: desiredBeforeEnable.bareJid,
-          apnsToken: desiredBeforeEnable.apnsToken,
-          componentJid: desiredBeforeEnable.componentJid,
-          pushModule: desiredBeforeEnable.pushModule,
-        );
-      } on Exception catch (error, stackTrace) {
-        _xmppLogger.fine('XMPP push enable failed.', error, stackTrace);
-        return _PushRegistrationDrainResult.enableFailed;
-      }
-      final currentDesired = _desiredPushRegistration;
-      final onEnabled = _desiredPushRegistrationConfirmed;
-      if (currentDesired != null &&
-          onEnabled != null &&
-          currentDesired.hasSameRegistrationTarget(desiredBeforeEnable)) {
-        try {
-          await onEnabled(currentDesired);
-          if (identical(_desiredPushRegistrationConfirmed, onEnabled) &&
-              _desiredPushRegistration?.hasSameRegistrationTarget(
-                    currentDesired,
-                  ) ==
-                  true) {
-            _desiredPushRegistrationConfirmed = null;
-          }
-        } on Exception catch (error, stackTrace) {
-          _xmppLogger.fine(
-            'XMPP push confirmation persistence failed.',
-            error,
-            stackTrace,
-          );
-          return _PushRegistrationDrainResult.enableFailed;
-        }
-      }
-      final desiredAfterConfirmation = _desiredPushRegistration;
-      if (desiredAfterConfirmation == null ||
-          !desiredAfterConfirmation.hasSameDisableTarget(desiredBeforeEnable)) {
-        await service.enqueuePendingCleanup(desiredBeforeEnable);
-      }
-    }
-
-    final latestDesired = _desiredPushRegistration;
-    final pending = await service.pendingCleanups();
-    for (final target in pending) {
-      if (target.bareJid != activeBareJid) {
-        continue;
-      }
-      if (latestDesired != null && latestDesired.hasSameDisableTarget(target)) {
-        await service.removePendingCleanup(target);
-        continue;
-      }
-      try {
-        await service.disable(
-          bareJid: target.bareJid,
-          apnsToken: target.apnsToken,
-          componentJid: target.componentJid,
-        );
-        await service.removePendingCleanup(target);
-      } on Exception catch (error, stackTrace) {
-        if (kDebugMode) {
-          _xmppLogger.fine('XMPP push cleanup failed.', error, stackTrace);
-        }
-        return _PushRegistrationDrainResult.cleanupFailed;
-      }
-    }
-    return _PushRegistrationDrainResult.drained;
   }
 
   Future<void> _runAutomaticPostNegotiationWork(

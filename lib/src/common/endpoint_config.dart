@@ -16,8 +16,6 @@ class EndpointConfig extends Equatable {
     this.apiUseTls = true,
     this.emailProvisioningBaseUrl,
     this.emailProvisioningPublicToken,
-    this.fpushComponentJid = '',
-    this.fpushIosPushModule = defaultFpushIosPushModule,
   });
 
   static const Object _unset = Object();
@@ -28,8 +26,6 @@ class EndpointConfig extends Equatable {
   static const int defaultImapPort = 993;
   static const int defaultSmtpPort = 465;
   static const int defaultApiPort = 5443;
-  static const String legacyDefaultFpushComponentJid = 'push.axi.im';
-  static const String defaultFpushIosPushModule = 'apns';
 
   final String domain;
   final bool xmppEnabled;
@@ -42,31 +38,12 @@ class EndpointConfig extends Equatable {
   final bool apiUseTls;
   final String? emailProvisioningBaseUrl;
   final String? emailProvisioningPublicToken;
-  final String fpushComponentJid;
-  final String fpushIosPushModule;
 
   bool get isDefaultDomain => domain.trim().toLowerCase() == defaultDomain;
 
   bool get isAxiImDomain => domain.trim().toLowerCase() == axiImDomain;
 
   bool get requiresCustomSignupEndpoint => isAxiImDomain;
-
-  String get resolvedFpushComponentJid {
-    final configured = fpushComponentJid.trim();
-    if (configured.isNotEmpty &&
-        configured.toLowerCase() != legacyDefaultFpushComponentJid) {
-      return configured;
-    }
-    return fpushComponentJidForDomain(domain);
-  }
-
-  static String fpushComponentJidForDomain(String domain) {
-    final normalizedDomain = domain.trim().toLowerCase();
-    final effectiveDomain = normalizedDomain.isEmpty
-        ? defaultDomain
-        : normalizedDomain;
-    return 'push.$effectiveDomain';
-  }
 
   EndpointConfig copyWith({
     String? domain,
@@ -80,8 +57,6 @@ class EndpointConfig extends Equatable {
     bool? apiUseTls,
     Object? emailProvisioningBaseUrl = _unset,
     Object? emailProvisioningPublicToken = _unset,
-    String? fpushComponentJid,
-    String? fpushIosPushModule,
   }) {
     return EndpointConfig(
       domain: domain ?? this.domain,
@@ -99,8 +74,6 @@ class EndpointConfig extends Equatable {
       emailProvisioningPublicToken: emailProvisioningPublicToken == _unset
           ? this.emailProvisioningPublicToken
           : emailProvisioningPublicToken as String?,
-      fpushComponentJid: fpushComponentJid ?? this.fpushComponentJid,
-      fpushIosPushModule: fpushIosPushModule ?? this.fpushIosPushModule,
     );
   }
 
@@ -116,8 +89,6 @@ class EndpointConfig extends Equatable {
     'apiUseTls': apiUseTls,
     'emailProvisioningBaseUrl': emailProvisioningBaseUrl,
     'emailProvisioningPublicToken': emailProvisioningPublicToken,
-    'fpushComponentJid': fpushComponentJid,
-    'fpushIosPushModule': fpushIosPushModule,
   };
 
   factory EndpointConfig.fromJson(Map<String, dynamic> json) {
@@ -151,10 +122,6 @@ class EndpointConfig extends Equatable {
       emailProvisioningPublicToken: readOptionalString(
         json['emailProvisioningPublicToken'],
       ),
-      fpushComponentJid: readOptionalString(json['fpushComponentJid']) ?? '',
-      fpushIosPushModule:
-          readOptionalString(json['fpushIosPushModule']) ??
-          defaultFpushIosPushModule,
     );
   }
 
@@ -171,7 +138,5 @@ class EndpointConfig extends Equatable {
     apiUseTls,
     emailProvisioningBaseUrl,
     emailProvisioningPublicToken,
-    fpushComponentJid,
-    fpushIosPushModule,
   ];
 }

@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:ui' show AppLifecycleState;
 
 import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/common/address_tools.dart';
@@ -14,7 +13,6 @@ import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
@@ -27,8 +25,6 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 const String _androidIconPath = '@mipmap/ic_launcher';
-
-typedef RemoteNotificationRegistrar = Future<void> Function();
 
 enum MessageNotificationChannel {
   chat,
@@ -58,15 +54,6 @@ enum NotificationPermissionRequestResult {
   awaitingBatteryOptimizationSettings;
 
   bool get isGranted => this == NotificationPermissionRequestResult.granted;
-}
-
-@visibleForTesting
-bool isDarwinAppForegroundFromLifecycle({
-  required bool isIOS,
-  required bool isMacOS,
-  required AppLifecycleState? lifecycleState,
-}) {
-  return (isIOS || isMacOS) && lifecycleState == AppLifecycleState.resumed;
 }
 
 class PendingNotificationReference {
@@ -248,7 +235,6 @@ class NotificationService {
   final Map<String, List<_MessageNotificationEntry>>
   _messageNotificationHistoryByThread =
       <String, List<_MessageNotificationEntry>>{};
-  RemoteNotificationRegistrar? _remoteNotificationRegistrar;
 
   bool mute = false;
   bool backgroundMessageNotificationsEnabled = false;
@@ -257,22 +243,14 @@ class NotificationService {
   bool notificationPreviewsEnabled = false;
   NotificationStrings? _strings;
 
-  bool get needsPermissions =>
-      Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+  bool get needsPermissions => Platform.isAndroid;
   bool get _supportsPlatformScheduling =>
-      Platform.isAndroid ||
-      Platform.isIOS ||
-      Platform.isMacOS ||
-      Platform.isWindows;
+      Platform.isAndroid || Platform.isWindows;
   AndroidFlutterLocalNotificationsPlugin? get _androidNotificationsPlugin =>
       _plugin
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
-  MacOSFlutterLocalNotificationsPlugin? get _macOsNotificationsPlugin => _plugin
-      .resolvePlatformSpecificImplementation<
-        MacOSFlutterLocalNotificationsPlugin
-      >();
 
   static const String _unsupportedSchedulingMessage =
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
@@ -305,12 +283,6 @@ class NotificationService {
 
   String get _genericMessageNotificationTitle => _l10n.newMessageTitle;
 
-  void updateRemoteNotificationRegistrar(
-    RemoteNotificationRegistrar? registrar,
-  ) {
-    _remoteNotificationRegistrar = registrar;
-  }
-
   Future<void> init() => _ensureInitialized();
 
   Future<NotificationAppLaunchDetails?>
@@ -338,11 +310,7 @@ class NotificationService {
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings(_androidIconPath);
       const DarwinInitializationSettings initializationSettingsDarwin =
-          DarwinInitializationSettings(
-            requestAlertPermission: false,
-            requestBadgePermission: false,
-            requestSoundPermission: false,
-          );
+          DarwinInitializationSettings();
       final LinuxInitializationSettings initializationSettingsLinux =
           LinuxInitializationSettings(defaultActionName: _l10n.openAction);
       final WindowsInitializationSettings initializationSettingsWindows =
@@ -387,9 +355,6 @@ class NotificationService {
 
   Future<bool> hasNotificationDisplayPermission() async {
     if (!needsPermissions) return true;
-    if (Platform.isMacOS) {
-      return _hasMacOsNotificationPermissions();
-    }
 
     try {
       if (!await Permission.notification.isGranted) {
@@ -428,27 +393,12 @@ class NotificationService {
     }
   }
 
-  Future<bool> requestRemoteNotificationsIfAuthorized() async {
-    if (!await hasAllNotificationPermissions()) {
-      return false;
-    }
-    return _requestRemoteNotificationsIfConfigured();
-  }
-
   Future<NotificationPermissionRequestResult>
   requestNotificationDisplayPermission({
     bool openSettingsIfRequired = false,
   }) async {
     if (!needsPermissions) {
       return NotificationPermissionRequestResult.granted;
-    }
-    if (Platform.isMacOS) {
-      return await _requestMacOsNotificationPermissions(
-            requestRemoteNotifications: false,
-            openSettingsIfRequired: openSettingsIfRequired,
-          )
-          ? NotificationPermissionRequestResult.granted
-          : NotificationPermissionRequestResult.awaitingNotificationSettings;
     }
 
     try {
@@ -475,10 +425,6 @@ class NotificationService {
         if (openSettingsIfRequired) {
           await _openNotificationSettings();
         }
-        return NotificationPermissionRequestResult.awaitingNotificationSettings;
-      }
-      if (Platform.isIOS && openSettingsIfRequired) {
-        await _openNotificationSettings();
         return NotificationPermissionRequestResult.awaitingNotificationSettings;
       }
       return NotificationPermissionRequestResult.denied;
@@ -518,7 +464,6 @@ class NotificationService {
         }
       }
 
-      await _requestRemoteNotificationsIfConfigured();
       return NotificationPermissionRequestResult.granted;
     } on MissingPluginException catch (error, stackTrace) {
       _log.warning(
@@ -558,9 +503,6 @@ class NotificationService {
         case NotificationPermissionRequestResult.denied:
           return false;
         case NotificationPermissionRequestResult.awaitingNotificationSettings:
-          if (Platform.isMacOS) {
-            return _hasMacOsNotificationPermissions();
-          }
           return await Permission.notification.isGranted;
         case NotificationPermissionRequestResult
             .awaitingBatteryOptimizationSettings:
@@ -570,52 +512,6 @@ class NotificationService {
     } on MissingPluginException catch (error, stackTrace) {
       _log.warning(
         'Permission plugin unavailable while checking requested permission.',
-        error,
-        stackTrace,
-      );
-      mute = true;
-      return false;
-    }
-  }
-
-  Future<bool> _hasMacOsNotificationPermissions() async {
-    try {
-      await _ensureInitialized();
-      final permissions = await _macOsNotificationsPlugin?.checkPermissions();
-      return permissions?.isEnabled == true;
-    } on MissingPluginException catch (error, stackTrace) {
-      _log.warning(
-        'macOS notification plugin unavailable; disabling notifications.',
-        error,
-        stackTrace,
-      );
-      mute = true;
-      return false;
-    }
-  }
-
-  Future<bool> _requestMacOsNotificationPermissions({
-    required bool requestRemoteNotifications,
-    bool openSettingsIfRequired = false,
-  }) async {
-    try {
-      await _ensureInitialized();
-      final granted =
-          await _macOsNotificationsPlugin?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          ) ??
-          false;
-      if (!granted && openSettingsIfRequired) {
-        await _openNotificationSettings();
-      } else if (requestRemoteNotifications) {
-        await _requestRemoteNotificationsIfConfigured();
-      }
-      return granted;
-    } on MissingPluginException catch (error, stackTrace) {
-      _log.warning(
-        'macOS notification plugin unavailable while requesting permissions.',
         error,
         stackTrace,
       );
@@ -640,24 +536,6 @@ class NotificationService {
 
   Future<void> openNotificationSettings() {
     return _openNotificationSettings();
-  }
-
-  Future<bool> _requestRemoteNotificationsIfConfigured() async {
-    final registrar = _remoteNotificationRegistrar;
-    if (registrar == null) {
-      return !Platform.isIOS;
-    }
-    try {
-      await registrar();
-      return true;
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Remote notification registration request failed.',
-        error,
-        stackTrace,
-      );
-      return false;
-    }
   }
 
   Future<bool> hasReminderSchedulingPermission() async {
@@ -865,13 +743,6 @@ class NotificationService {
   }
 
   Future<bool> _isAppOnForeground() async {
-    if (Platform.isIOS || Platform.isMacOS) {
-      return isDarwinAppForegroundFromLifecycle(
-        isIOS: Platform.isIOS,
-        isMacOS: Platform.isMacOS,
-        lifecycleState: SchedulerBinding.instance.lifecycleState,
-      );
-    }
     if (!Platform.isAndroid) {
       return false;
     }
@@ -1128,17 +999,15 @@ class NotificationService {
       channel,
       groupKey: '${packageInfo.packageName}.MESSAGES',
       importance: Importance.max,
-      priority: Priority.high,
+      priority: urgency == NotificationUrgency.timeSensitive
+          ? Priority.max
+          : Priority.high,
       icon: _androidIconPath,
       visibility: NotificationVisibility.private,
     );
     const windowsDetails = WindowsNotificationDetails();
     const linuxDetails = LinuxNotificationDetails();
-    final darwinDetails = DarwinNotificationDetails(
-      interruptionLevel: urgency == NotificationUrgency.timeSensitive
-          ? InterruptionLevel.timeSensitive
-          : null,
-    );
+    const darwinDetails = DarwinNotificationDetails();
 
     return NotificationDetails(
       android: androidDetails,

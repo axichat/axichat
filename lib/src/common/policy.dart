@@ -9,24 +9,10 @@ class Policy {
 
   AndroidOptions getFssAndroidOptions() => const AndroidOptions();
 
-  MacOsOptions getFssMacOsOptions() => const _AxichatMacOsOptions(
+  MacOsOptions getFssMacOsOptions() => const MacOsOptions(
     accessibility: KeychainAccessibility.first_unlock_this_device,
-    usesDataProtectionKeychain: true,
   );
 
   double getMaxEmojiSize() =>
       28 * (defaultTargetPlatform == TargetPlatform.iOS ? 1.2 : 1.0);
-}
-
-class _AxichatMacOsOptions extends MacOsOptions {
-  const _AxichatMacOsOptions({
-    super.accessibility,
-    super.usesDataProtectionKeychain,
-  });
-
-  @override
-  Map<String, String> toMap() => <String, String>{
-    ...super.toMap(),
-    'useDataProtectionKeyChain': '$usesDataProtectionKeychain',
-  };
 }

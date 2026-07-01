@@ -7,7 +7,6 @@ import 'package:async/async.dart';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/foreground_runtime_controller.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
-import 'package:axichat/src/push/push_registration_coordinator.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -73,11 +72,9 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   NotificationRequestCubit({
     required NotificationService notificationService,
     required ForegroundRuntimeController foregroundRuntimeController,
-    PushRegistrationCoordinator? pushRegistrationCoordinator,
     AppLifecycleState? Function()? lifecycleStateProvider,
   }) : _notificationService = notificationService,
        _foregroundRuntimeController = foregroundRuntimeController,
-       _pushRegistrationCoordinator = pushRegistrationCoordinator,
        _lifecycleStateProvider =
            lifecycleStateProvider ??
            (() => SchedulerBinding.instance.lifecycleState),
@@ -91,7 +88,6 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
 
   final NotificationService _notificationService;
   final ForegroundRuntimeController _foregroundRuntimeController;
-  final PushRegistrationCoordinator? _pushRegistrationCoordinator;
   final AppLifecycleState? Function() _lifecycleStateProvider;
   CancelableOperation<bool>? _refreshPermissionsOperation;
   Future<NotificationPermissionRequestResult>? _requestPermissionsFuture;
@@ -183,13 +179,6 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
               NotificationBackgroundMessagingPhase.disablingForeground,
         ),
       );
-      final pushRegistrationDisabled =
-          await _pushRegistrationCoordinator
-              ?.handleBackgroundMessagingPreferenceChanged(enabled: false) ??
-          true;
-      if (!pushRegistrationDisabled) {
-        return result;
-      }
       final foregroundDisabled = await disableForegroundService();
       if (!foregroundDisabled) {
         return result;

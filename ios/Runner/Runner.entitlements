@@ -2,17 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>aps-environment</key>
-	<string>$(APS_ENVIRONMENT)</string>
-	<key>com.apple.developer.usernotifications.time-sensitive</key>
-	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.im.axi.axichat.shared</string>
-	</array>
-	<key>keychain-access-groups</key>
-	<array>
-		<string>$(AppIdentifierPrefix)im.axi.axichat</string>
 	</array>
 </dict>
 </plist>
