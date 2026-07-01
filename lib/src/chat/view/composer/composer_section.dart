@@ -1061,6 +1061,7 @@ class _SubjectTextField extends StatelessWidget {
                 textCapitalization: TextCapitalization.sentences,
                 onSubmitted: enabled ? (_) => onSubmitted() : null,
                 onEditingComplete: enabled ? onSubmitted : null,
+                onPressedOutside: (_) {},
                 keyboardType: TextInputType.text,
                 variant: AxiInputVariant.plain,
                 style: subjectStyle,

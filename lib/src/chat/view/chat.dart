@@ -128,7 +128,8 @@ import 'package:flutter/rendering.dart'
         RenderBox,
         RenderBoxContainerDefaultsMixin,
         RenderProxyBox,
-        ScrollCacheExtent;
+        ScrollCacheExtent,
+        SelectedContent;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:html/dom.dart' as html_dom;
@@ -4070,6 +4071,10 @@ class _ChatState extends State<Chat> {
 
   void _handleTimelineBubbleTap(Message message) {
     if (widget.readOnly) return;
+    if (_inlineComposerController.hasInputFocus) {
+      _inlineComposerController.unfocus();
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
     _recordAndArmWebViewAutoScrollTarget(
       message.stanzaID,
       previousMessageId: _selectedMessageId,

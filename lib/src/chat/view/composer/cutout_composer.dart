@@ -209,6 +209,10 @@ class ChatCutoutComposer extends StatelessWidget {
                         color: colors.mutedForeground,
                       ),
                     ),
+                    onEditingComplete: sendOnEnter
+                        ? controller.clearComposing
+                        : null,
+                    onTapOutside: (_) {},
                     onSubmitted: (_) {
                       if (enabled && sendEnabled && sendOnEnter) onSend();
                     },

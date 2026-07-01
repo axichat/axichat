@@ -173,7 +173,9 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
         child: bubble,
       ),
     );
-    final selectableBubble = SelectionArea(child: interactiveBubble);
+    final selectableBubble = _MessageTextSelectionArea(
+      child: interactiveBubble,
+    );
     final bubbleStack = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -252,6 +254,58 @@ class _ChatTimelineMessageRowView extends StatelessWidget {
     return KeyedSubtree(
       key: rowKey,
       child: Padding(padding: outerPadding, child: alignedMessage),
+    );
+  }
+}
+
+class _MessageTextSelectionArea extends StatefulWidget {
+  const _MessageTextSelectionArea({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_MessageTextSelectionArea> createState() =>
+      _MessageTextSelectionAreaState();
+}
+
+class _MessageTextSelectionAreaState extends State<_MessageTextSelectionArea> {
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.canRequestFocus = !FocusManager.instance.isTextInputFocused;
+    FocusManager.instance.addListener(_syncFocusAvailability);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeListener(_syncFocusAvailability);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _syncFocusAvailability() {
+    if (_focusNode.canRequestFocus !=
+        !FocusManager.instance.isTextInputFocused) {
+      _focusNode.canRequestFocus = !FocusManager.instance.isTextInputFocused;
+    }
+  }
+
+  void _handleSelectionChanged(SelectedContent? selectedContent) {
+    if (selectedContent == null || selectedContent.plainText.isEmpty) {
+      return;
+    }
+    _focusNode.canRequestFocus = true;
+    _focusNode.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectionArea(
+      focusNode: _focusNode,
+      onSelectionChanged: _handleSelectionChanged,
+      child: widget.child,
     );
   }
 }

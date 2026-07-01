@@ -2037,12 +2037,6 @@ final class _RecipientAutocompleteOverlayState
       unawaited(widget.onSubmitted());
     }
     _dismissOverlay();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || FocusManager.instance.primaryFocus != widget.focusNode) {
-        return;
-      }
-      widget.focusNode.unfocus();
-    });
   }
 
   double _triggerWidth({
