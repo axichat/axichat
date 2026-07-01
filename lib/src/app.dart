@@ -1114,6 +1114,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               value: overlayStyle,
               child: routedContent,
             );
+            content = KeyboardDismissScope(child: content);
             content = ScrollConfiguration(
               behavior: const AxiDragScrollBehavior(),
               child: content,

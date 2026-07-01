@@ -906,10 +906,12 @@ class _ChatScaffoldBody extends StatelessWidget {
                                     state.supportsHttpFileUpload,
                                 settingsSnapshot: settingsSnapshot,
                               ),
-                          onSend: () => owner._handleSendMessage(
-                            chatState: state,
-                            settingsSnapshot: settingsSnapshot,
-                          ),
+                          onSend: (composerHadInputFocus) =>
+                              owner._handleSendMessage(
+                                chatState: state,
+                                settingsSnapshot: settingsSnapshot,
+                                composerHadInputFocus: composerHadInputFocus,
+                              ),
                           onSave: owner._handleInlineComposerSavePressed,
                           onDiscard: owner._handleInlineComposerDiscardPressed,
                           onTaskDropped: owner._handleTaskDrop,
@@ -1009,10 +1011,12 @@ class _ChatScaffoldBody extends StatelessWidget {
                               ),
                           onTaskDropped: owner._handleTaskDrop,
                           sendOnEnter: composerSendOnEnter,
-                          onSend: () => owner._handleSendMessage(
-                            chatState: state,
-                            settingsSnapshot: settingsSnapshot,
-                          ),
+                          onSend: (composerHadInputFocus) =>
+                              owner._handleSendMessage(
+                                chatState: state,
+                                settingsSnapshot: settingsSnapshot,
+                                composerHadInputFocus: composerHadInputFocus,
+                              ),
                         );
                         bottomContent = _ComposerModeTransition(
                           duration: overlayAnimationDuration,

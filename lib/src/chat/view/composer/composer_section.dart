@@ -116,7 +116,7 @@ class _InlineExpandedDraftComposerSection extends StatefulWidget {
   final ValueChanged<PendingAttachment>? onPendingAttachmentLongPressed;
   final List<Widget> Function(PendingAttachment pending)?
   pendingAttachmentMenuBuilder;
-  final VoidCallback onSend;
+  final ValueChanged<bool> onSend;
   final Future<void> Function() onSave;
   final Future<void> Function() onDiscard;
   final ValueChanged<CalendarDragPayload>? onTaskDropped;
@@ -187,6 +187,10 @@ class _InlineExpandedDraftComposerSectionState
 
   @override
   bool get hasTextFocus => _bodyFocusNode.hasFocus;
+
+  @override
+  bool get hasInputFocus =>
+      _bodyFocusNode.hasFocus || _subjectFocusNode.hasFocus;
 
   @override
   void setTextValue(TextEditingValue value, {bool notify = true}) {
@@ -362,7 +366,7 @@ class _InlineExpandedDraftComposerSectionState
                   sending: widget.sending,
                   disabledSendReason: widget.sendBlocker,
                   onSendPressed: readyToSend && !widget.sending
-                      ? widget.onSend
+                      ? () => widget.onSend(hasInputFocus)
                       : null,
                   showSendBlockerMessage: false,
                   sendBlockerMessage: widget.sendBlocker,
@@ -409,6 +413,8 @@ class _InlineComposerController {
   String get subject => _binding?.subject ?? _subject;
 
   bool get hasTextFocus => _binding?.hasTextFocus ?? false;
+
+  bool get hasInputFocus => _binding?.hasInputFocus ?? false;
 
   void setTextValue(TextEditingValue value) {
     _textValue = value;
@@ -498,6 +504,7 @@ abstract class _InlineComposerBinding {
   TextSelection get textSelection;
   String get subject;
   bool get hasTextFocus;
+  bool get hasInputFocus;
   void setTextValue(TextEditingValue value, {bool notify = true});
   void setSubjectText(String text, {bool notify = true});
   void requestTextFocus();
@@ -587,7 +594,7 @@ class _ChatComposerSection extends StatefulWidget {
   })
   buildComposerAccessories;
   final bool sendOnEnter;
-  final VoidCallback onSend;
+  final ValueChanged<bool> onSend;
   final String? composerError;
   final VoidCallback? onComposerErrorCleared;
   final bool showAttachmentWarning;
@@ -691,6 +698,10 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
 
   @override
   bool get hasTextFocus => _textFocusNode.hasFocus;
+
+  @override
+  bool get hasInputFocus =>
+      _textFocusNode.hasFocus || _subjectFocusNode.hasFocus;
 
   @override
   void setTextValue(TextEditingValue value, {bool notify = true}) {
@@ -856,7 +867,7 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
                       minLines: widget.composerMinLines,
                       maxLines: widget.composerMaxLines,
                       semanticsLabel: context.l10n.chatComposerSemantics,
-                      onSend: widget.onSend,
+                      onSend: () => widget.onSend(hasInputFocus),
                       groupId: widget.tapRegionGroup,
                       header: subjectHeader,
                       actions: widget.buildComposerAccessories(
@@ -924,13 +935,6 @@ class _ChatComposerSectionState extends State<_ChatComposerSection>
       onDropped: widget.onAttachmentsDropped,
       child: TapRegion(
         groupId: widget.tapRegionGroup,
-        onTapUpOutside: (_) {
-          if (!_textFocusNode.hasFocus && !_subjectFocusNode.hasFocus) {
-            return;
-          }
-          _textFocusNode.unfocus();
-          _subjectFocusNode.unfocus();
-        },
         child: Padding(
           padding: EdgeInsets.zero,
           child: Column(

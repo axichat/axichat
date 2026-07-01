@@ -5088,16 +5088,20 @@ class _ChatState extends State<Chat> {
   Future<void> _handleSendMessage({
     required ChatState chatState,
     required ChatSettingsSnapshot settingsSnapshot,
+    required bool composerHadInputFocus,
     MessageTransport? oneShotTransportOverride,
   }) async {
     if (_inlineSendDispatching) {
       return;
     }
+    final composerWasExpanded = _composerExpanded;
     _inlineSendDispatching = true;
     try {
       await _handleSendMessageUnlocked(
         chatState: chatState,
         settingsSnapshot: settingsSnapshot,
+        composerHadInputFocus: composerHadInputFocus,
+        restoreComposerExpanded: composerWasExpanded,
         oneShotTransportOverride: oneShotTransportOverride,
       );
     } finally {
@@ -5108,6 +5112,8 @@ class _ChatState extends State<Chat> {
   Future<void> _handleSendMessageUnlocked({
     required ChatState chatState,
     required ChatSettingsSnapshot settingsSnapshot,
+    required bool composerHadInputFocus,
+    required bool restoreComposerExpanded,
     MessageTransport? oneShotTransportOverride,
   }) async {
     final l10n = context.l10n;
@@ -5233,7 +5239,10 @@ class _ChatState extends State<Chat> {
     });
     if (outcome.completed) {
       _inlineRetryTransportOverride = null;
-      await _handleInlineComposerSendComplete();
+      await _handleInlineComposerSendComplete(
+        preserveTextInputFocus: composerHadInputFocus,
+        restoreComposerExpanded: restoreComposerExpanded,
+      );
       return;
     }
     if (outcome.incomplete) {
@@ -5331,6 +5340,7 @@ class _ChatState extends State<Chat> {
         await _handleSendMessage(
           chatState: chatState,
           settingsSnapshot: settingsSnapshot,
+          composerHadInputFocus: true,
           oneShotTransportOverride: MessageTransport.email,
         );
     }
@@ -5519,7 +5529,10 @@ class _ChatState extends State<Chat> {
     _subjectChangeSuppressed = false;
   }
 
-  void _clearInlineComposerState({required bool clearInlineComposerDraftId}) {
+  void _clearInlineComposerState({
+    required bool clearInlineComposerDraftId,
+    bool composerExpandedAfterClear = false,
+  }) {
     _cancelInlineAttachmentPreparation();
     _inlineComposerRevision += 1;
     unawaited(
@@ -5532,7 +5545,7 @@ class _ChatState extends State<Chat> {
     _pendingCalendarTaskIcs = null;
     _pendingCalendarTaskIcsReadOnly = _calendarTaskIcsReadOnlyFallback;
     _pendingCalendarSeedText = null;
-    _composerExpanded = false;
+    _composerExpanded = composerExpandedAfterClear;
     _savingInlineDraft = false;
     _discardingInlineDraft = false;
     if (clearInlineComposerDraftId) {
@@ -5544,12 +5557,14 @@ class _ChatState extends State<Chat> {
   void _resetInlineComposer({
     required bool clearInlineComposerDraftId,
     bool requestFocus = false,
+    bool composerExpandedAfterReset = false,
   }) {
     _clearInlineComposerControllers();
     if (!mounted) return;
     setState(() {
       _clearInlineComposerState(
         clearInlineComposerDraftId: clearInlineComposerDraftId,
+        composerExpandedAfterClear: composerExpandedAfterReset,
       );
     });
     _syncEmailComposerWatermark(
@@ -5847,17 +5862,30 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  Future<void> _handleInlineComposerSendComplete() async {
+  Future<void> _handleInlineComposerSendComplete({
+    required bool preserveTextInputFocus,
+    required bool restoreComposerExpanded,
+  }) async {
     final draftId = _inlineComposerDraftId;
-    setState(() {
-      _clearInlineComposerState(clearInlineComposerDraftId: true);
-      _recreateInlineComposer();
-    });
-    _syncEmailComposerWatermark(
-      chatState: context.read<ChatBloc>().state,
-      forceInsert: true,
-    );
-    _inlineComposerController.requestTextFocus();
+    if (preserveTextInputFocus) {
+      _resetInlineComposer(
+        clearInlineComposerDraftId: true,
+        requestFocus: true,
+        composerExpandedAfterReset: restoreComposerExpanded,
+      );
+    } else {
+      setState(() {
+        _clearInlineComposerState(
+          clearInlineComposerDraftId: true,
+          composerExpandedAfterClear: restoreComposerExpanded,
+        );
+        _recreateInlineComposer();
+      });
+      _syncEmailComposerWatermark(
+        chatState: context.read<ChatBloc>().state,
+        forceInsert: true,
+      );
+    }
     if (draftId == null) {
       return;
     }
@@ -5999,6 +6027,7 @@ class _ChatState extends State<Chat> {
             onPressed: () => _handleSendMessage(
               chatState: chatState,
               settingsSnapshot: settingsSnapshot,
+              composerHadInputFocus: _inlineComposerController.hasInputFocus,
             ),
             onLongPress: widget.readOnly || sending
                 ? null
