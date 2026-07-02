@@ -275,29 +275,42 @@ String rfcEmailBodyText({
   bool deriveHtmlIfMissing = true,
 }) {
   final body = _plainEmailBodyCandidate(message);
+  final html = resolvedHtmlBody ?? message.htmlBody;
   if (body.isNotEmpty &&
       !(message.hasRfc822BodyContent &&
           HtmlContentCodec.looksLikeCssBodyText(body))) {
+    final displayHtmlText = _displayTextForGeneratedHtmlBody(
+      message: message,
+      body: body,
+      html: html,
+      deriveHtmlIfMissing: deriveHtmlIfMissing,
+    );
+    if (displayHtmlText != null) {
+      return displayHtmlText;
+    }
     return body;
   }
-  final html = resolvedHtmlBody ?? message.htmlBody;
   return emailHtmlVisibleBodyText(html, deriveIfMissing: deriveHtmlIfMissing);
 }
 
 String _plainEmailBodyCandidate(Message message) {
-  final split = ChatSubjectCodec.splitEmailBody(
+  return _plainEmailBodyCandidateFromValues(
     body: message.body,
     subject: message.subject,
   );
-  final subject = split.subject?.trim();
-  final body = subject?.isNotEmpty == true
+}
+
+String _plainEmailBodyCandidateFromValues({String? body, String? subject}) {
+  final split = ChatSubjectCodec.splitEmailBody(body: body, subject: subject);
+  final splitSubject = split.subject?.trim();
+  final resolvedBody = splitSubject?.isNotEmpty == true
       ? ChatSubjectCodec.stripRepeatedSubject(
           body: split.body,
-          subject: subject!,
+          subject: splitSubject!,
         )
       : split.body;
-  final previewBody = ChatSubjectCodec.previewBodyText(body).trim();
-  final forwardedContent = splitForwardedBodyContent(body);
+  final previewBody = ChatSubjectCodec.previewBodyText(resolvedBody).trim();
+  final forwardedContent = splitForwardedBodyContent(resolvedBody);
   if (forwardedContent.body.trim().isEmpty) {
     return previewBody;
   }
@@ -309,6 +322,34 @@ String _plainEmailBodyCandidate(Message message) {
         )
       : forwardedContent.body;
   return ChatSubjectCodec.previewBodyText(forwardedBody).trim();
+}
+
+String? _displayTextForGeneratedHtmlBody({
+  required Message message,
+  required String body,
+  required String? html,
+  required bool deriveHtmlIfMissing,
+}) {
+  final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+  if (normalizedHtml == null) {
+    return null;
+  }
+  final preparedHtml = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+    normalizedHtml,
+    allowRemoteImages: false,
+  );
+  final generatedBody = _plainEmailBodyCandidateFromValues(
+    body: HtmlContentCodec.toPlainText(preparedHtml, includeLinkTargets: true),
+    subject: message.subject,
+  );
+  if (generatedBody != body) {
+    return null;
+  }
+  final displayText = emailHtmlVisibleBodyText(
+    normalizedHtml,
+    deriveIfMissing: deriveHtmlIfMissing,
+  ).trim();
+  return displayText.isEmpty ? null : displayText;
 }
 
 final class _RfcEmailBodyCandidate {

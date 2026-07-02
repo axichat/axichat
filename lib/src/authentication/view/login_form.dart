@@ -31,6 +31,7 @@ class _LoginFormState extends State<LoginForm> {
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
 
   bool rememberMe = true;
+  var _localCleanupInProgress = false;
 
   @override
   void initState() {
@@ -73,6 +74,39 @@ class _LoginFormState extends State<LoginForm> {
     );
   }
 
+  Future<void> _onRemoveLocalDataPressed() async {
+    final username = _jidTextController.value.text.trim();
+    if (username.isEmpty || _localCleanupInProgress) {
+      return;
+    }
+    final approved = await confirm(
+      context,
+      title: context.l10n.authLocalDataCleanupConfirmTitle,
+      message: context.l10n.authLocalDataCleanupConfirmMessage,
+      confirmLabel: context.l10n.authLocalDataCleanupAction,
+      cancelLabel: context.l10n.commonCancel,
+      destructiveConfirm: true,
+    );
+    if (!mounted || approved != true) {
+      return;
+    }
+    setState(() {
+      _localCleanupInProgress = true;
+    });
+    try {
+      await context.read<AuthenticationCubit>().removeLocalAccountData(
+        username: username,
+        host: context.read<SettingsCubit>().state.endpointConfig.domain,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _localCleanupInProgress = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
@@ -103,6 +137,8 @@ class _LoginFormState extends State<LoginForm> {
         final errorText = state is AuthenticationFailure
             ? state.message.resolve(context.l10n)
             : null;
+        final canOfferLocalCleanup =
+            state is AuthenticationFailure && state.canOfferLocalCleanup;
         return Form(
           key: _formKey,
           child: Align(
@@ -135,6 +171,26 @@ class _LoginFormState extends State<LoginForm> {
                             ),
                           ),
                   ),
+                  if (canOfferLocalCleanup &&
+                      errorText != null &&
+                      errorText.isNotEmpty)
+                    Padding(
+                      padding: horizontalPadding,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: 1,
+                        child: AxiButton.destructive(
+                          onPressed: isBusy || _localCleanupInProgress
+                              ? null
+                              : _onRemoveLocalDataPressed,
+                          child: Text(context.l10n.authLocalDataCleanupAction),
+                        ),
+                      ),
+                    ),
+                  if (canOfferLocalCleanup &&
+                      errorText != null &&
+                      errorText.isNotEmpty)
+                    SizedBox(height: spacing.m),
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(

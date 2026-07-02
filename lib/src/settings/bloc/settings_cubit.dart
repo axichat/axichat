@@ -216,6 +216,43 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     await activateAccountSettings(accountJid);
   }
 
+  Future<void> clearAccountLocalData(String accountJid) async {
+    final normalizedAccountJid = _normalizedAccountJid(accountJid);
+    final accountKey = _accountKeyForJid(accountJid);
+    if (normalizedAccountJid == null || accountKey == null) {
+      return;
+    }
+    _persistVisibleState(state);
+    _accountSettingsJsonByKey.remove(accountKey);
+    _pendingRemoteSettingsSyncByKey.remove(accountKey);
+    if (_activeAccountKey == accountKey) {
+      _activeAccountKey = null;
+      final nextState = _bootstrapState;
+      if (nextState != state) {
+        emit(nextState);
+      }
+      _applySettingsSideEffects(nextState);
+    }
+    await _removeBackgroundMessagingPreference(normalizedAccountJid);
+    await _removeDismissedAccount(
+      key: _accountWelcomeShownKey,
+      accountJid: normalizedAccountJid,
+    );
+    await _removeDismissedAccount(
+      key: _emailWebViewTipShownKey,
+      accountJid: normalizedAccountJid,
+    );
+    await _removeDismissedAccount(
+      key: _calendarTaskDragTipShownKey,
+      accountJid: normalizedAccountJid,
+    );
+    await _removeDismissedAccount(
+      key: _recoveryWelcomeDismissedKey,
+      accountJid: normalizedAccountJid,
+    );
+    await _persistHydratedEnvelope();
+  }
+
   Future<bool> backgroundMessagingEnabledForAccount(String? accountJid) async {
     final accountKey = _accountKeyForJid(accountJid);
     if (accountKey == null) {
@@ -1281,6 +1318,60 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       await credentialStore.delete(key: _backgroundMessagingPreferencesKey);
       return const {};
     }
+  }
+
+  Future<void> _writeBackgroundMessagingPreferences(
+    Map<String, bool> preferences,
+  ) async {
+    final credentialStore = _credentialStore;
+    if (credentialStore == null) {
+      return;
+    }
+    final values = <String, bool>{
+      for (final entry in preferences.entries)
+        if (entry.key.trim().isNotEmpty)
+          entry.key.trim().toLowerCase(): entry.value,
+    };
+    if (values.isEmpty) {
+      await credentialStore.delete(key: _backgroundMessagingPreferencesKey);
+      return;
+    }
+    await credentialStore.write(
+      key: _backgroundMessagingPreferencesKey,
+      value: jsonEncode(values),
+    );
+  }
+
+  Future<void> _removeBackgroundMessagingPreference(String accountJid) async {
+    final preferences = await _readBackgroundMessagingPreferences();
+    if (!preferences.containsKey(accountJid)) {
+      return;
+    }
+    await _writeBackgroundMessagingPreferences(
+      Map<String, bool>.from(preferences)..remove(accountJid),
+    );
+  }
+
+  Future<void> _removeDismissedAccount({
+    required RegisteredCredentialKey key,
+    required String accountJid,
+  }) async {
+    final accounts = await _readDismissedAccounts(key);
+    if (!accounts.contains(accountJid)) {
+      return;
+    }
+    await _writeDismissedAccounts(
+      key: key,
+      dismissedAccounts: Set<String>.from(accounts)..remove(accountJid),
+    );
+  }
+
+  Future<void> _persistHydratedEnvelope() async {
+    final json = toJson(state);
+    if (json == null) {
+      return;
+    }
+    await HydratedBloc.storage.write(storageToken, json);
   }
 
   @override

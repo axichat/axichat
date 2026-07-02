@@ -126,6 +126,16 @@ final class MessageSaveResult {
       change == MessageSaveChange.unchanged;
 }
 
+final class EmailUnreadBoundaryResolution {
+  const EmailUnreadBoundaryResolution({
+    required this.boundaryMessage,
+    required this.windowTarget,
+  });
+
+  final Message boundaryMessage;
+  final Message windowTarget;
+}
+
 abstract interface class XmppDatabase implements Database {
   Stream<List<Message>> watchChatMessages(
     String jid, {
@@ -260,6 +270,14 @@ abstract interface class XmppDatabase implements Database {
   });
 
   Future<Message?> getOldestUnreadEmailBackedMessageForChat(
+    String jid, {
+    String? selfJid,
+    String? emailSelfJid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
+  Future<EmailUnreadBoundaryResolution?>
+  getOldestUnreadEmailBackedBoundaryForChat(
     String jid, {
     String? selfJid,
     String? emailSelfJid,
@@ -4315,6 +4333,23 @@ WHERE stanza_i_d = ?
     String? emailSelfJid,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
+    final resolution = await getOldestUnreadEmailBackedBoundaryForChat(
+      jid,
+      selfJid: selfJid,
+      emailSelfJid: emailSelfJid,
+      filter: filter,
+    );
+    return resolution?.boundaryMessage;
+  }
+
+  @override
+  Future<EmailUnreadBoundaryResolution?>
+  getOldestUnreadEmailBackedBoundaryForChat(
+    String jid, {
+    String? selfJid,
+    String? emailSelfJid,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
     final normalizedJid = jid.trim();
     if (normalizedJid.isEmpty) {
       return null;
@@ -4342,7 +4377,10 @@ WHERE stanza_i_d = ?
           isGroupChat: false,
           myOccupantJid: null,
         )) {
-          return message;
+          return EmailUnreadBoundaryResolution(
+            boundaryMessage: message,
+            windowTarget: await _emailUnreadWindowTargetForBoundary(message),
+          );
         }
       }
       if (rows.length < pageSize) {
@@ -4350,6 +4388,45 @@ WHERE stanza_i_d = ?
       }
       offset += rows.length;
     }
+  }
+
+  Future<Message> _emailUnreadWindowTargetForBoundary(Message boundary) async {
+    final originId = boundary.originID?.trim();
+    if (boundary.emailRfcGroupKey == null ||
+        originId == null ||
+        originId.isEmpty) {
+      return boundary;
+    }
+    final normalizedChatJid = boundary.chatJid.trim();
+    if (normalizedChatJid.isEmpty) {
+      return boundary;
+    }
+    final originIds = _emailOriginIdCandidates(originId);
+    if (originIds.isEmpty) {
+      return boundary;
+    }
+    final deltaAccountId = boundary.deltaAccountId;
+    final siblings =
+        await (select(messages)
+              ..where(
+                (tbl) =>
+                    tbl.chatJid.equals(normalizedChatJid) &
+                    tbl.originID.isIn(originIds) &
+                    tbl.deltaAccountId.equals(deltaAccountId) &
+                    _timelineDisplayableMessageExpression(tbl),
+              )
+              ..orderBy(_timelineMessageOrdering(newestFirst: false)))
+            .get();
+    for (final sibling in siblings) {
+      if (!boundary.hasSameEmailRfcGroup(sibling) ||
+          !_shouldDisplayMessage(sibling)) {
+        continue;
+      }
+      if (sibling.timestamp != null) {
+        return sibling;
+      }
+    }
+    return boundary;
   }
 
   @override

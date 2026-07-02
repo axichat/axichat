@@ -3616,6 +3616,72 @@ class EmailService {
     }
   }
 
+  Future<void> cleanupUnregisterLocalData({
+    required String databasePrefix,
+    String? databasePassphrase,
+  }) async {
+    final normalizedPrefix = tryNormalizeAppOwnedPathSegment(databasePrefix);
+    if (normalizedPrefix == null) {
+      _log.warning(
+        'Skipping email storage cleanup for invalid database prefix.',
+      );
+      return;
+    }
+    final pendingCleanup = _pendingNativeCleanup;
+    if (pendingCleanup != null) {
+      await pendingCleanup;
+    }
+    await _drainDeltaOperationQueueForShutdown();
+    if (await _deleteStorageArtifactsWithTransport(
+      _transport,
+      databasePrefix: normalizedPrefix,
+    )) {
+      return;
+    }
+    final cleanupTransport = _transportFactory();
+    try {
+      await cleanupTransport.deleteStorageArtifacts(
+        databasePrefix: normalizedPrefix,
+      );
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      final passphrase = databasePassphrase;
+      if (passphrase == null || passphrase.isEmpty) {
+        _log.warning(
+          'Failed to delete email storage without an initialized Delta worker.',
+          error,
+          stackTrace,
+        );
+        return;
+      }
+      await cleanupTransport.ensureInitialized(
+        databasePrefix: normalizedPrefix,
+        databasePassphrase: passphrase,
+      );
+      await cleanupTransport.deleteStorageArtifacts(
+        databasePrefix: normalizedPrefix,
+      );
+    } finally {
+      await _disposeTransportForCleanup(cleanupTransport);
+    }
+  }
+
+  Future<bool> _deleteStorageArtifactsWithTransport(
+    EmailDeltaRuntime transport, {
+    required String databasePrefix,
+  }) async {
+    try {
+      await transport.deleteStorageArtifacts(databasePrefix: databasePrefix);
+      return true;
+    } on EmailDeltaWorkerRuntimeException catch (error, stackTrace) {
+      _log.fine(
+        'Active email transport could not delete storage artifacts.',
+        error,
+        stackTrace,
+      );
+      return false;
+    }
+  }
+
   Future<void> close() async {
     await _mailPushHintSubscription?.cancel();
     _mailPushHintSubscription = null;
@@ -6009,6 +6075,10 @@ class EmailService {
       },
     );
     if (active != null) {
+      _setEmailHistoryImportPromptStatus(
+        EmailHistoryImportPromptStatus.importing,
+        source: _EmailSyncSource.unknown,
+      );
       return active;
     }
     final task = _importExistingEmailHistory(force: force);
@@ -6872,11 +6942,29 @@ class EmailService {
     int? unreadCount,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
+    final resolution = await loadOldestUnreadEmailBackedBoundaryForChat(
+      chat,
+      selfJid: selfJid,
+      emailSelfJid: emailSelfJid,
+      unreadCount: unreadCount,
+      filter: filter,
+    );
+    return resolution?.boundaryMessage;
+  }
+
+  Future<EmailUnreadBoundaryResolution?>
+  loadOldestUnreadEmailBackedBoundaryForChat(
+    Chat chat, {
+    String? selfJid,
+    String? emailSelfJid,
+    int? unreadCount,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
     if ((unreadCount ?? chat.unreadCount) <= _emptyUnreadCount) {
       return null;
     }
     final db = await _databaseBuilder();
-    return db.getOldestUnreadEmailBackedMessageForChat(
+    return db.getOldestUnreadEmailBackedBoundaryForChat(
       chat.jid,
       selfJid: selfJid,
       emailSelfJid: emailSelfJid,

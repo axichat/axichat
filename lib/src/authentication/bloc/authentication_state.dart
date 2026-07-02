@@ -168,16 +168,25 @@ final class AuthenticationUnregisterFailure extends AuthenticationComplete {
 }
 
 final class AuthenticationFailure extends AuthenticationState {
-  const AuthenticationFailure(this.message, {super.config});
+  const AuthenticationFailure(
+    this.message, {
+    this.canOfferLocalCleanup = false,
+    super.config,
+  });
 
   final AuthMessage message;
+  final bool canOfferLocalCleanup;
 
   @override
   AuthenticationFailure copyWithConfig(EndpointConfig config) =>
-      AuthenticationFailure(message, config: config);
+      AuthenticationFailure(
+        message,
+        canOfferLocalCleanup: canOfferLocalCleanup,
+        config: config,
+      );
 
   @override
-  List<Object?> get props => [config, message];
+  List<Object?> get props => [config, message, canOfferLocalCleanup];
 }
 
 final class AuthenticationSignupFailure extends AuthenticationState {

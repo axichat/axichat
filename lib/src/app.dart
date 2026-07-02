@@ -284,6 +284,27 @@ class _AxichatState extends State<Axichat> {
                                     ),
                               );
                         },
+                        accountLocalDataCleanup:
+                            ({
+                              required accountJid,
+                              databasePrefix,
+                              databasePassphrase,
+                            }) async {
+                              final storageManager = context
+                                  .read<CalendarStorageManager>();
+                              final settingsCubit = context
+                                  .read<SettingsCubit>();
+                              final storageRootDirectory =
+                                  await prepareAppStorageDirectory();
+                              await storageManager.deleteAuthStorageForAccount(
+                                accountAddress: accountJid,
+                                storageRootPath: storageRootDirectory.path,
+                                passphrase: databasePassphrase,
+                              );
+                              await settingsCubit.clearAccountLocalData(
+                                accountJid,
+                              );
+                            },
                       ),
                     ),
                     BlocProvider(

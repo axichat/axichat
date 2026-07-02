@@ -63,6 +63,7 @@ import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
+import 'package:axichat/src/storage/app_storage.dart';
 import 'package:axichat/src/xmpp/muc/muc_join_state.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
@@ -146,8 +147,6 @@ part 'presence/presence_service.dart';
 
 part 'roster/roster_service.dart';
 
-
-
 part 'connection/xmpp_connection.dart';
 
 sealed class XmppException implements Exception {
@@ -177,7 +176,6 @@ final class XmppDatabaseCreationException extends XmppException {
 final class XmppUnknownException extends XmppException {
   XmppUnknownException([super.wrapped]);
 }
-
 
 final class XmppAbortedException extends XmppException {}
 
@@ -3266,6 +3264,7 @@ class XmppService extends XmppBase
     String? databasePrefix,
   }) async {
     XmppDatabase? liveDatabase;
+    var cleanupPrefix = _validatedUnregisterCleanupPrefix(databasePrefix);
     if (databasesInitialized && sameNormalizedAddressValue(myJid, jid)) {
       try {
         liveDatabase = await database;
@@ -3287,31 +3286,46 @@ class XmppService extends XmppBase
           stackTrace,
         );
       }
-      return;
     }
 
-    final resolvedPrefix = databasePrefix?.trim();
-    if (resolvedPrefix == null || resolvedPrefix.isEmpty) {
+    if (cleanupPrefix == null) {
       return;
     }
-    try {
-      await _deleteUnregisterDatabaseArtifacts(resolvedPrefix);
-    } on Exception catch (error, stackTrace) {
+    if (liveDatabase == null) {
+      try {
+        await _deleteUnregisterDatabaseArtifacts(cleanupPrefix);
+      } on Exception catch (error, stackTrace) {
+        _xmppLogger.warning(
+          'Failed to delete XMPP database during unregister cleanup',
+          error,
+          stackTrace,
+        );
+      }
+      try {
+        await _deleteUnregisterAttachmentDirectory(cleanupPrefix);
+      } on Exception catch (error, stackTrace) {
+        _xmppLogger.warning(
+          'Failed to delete XMPP attachment directory during unregister cleanup',
+          error,
+          stackTrace,
+        );
+      }
+    }
+    await _deleteUnregisterStateStoreDirectory(cleanupPrefix);
+  }
+
+  String? _validatedUnregisterCleanupPrefix(String? databasePrefix) {
+    final trimmed = databasePrefix?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    final normalized = tryNormalizeAppOwnedPathSegment(trimmed);
+    if (normalized == null) {
       _xmppLogger.warning(
-        'Failed to delete XMPP database during unregister cleanup',
-        error,
-        stackTrace,
+        'Ignoring invalid database prefix during unregister cleanup.',
       );
     }
-    try {
-      await _deleteUnregisterAttachmentDirectory(resolvedPrefix);
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.warning(
-        'Failed to delete XMPP attachment directory during unregister cleanup',
-        error,
-        stackTrace,
-      );
-    }
+    return normalized;
   }
 
   Future<void> clearSessionTokens() async {
@@ -3377,6 +3391,28 @@ class XmppService extends XmppBase
     } on FileSystemException catch (error, stackTrace) {
       _xmppLogger.warning(
         'Failed to delete attachment directory ${directory.path}',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _deleteUnregisterStateStoreDirectory(String prefix) async {
+    final rootDirectory = await prepareAppStorageDirectory();
+    final directory = Directory(p.join(rootDirectory.path, prefix));
+    try {
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: directory.path,
+      );
+      if (!deleted) {
+        _xmppLogger.warning(
+          'Skipped XMPP state store cleanup for unexpected path ${directory.path}',
+        );
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to delete XMPP state store directory ${directory.path}',
         error,
         stackTrace,
       );

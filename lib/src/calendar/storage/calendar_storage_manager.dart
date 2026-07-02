@@ -2,9 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/impatient_completer.dart';
@@ -154,6 +157,65 @@ class CalendarStorageManager extends ChangeNotifier {
   /// Unregisters and forgets the authenticated storage reference.
   Future<void> clearAuthStorage() {
     return _enqueueAuthStorageOperation(_clearAuthStorage);
+  }
+
+  Future<void> deleteAuthStorageForAccount({
+    required String accountAddress,
+    required String storageRootPath,
+    String? passphrase,
+  }) {
+    final normalizedAccountAddress = normalizedAddressKey(accountAddress);
+    if (normalizedAccountAddress == null) {
+      return Future<void>.value();
+    }
+    return _enqueueAuthStorageOperation(
+      () => _deleteAuthStorageForAccount(
+        accountAddress: normalizedAccountAddress,
+        storageRootPath: storageRootPath,
+        passphrase: passphrase,
+      ),
+    );
+  }
+
+  Future<void> _deleteAuthStorageForAccount({
+    required String accountAddress,
+    required String storageRootPath,
+    required String? passphrase,
+  }) async {
+    var storageScopeKey = _authStorageScopeKeyForPassphrase(
+      accountAddress: accountAddress,
+      passphrase: passphrase,
+    );
+    if (storageScopeKey == null &&
+        _authStorageAccountAddress == accountAddress) {
+      storageScopeKey = _authStorageScopeKey;
+    }
+    if (storageScopeKey == null) {
+      return;
+    }
+    final existingCompleter = _authStorageCompleter;
+    if (existingCompleter != null && _authStorageScopeKey == storageScopeKey) {
+      await _closeAuthStorage(existingCompleter);
+    }
+    final directory = Directory(p.join(storageRootPath, storageScopeKey));
+    await deleteAppOwnedDirectoryTree(
+      directory: directory,
+      expectedPath: directory.path,
+    );
+  }
+
+  String? _authStorageScopeKeyForPassphrase({
+    required String accountAddress,
+    required String? passphrase,
+  }) {
+    final secret = passphrase;
+    if (secret == null || secret.isEmpty) {
+      return null;
+    }
+    return authCalendarStorageScopeKey(
+      accountAddress: accountAddress,
+      encryptionKey: deriveCalendarEncryptionKey(secret),
+    );
   }
 
   Future<void> _clearAuthStorage() async {

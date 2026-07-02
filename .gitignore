@@ -68,3 +68,4 @@ app.*.map.json
 /.cargo-home/
 /*.json
 /axichat-apple/
+/test-old/

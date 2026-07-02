@@ -1479,14 +1479,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return null;
   }
 
-  Future<void> _subscribeThroughMessage({
+  Future<bool> _subscribeThroughMessage({
     required Chat chat,
     required Message target,
+    int? minLimit,
     int? maxLimit,
   }) async {
     final timestamp = target.timestamp;
     if (timestamp == null) {
-      return;
+      return false;
     }
     final throughCount = await _messageService.countChatMessagesThrough(
       chat.jid,
@@ -1498,10 +1499,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     var desiredLimit = throughCount > _currentMessageLimit
         ? throughCount
         : _currentMessageLimit;
+    if (minLimit != null && desiredLimit < minLimit) {
+      desiredLimit = minLimit;
+    }
     if (maxLimit != null && desiredLimit > maxLimit) {
       desiredLimit = maxLimit;
     }
     await _subscribeToMessages(limit: desiredLimit, filter: state.viewFilter);
+    return true;
   }
 
   Future<void> _ensureUnreadWindowLoaded({
@@ -4251,14 +4256,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return null;
     }
     if (chat.defaultTransport.isEmail) {
-      final oldestEmailUnread = await _emailService
-          ?.loadOldestUnreadEmailBackedMessageForChat(
+      final boundaryResolution = await _emailService
+          ?.loadOldestUnreadEmailBackedBoundaryForChat(
             chat,
             selfJid: selfJid,
             emailSelfJid: state.emailSelfJid,
             unreadCount: targetUnreadCount,
             filter: state.viewFilter,
           );
+      final oldestEmailUnread = boundaryResolution?.boundaryMessage;
       final oldestEmailStanzaId = oldestEmailUnread?.stanzaID.trim();
       _unreadBoundaryStanzaId =
           oldestEmailStanzaId == null || oldestEmailStanzaId.isEmpty
@@ -4318,21 +4324,28 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     if (chat.defaultTransport.isEmail) {
-      final boundary = await _emailService
-          ?.loadOldestUnreadEmailBackedMessageForChat(
+      final boundaryResolution = await _emailService
+          ?.loadOldestUnreadEmailBackedBoundaryForChat(
             chat,
             selfJid: selfJid,
             emailSelfJid: state.emailSelfJid,
             unreadCount: unreadTargetCount,
             filter: state.viewFilter,
           );
+      final boundary = boundaryResolution?.boundaryMessage;
       final boundaryStanzaId = boundary?.stanzaID.trim();
       if (boundary != null &&
           boundaryStanzaId != null &&
           boundaryStanzaId.isNotEmpty) {
         _unreadBoundaryStanzaId = boundaryStanzaId;
-        await _subscribeThroughMessage(chat: chat, target: boundary);
-        return;
+        final subscribed = await _subscribeThroughMessage(
+          chat: chat,
+          target: boundaryResolution?.windowTarget ?? boundary,
+          minLimit: desiredLimit,
+        );
+        if (subscribed) {
+          return;
+        }
       }
       _pendingUnreadBoundaryCount = null;
       _clearPendingUnreadDividerEmailContentMessages();
@@ -4355,8 +4368,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         messageId: storedBoundaryStanzaId,
       );
       if (boundaryMessage != null) {
-        await _subscribeThroughMessage(chat: chat, target: boundaryMessage);
-        return;
+        final subscribed = await _subscribeThroughMessage(
+          chat: chat,
+          target: boundaryMessage,
+        );
+        if (subscribed) {
+          return;
+        }
       }
     }
     if (desiredLimit != _currentMessageLimit) {

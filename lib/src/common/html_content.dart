@@ -567,7 +567,7 @@ pre, code {
     return normalized.isEmpty ? null : normalized;
   }
 
-  static String toPlainText(String html) {
+  static String toPlainText(String html, {bool includeLinkTargets = true}) {
     try {
       final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
       final buffer = StringBuffer();
@@ -576,7 +576,13 @@ pre, code {
         maxDepth: _maxHtmlDepth,
         maxDuration: _maxHtmlParseDuration,
       );
-      _appendPlainText(buffer, fragment.nodes, budget, 0);
+      _appendPlainText(
+        buffer,
+        fragment.nodes,
+        budget,
+        0,
+        includeLinkTargets: includeLinkTargets,
+      );
       return _normalizePlainText(buffer.toString());
     } on Exception {
       return '';
@@ -609,7 +615,10 @@ pre, code {
     );
     final derivation = (
       preparedFlutterHtml: preparedFlutterHtml,
-      visibleBodyText: toPlainText(preparedFlutterHtml).trim(),
+      visibleBodyText: toPlainText(
+        preparedFlutterHtml,
+        includeLinkTargets: false,
+      ).trim(),
       isPlainTextHtml: isPlainTextHtml(normalizedHtml),
       containsRemoteImages: containsRenderableRemoteImages(normalizedHtml),
       containsBlockedWebViewContent: containsBlockedWebViewContent(
@@ -3480,8 +3489,9 @@ pre, code {
     StringBuffer buffer,
     List<dom.Node> nodes,
     _HtmlNodeBudget budget,
-    int depth,
-  ) {
+    int depth, {
+    required bool includeLinkTargets,
+  }) {
     for (final node in nodes) {
       if (!budget.allow(depth)) {
         return;
@@ -3497,21 +3507,39 @@ pre, code {
           continue;
         }
         if (tag == 'a') {
-          _appendPlainTextAnchor(buffer, node, budget, depth + 1);
+          _appendPlainTextAnchor(
+            buffer,
+            node,
+            budget,
+            depth + 1,
+            includeLinkTargets: includeLinkTargets,
+          );
           continue;
         }
         final isBlock = _blockTags.contains(tag);
         if (isBlock) {
           _appendLineBreak(buffer);
         }
-        _appendPlainText(buffer, node.nodes, budget, depth + 1);
+        _appendPlainText(
+          buffer,
+          node.nodes,
+          budget,
+          depth + 1,
+          includeLinkTargets: includeLinkTargets,
+        );
         if (isBlock) {
           _appendLineBreak(buffer);
         }
         continue;
       }
       if (node.nodes.isNotEmpty) {
-        _appendPlainText(buffer, node.nodes, budget, depth + 1);
+        _appendPlainText(
+          buffer,
+          node.nodes,
+          budget,
+          depth + 1,
+          includeLinkTargets: includeLinkTargets,
+        );
       }
     }
   }
@@ -3520,12 +3548,22 @@ pre, code {
     StringBuffer buffer,
     dom.Element node,
     _HtmlNodeBudget budget,
-    int depth,
-  ) {
+    int depth, {
+    required bool includeLinkTargets,
+  }) {
     final labelBuffer = StringBuffer();
-    _appendPlainText(labelBuffer, node.nodes, budget, depth);
+    _appendPlainText(
+      labelBuffer,
+      node.nodes,
+      budget,
+      depth,
+      includeLinkTargets: includeLinkTargets,
+    );
     final label = labelBuffer.toString();
     buffer.write(label);
+    if (!includeLinkTargets) {
+      return;
+    }
     final href = node.attributes[_hrefAttribute];
     if (href == null) {
       return;
@@ -4004,6 +4042,7 @@ List<Map<String, Object>> _deriveEmailHtmlDerivationsForCache(
       'preparedFlutterHtml': preparedFlutterHtml,
       'visibleBodyText': HtmlContentCodec.toPlainText(
         preparedFlutterHtml,
+        includeLinkTargets: false,
       ).trim(),
       'isPlainTextHtml': HtmlContentCodec.isPlainTextHtml(normalizedHtml),
       'containsRemoteImages': HtmlContentCodec.containsRenderableRemoteImages(
