@@ -473,6 +473,38 @@ bool shouldDeferReadThresholdSyncForTesting({
   required bool initialTimelineReadinessPending,
 }) => !messagesLoaded || initialTimelineReadinessPending;
 
+bool _chatTimelineLoadingOverlayVisible({
+  required bool messagesLoaded,
+  required bool initialTimelineReadinessPending,
+}) => !messagesLoaded || initialTimelineReadinessPending;
+
+({bool loadingMessages, bool hideTimelineUntilInitialReadiness})
+_effectiveChatTimelineLoadingState({
+  required bool messagesLoaded,
+  required bool initialTimelineReadinessPending,
+  required bool loadingTimedOut,
+}) {
+  if (loadingTimedOut) {
+    return (loadingMessages: false, hideTimelineUntilInitialReadiness: false);
+  }
+  return (
+    loadingMessages: !messagesLoaded,
+    hideTimelineUntilInitialReadiness: initialTimelineReadinessPending,
+  );
+}
+
+@visibleForTesting
+({bool loadingMessages, bool hideTimelineUntilInitialReadiness})
+effectiveChatTimelineLoadingStateForTesting({
+  required bool messagesLoaded,
+  required bool initialTimelineReadinessPending,
+  required bool loadingTimedOut,
+}) => _effectiveChatTimelineLoadingState(
+  messagesLoaded: messagesLoaded,
+  initialTimelineReadinessPending: initialTimelineReadinessPending,
+  loadingTimedOut: loadingTimedOut,
+);
+
 @visibleForTesting
 bool emailMessageRenderSettledForTesting({
   required Message message,
@@ -591,6 +623,8 @@ class Chat extends StatefulWidget {
   final bool active;
   final bool syncWithOpenChatRoute;
   final bool calendarSurfaceActive;
+
+  static const Duration _loadingSpinnerTimeout = Duration(seconds: 10);
 
   @override
   State<Chat> createState() => _ChatState();
@@ -761,6 +795,9 @@ class _ChatState extends State<Chat> {
   var _unreadDividerEmailReadinessRecheckToken = 0;
   var _unreadDividerScrollPrepRetryRequestId = 0;
   var _unreadDividerScrollPrepRetryScheduled = false;
+  var _initialUnreadDividerAutoScrollSuppressed = false;
+  Timer? _chatTimelineLoadingTimer;
+  var _chatTimelineLoadingTimedOut = false;
   var _initialEmailViewportWarmupStatus =
       _InitialEmailViewportWarmupStatus.pending;
   Set<String> _initialEmailViewportStanzaIds = const <String>{};
@@ -1879,8 +1916,12 @@ class _ChatState extends State<Chat> {
     return origin & renderObject.size;
   }
 
-  Set<String> _readThresholdMessageIds(ChatState state) {
-    if (!state.messagesLoaded || !_chatRoute.allowsChatInteraction) {
+  Set<String> _readThresholdMessageIds(
+    ChatState state, {
+    bool allowBeforeMessagesLoaded = false,
+  }) {
+    if ((!state.messagesLoaded && !allowBeforeMessagesLoaded) ||
+        !_chatRoute.allowsChatInteraction) {
       return const <String>{};
     }
     final viewportRect = _messageListViewportRect();
@@ -1920,15 +1961,19 @@ class _ChatState extends State<Chat> {
       return;
     }
     final chatState = context.read<ChatBloc>().state;
+    final loadingTimedOut = _chatTimelineLoadingCapReached;
     if (shouldDeferReadThresholdSyncForTesting(
-      messagesLoaded: chatState.messagesLoaded,
-      initialTimelineReadinessPending: _initialTimelineReadinessPending(
-        chatState,
-      ),
+      messagesLoaded: chatState.messagesLoaded || loadingTimedOut,
+      initialTimelineReadinessPending: loadingTimedOut
+          ? false
+          : _initialTimelineReadinessPending(chatState),
     )) {
       return;
     }
-    final nextIds = _readThresholdMessageIds(chatState);
+    final nextIds = _readThresholdMessageIds(
+      chatState,
+      allowBeforeMessagesLoaded: loadingTimedOut,
+    );
     if (nextIds.length == _reportedReadThresholdMessageIds.length &&
         nextIds.containsAll(_reportedReadThresholdMessageIds)) {
       return;
@@ -1948,6 +1993,11 @@ class _ChatState extends State<Chat> {
     return state.messagesLoaded && _unreadDividerScrollTargetPending(state);
   }
 
+  bool get _chatTimelineLoadingCapReached {
+    return _chatTimelineLoadingTimedOut ||
+        _initialUnreadDividerAutoScrollSuppressed;
+  }
+
   bool _chatHasEmailBackedMessages(ChatState state) {
     for (final message in state.items) {
       if (message.isEmailBacked) {
@@ -1961,6 +2011,61 @@ class _ChatState extends State<Chat> {
     return state.messagesLoaded &&
         (state.initialUnreadBootstrapStatus.isLoading ||
             _unreadDividerScrollTargetPending(state));
+  }
+
+  bool _chatTimelineLoadingOverlayVisibleForState(ChatState state) {
+    return _chatTimelineLoadingOverlayVisible(
+      messagesLoaded: state.messagesLoaded,
+      initialTimelineReadinessPending: _initialTimelineReadinessPending(state),
+    );
+  }
+
+  void _resetChatTimelineLoadingTimeout({bool notify = true}) {
+    _chatTimelineLoadingTimer?.cancel();
+    _chatTimelineLoadingTimer = null;
+    if (!_chatTimelineLoadingTimedOut) {
+      return;
+    }
+    if (notify && mounted) {
+      setState(() {
+        _chatTimelineLoadingTimedOut = false;
+      });
+      return;
+    }
+    _chatTimelineLoadingTimedOut = false;
+  }
+
+  void _syncChatTimelineLoadingOverlayTimeout(ChatState state) {
+    if (!_chatTimelineLoadingOverlayVisibleForState(state)) {
+      _resetChatTimelineLoadingTimeout();
+      return;
+    }
+    if (_chatTimelineLoadingCapReached || _chatTimelineLoadingTimer != null) {
+      return;
+    }
+    _chatTimelineLoadingTimer = Timer(
+      Chat._loadingSpinnerTimeout,
+      _handleChatTimelineLoadingTimedOut,
+    );
+  }
+
+  void _handleChatTimelineLoadingTimedOut() {
+    _chatTimelineLoadingTimer = null;
+    if (!mounted) {
+      return;
+    }
+    final state = context.read<ChatBloc>().state;
+    if (!_chatTimelineLoadingOverlayVisibleForState(state)) {
+      _resetChatTimelineLoadingTimeout();
+      return;
+    }
+    _resetUnreadDividerEmailReadiness();
+    setState(() {
+      _chatTimelineLoadingTimedOut = true;
+      _initialUnreadDividerAutoScrollSuppressed = true;
+    });
+    _abandonSuppressedUnreadDividerScroll(state);
+    _scheduleReadThresholdSync();
   }
 
   Set<int> _trackedUnreadDividerEmailDeltaIds(ChatState state) {
@@ -2192,6 +2297,10 @@ class _ChatState extends State<Chat> {
     if (!_initialUnreadScrollPending(state)) {
       return;
     }
+    if (_initialUnreadDividerAutoScrollSuppressed) {
+      _abandonSuppressedUnreadDividerScroll(state);
+      return;
+    }
     final trackedIds = _trackedUnreadDividerEmailDeltaIds(state);
     if (!_cachedTimelineContainsUnreadDivider()) {
       if (!state.initialUnreadBootstrapStatus.isLoading) {
@@ -2218,6 +2327,20 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  void _abandonSuppressedUnreadDividerScroll(ChatState state) {
+    if (!_initialUnreadDividerAutoScrollSuppressed ||
+        !_unreadDividerScrollTargetPending(state)) {
+      return;
+    }
+    final requestId = state.scrollTargetRequestId;
+    if (_activeUnreadDividerScrollRequestId == requestId) {
+      _activeUnreadDividerScrollRequestId = 0;
+    }
+    _unreadDividerScrollPrepRetryRequestId = 0;
+    _unreadDividerScrollPrepRetryScheduled = false;
+    context.read<ChatBloc>().add(ChatUnreadDividerScrollAbandoned(requestId));
+  }
+
   void _completeUnreadDividerScrollRequest(int requestId) {
     if (_activeUnreadDividerScrollRequestId == requestId) {
       _activeUnreadDividerScrollRequestId = 0;
@@ -2242,6 +2365,10 @@ class _ChatState extends State<Chat> {
 
   void _retryOrAbandonUnreadDividerScrollRequest(int requestId) {
     if (!mounted) {
+      return;
+    }
+    if (_initialUnreadDividerAutoScrollSuppressed) {
+      context.read<ChatBloc>().add(ChatUnreadDividerScrollAbandoned(requestId));
       return;
     }
     if (_unreadDividerScrollPrepRetryRequestId != requestId) {
@@ -7583,13 +7710,17 @@ class _ChatState extends State<Chat> {
         ChatBloc.unreadDividerScrollTargetMessageId,
         jumpBeforeWaiting: true,
       );
-      if (!dividerPrepared) {
+      if (!dividerPrepared || !_unreadDividerScrollRequestActive(requestId)) {
         return;
       }
       await WidgetsBinding.instance.endOfFrame;
+      if (!_unreadDividerScrollRequestActive(requestId)) {
+        return;
+      }
       final ready = await _waitForUnreadDividerContext();
       final dividerContext = _unreadDividerContext;
       if (!mounted ||
+          !_unreadDividerScrollRequestActive(requestId) ||
           !ready ||
           dividerContext == null ||
           !dividerContext.mounted) {
@@ -7612,6 +7743,12 @@ class _ChatState extends State<Chat> {
         _retryOrAbandonUnreadDividerScrollRequest(requestId);
       }
     }
+  }
+
+  bool _unreadDividerScrollRequestActive(int requestId) {
+    return mounted &&
+        !_initialUnreadDividerAutoScrollSuppressed &&
+        _activeUnreadDividerScrollRequestId == requestId;
   }
 
   bool _hasMessageContext(String messageId) {
@@ -7883,6 +8020,7 @@ class _ChatState extends State<Chat> {
     _syncSelectionCaches(context.read<ChatBloc>().state, notify: false);
     _scheduleReadThresholdSync();
     final initialState = context.read<ChatBloc>().state;
+    _syncChatTimelineLoadingOverlayTimeout(initialState);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -7928,6 +8066,7 @@ class _ChatState extends State<Chat> {
     super.didChangeDependencies();
     final chatsState = context.read<ChatsCubit>().state;
     _consumePendingOpenMessageSelection(chatsState);
+    _syncChatTimelineLoadingOverlayTimeout(context.read<ChatBloc>().state);
     final currentKey = _scrollStorageKey;
     if (_lastScrollStorageKey == null) {
       _lastScrollStorageKey = currentKey;
@@ -7957,6 +8096,7 @@ class _ChatState extends State<Chat> {
     unawaited(_shareComposerSeedConsumptionSubscription.cancel());
     unawaited(_shareComposerSeedConsumptionRequests.close());
     _persistScrollOffset(key: _lastScrollStorageKey, skipPageStorage: true);
+    _resetChatTimelineLoadingTimeout(notify: false);
     _scrollController.dispose();
     _emojiPopoverController.dispose();
     _bubbleRegionRegistry.clear();
@@ -8231,6 +8371,8 @@ class _ChatState extends State<Chat> {
                 listenWhen: (previous, current) =>
                     previous.chat?.jid != current.chat?.jid,
                 listener: (_, state) {
+                  _resetChatTimelineLoadingTimeout();
+                  _initialUnreadDividerAutoScrollSuppressed = false;
                   _activeUnreadDividerScrollRequestId = 0;
                   _completedUnreadDividerScrollRequestId = 0;
                   _resetUnreadDividerEmailReadiness();
@@ -8249,6 +8391,20 @@ class _ChatState extends State<Chat> {
                   if (state.messagesLoaded) {
                     _hydrateAnimatedMessages(state.items);
                   }
+                },
+              ),
+              BlocListener<ChatBloc, ChatState>(
+                listenWhen: (previous, current) =>
+                    previous.chat?.jid != current.chat?.jid ||
+                    previous.messagesLoaded != current.messagesLoaded ||
+                    previous.initialUnreadBootstrapStatus !=
+                        current.initialUnreadBootstrapStatus ||
+                    previous.scrollTargetMessageId !=
+                        current.scrollTargetMessageId ||
+                    previous.scrollTargetRequestId !=
+                        current.scrollTargetRequestId,
+                listener: (_, state) {
+                  _syncChatTimelineLoadingOverlayTimeout(state);
                 },
               ),
               BlocListener<ChatBloc, ChatState>(

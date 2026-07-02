@@ -350,7 +350,14 @@ class _ChatScaffoldBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Builder(
       builder: (context) {
-        final loadingMessages = !state.messagesLoaded;
+        final initialTimelineReadinessPending = owner
+            ._initialTimelineReadinessPending(state);
+        final effectiveTimelineLoading = _effectiveChatTimelineLoadingState(
+          messagesLoaded: state.messagesLoaded,
+          initialTimelineReadinessPending: initialTimelineReadinessPending,
+          loadingTimedOut: owner._chatTimelineLoadingCapReached,
+        );
+        final loadingMessages = effectiveTimelineLoading.loadingMessages;
         final attachmentsByMessageId = loadingMessages
             ? const <String, List<String>>{}
             : state.attachmentMetadataIdsByMessageId;
@@ -1104,8 +1111,9 @@ class _ChatScaffoldBody extends StatelessWidget {
                       normalizedEmailSelfJid: normalizedEmailSelfJid,
                       messageFontSize: settingsState.messageTextSize.fontSize,
                       loadingMessages: loadingMessages,
-                      hideTimelineUntilInitialReadiness: owner
-                          ._initialTimelineReadinessPending(state),
+                      hideTimelineUntilInitialReadiness:
+                          effectiveTimelineLoading
+                              .hideTimelineUntilInitialReadiness,
                       mainTimelineItems: mainTimelineItems,
                       messageListOptions: dashMessageListOptions,
                       onRenderedMessagesChanged: (messages) {
