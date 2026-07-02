@@ -405,6 +405,21 @@ class _ContactListTile extends StatelessWidget {
       action: ContactActionType.removeContact,
       address: addressKey,
     );
+    final cachedBlocklistItems = context
+        .select<BlocklistCubit, List<BlocklistEntry>?>(
+          (cubit) =>
+              cubit[BlocklistCubit.blocklistItemsCacheKey]
+                  as List<BlocklistEntry>?,
+        );
+    final blocklistState = context.watch<BlocklistCubit>().state;
+    final blocklistItems =
+        blocklistState.items ??
+        cachedBlocklistItems ??
+        const <BlocklistEntry>[];
+    final contactBlocked = _contactBlockEntries(
+      contact: contact,
+      entries: blocklistItems,
+    ).isNotEmpty;
     return ListItemPadding(
       padding: EdgeInsets.fromLTRB(
         spacing.m,
@@ -480,7 +495,7 @@ class _ContactListTile extends StatelessWidget {
           status: null,
         ),
         titleWidget: _ContactListTileContent(contact: contact),
-        actions: _contactTileIndicators(contact),
+        actions: _contactTileIndicators(contact, blocked: contactBlocked),
       ),
     );
   }
@@ -796,6 +811,19 @@ class _ContactDetailsSheet extends StatelessWidget {
         builder: (context, state) {
           final spacing = context.spacing;
           final currentContact = _currentContactForSheet(state.items, contact);
+          final cachedBlocklistItems =
+              context.watch<BlocklistCubit>()[BlocklistCubit
+                      .blocklistItemsCacheKey]
+                  as List<BlocklistEntry>?;
+          final blocklistState = context.watch<BlocklistCubit>().state;
+          final blocklistItems =
+              blocklistState.items ??
+              cachedBlocklistItems ??
+              const <BlocklistEntry>[];
+          final contactBlocked = _contactBlockEntries(
+            contact: currentContact,
+            entries: blocklistItems,
+          ).isNotEmpty;
           final emailEnabled = context.select<SettingsCubit, bool>(
             (cubit) => cubit.state.endpointConfig.smtpEnabled,
           );
@@ -823,7 +851,10 @@ class _ContactDetailsSheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _ContactSummaryCard(contact: currentContact),
+                    _ContactSummaryCard(
+                      contact: currentContact,
+                      blocked: contactBlocked,
+                    ),
                     if (detailRows.isNotEmpty) ...[
                       SizedBox(height: spacing.m),
                       _ContactDetailsInfoCard(
@@ -871,9 +902,10 @@ class _ContactDetailsSheet extends StatelessWidget {
 }
 
 class _ContactSummaryCard extends StatelessWidget {
-  const _ContactSummaryCard({required this.contact});
+  const _ContactSummaryCard({required this.contact, required this.blocked});
 
   final ContactDirectoryEntry contact;
+  final bool blocked;
 
   @override
   Widget build(BuildContext context) {
@@ -908,6 +940,7 @@ class _ContactSummaryCard extends StatelessWidget {
             child: _ContactIdentityContent(
               contact: contact,
               sourceItems: sourceItems,
+              blocked: blocked,
             ),
           ),
         ],
@@ -920,10 +953,12 @@ class _ContactIdentityContent extends StatelessWidget {
   const _ContactIdentityContent({
     required this.contact,
     required this.sourceItems,
+    required this.blocked,
   });
 
   final ContactDirectoryEntry contact;
   final List<({IconData icon, String label})> sourceItems;
+  final bool blocked;
 
   @override
   Widget build(BuildContext context) {
@@ -947,8 +982,17 @@ class _ContactIdentityContent extends StatelessWidget {
             style: context.textTheme.muted,
           ),
         ],
-        if (contact.favorited || sourceItems.isNotEmpty) ...[
+        if (blocked || contact.favorited || sourceItems.isNotEmpty) ...[
           SizedBox(height: spacing.m),
+          if (blocked) ...[
+            _ContactStatusRow(
+              icon: LucideIcons.userX,
+              label: l10n.blocklistBlockedStatus,
+              destructive: true,
+            ),
+            if (contact.favorited || sourceItems.isNotEmpty)
+              SizedBox(height: spacing.s),
+          ],
           if (contact.favorited) ...[
             _ContactStatusRow(
               icon: LucideIcons.star,
@@ -1394,6 +1438,25 @@ class _ContactFavoriteIndicator extends StatelessWidget {
   }
 }
 
+class _ContactBlockedIndicator extends StatelessWidget {
+  const _ContactBlockedIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsDirectional.only(end: context.spacing.xs),
+      child: AxiTooltip(
+        builder: (context) => Text(context.l10n.blocklistBlockedStatus),
+        child: Icon(
+          LucideIcons.userX,
+          size: context.sizing.menuItemIconSize,
+          color: context.colorScheme.destructive,
+        ),
+      ),
+    );
+  }
+}
+
 class _ContactFolderRuleIndicator extends StatelessWidget {
   const _ContactFolderRuleIndicator({required this.collection});
 
@@ -1416,10 +1479,15 @@ class _ContactFolderRuleIndicator extends StatelessWidget {
 }
 
 class _ContactStatusRow extends StatelessWidget {
-  const _ContactStatusRow({required this.icon, required this.label});
+  const _ContactStatusRow({
+    required this.icon,
+    required this.label,
+    this.destructive = false,
+  });
 
   final IconData icon;
   final String label;
+  final bool destructive;
 
   @override
   Widget build(BuildContext context) {
@@ -1428,7 +1496,9 @@ class _ContactStatusRow extends StatelessWidget {
         Icon(
           icon,
           size: context.sizing.menuItemIconSize,
-          color: context.colorScheme.mutedForeground,
+          color: destructive
+              ? context.colorScheme.destructive
+              : context.colorScheme.mutedForeground,
         ),
         SizedBox(width: context.spacing.s),
         Expanded(
@@ -1513,6 +1583,17 @@ class _ContactDetailsActions extends StatelessWidget {
     );
   }
 
+  Future<void> _unblockContact(
+    BuildContext context,
+    List<BlocklistEntry> entries,
+  ) async {
+    await context.read<BlocklistCubit>().unblockContact(
+      address: contact.address,
+      includeEmail: entries.any((entry) => entry.isEmail),
+      includeXmpp: entries.any((entry) => entry.isXmpp),
+    );
+  }
+
   Future<void> _showFolderRule(BuildContext context) async {
     await showContactFolderRuleSheet(context, contact: contact);
   }
@@ -1535,14 +1616,26 @@ class _ContactDetailsActions extends StatelessWidget {
     final contactsState = context.watch<ContactsCubit>().state;
     final isUpdatingContact = contactsState.isContactAddressLoading(addressKey);
     final blocklistState = context.watch<BlocklistCubit>().state;
-    final isBlocking =
+    final cachedBlocklistItems =
+        context.watch<BlocklistCubit>()[BlocklistCubit.blocklistItemsCacheKey]
+            as List<BlocklistEntry>?;
+    final blocklistItems =
+        blocklistState.items ??
+        cachedBlocklistItems ??
+        const <BlocklistEntry>[];
+    final contactBlockEntries = _contactBlockEntries(
+      contact: contact,
+      entries: blocklistItems,
+    );
+    final contactBlocked = contactBlockEntries.isNotEmpty;
+    final blockOperationInFlight =
         blocklistState is BlocklistLoading &&
-        (blocklistState.jid == contact.address || blocklistState.jid == null);
+        blocklistState.operation.matches(address: contact.address);
     final isRemoving = contactsState.isContactActionLoading(
       action: ContactActionType.removeContact,
       address: addressKey,
     );
-    final disabled = isRemoving || isUpdatingContact || isBlocking;
+    final disabled = isRemoving || isUpdatingContact || blockOperationInFlight;
     final isRenaming =
         contactsState.isContactActionLoading(
           action: ContactActionType.rename,
@@ -1610,10 +1703,18 @@ class _ContactDetailsActions extends StatelessWidget {
           if (contact.hasXmppRoster || contact.hasEmailContact)
             AxiButton.destructive(
               widthBehavior: AxiButtonWidth.expand,
-              loading: isBlocking,
-              onPressed: disabled ? null : () => _blockContact(context),
-              leading: const Icon(LucideIcons.userX),
-              child: Text(l10n.blocklistBlock),
+              loading: blockOperationInFlight,
+              onPressed: disabled
+                  ? null
+                  : contactBlocked
+                  ? () => _unblockContact(context, contactBlockEntries)
+                  : () => _blockContact(context),
+              leading: Icon(
+                contactBlocked ? LucideIcons.userCheck : LucideIcons.userX,
+              ),
+              child: Text(
+                contactBlocked ? l10n.blocklistUnblock : l10n.blocklistBlock,
+              ),
             ),
           if ((contact.hasXmppRoster || contact.hasEmailContact) &&
               (contact.hasPrivateContact ||
@@ -1764,11 +1865,15 @@ List<String> _contactSecondaryValues(
   ];
 }
 
-List<Widget>? _contactTileIndicators(ContactDirectoryEntry contact) {
+List<Widget>? _contactTileIndicators(
+  ContactDirectoryEntry contact, {
+  required bool blocked,
+}) {
   final systemCollection = contact.folderCollectionId == null
       ? null
       : SystemMessageCollection.fromId(contact.folderCollectionId!);
   final indicators = <Widget>[
+    if (blocked) const _ContactBlockedIndicator(),
     if (contact.favorited &&
         systemCollection != SystemMessageCollection.important)
       const _ContactFavoriteIndicator(),
@@ -1776,6 +1881,13 @@ List<Widget>? _contactTileIndicators(ContactDirectoryEntry contact) {
       _ContactFolderRuleIndicator(collection: systemCollection),
   ];
   return indicators.isEmpty ? null : indicators;
+}
+
+List<BlocklistEntry> _contactBlockEntries({
+  required ContactDirectoryEntry contact,
+  required Iterable<BlocklistEntry> entries,
+}) {
+  return blocklistEntriesForAddress(address: contact.address, entries: entries);
 }
 
 IconData _contactFolderRuleIcon(SystemMessageCollection collection) {

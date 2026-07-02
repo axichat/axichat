@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/avatar/avatar_presentation.dart';
 import 'package:axichat/src/avatar/view/app_icon_avatar.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
@@ -395,6 +396,19 @@ class _ChatTileSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cachedBlocklistEntries = context
+        .select<BlocklistCubit, List<BlocklistEntry>?>(
+          (cubit) =>
+              cubit[BlocklistCubit.blocklistItemsCacheKey]
+                  as List<BlocklistEntry>?,
+        );
+    final blocklistState = context.watch<BlocklistCubit>().state;
+    final blocklistEntries =
+        blocklistState.items ??
+        cachedBlocklistEntries ??
+        const <BlocklistEntry>[];
+    final blocked =
+        blocklistEntryForChat(chat: chat, entries: blocklistEntries) != null;
     return ValueListenableBuilder<DateTime>(
       valueListenable: timestampNowListenable,
       builder: (context, timestampNow, _) {
@@ -410,6 +424,7 @@ class _ChatTileSlot extends StatelessWidget {
             timestampNow: timestampNow,
             calendarStorage: calendarStorage,
             selfIdentity: selfIdentity,
+            isBlocked: blocked,
           ),
         );
       },
@@ -633,6 +648,25 @@ class _EmailChatTitle extends StatelessWidget {
   }
 }
 
+class _BlockedChatTileIndicator extends StatelessWidget {
+  const _BlockedChatTileIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsetsDirectional.only(end: context.spacing.xs),
+      child: AxiTooltip(
+        builder: (context) => Text(context.l10n.blocklistBlockedStatus),
+        child: Icon(
+          LucideIcons.userX,
+          size: context.sizing.menuItemIconSize,
+          color: context.colorScheme.destructive,
+        ),
+      ),
+    );
+  }
+}
+
 class ChatListTile extends StatefulWidget {
   const ChatListTile({
     super.key,
@@ -647,6 +681,7 @@ class ChatListTile extends StatefulWidget {
     this.archivedContext = false,
     this.spamContext = false,
     this.spamUpdating = false,
+    this.isBlocked = false,
     this.onArchivedTap,
     this.onMoveToInbox,
   });
@@ -662,6 +697,7 @@ class ChatListTile extends StatefulWidget {
   final bool archivedContext;
   final bool spamContext;
   final bool spamUpdating;
+  final bool isBlocked;
   final Future<void> Function(Chat chat)? onArchivedTap;
   final Future<void> Function()? onMoveToInbox;
 
@@ -1133,17 +1169,19 @@ class _ChatListTileState extends State<ChatListTile> {
       top: scaled(isEmailChatRow ? spacing.xxs : spacing.xs),
       bottom: scaled(isEmailChatRow ? spacing.xxs : spacing.xs),
     );
-    final tileActions = trailingTimestampLabel == null
-        ? null
-        : <Widget>[
-            Text(
-              trailingTimestampLabel,
-              style: context.textTheme.small.copyWith(
-                color: colors.mutedForeground,
-                fontWeight: FontWeight.w600,
+    final tileActions = widget.isBlocked || trailingTimestampLabel != null
+        ? <Widget>[
+            if (widget.isBlocked) const _BlockedChatTileIndicator(),
+            if (trailingTimestampLabel != null)
+              Text(
+                trailingTimestampLabel,
+                style: context.textTheme.small.copyWith(
+                  color: colors.mutedForeground,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ];
+          ]
+        : null;
     final tile = AxiListTile(
       key: Key(item.jid),
       onTap: tileOnTap,

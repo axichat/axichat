@@ -170,6 +170,7 @@ class AxiButton extends StatefulWidget {
     this.width,
     this.tooltip,
     this.semanticLabel,
+    this.foregroundColor,
   });
 
   const AxiButton.primary({
@@ -187,6 +188,7 @@ class AxiButton extends StatefulWidget {
     this.width,
     this.tooltip,
     this.semanticLabel,
+    this.foregroundColor,
   }) : variant = AxiButtonVariant.primary;
 
   const AxiButton.secondary({
@@ -204,6 +206,7 @@ class AxiButton extends StatefulWidget {
     this.width,
     this.tooltip,
     this.semanticLabel,
+    this.foregroundColor,
   }) : variant = AxiButtonVariant.secondary;
 
   const AxiButton.outline({
@@ -221,6 +224,7 @@ class AxiButton extends StatefulWidget {
     this.width,
     this.tooltip,
     this.semanticLabel,
+    this.foregroundColor,
   }) : variant = AxiButtonVariant.outline;
 
   const AxiButton.ghost({
@@ -238,6 +242,7 @@ class AxiButton extends StatefulWidget {
     this.width,
     this.tooltip,
     this.semanticLabel,
+    this.foregroundColor,
   }) : variant = AxiButtonVariant.ghost;
 
   const AxiButton.link({
@@ -255,6 +260,7 @@ class AxiButton extends StatefulWidget {
     this.width,
     this.tooltip,
     this.semanticLabel,
+    this.foregroundColor,
   }) : variant = AxiButtonVariant.link;
 
   const AxiButton.destructive({
@@ -272,6 +278,7 @@ class AxiButton extends StatefulWidget {
     this.width,
     this.tooltip,
     this.semanticLabel,
+    this.foregroundColor,
   }) : variant = AxiButtonVariant.destructive;
 
   final AxiButtonVariant variant;
@@ -288,6 +295,7 @@ class AxiButton extends StatefulWidget {
   final double? width;
   final String? tooltip;
   final String? semanticLabel;
+  final Color? foregroundColor;
 
   @override
   State<AxiButton> createState() => _AxiButtonState();
@@ -351,12 +359,14 @@ class _AxiButtonState extends State<AxiButton> {
           hovered: hoverOrFocus,
           pressed: pressed,
         );
-        final Color foreground = widget.variant.foregroundColor(
-          theme: buttonTheme,
-          colors: context.colorScheme,
-          hovered: hoverOrFocus,
-          pressed: pressed,
-        );
+        final Color foreground =
+            widget.foregroundColor ??
+            widget.variant.foregroundColor(
+              theme: buttonTheme,
+              colors: context.colorScheme,
+              hovered: hoverOrFocus,
+              pressed: pressed,
+            );
         final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
             ? BorderSide(

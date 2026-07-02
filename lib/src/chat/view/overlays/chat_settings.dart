@@ -31,6 +31,7 @@ class _ChatSettingsButtons extends StatelessWidget {
     final colors = context.colorScheme;
     final destructiveColor = colors.destructive;
     final BlocklistState blocklistState = context.watch<BlocklistCubit>().state;
+    final chatsState = context.watch<ChatsCubit>().state;
     final settingsState = context.watch<SettingsCubit>().state;
     final bool signatureActive =
         chat.shareSignatureEnabled ?? settingsState.shareTokenSignatureEnabled;
@@ -53,11 +54,19 @@ class _ChatSettingsButtons extends StatelessWidget {
         chat.defaultTransport.isXmpp && !chat.isAxichatWelcomeThread;
     final blockTransport = chat.defaultTransport;
     final itemPadding = EdgeInsets.all(context.spacing.m);
+    final bool spamActionInFlight = chatsState.spamUpdatingJids.contains(
+      chat.jid,
+    );
     final bool blockActionInFlight = switch (blocklistState) {
-      BlocklistLoading state =>
-        state.jid == null ||
-            state.jid == resolvedBlockAddress ||
-            state.jid == resolvedBlockEntryAddress,
+      BlocklistLoading(:final operation) =>
+        operation.matches(
+              address: resolvedBlockAddress,
+              transport: blockTransport,
+            ) ||
+            operation.matches(
+              address: resolvedBlockEntryAddress,
+              transport: blocklistEntry?.transport,
+            ),
       _ => false,
     };
     final bool blockSwitchEnabled =
@@ -258,7 +267,8 @@ class _ChatSettingsButtons extends StatelessWidget {
           titleColor: destructiveColor,
           checkedTrackColor: destructiveColor,
           value: isSpamChat,
-          onChanged: onSpamToggle,
+          loading: spamActionInFlight,
+          onChanged: spamActionInFlight ? null : onSpamToggle,
         ),
       ),
       Padding(
@@ -268,6 +278,7 @@ class _ChatSettingsButtons extends StatelessWidget {
           titleColor: destructiveColor,
           checkedTrackColor: destructiveColor,
           value: isChatBlocked,
+          loading: blockActionInFlight,
           onChanged: blockSwitchEnabled
               ? (blocked) {
                   if (blocked == isChatBlocked) {

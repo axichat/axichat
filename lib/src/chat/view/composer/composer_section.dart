@@ -1142,6 +1142,35 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
   }
 }
 
+class _BlockedContactComposerBanner extends StatelessWidget {
+  const _BlockedContactComposerBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return _ComposerAttachedBannerSurface(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _ComposerBannerLeading(
+            child: Icon(
+              LucideIcons.userX,
+              size: context.sizing.menuItemIconSize,
+              color: context.colorScheme.destructive,
+            ),
+          ),
+          SizedBox(width: context.spacing.s),
+          Expanded(
+            child: Text(
+              context.l10n.blocklistBlockedStatus,
+              style: context.textTheme.p.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RoomBootstrapComposerBanner extends StatelessWidget {
   const _RoomBootstrapComposerBanner({super.key});
 

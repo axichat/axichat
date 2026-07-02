@@ -4728,6 +4728,24 @@ abstract class AppLocalizations {
   /// **'Delete account'**
   String get authUnregisterConfirmAction;
 
+  /// No description provided for @authLocalDataCleanupConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove local data?'**
+  String get authLocalDataCleanupConfirmTitle;
+
+  /// No description provided for @authLocalDataCleanupConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes this account\'s local Axichat data from this device only. It will not contact the server or delete the remote account.'**
+  String get authLocalDataCleanupConfirmMessage;
+
+  /// No description provided for @authLocalDataCleanupAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove local data'**
+  String get authLocalDataCleanupAction;
+
   /// No description provided for @authUnregisterProgressLabel.
   ///
   /// In en, this message translates to:
@@ -5676,11 +5694,23 @@ abstract class AppLocalizations {
   /// **'Enter a valid address.'**
   String get blocklistInvalidJid;
 
+  /// No description provided for @blocklistBlockedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked'**
+  String get blocklistBlockedStatus;
+
   /// No description provided for @blocklistBlockFailed.
   ///
   /// In en, this message translates to:
   /// **'Failed to block {address}. Try again later.'**
   String blocklistBlockFailed(Object address);
+
+  /// No description provided for @blocklistBlockMultipleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to block {count} addresses. Try again later.'**
+  String blocklistBlockMultipleFailed(Object count);
 
   /// No description provided for @blocklistUnblockFailed.
   ///
@@ -5693,6 +5723,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Blocked {address}.'**
   String blocklistBlocked(Object address);
+
+  /// No description provided for @blocklistBlockedMultiple.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked {count} addresses.'**
+  String blocklistBlockedMultiple(Object count);
 
   /// No description provided for @blocklistUnblocked.
   ///

@@ -17,8 +17,6 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/muc/occupant.dart';
 import 'package:axichat/src/xmpp/muc/room_state.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
@@ -1279,7 +1277,7 @@ String? _mucInviteChatAddress(chat_models.Chat chat) {
   return bareAddressOrNull(chat.remoteJid) ?? bareAddressOrNull(chat.jid);
 }
 
-class _InviteChipsSheet extends StatefulWidget {
+class _InviteChipsSheet extends StatelessWidget {
   const _InviteChipsSheet({
     required this.initialRecipients,
     required this.onClose,
@@ -1289,167 +1287,66 @@ class _InviteChipsSheet extends StatefulWidget {
   final VoidCallback onClose;
 
   @override
-  State<_InviteChipsSheet> createState() => _InviteChipsSheetState();
-}
-
-class _InviteChipsSheetState extends State<_InviteChipsSheet> {
-  late List<ComposerRecipient> _recipients;
-  final Object _recipientTextInputTapRegionGroup = Object();
-
-  @override
-  void initState() {
-    super.initState();
-    _recipients = List<ComposerRecipient>.from(widget.initialRecipients);
-  }
-
-  @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final spacing = context.spacing;
-    final rosterItems =
-        context.watch<RosterCubit>().state.items ??
-        (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
-            as List<RosterItem>?) ??
-        const <RosterItem>[];
-    final locate = context.read;
-    final chatsState = locate<ChatsCubit>().state;
-    final selfJid = locate<ChatsCubit>().selfJid;
-    final accountDomain = _mucInviteAccountDomain(selfJid);
-    final availableChats = (chatsState.items ?? const <chat_models.Chat>[])
-        .where((chat) => _isMucInviteEligibleChat(chat, domain: accountDomain))
-        .toList(growable: false);
-    final profileJid = context.watch<ProfileCubit>().state.jid;
-    final resolvedProfileJid = profileJid.trim();
-    final String? selfIdentityJid = resolvedProfileJid.isNotEmpty
-        ? resolvedProfileJid
-        : null;
-    final selfIdentity = SelfAvatar(
-      jid: selfIdentityJid,
-      avatar: Avatar.tryParseOrNull(
-        path: context.watch<ProfileCubit>().state.avatarPath,
-        hash: null,
-      ),
-      hydrating: context.watch<ProfileCubit>().state.avatarHydrating,
-    );
-    final Widget actions = AxiSheetActions(
-      children: [
-        AxiButton.outline(
-          onPressed: () =>
-              closeSheetWithKeyboardDismiss(context, widget.onClose),
-          child: Text(l10n.commonCancel),
-        ),
-        SizedBox(width: spacing.s),
-        AxiButton.primary(
-          onPressed: _recipients.isEmpty
-              ? null
-              : () {
-                  final invitees = <String>[];
-                  for (final recipient in _recipients) {
-                    final target = recipient.target;
-                    if (!_isMucInviteEligibleTarget(
-                      target,
-                      domain: accountDomain,
-                    )) {
-                      FeedbackSystem.showInfo(
-                        context,
-                        context.l10n.mucInviteEligibleRecipientsOnly,
-                      );
-                      return;
-                    }
-                    final invitee = _mucInviteAddressForTarget(target);
-                    if (invitee == null) {
-                      FeedbackSystem.showInfo(
-                        context,
-                        context.l10n.mucInviteEligibleRecipientsOnly,
-                      );
-                      return;
-                    }
-                    invitees.add(invitee);
-                  }
-                  Navigator.of(context).pop(invitees);
-                },
-          leading: Icon(
-            LucideIcons.send,
-            size: context.sizing.iconButtonIconSize,
-          ),
-          child: Text(l10n.commonSend),
-        ),
-      ],
-    );
-    return AxiSheetScaffold.sections(
-      header: AxiSheetHeader(
-        title: Text(l10n.mucInviteUsers),
-        onClose: widget.onClose,
-      ),
-      footer: actions,
-      sections: [
-        AxiSheetSection.edge(
-          child: BlocSelector<ChatsCubit, ChatsState, List<String>>(
-            bloc: locate<ChatsCubit>(),
-            selector: (state) => state.recipientAddressSuggestions,
-            builder: (context, suggestions) {
-              final filteredSuggestions = suggestions
-                  .where(
-                    (address) => _isMucInviteEligibleAddress(
-                      address,
-                      domain: accountDomain,
-                    ),
-                  )
-                  .toList(growable: false);
-              return RecipientChipsBar(
-                recipients: _recipients,
-                availableChats: availableChats,
-                rosterItems: rosterItems,
-                databaseSuggestionAddresses: filteredSuggestions,
-                selfJid: selfJid,
-                selfIdentity: selfIdentity,
-                latestStatuses: const {},
-                onRecipientAdded: (target) {
-                  if (!_isMucInviteEligibleTarget(
-                    target,
-                    domain: accountDomain,
-                  )) {
-                    FeedbackSystem.showInfo(
-                      context,
-                      context.l10n.mucInviteEligibleRecipientsOnly,
-                    );
-                    return false;
-                  }
-                  _addRecipient(target);
-                  return true;
-                },
-                onRecipientRemoved: _removeRecipient,
-                collapsedByDefault: false,
-                horizontalPadding: 0,
-                tapRegionGroup: _recipientTextInputTapRegionGroup,
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _addRecipient(Contact target) {
-    setState(() {
-      final existingIndex = _recipients.indexWhere(
-        (recipient) => recipient.key == target.key,
-      );
-      if (existingIndex >= 0) {
-        _recipients[existingIndex] = _recipients[existingIndex].copyWith(
-          target: target,
-          included: true,
+    return RecipientPickerSheet(
+      title: Text(l10n.mucInviteUsers),
+      primaryLabel: l10n.commonSend,
+      primaryIconData: LucideIcons.send,
+      initialRecipients: initialRecipients,
+      onClose: onClose,
+      chatFilter: (chat, selfJid) {
+        return _isMucInviteEligibleChat(
+          chat,
+          domain: _mucInviteAccountDomain(selfJid),
         );
-      } else {
-        _recipients.add(ComposerRecipient(target: target));
-      }
-    });
-  }
-
-  void _removeRecipient(String key) {
-    setState(() {
-      _recipients.removeWhere((recipient) => recipient.key == key);
-    });
+      },
+      databaseSuggestionFilter: (address, selfJid) {
+        return _isMucInviteEligibleAddress(
+          address,
+          domain: _mucInviteAccountDomain(selfJid),
+        );
+      },
+      resolveRecipient: (context, target, selfJid) {
+        if (!_isMucInviteEligibleTarget(
+          target,
+          domain: _mucInviteAccountDomain(selfJid),
+        )) {
+          FeedbackSystem.showInfo(
+            context,
+            context.l10n.mucInviteEligibleRecipientsOnly,
+          );
+          return null;
+        }
+        return target;
+      },
+      onSubmit: (context, recipients) {
+        final invitees = <String>[];
+        for (final recipient in recipients) {
+          final target = recipient.target;
+          final accountDomain = _mucInviteAccountDomain(
+            context.read<ChatsCubit>().selfJid,
+          );
+          if (!_isMucInviteEligibleTarget(target, domain: accountDomain)) {
+            FeedbackSystem.showInfo(
+              context,
+              context.l10n.mucInviteEligibleRecipientsOnly,
+            );
+            return;
+          }
+          final invitee = _mucInviteAddressForTarget(target);
+          if (invitee == null) {
+            FeedbackSystem.showInfo(
+              context,
+              context.l10n.mucInviteEligibleRecipientsOnly,
+            );
+            return;
+          }
+          invitees.add(invitee);
+        }
+        Navigator.of(context).pop(invitees);
+      },
+    );
   }
 }
 

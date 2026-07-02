@@ -2514,6 +2514,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authUnregisterConfirmAction => '删除账号';
 
   @override
+  String get authLocalDataCleanupConfirmTitle => '移除本地数据？';
+
+  @override
+  String get authLocalDataCleanupConfirmMessage =>
+      '这只会从此设备移除此账号的本地 Axichat 数据。不会联系服务器，也不会删除远程账号。';
+
+  @override
+  String get authLocalDataCleanupAction => '移除本地数据';
+
+  @override
   String get authUnregisterProgressLabel => '正在等待删除账户';
 
   @override
@@ -3015,8 +3025,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get blocklistInvalidJid => '请输入有效的地址。';
 
   @override
+  String get blocklistBlockedStatus => '已屏蔽';
+
+  @override
   String blocklistBlockFailed(Object address) {
     return '无法屏蔽 $address。请稍后重试。';
+  }
+
+  @override
+  String blocklistBlockMultipleFailed(Object count) {
+    return '无法屏蔽 $count 个地址。请稍后重试。';
   }
 
   @override
@@ -3027,6 +3045,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String blocklistBlocked(Object address) {
     return '已屏蔽 $address。';
+  }
+
+  @override
+  String blocklistBlockedMultiple(Object count) {
+    return '已屏蔽 $count 个地址。';
   }
 
   @override
@@ -9969,6 +9992,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get authUnregisterConfirmAction => '刪除帳號';
 
   @override
+  String get authLocalDataCleanupConfirmTitle => '移除本機資料？';
+
+  @override
+  String get authLocalDataCleanupConfirmMessage =>
+      '這只會從此裝置移除此帳戶的本機 Axichat 資料。不會聯絡伺服器，也不會刪除遠端帳戶。';
+
+  @override
+  String get authLocalDataCleanupAction => '移除本機資料';
+
+  @override
   String get authUnregisterProgressLabel => '正在等待刪除帳戶';
 
   @override
@@ -10471,8 +10504,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get blocklistInvalidJid => '請輸入有效的地址。';
 
   @override
+  String get blocklistBlockedStatus => '已封鎖';
+
+  @override
   String blocklistBlockFailed(Object address) {
     return '無法封鎖 $address。請稍後再試。';
+  }
+
+  @override
+  String blocklistBlockMultipleFailed(Object count) {
+    return '無法封鎖 $count 個地址。請稍後再試。';
   }
 
   @override
@@ -10483,6 +10524,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String blocklistBlocked(Object address) {
     return '已封鎖 $address。';
+  }
+
+  @override
+  String blocklistBlockedMultiple(Object count) {
+    return '已封鎖 $count 個地址。';
   }
 
   @override

@@ -269,8 +269,7 @@ dc_contact_t* dc_get_contact(dc_context_t* ctx, uint32_t contact_id);
 void dc_contact_unref(dc_contact_t* contact);
 char* dc_contact_get_addr(const dc_contact_t* contact);
 char* dc_contact_get_name(const dc_contact_t* contact);
-int32_t dc_block_contact(dc_context_t* ctx, uint32_t contact_id);
-int32_t dc_unblock_contact(dc_context_t* ctx, uint32_t contact_id);
+void dc_block_contact(dc_context_t* ctx, uint32_t contact_id, int block);
 uint32_t dc_lookup_contact_id_by_addr(dc_context_t* ctx, const char* addr);
 
 dc_msg_t* dc_get_msg(dc_context_t* ctx, uint32_t msg_id);

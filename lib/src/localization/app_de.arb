@@ -982,6 +982,9 @@
   "authUnregisterConfirmTitle": "Konto löschen?",
   "authUnregisterConfirmMessage": "Dadurch werden dein Konto und lokale Daten dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
   "authUnregisterConfirmAction": "Konto löschen",
+  "authLocalDataCleanupConfirmTitle": "Lokale Daten entfernen?",
+  "authLocalDataCleanupConfirmMessage": "Dies entfernt die lokalen Axichat-Daten dieses Kontos nur von diesem Gerät. Der Server wird nicht kontaktiert und das Remote-Konto wird nicht gelöscht.",
+  "authLocalDataCleanupAction": "Lokale Daten entfernen",
   "authUnregisterProgressLabel": "Warten auf Kontolöschung",
   "authPasswordPlaceholder": "Passwort",
   "authPasswordCurrentPlaceholder": "Altes Passwort",
@@ -1161,10 +1164,17 @@
   "blocklistBlock": "Blockieren",
   "blocklistAddTooltip": "Zur Blockliste hinzufügen",
   "blocklistInvalidJid": "Gib eine gültige Adresse ein.",
+  "blocklistBlockedStatus": "Blockiert",
   "blocklistBlockFailed": "Blockieren von {address} fehlgeschlagen. Bitte später erneut versuchen.",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockMultipleFailed": "Blockieren von {count} Adressen fehlgeschlagen. Bitte später erneut versuchen.",
+  "@blocklistBlockMultipleFailed": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblockFailed": "Entsperren von {address} fehlgeschlagen. Bitte später erneut versuchen.",
@@ -1177,6 +1187,12 @@
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockedMultiple": "{count} Adressen blockiert.",
+  "@blocklistBlockedMultiple": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblocked": "{address} entsperrt.",

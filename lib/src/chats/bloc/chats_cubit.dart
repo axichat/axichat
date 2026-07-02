@@ -927,7 +927,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _chatsService.toggleChatHidden(jid: jid, hidden: hidden);
   }
 
-  Future<bool?> moveSpamToInbox({required Chat chat}) async {
+  Future<bool?> setSpamStatus({required Chat chat, required bool spam}) async {
     final jid = chat.jid;
     final spamTargetJid = chat.antiAbuseTargetAddress;
     if (state.spamUpdatingJids.contains(jid)) {
@@ -936,7 +936,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     emit(state.copyWith(spamUpdatingJids: {...state.spamUpdatingJids, jid}));
     bool success = false;
     try {
-      await _xmppService.setSpamStatus(jid: spamTargetJid, spam: false);
+      await _xmppService.setSpamStatus(jid: spamTargetJid, spam: spam);
       success = true;
     } on XmppException {
       success = false;
@@ -949,6 +949,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     }
     return success;
   }
+
+  Future<bool?> moveSpamToInbox({required Chat chat}) =>
+      setSpamStatus(chat: chat, spam: false);
 
   Future<List<Message>> loadChatHistory(String jid) {
     return _chatsService.loadCompleteChatHistory(jid: jid);

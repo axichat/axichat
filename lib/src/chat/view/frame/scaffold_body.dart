@@ -1033,6 +1033,10 @@ class _ChatScaffoldBody extends StatelessWidget {
                                     roomJoinFailureState!.selfPresenceReason,
                               );
                         }
+                        if (isChatBlocked) {
+                          composerOverlayBanner ??=
+                              const _BlockedContactComposerBanner();
+                        }
                       }
                     }
                     composerOverlayBanner ??=

@@ -11,17 +11,23 @@ class AxiFab extends StatelessWidget {
     required this.iconData,
     this.onPressed,
     this.tooltip,
+    this.variant = AxiButtonVariant.primary,
+    this.loading = false,
   });
 
   final String text;
   final IconData iconData;
   final void Function()? onPressed;
   final String? tooltip;
+  final AxiButtonVariant variant;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
-    return AxiButton.primary(
+    return AxiButton(
+      variant: variant,
       onPressed: onPressed,
+      loading: loading,
       leading: Icon(iconData),
       tooltip: tooltip,
       semanticLabel: tooltip,

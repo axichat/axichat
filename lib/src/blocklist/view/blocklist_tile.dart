@@ -9,11 +9,12 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlocklistTile extends StatelessWidget {
   const BlocklistTile({super.key, required this.entry, this.avatarPathsByJid});
 
-  final BlocklistEntry entry;
+  final BlocklistAddressEntry entry;
   final Map<String, String>? avatarPathsByJid;
 
   @override
@@ -21,7 +22,7 @@ class BlocklistTile extends StatelessWidget {
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
           state is BlocklistLoading &&
-          (state.jid == entry.address || state.jid == null),
+          state.operation.matches(address: entry.address),
       builder: (context, disabled) {
         final normalizedJid = entry.address.normalizedJidKey;
         final avatarPath = normalizedJid == null
@@ -36,20 +37,33 @@ class BlocklistTile extends StatelessWidget {
           ),
         );
         return AxiListTile(
+          paintSurface: false,
+          minTileHeight: context.sizing.iconButtonTapTarget,
+          contentPadding: EdgeInsetsDirectional.only(
+            start: context.spacing.s,
+            end: context.spacing.s,
+            top: context.spacing.xs,
+            bottom: context.spacing.xs,
+          ),
+          horizontalTitleGap: context.spacing.s,
+          leadingConstraints: BoxConstraints(
+            maxWidth: context.sizing.iconButtonSize,
+            maxHeight: context.sizing.iconButtonSize,
+          ),
           leading: avatar,
           title: entry.address,
           actions: [
-            AxiButton.ghost(
-              size: AxiButtonSize.sm,
+            AxiIconButton.destructive(
+              iconData: LucideIcons.shieldOff,
+              tooltip: context.l10n.blocklistUnblock,
+              loading: disabled,
               onPressed: disabled
                   ? null
-                  : () => context.read<BlocklistCubit>().unblock(entry: entry),
-              child: Text(
-                context.l10n.blocklistUnblock,
-                style: context.textTheme.label.copyWith(
-                  color: context.colorScheme.destructive,
-                ),
-              ),
+                  : () => context.read<BlocklistCubit>().unblockContact(
+                      address: entry.address,
+                      includeEmail: entry.hasEmail,
+                      includeXmpp: entry.hasXmpp,
+                    ),
             ),
           ],
         );

@@ -1122,28 +1122,10 @@ class DraftFormState extends State<DraftForm> {
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final supportsEmail = endpointConfig.smtpEnabled;
-    final supportsXmpp = endpointConfig.xmppEnabled;
-    if (supportsEmail && !supportsXmpp) {
-      return MessageTransport.email;
-    }
-    if (!supportsEmail && supportsXmpp) {
-      return MessageTransport.xmpp;
-    }
-    if (!supportsEmail && !supportsXmpp) {
-      return null;
-    }
-    final hinted = hintTransportForAddress(
-      address,
-      xmppDomainHints: {endpointConfig.domain},
-    );
-    if (hinted != null) {
-      return hinted;
-    }
-    return showTransportChoiceDialog(
+    return resolveAddressTransportChoice(
       context,
       address: address,
-      defaultTransport: hinted,
+      endpointConfig: endpointConfig,
     );
   }
 

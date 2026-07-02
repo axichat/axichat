@@ -488,6 +488,7 @@ class _ChatScaffoldLayout extends StatelessWidget {
             selfIdentity: selfIdentity,
             isGroupChat: isGroupChat,
             isEmailBacked: isEmailBacked,
+            isChatBlocked: isChatBlocked,
             chatCalendarAvailable: chatCalendarAvailable,
             calendarFirstRoom: calendarFirstRoom,
             showingChatCalendar: showingChatCalendar,
@@ -588,6 +589,7 @@ class _ChatScaffoldAppBar extends StatelessWidget
     required this.selfIdentity,
     required this.isGroupChat,
     required this.isEmailBacked,
+    required this.isChatBlocked,
     required this.chatCalendarAvailable,
     required this.calendarFirstRoom,
     required this.showingChatCalendar,
@@ -624,6 +626,7 @@ class _ChatScaffoldAppBar extends StatelessWidget
   final SelfAvatar selfIdentity;
   final bool isGroupChat;
   final bool isEmailBacked;
+  final bool isChatBlocked;
   final bool chatCalendarAvailable;
   final bool calendarFirstRoom;
   final bool showingChatCalendar;
@@ -770,6 +773,7 @@ class _ChatScaffoldAppBar extends StatelessWidget
                                       chatEntity
                                           ?.isAxiImServerAnnouncementThread ??
                                       false,
+                                  blocked: isChatBlocked,
                                   onRename: owner._promptContactRename,
                                 ),
                                 if (secondaryLabel.isNotEmpty)
@@ -925,6 +929,7 @@ class _ChatTitleLine extends StatelessWidget {
     required this.style,
     required this.canRenameContact,
     required this.verified,
+    required this.blocked,
     required this.onRename,
   });
 
@@ -932,6 +937,7 @@ class _ChatTitleLine extends StatelessWidget {
   final TextStyle style;
   final bool canRenameContact;
   final bool verified;
+  final bool blocked;
   final VoidCallback onRename;
 
   @override
@@ -957,6 +963,17 @@ class _ChatTitleLine extends StatelessWidget {
               LucideIcons.shieldCheck,
               size: context.sizing.menuItemIconSize,
               color: context.colorScheme.primary,
+            ),
+          ),
+        ],
+        if (blocked) ...[
+          SizedBox(width: context.spacing.xs),
+          AxiTooltip(
+            builder: (context) => Text(context.l10n.blocklistBlockedStatus),
+            child: Icon(
+              LucideIcons.userX,
+              size: context.sizing.menuItemIconSize,
+              color: context.colorScheme.destructive,
             ),
           ),
         ],

@@ -40,7 +40,11 @@ class BlockButtonInline extends StatelessWidget {
     }
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
-          state is BlocklistLoading && (state.jid == jid || state.jid == null),
+          state is BlocklistLoading &&
+          state.operation.matches(
+            address: jid,
+            transport: MessageTransport.xmpp,
+          ),
       builder: (context, disabled) {
         final onPressed = disabled
             ? null
@@ -55,23 +59,15 @@ class BlockButtonInline extends StatelessWidget {
               };
         return AxiButton.ghost(
           widthBehavior: AxiButtonWidth.expand,
+          foregroundColor: context.colorScheme.destructive,
           onPressed: onPressed,
           child: Expanded(
             child: Row(
               mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.center,
               children: [
-                if (showIcon)
-                  Icon(
-                    LucideIcons.userX,
-                    color: context.colorScheme.destructive,
-                  ),
+                if (showIcon) Icon(LucideIcons.userX),
                 if (showIcon) SizedBox(width: context.spacing.s),
-                Text(
-                  context.l10n.blocklistBlock,
-                  style: context.textTheme.small.copyWith(
-                    color: context.colorScheme.destructive,
-                  ),
-                ),
+                Text(context.l10n.blocklistBlock),
               ],
             ),
           ),
@@ -100,20 +96,15 @@ class _EmailBlockButton extends StatelessWidget {
     if (address == null || address.isEmpty) {
       return AxiButton.ghost(
         widthBehavior: AxiButtonWidth.expand,
+        foregroundColor: context.colorScheme.destructive,
         onPressed: null,
         child: Expanded(
           child: Row(
             mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.center,
             children: [
-              if (showIcon)
-                Icon(LucideIcons.userX, color: context.colorScheme.destructive),
+              if (showIcon) Icon(LucideIcons.userX),
               if (showIcon) SizedBox(width: context.spacing.s),
-              Text(
-                context.l10n.blocklistBlock,
-                style: context.textTheme.small.copyWith(
-                  color: context.colorScheme.destructive,
-                ),
-              ),
+              Text(context.l10n.blocklistBlock),
             ],
           ),
         ),
@@ -122,7 +113,10 @@ class _EmailBlockButton extends StatelessWidget {
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
           state is BlocklistLoading &&
-          (state.jid == address || state.jid == null),
+          state.operation.matches(
+            address: address,
+            transport: MessageTransport.email,
+          ),
       builder: (context, disabled) {
         VoidCallback? onPressed = disabled
             ? null
@@ -135,23 +129,15 @@ class _EmailBlockButton extends StatelessWidget {
               };
         return AxiButton.ghost(
           widthBehavior: AxiButtonWidth.expand,
+          foregroundColor: context.colorScheme.destructive,
           onPressed: onPressed,
           child: Expanded(
             child: Row(
               mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.center,
               children: [
-                if (showIcon)
-                  Icon(
-                    LucideIcons.userX,
-                    color: context.colorScheme.destructive,
-                  ),
+                if (showIcon) Icon(LucideIcons.userX),
                 if (showIcon) SizedBox(width: context.spacing.s),
-                Text(
-                  context.l10n.blocklistBlock,
-                  style: context.textTheme.small.copyWith(
-                    color: context.colorScheme.destructive,
-                  ),
-                ),
+                Text(context.l10n.blocklistBlock),
               ],
             ),
           ),

@@ -12962,8 +12962,13 @@ WHERE (delta_msg_id IS NOT NULL OR delta_chat_id IS NOT NULL)
       emailBlocklistAccessor.selectEntries();
 
   @override
-  Future<EmailBlocklistEntry?> getEmailBlocklistEntry(String address) =>
-      emailBlocklistAccessor.selectOne(address);
+  Future<EmailBlocklistEntry?> getEmailBlocklistEntry(String address) {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return Future.value();
+    }
+    return emailBlocklistAccessor.selectOne(normalized);
+  }
 
   @override
   Future<void> addEmailBlock(
@@ -13040,8 +13045,13 @@ ON CONFLICT(address) DO UPDATE SET
       emailSpamlistAccessor.selectEntries();
 
   @override
-  Future<EmailSpamEntry?> getEmailSpamEntry(String address) =>
-      emailSpamlistAccessor.selectOne(address);
+  Future<EmailSpamEntry?> getEmailSpamEntry(String address) {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return Future.value();
+    }
+    return emailSpamlistAccessor.selectOne(normalized);
+  }
 
   @override
   Future<void> addEmailSpam(

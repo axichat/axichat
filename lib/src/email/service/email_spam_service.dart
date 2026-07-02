@@ -5,27 +5,11 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 
-/// Callback type for syncing spam state to DeltaChat core blocking.
-final class DeltaChatSpamCallback {
-  const DeltaChatSpamCallback(this._callback);
-
-  final Future<bool> Function(String address) _callback;
-
-  Future<bool> call(String address) => _callback(address);
-}
-
 class EmailSpamService {
-  EmailSpamService({
-    required Future<XmppDatabase> Function() databaseBuilder,
-    DeltaChatSpamCallback? onMarkSpam,
-    DeltaChatSpamCallback? onUnmarkSpam,
-  }) : _databaseBuilder = databaseBuilder,
-       _onMarkSpam = onMarkSpam,
-       _onUnmarkSpam = onUnmarkSpam;
+  EmailSpamService({required Future<XmppDatabase> Function() databaseBuilder})
+    : _databaseBuilder = databaseBuilder;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
-  final DeltaChatSpamCallback? _onMarkSpam;
-  final DeltaChatSpamCallback? _onUnmarkSpam;
 
   Future<XmppDatabase> get _db async => _databaseBuilder();
 
@@ -40,8 +24,6 @@ class EmailSpamService {
     final db = await _db;
     await db.addEmailSpam(normalized);
     await db.markEmailChatsSpam(address: normalized, spam: true);
-    // Block in DeltaChat to stop downloading messages from spammers
-    await _onMarkSpam?.call(normalized);
   }
 
   Future<void> unmark(String address) async {
@@ -50,8 +32,6 @@ class EmailSpamService {
     final db = await _db;
     await db.removeEmailSpam(normalized);
     await db.markEmailChatsSpam(address: normalized, spam: false);
-    // Unblock in DeltaChat to resume downloading messages
-    await _onUnmarkSpam?.call(normalized);
   }
 
   Future<bool> isSpam(String address) async {

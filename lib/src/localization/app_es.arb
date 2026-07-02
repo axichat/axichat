@@ -980,6 +980,9 @@
   "authUnregisterConfirmTitle": "¿Eliminar cuenta?",
   "authUnregisterConfirmMessage": "Esto eliminará permanentemente tu cuenta y los datos locales. Esta acción no se puede deshacer.",
   "authUnregisterConfirmAction": "Eliminar cuenta",
+  "authLocalDataCleanupConfirmTitle": "¿Eliminar datos locales?",
+  "authLocalDataCleanupConfirmMessage": "Esto elimina los datos locales de Axichat de esta cuenta solo de este dispositivo. No contactará con el servidor ni eliminará la cuenta remota.",
+  "authLocalDataCleanupAction": "Eliminar datos locales",
   "authUnregisterProgressLabel": "Esperando la eliminación de la cuenta",
   "authPasswordPlaceholder": "Contraseña",
   "authPasswordCurrentPlaceholder": "Contraseña anterior",
@@ -1157,10 +1160,17 @@
   "blocklistBlock": "Bloquear",
   "blocklistAddTooltip": "Agregar a la lista bloqueada",
   "blocklistInvalidJid": "Introduce una dirección válida.",
+  "blocklistBlockedStatus": "Bloqueado",
   "blocklistBlockFailed": "Error al bloquear {address}. Inténtalo de nuevo más tarde.",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockMultipleFailed": "Error al bloquear {count} direcciones. Inténtalo de nuevo más tarde.",
+  "@blocklistBlockMultipleFailed": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblockFailed": "Error al desbloquear {address}. Inténtalo de nuevo más tarde.",
@@ -1173,6 +1183,12 @@
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockedMultiple": "{count} direcciones bloqueadas.",
+  "@blocklistBlockedMultiple": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblocked": "{address} desbloqueado.",

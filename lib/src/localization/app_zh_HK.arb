@@ -977,6 +977,9 @@
   "authUnregisterConfirmTitle": "刪除帳號？",
   "authUnregisterConfirmMessage": "這將永久刪除你的帳號和本機資料。此操作無法復原。",
   "authUnregisterConfirmAction": "刪除帳號",
+  "authLocalDataCleanupConfirmTitle": "移除本機資料？",
+  "authLocalDataCleanupConfirmMessage": "這只會從此裝置移除此帳戶的本機 Axichat 資料。不會聯絡伺服器，也不會刪除遠端帳戶。",
+  "authLocalDataCleanupAction": "移除本機資料",
   "authUnregisterProgressLabel": "正在等待刪除帳戶",
   "authPasswordPlaceholder": "密碼",
   "authPasswordCurrentPlaceholder": "舊密碼",
@@ -1154,10 +1157,17 @@
   "blocklistBlock": "封鎖",
   "blocklistAddTooltip": "加入封鎖清單",
   "blocklistInvalidJid": "請輸入有效的地址。",
+  "blocklistBlockedStatus": "已封鎖",
   "blocklistBlockFailed": "無法封鎖 {address}。請稍後再試。",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockMultipleFailed": "無法封鎖 {count} 個地址。請稍後再試。",
+  "@blocklistBlockMultipleFailed": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblockFailed": "無法解除封鎖 {address}。請稍後再試。",
@@ -1170,6 +1180,12 @@
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockedMultiple": "已封鎖 {count} 個地址。",
+  "@blocklistBlockedMultiple": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblocked": "已解除封鎖 {address}。",

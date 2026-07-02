@@ -982,6 +982,9 @@
   "authUnregisterConfirmTitle": "删除账号？",
   "authUnregisterConfirmMessage": "这将永久删除你的账号和本地数据。此操作无法撤销。",
   "authUnregisterConfirmAction": "删除账号",
+  "authLocalDataCleanupConfirmTitle": "移除本地数据？",
+  "authLocalDataCleanupConfirmMessage": "这只会从此设备移除此账号的本地 Axichat 数据。不会联系服务器，也不会删除远程账号。",
+  "authLocalDataCleanupAction": "移除本地数据",
   "authUnregisterProgressLabel": "正在等待删除账户",
   "authPasswordPlaceholder": "密码",
   "authPasswordCurrentPlaceholder": "旧密码",
@@ -1161,10 +1164,17 @@
   "blocklistBlock": "屏蔽",
   "blocklistAddTooltip": "添加到屏蔽列表",
   "blocklistInvalidJid": "请输入有效的地址。",
+  "blocklistBlockedStatus": "已屏蔽",
   "blocklistBlockFailed": "无法屏蔽 {address}。请稍后重试。",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockMultipleFailed": "无法屏蔽 {count} 个地址。请稍后重试。",
+  "@blocklistBlockMultipleFailed": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblockFailed": "无法解除屏蔽 {address}。请稍后重试。",
@@ -1177,6 +1187,12 @@
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockedMultiple": "已屏蔽 {count} 个地址。",
+  "@blocklistBlockedMultiple": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblocked": "已解除屏蔽 {address}。",

@@ -3,7 +3,6 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_tile.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/bloc/home_bloc.dart';
@@ -76,7 +75,7 @@ class _BlocklistListState extends State<BlocklistList> {
               }
             }
             return _BlocklistListBody(
-              items: visibleItems,
+              items: groupBlocklistEntries(visibleItems),
               avatarPathsByJid: avatarPathsByJid,
             );
           },
@@ -96,12 +95,13 @@ class _BlocklistListState extends State<BlocklistList> {
 class _BlocklistListBody extends StatelessWidget {
   const _BlocklistListBody({required this.items, this.avatarPathsByJid});
 
-  final List<BlocklistEntry> items;
+  final List<BlocklistAddressEntry> items;
   final Map<String, String>? avatarPathsByJid;
 
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    final sizing = context.sizing;
     if (items.isEmpty) {
       return Center(
         child: Text(
@@ -114,19 +114,20 @@ class _BlocklistListBody extends StatelessWidget {
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
-        padding: EdgeInsets.only(top: spacing.m, bottom: spacing.xxl),
-        itemCount: (items.length) + 1,
+        padding: EdgeInsets.only(
+          top: spacing.m,
+          bottom: spacing.xxl + sizing.buttonHeightRegular,
+        ),
+        itemCount: items.length,
         itemBuilder: (context, index) {
-          if (index == 0) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: BlocklistUnblockAllButton(),
-              ),
-            );
-          }
-          final item = items[index - 1];
+          final item = items[index];
           return ListItemPadding(
+            padding: EdgeInsets.fromLTRB(
+              spacing.m,
+              spacing.xs,
+              spacing.m,
+              spacing.xs,
+            ),
             child: BlocklistTile(
               entry: item,
               avatarPathsByJid: avatarPathsByJid,

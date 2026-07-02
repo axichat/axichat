@@ -20,7 +20,8 @@ class BlockMenuItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
-          state is BlocklistLoading && (state.jid == jid || state.jid == null),
+          state is BlocklistLoading &&
+          state.operation.matches(address: jid, transport: transport),
       builder: (context, disabled) {
         return ShadContextMenuItem(
           onPressed: disabled
@@ -54,7 +55,8 @@ class ReportSpamMenuItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
-          state is BlocklistLoading && (state.jid == jid || state.jid == null),
+          state is BlocklistLoading &&
+          state.operation.matches(address: jid, transport: transport),
       builder: (context, disabled) {
         return ShadContextMenuItem(
           onPressed: disabled

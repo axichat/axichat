@@ -1102,6 +1102,9 @@
   "authUnregisterConfirmTitle": "Delete account?",
   "authUnregisterConfirmMessage": "This will permanently delete your account and local data. This cannot be undone.",
   "authUnregisterConfirmAction": "Delete account",
+  "authLocalDataCleanupConfirmTitle": "Remove local data?",
+  "authLocalDataCleanupConfirmMessage": "This removes this account's local Axichat data from this device only. It will not contact the server or delete the remote account.",
+  "authLocalDataCleanupAction": "Remove local data",
   "authUnregisterProgressLabel": "Waiting for account deletion",
   "authPasswordPlaceholder": "Password",
   "authPasswordCurrentPlaceholder": "Old password",
@@ -1321,10 +1324,17 @@
   "blocklistBlock": "Block",
   "blocklistAddTooltip": "Add to blocklist",
   "blocklistInvalidJid": "Enter a valid address.",
+  "blocklistBlockedStatus": "Blocked",
   "blocklistBlockFailed": "Failed to block {address}. Try again later.",
   "@blocklistBlockFailed": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockMultipleFailed": "Failed to block {count} addresses. Try again later.",
+  "@blocklistBlockMultipleFailed": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblockFailed": "Failed to unblock {address}. Try again later.",
@@ -1337,6 +1347,12 @@
   "@blocklistBlocked": {
     "placeholders": {
       "address": {}
+    }
+  },
+  "blocklistBlockedMultiple": "Blocked {count} addresses.",
+  "@blocklistBlockedMultiple": {
+    "placeholders": {
+      "count": {}
     }
   },
   "blocklistUnblocked": "Unblocked {address}.",

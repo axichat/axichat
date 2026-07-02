@@ -2,10 +2,45 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+
+enum AddressTransportHintBehavior { autoAcceptHint, promptWithHint }
+
+Future<MessageTransport?> resolveAddressTransportChoice(
+  BuildContext context, {
+  required String address,
+  required EndpointConfig endpointConfig,
+  Iterable<String> xmppDomainHints = const <String>[],
+  AddressTransportHintBehavior hintBehavior =
+      AddressTransportHintBehavior.autoAcceptHint,
+}) {
+  if (endpointConfig.smtpEnabled && !endpointConfig.xmppEnabled) {
+    return Future.value(MessageTransport.email);
+  }
+  if (!endpointConfig.smtpEnabled && endpointConfig.xmppEnabled) {
+    return Future.value(MessageTransport.xmpp);
+  }
+  if (!endpointConfig.smtpEnabled && !endpointConfig.xmppEnabled) {
+    return Future.value();
+  }
+  final hinted = hintTransportForAddress(
+    address,
+    xmppDomainHints: {endpointConfig.domain, ...xmppDomainHints},
+  );
+  if (hinted != null &&
+      hintBehavior == AddressTransportHintBehavior.autoAcceptHint) {
+    return Future.value(hinted);
+  }
+  return showTransportChoiceDialog(
+    context,
+    address: address,
+    defaultTransport: hinted,
+  );
+}
 
 Future<MessageTransport?> showTransportChoiceDialog(
   BuildContext context, {

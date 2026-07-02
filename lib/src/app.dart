@@ -315,6 +315,14 @@ class _AxichatState extends State<Axichat> {
                     BlocProvider(
                       create: (context) => BlocklistCubit(
                         xmppService: context.read<XmppService>(),
+                        emailService:
+                            context
+                                .read<SettingsCubit>()
+                                .state
+                                .endpointConfig
+                                .smtpEnabled
+                            ? context.read<EmailService>()
+                            : null,
                       ),
                     ),
                     BlocProvider(
@@ -384,6 +392,7 @@ class _AxichatState extends State<Axichat> {
                           final config = settings.endpointConfig;
                           final authenticationCubit = context
                               .read<AuthenticationCubit>();
+                          final blocklistCubit = context.read<BlocklistCubit>();
                           final chatsCubit = context.read<ChatsCubit>();
                           final draftCubit = context.read<DraftCubit>();
                           final connectivityCubit = context
@@ -398,6 +407,7 @@ class _AxichatState extends State<Axichat> {
                             activeEmailService,
                           );
                           if (!context.mounted) return;
+                          blocklistCubit.updateEmailService(activeEmailService);
                           chatsCubit.updateEmailService(activeEmailService);
                           draftCubit.updateEmailService(activeEmailService);
                           emailService.updateEndpointConfig(config);

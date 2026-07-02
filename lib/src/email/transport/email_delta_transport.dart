@@ -2925,36 +2925,112 @@ class EmailDeltaTransport implements EmailDeltaRuntime {
 
   /// Blocks an email contact in DeltaChat core.
   ///
-  /// Returns true if the contact was found and blocked.
+  /// Returns true when the contact is found or created and blocked.
   @override
   Future<bool> blockContact(String address, {int? accountId}) async {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty || !normalized.isValidEmailAddress) {
+      return false;
+    }
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
     final context = session?.context;
     if (context == null) {
       return false;
     }
-    final contactId = await context.lookupContactIdByAddress(address);
-    if (contactId == null) return false;
-    await context.blockContact(contactId);
-    return true;
+    final blockedIds = await _matchingBlockedContactIds(context, normalized);
+    final contactIds = await _matchingKnownContactIds(context, normalized);
+    final targetIds = {...blockedIds, ...contactIds};
+    if (targetIds.isEmpty) {
+      final contactId = await context.createContact(
+        address: normalized,
+        displayName: normalized,
+      );
+      await context.blockContact(contactId);
+    } else {
+      for (final contactId in targetIds) {
+        if (blockedIds.contains(contactId)) {
+          continue;
+        }
+        await context.blockContact(contactId);
+      }
+    }
+    return (await _matchingBlockedContactIds(context, normalized)).isNotEmpty;
   }
 
   /// Unblocks an email contact in DeltaChat core.
   ///
-  /// Returns true if the contact was found and unblocked.
+  /// Returns true when the contact is unblocked or no Core contact exists.
   @override
   Future<bool> unblockContact(String address, {int? accountId}) async {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty || !normalized.isValidEmailAddress) {
+      return false;
+    }
     await _ensureContextReady();
     final session = await _ensureSession(accountId: accountId);
     final context = session?.context;
     if (context == null) {
       return false;
     }
-    final contactId = await context.lookupContactIdByAddress(address);
-    if (contactId == null) return false;
-    await context.unblockContact(contactId);
-    return true;
+    final blockedIds = await _matchingBlockedContactIds(context, normalized);
+    if (blockedIds.isEmpty) {
+      final contactId = await context.lookupContactIdByAddress(normalized);
+      if (contactId == null) {
+        return true;
+      }
+      await context.unblockContact(contactId);
+      return (await _matchingBlockedContactIds(context, normalized)).isEmpty;
+    }
+    for (final contactId in blockedIds) {
+      await context.unblockContact(contactId);
+    }
+    return (await _matchingBlockedContactIds(context, normalized)).isEmpty;
+  }
+
+  Future<Set<int>> _matchingKnownContactIds(
+    DeltaContextHandle context,
+    String normalizedAddress,
+  ) async {
+    final ids = <int>{};
+    final lookupId = await context.lookupContactIdByAddress(normalizedAddress);
+    if (lookupId != null) {
+      ids.add(lookupId);
+    }
+    final contactIds = await context.getContactIds(
+      flags: DeltaContactListFlags.address,
+      query: normalizedAddress,
+    );
+    for (final contactId in contactIds) {
+      final contact = await context.getContact(contactId);
+      if (_contactMatchesAddress(contact, normalizedAddress)) {
+        ids.add(contactId);
+      }
+    }
+    return ids;
+  }
+
+  Future<Set<int>> _matchingBlockedContactIds(
+    DeltaContextHandle context,
+    String normalizedAddress,
+  ) async {
+    final ids = <int>{};
+    final blockedIds = await context.getBlockedContactIds();
+    for (final contactId in blockedIds) {
+      final contact = await context.getContact(contactId);
+      if (_contactMatchesAddress(contact, normalizedAddress)) {
+        ids.add(contactId);
+      }
+    }
+    return ids;
+  }
+
+  bool _contactMatchesAddress(DeltaContact? contact, String normalizedAddress) {
+    final address = contact?.address;
+    if (address == null || address.trim().isEmpty) {
+      return false;
+    }
+    return normalizeEmailAddress(address) == normalizedAddress;
   }
 
   /// Marks a chat as noticed in core, clearing unread badges.

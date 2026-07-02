@@ -2672,6 +2672,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authUnregisterConfirmAction => 'Eliminar cuenta';
 
   @override
+  String get authLocalDataCleanupConfirmTitle => '¿Eliminar datos locales?';
+
+  @override
+  String get authLocalDataCleanupConfirmMessage =>
+      'Esto elimina los datos locales de Axichat de esta cuenta solo de este dispositivo. No contactará con el servidor ni eliminará la cuenta remota.';
+
+  @override
+  String get authLocalDataCleanupAction => 'Eliminar datos locales';
+
+  @override
   String get authUnregisterProgressLabel =>
       'Esperando la eliminación de la cuenta';
 
@@ -3195,8 +3205,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get blocklistInvalidJid => 'Introduce una dirección válida.';
 
   @override
+  String get blocklistBlockedStatus => 'Bloqueado';
+
+  @override
   String blocklistBlockFailed(Object address) {
     return 'Error al bloquear $address. Inténtalo de nuevo más tarde.';
+  }
+
+  @override
+  String blocklistBlockMultipleFailed(Object count) {
+    return 'Error al bloquear $count direcciones. Inténtalo de nuevo más tarde.';
   }
 
   @override
@@ -3207,6 +3225,11 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String blocklistBlocked(Object address) {
     return '$address bloqueado.';
+  }
+
+  @override
+  String blocklistBlockedMultiple(Object count) {
+    return '$count direcciones bloqueadas.';
   }
 
   @override

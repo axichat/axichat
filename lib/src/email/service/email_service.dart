@@ -831,6 +831,12 @@ final class EmailServiceChatPersistTimeoutException
   const EmailServiceChatPersistTimeoutException();
 }
 
+final class EmailServiceCoreBlockStateException extends EmailServiceException {
+  const EmailServiceCoreBlockStateException();
+}
+
+enum EmailCoreBlockStateResult { applied }
+
 final class EmailServiceMissingRecipientMetadataException
     extends EmailServiceException {
   const EmailServiceMissingRecipientMetadataException();
@@ -1140,15 +1146,7 @@ class EmailService {
         (address) => _transport.unblockContact(address),
       ),
     );
-    spam = EmailSpamService(
-      databaseBuilder: databaseBuilder,
-      onMarkSpam: DeltaChatSpamCallback(
-        (address) => _transport.blockContact(address),
-      ),
-      onUnmarkSpam: DeltaChatSpamCallback(
-        (address) => _transport.unblockContact(address),
-      ),
-    );
+    spam = EmailSpamService(databaseBuilder: databaseBuilder);
     _mailPushHintSubscription = mailPushHints?.listen((_) {
       fireAndForget(
         _handleMailPushHint,
@@ -1257,6 +1255,8 @@ class EmailService {
   final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   final EmailAsyncQueue _contactsSyncQueue = EmailAsyncQueue();
   final EmailAsyncQueue _chatlistSyncQueue = EmailAsyncQueue();
+  final EmailAsyncQueue _emailBlocklistCoreStateQueue = EmailAsyncQueue();
+  final Map<String, bool> _emailBlocklistCoreRepairTargets = <String, bool>{};
   Future<void>? _chatlistRefreshTask;
   DateTime? _lastChatlistRefreshCompletedAt;
   int? _lastChatlistRefreshCompletedAccountId;
@@ -3510,6 +3510,7 @@ class EmailService {
     _resetEmailOriginalContent();
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
+    _emailBlocklistCoreStateQueue.reset();
     _chatlistRefreshTask = null;
     _lastChatlistRefreshCompletedAt = null;
     _lastChatlistRefreshCompletedAccountId = null;
@@ -3744,6 +3745,7 @@ class EmailService {
     _reconnectRestartQueue.reset();
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
+    _emailBlocklistCoreStateQueue.reset();
     _chatlistRefreshTask = null;
     _lastChatlistRefreshCompletedAt = null;
     _lastChatlistRefreshCompletedAccountId = null;
@@ -5678,6 +5680,10 @@ class EmailService {
     if (!await recoverForHomeRefresh()) {
       return false;
     }
+    await _runBestEffortSessionSync(() async {
+      await _reconcileEmailBlocklistCoreState();
+      return true;
+    });
     await Future.wait<void>([
       _runBestEffortSessionSync(syncContactsForHomeRefresh),
       _runBestEffortSessionSync(refreshHistoryForHomeRefresh),
@@ -5714,7 +5720,13 @@ class EmailService {
 
     final spamEntries = await db.getEmailSpamlist();
     final spamAddresses = spamEntries.map((entry) => entry.address).toSet();
-    final filteredBlockedAddresses = blockedAddresses.difference(spamAddresses);
+    final pendingCoreUnblockAddresses = <String>{
+      for (final target in _emailBlocklistCoreRepairTargets.entries)
+        if (!target.value) target.key,
+    };
+    final filteredBlockedAddresses = blockedAddresses
+        .difference(spamAddresses)
+        .difference(pendingCoreUnblockAddresses);
 
     final existing = await db.getEmailBlocklist();
     final existingAddresses = existing.map((entry) => entry.address).toSet();
@@ -5748,19 +5760,78 @@ class EmailService {
     if (normalized.isEmpty || !normalized.isValidEmailAddress) {
       return;
     }
+    // XMPP owns spam state; EmailService has no transport-side work for spam.
+  }
+
+  Future<EmailCoreBlockStateResult> applyEmailBlocklistCoreState({
+    required String address,
+    required bool blocked,
+  }) async {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty || !normalized.isValidEmailAddress) {
+      throw const EmailServiceMissingAddressException();
+    }
+    late EmailCoreBlockStateResult result;
+    await _emailBlocklistCoreStateQueue.run(() async {
+      result = await _applyEmailBlocklistCoreState(
+        address: normalized,
+        blocked: blocked,
+      );
+    });
+    _emailBlocklistCoreRepairTargets.remove(normalized);
+    return result;
+  }
+
+  Future<EmailCoreBlockStateResult> _applyEmailBlocklistCoreState({
+    required String address,
+    required bool blocked,
+  }) async {
     try {
-      await _ensureReady();
-      final db = await _databaseBuilder();
-      if (update.isSpam) {
-        await _transport.blockContact(normalized);
-      } else {
-        final blocked = await db.isEmailAddressBlocked(normalized);
-        if (!blocked) {
-          await _transport.unblockContact(normalized);
-        }
+      if (blocked) {
+        await _applyEmailReceiveCoreBlock(address: address);
+        return EmailCoreBlockStateResult.applied;
       }
-    } on Exception {
-      _log.fine('Failed to apply spam sync update to DeltaChat core.');
+      await _applyEmailReceiveCoreUnblock(address: address);
+      return EmailCoreBlockStateResult.applied;
+    } on EmailProvisioningException {
+      throw const EmailServiceCoreBlockStateException();
+    }
+  }
+
+  Future<EmailCoreBlockStateResult> applyEmailCoreBlockState({
+    required String address,
+    required bool blocked,
+  }) {
+    return applyEmailBlocklistCoreState(address: address, blocked: blocked);
+  }
+
+  Future<void> _applyEmailReceiveCoreBlock({required String address}) async {
+    await _ensureReady();
+    final scope = _requireActiveScope();
+    final account = await _accountBindingForScope(scope: scope);
+    await _ensureAccountConfigured(scope: scope, account: account);
+    final applied = await _guardDeltaOperation(
+      operation: 'block email contact',
+      body: () =>
+          _transport.blockContact(address, accountId: account.deltaAccountId),
+    );
+    if (!applied) {
+      throw const EmailServiceCoreBlockStateException();
+    }
+  }
+
+  Future<void> _applyEmailReceiveCoreUnblock({required String address}) async {
+    await _ensureReady();
+    final scope = _requireActiveScope();
+    final account = await _accountBindingForScope(scope: scope);
+    await _ensureAccountConfigured(scope: scope, account: account);
+    final applied = await _guardDeltaOperation(
+      operation: 'unblock email contact',
+      body: () =>
+          _transport.unblockContact(address, accountId: account.deltaAccountId),
+    );
+    if (!applied) {
+      throw const EmailServiceCoreBlockStateException();
     }
   }
 
@@ -5772,20 +5843,131 @@ class EmailService {
       return;
     }
     try {
-      await _ensureReady();
-      final db = await _databaseBuilder();
-      if (update.blocked) {
-        await _transport.blockContact(normalized);
-      } else {
-        final isSpam = await db.isEmailAddressSpam(normalized);
-        if (!isSpam) {
-          await _transport.unblockContact(normalized);
-        }
-      }
-    } on Exception {
-      _log.fine(
-        'Failed to apply email blocklist sync update to DeltaChat core.',
+      await _emailBlocklistCoreStateQueue.run(() async {
+        await _applyEmailBlocklistCoreState(
+          address: normalized,
+          blocked: update.blocked,
+        );
+      });
+      _emailBlocklistCoreRepairTargets.remove(normalized);
+    } on EmailServiceException catch (error, stackTrace) {
+      await _trackEmailBlocklistCoreRepair(
+        address: normalized,
+        blocked: update.blocked,
+        error: error,
+        stackTrace: stackTrace,
       );
+    } on DeltaChatException catch (error, stackTrace) {
+      await _trackEmailBlocklistCoreRepair(
+        address: normalized,
+        blocked: update.blocked,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _trackEmailBlocklistCoreRepair({
+    required String address,
+    required bool blocked,
+    required Object error,
+    required StackTrace stackTrace,
+  }) async {
+    _emailBlocklistCoreRepairTargets[address] = blocked;
+    _log.fine(
+      'Failed to apply email blocklist sync update to DeltaChat core.',
+      error,
+      stackTrace,
+    );
+    await _reconcileEmailBlocklistCoreState();
+  }
+
+  Future<void> _reconcileEmailBlocklistCoreState() async {
+    final db = await _databaseBuilder();
+    final targets = <String, bool>{};
+    final persisted = await db.getEmailBlocklist();
+    for (final entry in persisted) {
+      final normalized = normalizeEmailAddress(entry.address);
+      if (normalized.isEmpty || !normalized.isValidEmailAddress) {
+        continue;
+      }
+      if (!_isEmailBlocklistCoreReplaySource(entry.sourceId)) {
+        continue;
+      }
+      targets[normalized] = true;
+    }
+    targets.addAll(_emailBlocklistCoreRepairTargets);
+    for (final target in targets.entries) {
+      try {
+        await _applyEmailBlocklistCoreRepairTarget(
+          address: target.key,
+          blocked: target.value,
+        );
+      } on EmailServiceException catch (error, stackTrace) {
+        _log.fine(
+          'Email blocklist Core reconciliation deferred.',
+          error,
+          stackTrace,
+        );
+      } on DeltaChatException catch (error, stackTrace) {
+        _log.fine(
+          'Email blocklist Core reconciliation deferred.',
+          error,
+          stackTrace,
+        );
+      }
+    }
+  }
+
+  Future<void> _applyEmailBlocklistCoreRepairTarget({
+    required String address,
+    required bool blocked,
+  }) async {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty || !normalized.isValidEmailAddress) {
+      _emailBlocklistCoreRepairTargets.remove(address);
+      return;
+    }
+    if (blocked &&
+        !await _hasCurrentEmailBlocklistCoreReplayTarget(normalized)) {
+      if (_emailBlocklistCoreRepairTargets[normalized] == blocked) {
+        _emailBlocklistCoreRepairTargets.remove(normalized);
+      }
+      return;
+    }
+    await _emailBlocklistCoreStateQueue.run(() async {
+      await _applyEmailBlocklistCoreState(
+        address: normalized,
+        blocked: blocked,
+      );
+    });
+    if (!blocked) {
+      await _removeLegacyEmailBlockIfPresent(normalized);
+    }
+    if (_emailBlocklistCoreRepairTargets[normalized] == blocked) {
+      _emailBlocklistCoreRepairTargets.remove(normalized);
+    }
+  }
+
+  bool _isEmailBlocklistCoreReplaySource(String? sourceId) =>
+      !_isLegacyBlocklistSource(sourceId);
+
+  Future<bool> _hasCurrentEmailBlocklistCoreReplayTarget(String address) async {
+    final db = await _databaseBuilder();
+    final entry = await db.getEmailBlocklistEntry(address);
+    if (entry == null) {
+      return false;
+    }
+    final normalized = normalizeEmailAddress(entry.address);
+    return normalized == address &&
+        _isEmailBlocklistCoreReplaySource(entry.sourceId);
+  }
+
+  Future<void> _removeLegacyEmailBlockIfPresent(String address) async {
+    final db = await _databaseBuilder();
+    final entry = await db.getEmailBlocklistEntry(address);
+    if (entry != null && _isLegacyBlocklistSource(entry.sourceId)) {
+      await db.removeEmailBlock(address);
     }
   }
 

@@ -1074,28 +1074,10 @@ class _ChatState extends State<Chat> {
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final supportsEmail = endpointConfig.smtpEnabled;
-    final supportsXmpp = endpointConfig.xmppEnabled;
-    if (supportsEmail && !supportsXmpp) {
-      return MessageTransport.email;
-    }
-    if (!supportsEmail && supportsXmpp) {
-      return MessageTransport.xmpp;
-    }
-    if (!supportsEmail && !supportsXmpp) {
-      return null;
-    }
-    final hinted = hintTransportForAddress(
-      address,
-      xmppDomainHints: {endpointConfig.domain},
-    );
-    if (hinted != null) {
-      return hinted;
-    }
-    return showTransportChoiceDialog(
+    return resolveAddressTransportChoice(
       context,
       address: address,
-      defaultTransport: hinted,
+      endpointConfig: endpointConfig,
     );
   }
 
@@ -4479,19 +4461,24 @@ class _ChatState extends State<Chat> {
     }
     final l10n = context.l10n;
     final chatTitle = chat.displayName;
-    context.read<ChatBloc>().add(
-      ChatSpamStatusRequested(
-        chat: chat,
-        sendToSpam: sendToSpam,
-        successTitle: sendToSpam
-            ? l10n.chatSpamReportedTitle
-            : l10n.chatSpamRestoredTitle,
-        successMessage: sendToSpam
-            ? l10n.chatSpamSent(chatTitle)
-            : l10n.chatSpamRestored(chatTitle),
-        failureMessage: l10n.chatSpamUpdateFailed,
-      ),
+    final successTitle = sendToSpam
+        ? l10n.chatSpamReportedTitle
+        : l10n.chatSpamRestoredTitle;
+    final successMessage = sendToSpam
+        ? l10n.chatSpamSent(chatTitle)
+        : l10n.chatSpamRestored(chatTitle);
+    final success = await context.read<ChatsCubit>().setSpamStatus(
+      chat: chat,
+      spam: sendToSpam,
     );
+    if (!mounted || success == null) {
+      return;
+    }
+    if (success) {
+      FeedbackSystem.showSuccess(context, successMessage, title: successTitle);
+      return;
+    }
+    FeedbackSystem.showError(context, l10n.chatSpamUpdateFailed);
   }
 
   Future<bool> _handleAddContact() async {
@@ -4809,45 +4796,7 @@ class _ChatState extends State<Chat> {
   BlocklistEntry? _resolveChatBlocklistEntry({
     required chat_models.Chat chat,
     required List<BlocklistEntry> entries,
-  }) {
-    if (chat.type != ChatType.chat) {
-      return null;
-    }
-    if (entries.isEmpty) {
-      return null;
-    }
-    if (chat.defaultTransport.isEmail) {
-      final String? normalizedCandidate = normalizedAddressValue(
-        chat.antiAbuseTargetAddress,
-      );
-      if (normalizedCandidate == null || normalizedCandidate.isEmpty) {
-        return null;
-      }
-      for (final entry in entries) {
-        if (!entry.transport.isEmail) {
-          continue;
-        }
-        if (normalizedAddressValue(entry.address) == normalizedCandidate) {
-          return entry;
-        }
-      }
-      return null;
-    }
-    final String? chatBareJid = normalizedAddressKey(chat.remoteJid);
-    if (chatBareJid == null || chatBareJid.isEmpty) {
-      return null;
-    }
-    for (final entry in entries) {
-      if (!entry.transport.isXmpp) {
-        continue;
-      }
-      final String? entryBareJid = normalizedAddressKey(entry.address);
-      if (entryBareJid != null && entryBareJid == chatBareJid) {
-        return entry;
-      }
-    }
-    return null;
-  }
+  }) => blocklistEntryForChat(chat: chat, entries: entries);
 
   String? _resolveChatBlockAddress({required chat_models.Chat chat}) {
     if (chat.defaultTransport.isEmail) {

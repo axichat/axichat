@@ -1277,39 +1277,24 @@ class DeltaChatBindings {
   late final _dc_contact_get_name = _dc_contact_get_namePtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_contact_t>)>();
 
-  int dc_block_contact(
+  void dc_block_contact(
     ffi.Pointer<dc_context_t> ctx,
     int contact_id,
+    int block,
   ) {
     return _dc_block_contact(
       ctx,
       contact_id,
+      block,
     );
   }
 
   late final _dc_block_contactPtr = _lookup<
       ffi.NativeFunction<
-          ffi.Int32 Function(
-              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_block_contact');
+          ffi.Void Function(ffi.Pointer<dc_context_t>, ffi.Uint32,
+              ffi.Int)>>('dc_block_contact');
   late final _dc_block_contact = _dc_block_contactPtr
-      .asFunction<int Function(ffi.Pointer<dc_context_t>, int)>();
-
-  int dc_unblock_contact(
-    ffi.Pointer<dc_context_t> ctx,
-    int contact_id,
-  ) {
-    return _dc_unblock_contact(
-      ctx,
-      contact_id,
-    );
-  }
-
-  late final _dc_unblock_contactPtr = _lookup<
-      ffi.NativeFunction<
-          ffi.Int32 Function(
-              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_unblock_contact');
-  late final _dc_unblock_contact = _dc_unblock_contactPtr
-      .asFunction<int Function(ffi.Pointer<dc_context_t>, int)>();
+      .asFunction<void Function(ffi.Pointer<dc_context_t>, int, int)>();
 
   int dc_lookup_contact_id_by_addr(
     ffi.Pointer<dc_context_t> ctx,

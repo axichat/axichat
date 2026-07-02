@@ -1339,15 +1339,35 @@ class DeltaContextHandle {
   }
 
   Future<void> blockContact(int contactId) async {
-    _ensureState(_opened, 'block contact');
-    final result = _bindings.dc_block_contact(_context, contactId);
-    _ensureSuccess(result, 'block contact $contactId', _lastError);
+    _setContactBlocked(contactId, blocked: true);
   }
 
   Future<void> unblockContact(int contactId) async {
-    _ensureState(_opened, 'unblock contact');
-    final result = _bindings.dc_unblock_contact(_context, contactId);
-    _ensureSuccess(result, 'unblock contact $contactId', _lastError);
+    _setContactBlocked(contactId, blocked: false);
+  }
+
+  void _setContactBlocked(int contactId, {required bool blocked}) {
+    final operation = blocked ? 'block contact' : 'unblock contact';
+    _ensureState(_opened, operation);
+    try {
+      _bindings.dc_block_contact(_context, contactId, blocked ? 1 : 0);
+    } on ArgumentError catch (error) {
+      throw DeltaOperationException(
+        _nativeContactBlockErrorMessage(
+          operation: operation,
+          contactId: contactId,
+          message: error.message,
+        ),
+      );
+    } on UnsupportedError catch (error) {
+      throw DeltaOperationException(
+        _nativeContactBlockErrorMessage(
+          operation: operation,
+          contactId: contactId,
+          message: error.message,
+        ),
+      );
+    }
   }
 
   Future<DeltaContact?> getContact(int contactId) async {
@@ -3494,6 +3514,16 @@ int _jsonInt(Object? value) {
     return value.toInt();
   }
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+String _nativeContactBlockErrorMessage({
+  required String operation,
+  required int contactId,
+  required Object? message,
+}) {
+  final details = message?.toString().trim();
+  final suffix = details == null || details.isEmpty ? '' : ': $details';
+  return 'Failed to $operation $contactId$suffix';
 }
 
 void _ensureSuccess(

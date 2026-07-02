@@ -712,6 +712,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return;
     }
     if (!_connection.hasConnectionSettings) {
+      await _queueSpamPublish(normalized);
       return;
     }
     try {
@@ -721,6 +722,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
         featureLabel: 'spam sync',
       );
       if (!decision.isAllowed) {
+        await _queueSpamPublish(normalized);
         return;
       }
       final manager = _spamManager;
@@ -751,6 +753,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return;
     }
     if (!_connection.hasConnectionSettings) {
+      await _queueSpamRetraction(normalized);
       return;
     }
     try {
@@ -760,6 +763,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
         featureLabel: 'spam sync',
       );
       if (!decision.isAllowed) {
+        await _queueSpamRetraction(normalized);
         return;
       }
       final manager = _spamManager;
@@ -1159,6 +1163,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return;
     }
     if (!_connection.hasConnectionSettings) {
+      await _queueAddressBlockPublish(normalized);
       return;
     }
     try {
@@ -1168,6 +1173,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
         featureLabel: 'address block sync',
       );
       if (!decision.isAllowed) {
+        await _queueAddressBlockPublish(normalized);
         return;
       }
       final manager = _addressBlockManager;
@@ -1198,6 +1204,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return;
     }
     if (!_connection.hasConnectionSettings) {
+      await _queueAddressBlockRetraction(normalized);
       return;
     }
     try {
@@ -1207,6 +1214,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
         featureLabel: 'address block sync',
       );
       if (!decision.isAllowed) {
+        await _queueAddressBlockRetraction(normalized);
         return;
       }
       final manager = _addressBlockManager;
@@ -1277,6 +1285,13 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return;
     }
     if (_pendingAddressBlockPublishes.contains(normalized)) {
+      return;
+    }
+    final localEntry = await _dbOpReturning<XmppDatabase, AddressBlockEntry?>(
+      (db) => db.getAddressBlockEntry(normalized),
+    );
+    if (localEntry == null) {
+      await _clearPendingAddressBlockRetraction(normalized);
       return;
     }
     await _applyAddressBlockStatus(
