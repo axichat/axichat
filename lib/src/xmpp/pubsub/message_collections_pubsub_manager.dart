@@ -7,7 +7,6 @@ import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
@@ -250,15 +249,15 @@ final class MessageCollectionSyncPayload extends MessageCollectionSyncItem {
       tag: _entryTag,
       xmlns: messageCollectionsPubSubNode,
       attributes: {
-        _collectionIdAttr: escapeXmlAttribute(collectionId),
-        _chatJidAttr: escapeXmlAttribute(chatJid),
-        _messageReferenceIdAttr: escapeXmlAttribute(messageReferenceId),
+        _collectionIdAttr: collectionId,
+        _chatJidAttr: chatJid,
+        _messageReferenceIdAttr: messageReferenceId,
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
         _activeAttr: active ? '1' : '0',
-        _sourceIdAttr: escapeXmlAttribute(sourceId),
-        _messageStanzaIdAttr: ?escapeXmlAttributeOrNull(stanzaId),
-        _messageOriginIdAttr: ?escapeXmlAttributeOrNull(originId),
-        _messageMucStanzaIdAttr: ?escapeXmlAttributeOrNull(mucStanzaId),
+        _sourceIdAttr: sourceId,
+        _messageStanzaIdAttr: ?stanzaId,
+        _messageOriginIdAttr: ?originId,
+        _messageMucStanzaIdAttr: ?mucStanzaId,
       },
     );
   }
@@ -362,7 +361,7 @@ final class MessageCollectionRecordSyncPayload
       tag: _collectionTag,
       xmlns: messageCollectionsPubSubNode,
       attributes: {
-        _collectionIdAttr: escapeXmlAttribute(collectionId),
+        _collectionIdAttr: collectionId,
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
         _activeAttr: active ? '1' : '0',
       },

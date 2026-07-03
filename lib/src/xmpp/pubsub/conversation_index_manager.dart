@@ -5,7 +5,6 @@ import 'dart:async';
 
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -290,11 +289,10 @@ final class ConvItem {
       tag: _convTag,
       xmlns: xmlns,
       attributes: {
-        _peerAttr: escapeXmlAttribute(_normalizePeerForKind(kind, peer)),
+        _peerAttr: (_normalizePeerForKind(kind, peer)),
         _kindAttr: kind.wireValue,
         _lastTsAttr: lastTs,
-        if (trimmedLastId?.isNotEmpty == true)
-          _lastIdAttr: escapeXmlAttribute(trimmedLastId!),
+        if (trimmedLastId?.isNotEmpty == true) _lastIdAttr: trimmedLastId!,
         _pinnedAttr: pinned.toString(),
         _archivedAttr: archived.toString(),
         if (hidden != null) _hiddenAttr: hidden!.toString(),

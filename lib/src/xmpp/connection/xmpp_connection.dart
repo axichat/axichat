@@ -71,6 +71,11 @@ class XmppConnection extends mox.XmppConnection {
     super.connectionSettings = connectionSettings;
   }
 
+  @override
+  void sendRawXML(mox.XMLNode node) {
+    super.sendRawXML(_sanitizeXmlNodeForMoxWire(node));
+  }
+
   Future<void> updateConnectivityNotification(ConnectionState state) async {
     if (socketWrapper case final ForegroundSocketWrapper wrapper) {
       wrapper.updateConnectionState(state);

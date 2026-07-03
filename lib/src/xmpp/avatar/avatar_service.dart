@@ -2285,8 +2285,8 @@ mixin AvatarService on XmppBase, BaseStreamService {
                       ..attr('bytes', payload.bytes.length.toString())
                       ..attr('height', payload.height.toString())
                       ..attr('width', payload.width.toString())
-                      ..attr('type', payload.mimeType)
-                      ..attr('id', payload.hash))
+                      ..attr('type', (payload.mimeType))
+                      ..attr('id', (payload.hash)))
                     .build(),
               ))
             .build();

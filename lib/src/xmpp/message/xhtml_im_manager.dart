@@ -92,7 +92,8 @@ final class XhtmlImManager extends mox.XmppManagerBase {
       );
   }
 
-  List<mox.XMLNode> _messageSendingCallback(
+  @visibleForTesting
+  List<mox.XMLNode> messageSendingCallback(
     mox.TypedMap<mox.StanzaHandlerExtension> extensions,
   ) {
     final data = extensions.get<XhtmlImData>();
@@ -133,6 +134,6 @@ final class XhtmlImManager extends mox.XmppManagerBase {
     await super.postRegisterCallback();
     getAttributes()
         .getManagerById<mox.MessageManager>(mox.messageManager)
-        ?.registerMessageSendingCallback(_messageSendingCallback);
+        ?.registerMessageSendingCallback(messageSendingCallback);
   }
 }

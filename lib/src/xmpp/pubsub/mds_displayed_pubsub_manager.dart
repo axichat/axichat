@@ -4,7 +4,6 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/sync_rate_limiter.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
@@ -70,8 +69,8 @@ final class MdsDisplayedPayload {
           tag: _stanzaIdTag,
           xmlns: mox.stableIdXmlns,
           attributes: {
-            _byAttr: escapeXmlAttribute(serverStanzaBy.trim()),
-            _idAttr: escapeXmlAttribute(serverStanzaId.trim()),
+            _byAttr: (serverStanzaBy.trim()),
+            _idAttr: (serverStanzaId.trim()),
           },
         ),
       ],

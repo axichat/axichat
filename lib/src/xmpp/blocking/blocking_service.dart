@@ -1646,7 +1646,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
         if (stanzaId.by.trim().isNotEmpty && stanzaId.id.trim().isNotEmpty)
           stanzaId.toXml(),
       if (reportText != null && reportText.trim().isNotEmpty)
-        mox.XMLNode(tag: _reportTextTag, text: reportText.trim()),
+        mox.XMLNode(tag: _reportTextTag, text: (reportText.trim())),
     ];
     final reportNode = mox.XMLNode.xmlns(
       tag: _reportTag,

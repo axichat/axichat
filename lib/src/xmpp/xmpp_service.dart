@@ -58,7 +58,6 @@ import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
@@ -152,6 +151,7 @@ part 'presence/presence_service.dart';
 part 'roster/roster_service.dart';
 
 part 'connection/xmpp_connection.dart';
+part 'connection/outbound_xml_sanitizer_manager.dart';
 
 sealed class XmppException implements Exception {
   XmppException([this.wrapped]) : super();
@@ -1480,6 +1480,7 @@ class XmppService extends XmppBase
         mox.CryptographicHashManager(),
         mox.OccupantIdManager(),
         MucJoinBootstrapManager(),
+        OutboundXmlSanitizerManager(),
       ]);
 
     return managers;

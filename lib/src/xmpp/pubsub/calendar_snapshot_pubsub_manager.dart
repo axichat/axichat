@@ -9,7 +9,6 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -168,15 +167,15 @@ final class PersonalCalendarSnapshotPubSubPayload {
       xmlns: calendarSnapshotPubSubNode,
       attributes: {
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
-        _sourceIdAttr: escapeXmlAttribute(_normalizeSourceId(sourceId)),
-        _checksumAttr: escapeXmlAttribute(checksum),
+        _sourceIdAttr: (_normalizeSourceId(sourceId)),
+        _checksumAttr: checksum,
         _versionAttr: version.toString(),
       },
       children: [
         mox.XMLNode(
           tag: _snapshotTag,
           attributes: const {_encodingAttr: _snapshotEncoding},
-          text: escapeXmlText(encodedSnapshot),
+          text: encodedSnapshot,
         ),
       ],
     );

@@ -9,7 +9,6 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/storage/models/file_models.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
@@ -107,10 +106,7 @@ final class DraftRecipient {
         : _recipientRoleDefault;
     return mox.XMLNode(
       tag: _recipientTag,
-      attributes: {
-        _recipientJidAttr: escapeXmlAttribute(jid),
-        _recipientRoleAttr: escapeXmlAttribute(resolvedRole),
-      },
+      attributes: {_recipientJidAttr: jid, _recipientRoleAttr: resolvedRole},
     );
   }
 }
@@ -209,13 +205,13 @@ final class DraftAttachmentRef {
     return mox.XMLNode(
       tag: _attachmentTag,
       attributes: {
-        _attachmentIdAttr: escapeXmlAttribute(id),
+        _attachmentIdAttr: id,
         if (normalizedUrl != null && normalizedUrl.isNotEmpty)
-          _attachmentUrlAttr: escapeXmlAttribute(normalizedUrl),
+          _attachmentUrlAttr: normalizedUrl,
         if (normalizedName != null && normalizedName.isNotEmpty)
-          _attachmentNameAttr: escapeXmlAttribute(normalizedName),
+          _attachmentNameAttr: normalizedName,
         if (normalizedMime != null && normalizedMime.isNotEmpty)
-          _attachmentMimeAttr: escapeXmlAttribute(normalizedMime),
+          _attachmentMimeAttr: normalizedMime,
         if (normalizedSize != null)
           _attachmentSizeAttr: normalizedSize.toString(),
         if (normalizedWidth != null)
@@ -549,14 +545,12 @@ final class DraftSyncPayload {
       tag: _draftTag,
       xmlns: draftsPubSubNode,
       attributes: {
-        _draftSyncIdAttr: escapeXmlAttribute(syncId),
+        _draftSyncIdAttr: syncId,
         _draftUpdatedAtAttr: updatedAtIso,
-        _draftSourceIdAttr: ?escapeXmlAttributeOrNull(normalizedSourceId),
-        _quoteStanzaIdAttr: ?escapeXmlAttributeOrNull(normalizedQuoteId),
-        _quoteOriginIdAttr: ?escapeXmlAttributeOrNull(normalizedQuoteOriginId),
-        _quoteMucStanzaIdAttr: ?escapeXmlAttributeOrNull(
-          normalizedQuoteMucStanzaId,
-        ),
+        _draftSourceIdAttr: ?normalizedSourceId,
+        _quoteStanzaIdAttr: ?normalizedQuoteId,
+        _quoteOriginIdAttr: ?normalizedQuoteOriginId,
+        _quoteMucStanzaIdAttr: ?normalizedQuoteMucStanzaId,
       },
       children: [
         if (limitedRecipients.isNotEmpty)
@@ -567,13 +561,13 @@ final class DraftSyncPayload {
                 .toList(growable: false),
           ),
         if (normalizedSubject case final value?)
-          mox.XMLNode(tag: _subjectTag, text: escapeXmlText(value)),
+          mox.XMLNode(tag: _subjectTag, text: value),
         if (normalizedBody case final value?)
-          mox.XMLNode(tag: _bodyTag, text: escapeXmlText(value)),
+          mox.XMLNode(tag: _bodyTag, text: value),
         if (normalizedHtml case final value?)
-          mox.XMLNode(tag: _htmlTag, text: escapeXmlText(value)),
+          mox.XMLNode(tag: _htmlTag, text: value),
         if (normalizedCalendarTaskIcs case final value?)
-          mox.XMLNode(tag: _calendarTaskIcsTag, text: escapeXmlText(value)),
+          mox.XMLNode(tag: _calendarTaskIcsTag, text: value),
         if (limitedForwardedBlocks.isNotEmpty)
           mox.XMLNode(
             tag: _forwardedBlocksTag,
@@ -737,31 +731,23 @@ final class DraftSyncPayload {
     return mox.XMLNode(
       tag: _forwardedBlockTag,
       attributes: {
-        _forwardedBlockIdAttr: escapeXmlAttribute(blockId),
-        _forwardedSourceMessageIdAttr: escapeXmlAttribute(sourceMessageId),
-        _forwardedSenderJidAttr: escapeXmlAttribute(senderJid),
-        _forwardedSenderLabelAttr: escapeXmlAttribute(senderLabel),
+        _forwardedBlockIdAttr: blockId,
+        _forwardedSourceMessageIdAttr: sourceMessageId,
+        _forwardedSenderJidAttr: senderJid,
+        _forwardedSenderLabelAttr: senderLabel,
         if (block.timestamp != null)
           _forwardedTimestampAttr: block.timestamp!.toUtc().toIso8601String(),
-        _forwardedConversionStateAttr: escapeXmlAttribute(
-          block.conversionState.name,
-        ),
+        _forwardedConversionStateAttr: block.conversionState.name,
       },
       children: [
         if (originalSubject case final value?)
-          mox.XMLNode(tag: _forwardedSubjectTag, text: escapeXmlText(value)),
-        mox.XMLNode(
-          tag: _forwardedPlainTextTag,
-          text: escapeXmlText(originalPlainText),
-        ),
+          mox.XMLNode(tag: _forwardedSubjectTag, text: value),
+        mox.XMLNode(tag: _forwardedPlainTextTag, text: originalPlainText),
         if (originalHtml case final value?)
-          mox.XMLNode(tag: _forwardedHtmlTag, text: escapeXmlText(value)),
+          mox.XMLNode(tag: _forwardedHtmlTag, text: value),
         ?quotedContext,
         if (convertedText case final value?)
-          mox.XMLNode(
-            tag: _forwardedConvertedTextTag,
-            text: escapeXmlText(value),
-          ),
+          mox.XMLNode(tag: _forwardedConvertedTextTag, text: value),
       ],
     );
   }
@@ -808,14 +794,9 @@ final class DraftSyncPayload {
     }
     return mox.XMLNode(
       tag: _forwardedQuotedContextTag,
-      attributes: {
-        _forwardedQuotedSenderLabelAttr: escapeXmlAttribute(senderLabel),
-      },
+      attributes: {_forwardedQuotedSenderLabelAttr: senderLabel},
       children: [
-        mox.XMLNode(
-          tag: _forwardedQuotedPlainTextTag,
-          text: escapeXmlText(plainText),
-        ),
+        mox.XMLNode(tag: _forwardedQuotedPlainTextTag, text: plainText),
       ],
     );
   }

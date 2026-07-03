@@ -104,11 +104,11 @@ final class DirectMucInviteData implements mox.StanzaHandlerExtension {
       tag: _directInviteTag,
       xmlns: _directInviteXmlns,
       attributes: {
-        _directInviteRoomAttr: escapeXmlAttribute(roomJid),
+        _directInviteRoomAttr: roomJid,
         if (trimmedReason?.isNotEmpty == true)
-          _directInviteReasonAttr: escapeXmlAttribute(trimmedReason!),
+          _directInviteReasonAttr: trimmedReason!,
         if (trimmedPassword?.isNotEmpty == true)
-          _directInvitePasswordAttr: escapeXmlAttribute(trimmedPassword!),
+          _directInvitePasswordAttr: trimmedPassword!,
         if (continueFlag == true) _directInviteContinueAttr: 'true',
       },
     );
@@ -187,7 +187,7 @@ final class AxiMessageRepliesManager extends mox.XmppManagerBase {
           'id': data.id,
         },
       ),
-      if (data.body != null) mox.XMLNode(tag: 'body', text: data.body),
+      if (data.body != null) mox.XMLNode(tag: 'body', text: data.body!),
       if (data.body != null && data.start != null && data.end != null)
         mox.XMLNode.xmlns(
           tag: 'fallback',
@@ -314,19 +314,19 @@ final class AxiMucInvitePayload implements mox.StanzaHandlerExtension {
       tag: kind.tag,
       xmlns: _axiInviteXmlns,
       attributes: {
-        _axiInviteRoomAttr: escapeXmlAttribute(roomJid),
+        _axiInviteRoomAttr: roomJid,
         if (trimmedToken?.isNotEmpty == true)
-          _axiInviteTokenAttr: escapeXmlAttribute(trimmedToken!),
+          _axiInviteTokenAttr: trimmedToken!,
         if (trimmedInviter?.isNotEmpty == true)
-          _axiInviteInviterAttr: escapeXmlAttribute(trimmedInviter!),
+          _axiInviteInviterAttr: trimmedInviter!,
         if (trimmedInvitee?.isNotEmpty == true)
-          _axiInviteInviteeAttr: escapeXmlAttribute(trimmedInvitee!),
+          _axiInviteInviteeAttr: trimmedInvitee!,
         if (trimmedRoomName?.isNotEmpty == true)
-          _axiInviteRoomNameAttr: escapeXmlAttribute(trimmedRoomName!),
+          _axiInviteRoomNameAttr: trimmedRoomName!,
         if (!kind.isAcceptance && trimmedReason?.isNotEmpty == true)
-          _axiInviteReasonAttr: escapeXmlAttribute(trimmedReason!),
+          _axiInviteReasonAttr: trimmedReason!,
         if (!kind.isAcceptance && trimmedPassword?.isNotEmpty == true)
-          _axiInvitePasswordAttr: escapeXmlAttribute(trimmedPassword!),
+          _axiInvitePasswordAttr: trimmedPassword!,
       },
     );
   }
@@ -496,12 +496,7 @@ final class CalendarFragmentPayload implements mox.StanzaHandlerExtension {
       attributes: const {
         _calendarFragmentVersionAttr: _calendarFragmentVersionValue,
       },
-      children: [
-        mox.XMLNode(
-          tag: _calendarFragmentPayloadTag,
-          text: escapeXmlText(payload),
-        ),
-      ],
+      children: [mox.XMLNode(tag: _calendarFragmentPayloadTag, text: payload)],
     );
   }
 
@@ -550,12 +545,7 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
       tag: _calendarTaskIcsTag,
       xmlns: _calendarTaskIcsXmlns,
       attributes: {_calendarTaskIcsVersionAttr: _calendarTaskIcsVersionValue},
-      children: [
-        mox.XMLNode(
-          tag: _calendarTaskIcsPayloadTag,
-          text: escapeXmlText(payload),
-        ),
-      ],
+      children: [mox.XMLNode(tag: _calendarTaskIcsPayloadTag, text: payload)],
     );
   }
 
@@ -597,10 +587,7 @@ final class CalendarAvailabilityMessagePayload
         _calendarAvailabilityVersionAttr: _calendarAvailabilityVersionValue,
       },
       children: [
-        mox.XMLNode(
-          tag: _calendarAvailabilityPayloadTag,
-          text: escapeXmlText(payload),
-        ),
+        mox.XMLNode(tag: _calendarAvailabilityPayloadTag, text: payload),
       ],
     );
   }
@@ -672,7 +659,7 @@ final class PinMessageMutationData implements mox.StanzaHandlerExtension {
       xmlns: _pinMutationXmlns,
       attributes: {
         _pinMutationVersionAttr: _pinMutationVersionValue,
-        _pinMutationMessageIdAttr: escapeXmlAttribute(messageId),
+        _pinMutationMessageIdAttr: messageId,
         _pinMutationPinnedAttr: pinned.toString(),
         _pinMutationScopeAttr: scope.wireValue,
         _pinMutationTimestampAttr: timestamp.toUtc().toIso8601String(),

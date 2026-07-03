@@ -367,8 +367,8 @@ class PubSubManager extends mox.PubSubManager {
             children: [
               (mox.XmlBuilder.withNamespace('pubsub', mox.pubsubXmlns)..child(
                     (mox.XmlBuilder('subscribe')
-                          ..attr('jid', subscriberJid)
-                          ..attr('node', node))
+                          ..attr('jid', (subscriberJid))
+                          ..attr('node', (node)))
                         .build(),
                   ))
                   .build(),
@@ -500,7 +500,7 @@ class PubSubManager extends mox.PubSubManager {
               (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
                     ..child(
                       (mox.XmlBuilder(_configureTag)
-                            ..attr(_nodeAttr, node)
+                            ..attr(_nodeAttr, (node))
                             ..child(form))
                           .build(),
                     ))
@@ -633,7 +633,7 @@ class PubSubManager extends mox.PubSubManager {
             (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)..child(
                   (mox.XmlBuilder(
                     _configureTag,
-                  )..attr(_nodeAttr, node)).build(),
+                  )..attr(_nodeAttr, (node))).build(),
                 ))
                 .build(),
           ],
@@ -738,7 +738,7 @@ class PubSubManager extends mox.PubSubManager {
       ..sendEvent(_operationStartEvent(operationKind));
     var success = false;
     final affiliationsBuilder = mox.XmlBuilder(_affiliationsTag)
-      ..attr(_nodeAttr, node);
+      ..attr(_nodeAttr, (node));
     for (final node in affiliationNodes) {
       affiliationsBuilder.child(node);
     }

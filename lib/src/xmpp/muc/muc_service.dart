@@ -4172,7 +4172,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
           tag: 'item',
           attributes: {'nick': nick, 'role': OccupantRole.none.xmlValue},
           children: reason?.isNotEmpty == true
-              ? [mox.XMLNode(tag: 'reason', text: reason)]
+              ? [mox.XMLNode(tag: 'reason', text: reason!)]
               : const [],
         ),
       ],
@@ -4194,7 +4194,7 @@ mixin MucService on XmppBase, BaseStreamService, AvatarService, MessageService {
             'affiliation': OccupantAffiliation.outcast.xmlValue,
           },
           children: reason?.isNotEmpty == true
-              ? [mox.XMLNode(tag: 'reason', text: reason)]
+              ? [mox.XMLNode(tag: 'reason', text: reason!)]
               : const [],
         ),
       ],

@@ -7,7 +7,6 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
-import 'package:axichat/src/common/xml_safety.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/pubsub/pep_item_pubsub_node_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_hub_manager.dart';
@@ -105,14 +104,14 @@ final class ContactSyncFieldPayload {
     return mox.XMLNode(
       tag: _fieldTag,
       attributes: {
-        _fieldIdAttr: escapeXmlAttribute(fieldId),
-        _fieldKindAttr: escapeXmlAttribute(kind.syncName),
-        _fieldLabelAttr: ?escapeXmlAttributeOrNull(label),
-        _fieldValueAttr: escapeXmlAttribute(value),
+        _fieldIdAttr: fieldId,
+        _fieldKindAttr: kind.syncName,
+        _fieldLabelAttr: ?label,
+        _fieldValueAttr: value,
         _fieldSortOrderAttr: sortOrder.toString(),
         _activeAttr: active ? '1' : '0',
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
-        _sourceIdAttr: escapeXmlAttribute(sourceId),
+        _sourceIdAttr: sourceId,
       },
     );
   }
@@ -217,12 +216,12 @@ final class ContactSyncPayload {
       tag: _contactTag,
       xmlns: contactsPubSubNode,
       attributes: {
-        _addressKeyAttr: escapeXmlAttribute(addressKey),
+        _addressKeyAttr: addressKey,
         _activeAttr: active ? '1' : '0',
         _manualAttr: manual ? '1' : '0',
         _favoriteAttr: favorited ? '1' : '0',
-        _displayOverrideAttr: ?escapeXmlAttributeOrNull(displayNameOverride),
-        _folderCollectionIdAttr: ?escapeXmlAttributeOrNull(folderCollectionId),
+        _displayOverrideAttr: ?displayNameOverride,
+        _folderCollectionIdAttr: ?folderCollectionId,
         _updatedAtAttr: updatedAt.toUtc().toIso8601String(),
         _activeUpdatedAtAttr: ?activeUpdatedAt?.toUtc().toIso8601String(),
         _manualUpdatedAtAttr: ?manualUpdatedAt?.toUtc().toIso8601String(),
@@ -233,7 +232,7 @@ final class ContactSyncPayload {
         _folderRuleUpdatedAtAttr: ?folderRuleUpdatedAt
             ?.toUtc()
             .toIso8601String(),
-        _sourceIdAttr: escapeXmlAttribute(sourceId),
+        _sourceIdAttr: sourceId,
       },
       children: fields.map((field) => field.toXml()).toList(growable: false),
     );
