@@ -16,9 +16,9 @@ Binaries:
   https://github.com/axichat/axichat/releases/download/v%v/app-arm64-v8a-production-release.apk
 
 Builds:
-  - versionName: 0.8.3
-    versionCode: 2011
-    commit: eee414d26ba0902a311a7c924a24003d01bd27fa
+  - versionName: 0.8.4
+    versionCode: 2012
+    commit: 2005c9dfcc12e44184bcbfa737582eb896f1659a
     sudo:
       - apt-get update
       - apt-get install -y gcc make libc-dev pkg-config perl rustup unzip
@@ -74,5 +74,5 @@ UpdateCheckMode: Tags
 VercodeOperation:
   - 2000 + %c
 UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
-CurrentVersion: 0.8.3
-CurrentVersionCode: 2011
+CurrentVersion: 0.8.4
+CurrentVersionCode: 2012
