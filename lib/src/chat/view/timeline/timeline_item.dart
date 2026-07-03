@@ -34,9 +34,12 @@ final class _ChatTimelineSpecialItemView extends StatelessWidget {
         animationDuration: animationDuration,
       ),
     ),
-    ChatTimelineUnreadDividerItem(:final label) => KeyedSubtree(
-      key: unreadDividerKey,
-      child: _UnreadDivider(label: label),
+    ChatTimelineUnreadDividerItem(:final label) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        KeyedSubtree(key: unreadDividerKey, child: const SizedBox.shrink()),
+        _UnreadDivider(label: label),
+      ],
     ),
     ChatTimelineSystemStatusItem(:final label) => Padding(
       padding: EdgeInsets.symmetric(

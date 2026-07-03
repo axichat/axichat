@@ -193,6 +193,7 @@
   "chatSettings": "聊天設定",
   "chatEmptySearch": "沒有配對",
   "chatEmptyMessages": "沒有訊息",
+  "chatEmailLoadTimedOutEmptyMessages": "電郵訊息載入時間比預期更長。如果仍未顯示，此裝置可能需要重建本機電郵歷史。請在個人檔案 > 資料中嘗試匯入電郵歷史、重新啟動 Axichat、登出後重新登入，或重新安裝應用程式。",
   "chatComposerEmailHint": "傳送電郵訊息",
   "chatComposerDropFiles": "拖放檔案",
   "chatTransportChoiceTitle": "選擇傳送方式",

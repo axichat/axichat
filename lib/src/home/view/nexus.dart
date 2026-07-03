@@ -399,7 +399,9 @@ class _EmailHistoryImportBannerState extends State<_EmailHistoryImportBanner> {
   Future<void> _handleImport(BuildContext context) async {
     setState(() => _pendingAction = _EmailHistoryImportBannerAction.import);
     try {
-      await context.read<ConnectivityCubit>().importExistingEmailHistory();
+      await context.read<ConnectivityCubit>().importExistingEmailHistory(
+        force: widget.status.isFailed,
+      );
     } on EmailProvisioningException {
       if (context.mounted) {
         _showEmailHistoryImportFailed(context);

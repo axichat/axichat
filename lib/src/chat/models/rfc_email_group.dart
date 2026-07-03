@@ -283,7 +283,6 @@ String rfcEmailBodyText({
       message: message,
       body: body,
       html: html,
-      deriveHtmlIfMissing: deriveHtmlIfMissing,
     );
     if (displayHtmlText != null) {
       return displayHtmlText;
@@ -328,7 +327,6 @@ String? _displayTextForGeneratedHtmlBody({
   required Message message,
   required String body,
   required String? html,
-  required bool deriveHtmlIfMissing,
 }) {
   final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
   if (normalizedHtml == null) {
@@ -345,9 +343,9 @@ String? _displayTextForGeneratedHtmlBody({
   if (generatedBody != body) {
     return null;
   }
-  final displayText = emailHtmlVisibleBodyText(
-    normalizedHtml,
-    deriveIfMissing: deriveHtmlIfMissing,
+  final displayText = HtmlContentCodec.toPlainText(
+    preparedHtml,
+    includeLinkTargets: false,
   ).trim();
   return displayText.isEmpty ? null : displayText;
 }

@@ -593,6 +593,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatEmptyMessages => 'No messages';
 
   @override
+  String get chatEmailLoadTimedOutEmptyMessages =>
+      'Email messages are taking longer than expected to load. If they do not appear, this device may need to rebuild its local email history. Try Import email history from Profile > Data, restart Axichat, log out and back in, or reinstall the app.';
+
+  @override
   String get chatComposerEmailHint => 'Send email message';
 
   @override
@@ -4864,7 +4868,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emailContactsImportTitle => 'Import contacts';
 
   @override
-  String get emailHistoryImportTitle => 'Sync previous email history';
+  String get emailHistoryImportTitle => 'Import email history';
 
   @override
   String get emailHistoryImportBannerBody =>

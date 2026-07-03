@@ -1149,6 +1149,12 @@ abstract class AppLocalizations {
   /// **'No messages'**
   String get chatEmptyMessages;
 
+  /// No description provided for @chatEmailLoadTimedOutEmptyMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Email messages are taking longer than expected to load. If they do not appear, this device may need to rebuild its local email history. Try Import email history from Profile > Data, restart Axichat, log out and back in, or reinstall the app.'**
+  String get chatEmailLoadTimedOutEmptyMessages;
+
   /// No description provided for @chatComposerEmailHint.
   ///
   /// In en, this message translates to:
@@ -8650,7 +8656,7 @@ abstract class AppLocalizations {
   /// No description provided for @emailHistoryImportTitle.
   ///
   /// In en, this message translates to:
-  /// **'Sync previous email history'**
+  /// **'Import email history'**
   String get emailHistoryImportTitle;
 
   /// No description provided for @emailHistoryImportBannerBody.

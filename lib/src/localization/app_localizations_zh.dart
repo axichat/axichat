@@ -569,6 +569,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatEmptyMessages => '没有消息';
 
   @override
+  String get chatEmailLoadTimedOutEmptyMessages =>
+      '邮件消息加载时间比预期更长。如果它们仍未出现，此设备可能需要重建本地邮件历史。请在个人资料 > 数据中尝试导入邮件历史，重启 Axichat，退出后重新登录，或重新安装应用。';
+
+  @override
   String get chatComposerEmailHint => '发送邮件消息';
 
   @override
@@ -8044,6 +8048,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatEmptyMessages => '沒有訊息';
+
+  @override
+  String get chatEmailLoadTimedOutEmptyMessages =>
+      '電郵訊息載入時間比預期更長。如果仍未顯示，此裝置可能需要重建本機電郵歷史。請在個人檔案 > 資料中嘗試匯入電郵歷史、重新啟動 Axichat、登出後重新登入，或重新安裝應用程式。';
 
   @override
   String get chatComposerEmailHint => '傳送電郵訊息';

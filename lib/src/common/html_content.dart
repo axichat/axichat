@@ -613,13 +613,19 @@ pre, code {
       normalizedHtml,
       allowRemoteImages: false,
     );
+    final visibleBodyText = toPlainText(
+      preparedFlutterHtml,
+      includeLinkTargets: false,
+    ).trim();
+    final linkExpandedBodyText = toPlainText(
+      preparedFlutterHtml,
+      includeLinkTargets: true,
+    ).trim();
     final derivation = (
       preparedFlutterHtml: preparedFlutterHtml,
-      visibleBodyText: toPlainText(
-        preparedFlutterHtml,
-        includeLinkTargets: false,
-      ).trim(),
+      visibleBodyText: visibleBodyText,
       isPlainTextHtml: isPlainTextHtml(normalizedHtml),
+      hasHiddenLinkTargets: linkExpandedBodyText != visibleBodyText,
       containsRemoteImages: containsRenderableRemoteImages(normalizedHtml),
       containsBlockedWebViewContent: containsBlockedWebViewContent(
         normalizedHtml,
@@ -664,6 +670,7 @@ pre, code {
         final preparedFlutterHtml = item['preparedFlutterHtml'];
         final visibleBodyText = item['visibleBodyText'];
         final isPlainTextHtml = item['isPlainTextHtml'];
+        final hasHiddenLinkTargets = item['hasHiddenLinkTargets'];
         final containsRemoteImages = item['containsRemoteImages'];
         final containsBlockedWebViewContent =
             item['containsBlockedWebViewContent'];
@@ -672,6 +679,7 @@ pre, code {
             preparedFlutterHtml is! String ||
             visibleBodyText is! String ||
             isPlainTextHtml is! bool ||
+            hasHiddenLinkTargets is! bool ||
             containsRemoteImages is! bool ||
             containsBlockedWebViewContent is! bool ||
             containsCidImages is! bool) {
@@ -681,6 +689,7 @@ pre, code {
           preparedFlutterHtml: preparedFlutterHtml,
           visibleBodyText: visibleBodyText,
           isPlainTextHtml: isPlainTextHtml,
+          hasHiddenLinkTargets: hasHiddenLinkTargets,
           containsRemoteImages: containsRemoteImages,
           containsBlockedWebViewContent: containsBlockedWebViewContent,
           containsCidImages: containsCidImages,
@@ -739,6 +748,7 @@ pre, code {
       utf8.encode(derivation.preparedFlutterHtml).length +
       utf8.encode(derivation.visibleBodyText).length +
       (derivation.isPlainTextHtml ? 1 : 0) +
+      (derivation.hasHiddenLinkTargets ? 1 : 0) +
       (derivation.containsRemoteImages ? 1 : 0) +
       (derivation.containsBlockedWebViewContent ? 1 : 0) +
       (derivation.containsCidImages ? 1 : 0);
@@ -775,6 +785,9 @@ pre, code {
   }) {
     if (normalizedHtmlBody == null) {
       return false;
+    }
+    if (derivation?.hasHiddenLinkTargets == true) {
+      return true;
     }
     if (derivation?.isPlainTextHtml ??
         HtmlContentCodec.isPlainTextHtml(normalizedHtmlBody)) {
@@ -4037,14 +4050,20 @@ List<Map<String, Object>> _deriveEmailHtmlDerivationsForCache(
       normalizedHtml,
       allowRemoteImages: false,
     );
+    final visibleBodyText = HtmlContentCodec.toPlainText(
+      preparedFlutterHtml,
+      includeLinkTargets: false,
+    ).trim();
+    final linkExpandedBodyText = HtmlContentCodec.toPlainText(
+      preparedFlutterHtml,
+      includeLinkTargets: true,
+    ).trim();
     derivations.add(<String, Object>{
       'normalizedHtml': normalizedHtml,
       'preparedFlutterHtml': preparedFlutterHtml,
-      'visibleBodyText': HtmlContentCodec.toPlainText(
-        preparedFlutterHtml,
-        includeLinkTargets: false,
-      ).trim(),
+      'visibleBodyText': visibleBodyText,
       'isPlainTextHtml': HtmlContentCodec.isPlainTextHtml(normalizedHtml),
+      'hasHiddenLinkTargets': linkExpandedBodyText != visibleBodyText,
       'containsRemoteImages': HtmlContentCodec.containsRenderableRemoteImages(
         normalizedHtml,
       ),
@@ -4060,6 +4079,7 @@ typedef EmailHtmlDerivation = ({
   String preparedFlutterHtml,
   String visibleBodyText,
   bool isPlainTextHtml,
+  bool hasHiddenLinkTargets,
   bool containsRemoteImages,
   bool containsBlockedWebViewContent,
   bool containsCidImages,

@@ -610,6 +610,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatEmptyMessages => 'Keine Nachrichten';
 
   @override
+  String get chatEmailLoadTimedOutEmptyMessages =>
+      'E-Mail-Nachrichten brauchen länger als erwartet zum Laden. Wenn sie nicht angezeigt werden, muss dieses Gerät möglicherweise seinen lokalen E-Mail-Verlauf neu aufbauen. Versuche E-Mail-Verlauf importieren unter Profil > Daten, starte Axichat neu, melde dich ab und wieder an oder installiere die App neu.';
+
+  @override
   String get chatComposerEmailHint => 'E-Mail-Nachricht senden';
 
   @override

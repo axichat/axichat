@@ -193,6 +193,7 @@
   "chatSettings": "Réglages du chat",
   "chatEmptySearch": "Aucun résultat",
   "chatEmptyMessages": "Aucun message",
+  "chatEmailLoadTimedOutEmptyMessages": "Les messages e-mail mettent plus longtemps que prévu à charger. S’ils n’apparaissent pas, cet appareil devra peut-être reconstruire son historique e-mail local. Essayez Importer l’historique e-mail dans Profil > Données, redémarrez Axichat, déconnectez-vous puis reconnectez-vous, ou réinstallez l’application.",
   "chatComposerEmailHint": "Envoyer un message e-mail",
   "chatComposerEmailWatermark": "Envoyé depuis Axichat",
   "chatComposerDropFiles": "Déposez les fichiers",

@@ -612,6 +612,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatEmptyMessages => 'Aucun message';
 
   @override
+  String get chatEmailLoadTimedOutEmptyMessages =>
+      'Les messages e-mail mettent plus longtemps que prévu à charger. S’ils n’apparaissent pas, cet appareil devra peut-être reconstruire son historique e-mail local. Essayez Importer l’historique e-mail dans Profil > Données, redémarrez Axichat, déconnectez-vous puis reconnectez-vous, ou réinstallez l’application.';
+
+  @override
   String get chatComposerEmailHint => 'Envoyer un message e-mail';
 
   @override

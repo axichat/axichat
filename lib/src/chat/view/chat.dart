@@ -505,6 +505,43 @@ effectiveChatTimelineLoadingStateForTesting({
   loadingTimedOut: loadingTimedOut,
 );
 
+String _chatEmptyTimelineLabel({
+  required bool searchFiltering,
+  required bool loadingCapReached,
+  required bool isEmailBacked,
+  required bool hasMessages,
+  required String searchLabel,
+  required String timedOutEmailLabel,
+  required String emptyLabel,
+}) {
+  if (searchFiltering) {
+    return searchLabel;
+  }
+  if (loadingCapReached && isEmailBacked && !hasMessages) {
+    return timedOutEmailLabel;
+  }
+  return emptyLabel;
+}
+
+@visibleForTesting
+String chatEmptyTimelineLabelForTesting({
+  required bool searchFiltering,
+  required bool loadingCapReached,
+  required bool isEmailBacked,
+  required bool hasMessages,
+  required String searchLabel,
+  required String timedOutEmailLabel,
+  required String emptyLabel,
+}) => _chatEmptyTimelineLabel(
+  searchFiltering: searchFiltering,
+  loadingCapReached: loadingCapReached,
+  isEmailBacked: isEmailBacked,
+  hasMessages: hasMessages,
+  searchLabel: searchLabel,
+  timedOutEmailLabel: timedOutEmailLabel,
+  emptyLabel: emptyLabel,
+);
+
 @visibleForTesting
 bool emailMessageRenderSettledForTesting({
   required Message message,
@@ -2010,7 +2047,8 @@ class _ChatState extends State<Chat> {
   bool _initialTimelineReadinessPending(ChatState state) {
     return state.messagesLoaded &&
         (state.initialUnreadBootstrapStatus.isLoading ||
-            _unreadDividerScrollTargetPending(state));
+            _unreadDividerScrollTargetPending(state) ||
+            _initialEmailViewportWarmupApplies(state));
   }
 
   bool _chatTimelineLoadingOverlayVisibleForState(ChatState state) {
@@ -2203,12 +2241,143 @@ class _ChatState extends State<Chat> {
     return _unreadDividerEmailReadinessChecked;
   }
 
+  bool _trackedUnreadDividerEmailHtmlDerivationsCached(
+    ChatState state,
+    Set<int> trackedIds,
+  ) {
+    for (final message in state.items) {
+      final deltaMessageId = message.deltaMsgId;
+      if (deltaMessageId == null || !trackedIds.contains(deltaMessageId)) {
+        continue;
+      }
+      if (!_emailMessageHtmlDerivationsCached(
+        message: message,
+        resolvedHtmlBody: message.htmlBody,
+      )) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _resetInitialTimelineReadiness() {
     _initialEmailViewportWarmupStatus =
         _InitialEmailViewportWarmupStatus.pending;
     _initialEmailViewportStanzaIds = const <String>{};
     _lastRenderedHydrationSnapshot = null;
     _initialEmailViewportWarmupRequestId += 1;
+  }
+
+  bool _timelineMessageItemMounted(ChatTimelineMessageItem item) {
+    return _mountedTimelineItemIds.contains(item.id) ||
+        _mountedTimelineItemIds.contains(item.messageModel.stanzaID);
+  }
+
+  bool _emailHtmlDerivationCached(String? html) {
+    final normalizedHtml = HtmlContentCodec.normalizeHtml(html);
+    if (normalizedHtml == null) {
+      return true;
+    }
+    return emailHtmlDerivationForBody(normalizedHtml, deriveIfMissing: false) !=
+        null;
+  }
+
+  bool _emailMessageHtmlDerivationsCached({
+    required Message? message,
+    required String? resolvedHtmlBody,
+  }) {
+    if (!_emailHtmlDerivationCached(resolvedHtmlBody)) {
+      return false;
+    }
+    if (message == null) {
+      return true;
+    }
+    if (!_emailHtmlDerivationCached(message.htmlBody)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _timelineEmailItemHtmlDerivationsCached({
+    required ChatTimelineMessageItem item,
+    required Map<String, Message> messagesByStanzaId,
+  }) {
+    if (item.isEmailFullMessageLoading) {
+      return false;
+    }
+    if (item.emailBodyBlocks.isNotEmpty) {
+      for (final block in item.emailBodyBlocks) {
+        if (!_emailMessageHtmlDerivationsCached(
+          message: messagesByStanzaId[block.sourceStanzaId],
+          resolvedHtmlBody: block.resolvedHtmlBody,
+        )) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (item.emailRfcGroupKey != null && !item.isEmailRfcGroupLeader) {
+      return true;
+    }
+    return _emailMessageHtmlDerivationsCached(
+      message: item.messageModel,
+      resolvedHtmlBody: item.resolvedHtmlBody,
+    );
+  }
+
+  bool _mountedEmailHtmlDerivationsCached(ChatState state) {
+    if (_cachedTimelineItems.isEmpty) {
+      return state.items.isEmpty;
+    }
+    var hasMessageItems = false;
+    var hasMountedMessageItems = false;
+    final messagesByStanzaId = <String, Message>{
+      for (final message in state.items) message.stanzaID: message,
+    };
+    for (final item in _cachedTimelineItems) {
+      if (item is! ChatTimelineMessageItem) {
+        continue;
+      }
+      hasMessageItems = true;
+      if (!_timelineMessageItemMounted(item)) {
+        continue;
+      }
+      hasMountedMessageItems = true;
+      if (!item.isEmailMessage) {
+        continue;
+      }
+      if (!_timelineEmailItemHtmlDerivationsCached(
+        item: item,
+        messagesByStanzaId: messagesByStanzaId,
+      )) {
+        return false;
+      }
+    }
+    return !hasMessageItems || hasMountedMessageItems;
+  }
+
+  void _syncInitialEmailViewportWarmup(ChatState state) {
+    if (!_initialEmailViewportWarmupApplies(state)) {
+      _syncChatTimelineLoadingOverlayTimeout(state);
+      return;
+    }
+    if (!_mountedEmailHtmlDerivationsCached(state)) {
+      if (_initialEmailViewportWarmupStatus !=
+          _InitialEmailViewportWarmupStatus.warming) {
+        setState(() {
+          _initialEmailViewportWarmupStatus =
+              _InitialEmailViewportWarmupStatus.warming;
+        });
+      }
+      _syncChatTimelineLoadingOverlayTimeout(state);
+      return;
+    }
+    setState(() {
+      _initialEmailViewportWarmupStatus =
+          _InitialEmailViewportWarmupStatus.warmed;
+    });
+    _syncChatTimelineLoadingOverlayTimeout(state);
+    _scheduleReadThresholdSync();
   }
 
   Set<String> _visibleEmailStanzaIdsForInitialReadiness(
@@ -2221,6 +2390,41 @@ class _ChatState extends State<Chat> {
       }
     }
     return Set<String>.unmodifiable(ids);
+  }
+
+  List<Message> _renderedEmailHydrationMessages(
+    List<Message> renderedMessages,
+    ChatState state,
+  ) {
+    final messagesByStanzaId = <String, Message>{
+      for (final message in state.items) message.stanzaID: message,
+    };
+    final messagesById = <String, Message>{};
+    void addMessage(Message? message) {
+      if (message == null) {
+        return;
+      }
+      final key = message.stanzaID.trim();
+      if (key.isEmpty) {
+        return;
+      }
+      messagesById[key] = message;
+    }
+
+    for (final message in renderedMessages) {
+      addMessage(message);
+    }
+    for (final item in _cachedTimelineItems) {
+      if (item is! ChatTimelineMessageItem ||
+          !_timelineMessageItemMounted(item)) {
+        continue;
+      }
+      addMessage(item.messageModel);
+      for (final block in item.emailBodyBlocks) {
+        addMessage(messagesByStanzaId[block.sourceStanzaId]);
+      }
+    }
+    return List<Message>.unmodifiable(messagesById.values);
   }
 
   _RenderedHydrationSnapshot _renderedHydrationSnapshot(
@@ -2246,19 +2450,23 @@ class _ChatState extends State<Chat> {
     }
     final chatBloc = locate<ChatBloc>();
     final chatState = chatBloc.state;
-    final hydrationSnapshot = _renderedHydrationSnapshot(
+    final hydrationMessages = _renderedEmailHydrationMessages(
       renderedMessages,
+      chatState,
+    );
+    final hydrationSnapshot = _renderedHydrationSnapshot(
+      hydrationMessages,
       chatState,
     );
     if (hydrationSnapshot != _lastRenderedHydrationSnapshot) {
       _lastRenderedHydrationSnapshot = hydrationSnapshot;
-      chatBloc.add(ChatRenderedMessagesHydrationRequested(renderedMessages));
+      chatBloc.add(ChatRenderedMessagesHydrationRequested(hydrationMessages));
     }
     if (!_initialEmailViewportWarmupApplies(chatState)) {
       return;
     }
     final visibleEmailStanzaIds = _visibleEmailStanzaIdsForInitialReadiness(
-      renderedMessages,
+      hydrationMessages,
     );
     if (_initialEmailViewportWarmupStatus ==
             _InitialEmailViewportWarmupStatus.warming &&
@@ -2286,11 +2494,7 @@ class _ChatState extends State<Chat> {
     if (!mounted || requestId != _initialEmailViewportWarmupRequestId) {
       return;
     }
-    setState(() {
-      _initialEmailViewportWarmupStatus =
-          _InitialEmailViewportWarmupStatus.warmed;
-    });
-    _scheduleReadThresholdSync();
+    _syncInitialEmailViewportWarmup(context.read<ChatBloc>().state);
   }
 
   void _handlePendingUnreadDividerScroll(ChatState state) {
@@ -2312,6 +2516,9 @@ class _ChatState extends State<Chat> {
       return;
     }
     if (trackedIds.any(state.emailFullMessageLoading.contains)) {
+      return;
+    }
+    if (!_trackedUnreadDividerEmailHtmlDerivationsCached(state, trackedIds)) {
       return;
     }
     if (state.scrollTargetRequestId == _activeUnreadDividerScrollRequestId) {
@@ -7728,7 +7935,7 @@ class _ChatState extends State<Chat> {
       }
       await Scrollable.ensureVisible(
         dividerContext,
-        alignment: 1,
+        alignment: _visualTopAlignmentForScrollPosition(),
         alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
         duration: Duration.zero,
       );
@@ -8397,6 +8604,9 @@ class _ChatState extends State<Chat> {
                 listenWhen: (previous, current) =>
                     previous.chat?.jid != current.chat?.jid ||
                     previous.messagesLoaded != current.messagesLoaded ||
+                    previous.items != current.items ||
+                    previous.emailContentPreparationRevision !=
+                        current.emailContentPreparationRevision ||
                     previous.initialUnreadBootstrapStatus !=
                         current.initialUnreadBootstrapStatus ||
                     previous.scrollTargetMessageId !=
@@ -8404,6 +8614,7 @@ class _ChatState extends State<Chat> {
                     previous.scrollTargetRequestId !=
                         current.scrollTargetRequestId,
                 listener: (_, state) {
+                  _syncInitialEmailViewportWarmup(state);
                   _syncChatTimelineLoadingOverlayTimeout(state);
                 },
               ),
@@ -8476,10 +8687,6 @@ class _ChatState extends State<Chat> {
                     previous.chat?.jid != current.chat?.jid ||
                     previous.items != current.items ||
                     previous.messagesLoaded != current.messagesLoaded ||
-                    previous.emailFullHtmlByDeltaId !=
-                        current.emailFullHtmlByDeltaId ||
-                    previous.emailFullHtmlUnavailable !=
-                        current.emailFullHtmlUnavailable ||
                     previous.scrollTargetMessageId !=
                         current.scrollTargetMessageId ||
                     previous.initialUnreadBootstrapStatus !=

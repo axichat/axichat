@@ -441,9 +441,16 @@ class _ChatScaffoldBody extends StatelessWidget {
                 unreadDividerItemId: _unreadDividerMessageId,
                 unreadDividerLabel: context.l10n.chatUnreadDividerLabel,
                 emptyStateItemId: _emptyStateMessageId,
-                emptyStateLabel: searchFiltering
-                    ? context.l10n.chatEmptySearch
-                    : context.l10n.chatEmptyMessages,
+                emptyStateLabel: _chatEmptyTimelineLabel(
+                  searchFiltering: searchFiltering,
+                  loadingCapReached: owner._chatTimelineLoadingCapReached,
+                  isEmailBacked: isEmailBacked,
+                  hasMessages: filteredItems.isNotEmpty,
+                  searchLabel: context.l10n.chatEmptySearch,
+                  timedOutEmailLabel:
+                      context.l10n.chatEmailLoadTimedOutEmptyMessages,
+                  emptyLabel: context.l10n.chatEmptyMessages,
+                ),
                 unavailableEmailContentLabel:
                     context.l10n.messageErrorServiceUnavailable,
                 emailEncryptionStatusLabel:
