@@ -229,7 +229,6 @@ class AccountWelcomeDialog extends StatelessWidget {
                 if (showEmailOnboarding) SizedBox(height: spacing.xl),
                 AccountRecoveryWelcomeContent(
                   accountJid: accountJid,
-                  onRecoveryDismissed: onRecoveryDismissed,
                   onRecoveryConfigured: onRecoveryConfigured,
                 ),
               ],
@@ -273,12 +272,10 @@ class AccountRecoveryWelcomeContent extends StatelessWidget {
   const AccountRecoveryWelcomeContent({
     super.key,
     required this.accountJid,
-    required this.onRecoveryDismissed,
     required this.onRecoveryConfigured,
   });
 
   final String accountJid;
-  final Future<void> Function() onRecoveryDismissed;
   final Future<void> Function() onRecoveryConfigured;
 
   Future<void> _showEmailSetup(BuildContext context) async {
@@ -304,13 +301,6 @@ class AccountRecoveryWelcomeContent extends StatelessWidget {
       return;
     }
     await onRecoveryConfigured();
-    if (context.mounted) {
-      context.pop();
-    }
-  }
-
-  Future<void> _skip(BuildContext context) async {
-    await onRecoveryDismissed();
     if (context.mounted) {
       context.pop();
     }
@@ -346,10 +336,6 @@ class AccountRecoveryWelcomeContent extends StatelessWidget {
               leading: const Icon(LucideIcons.smartphone),
               onPressed: () async => await _showTotpSetup(context),
               child: Text(context.l10n.recoveryAddTotpAction),
-            ),
-            AxiButton.outline(
-              onPressed: () async => await _skip(context),
-              child: Text(context.l10n.recoverySkipForNow),
             ),
           ],
         ),

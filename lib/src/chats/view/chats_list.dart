@@ -1245,7 +1245,7 @@ class _ChatListTileState extends State<ChatListTile> {
       if (showUnreadBadge)
         CutoutSpec(
           edge: CutoutEdge.top,
-          alignment: const Alignment(0.84, -1),
+          alignment: const Alignment(0.8, -1),
           depth: unreadDepth + spacing.xxs,
           thickness: unreadDiameter + (spacing.xxs * 2),
           cornerRadius: context.radii.squircle,
