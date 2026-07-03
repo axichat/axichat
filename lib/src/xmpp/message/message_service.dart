@@ -1123,6 +1123,8 @@ final _messageCollectionSyncPendingPublishesKey = XmppStateStore.registerKey(
 const Duration _httpUploadSlotTimeout = Duration(seconds: 30);
 const Duration _httpUploadPutTimeout = Duration(minutes: 2);
 const Duration _httpAttachmentGetTimeout = Duration(minutes: 2);
+const Duration _linkMediaResolveTimeout = Duration(seconds: 15);
+const Duration _linkMediaNegativeResolutionTtl = Duration(minutes: 15);
 const int _xmppAttachmentDownloadMaxRedirects = 5;
 const int _aesGcmTagLengthBytes = 16;
 const int _attachmentMaxFilenameLength = 120;
@@ -1143,6 +1145,11 @@ const Duration _inboundAttachmentAutoDownloadRateLimitCleanupInterval =
     Duration(minutes: 5);
 const int _inboundAttachmentAutoDownloadMaxEventsPerChat = 30;
 const int _inboundAttachmentAutoDownloadMaxEventsGlobal = 120;
+const int _linkMediaProbeMaxCandidatesPerMessage = 3;
+const int _linkMediaNegativeResolutionMaxEntries = 512;
+const int _linkMediaHtmlProbeMaxBytes = 128 * 1024;
+const int _linkMediaHtmlCandidateMaxCount = 12;
+const int _linkMediaHtmlCandidateProbeMaxCount = 3;
 const WindowRateLimit _inboundAttachmentAutoDownloadPerChatRateLimit =
     WindowRateLimit(
       maxEvents: _inboundAttachmentAutoDownloadMaxEventsPerChat,
@@ -1153,6 +1160,14 @@ const WindowRateLimit _inboundAttachmentAutoDownloadGlobalRateLimit =
       maxEvents: _inboundAttachmentAutoDownloadMaxEventsGlobal,
       window: _inboundAttachmentAutoDownloadRateLimitWindow,
     );
+const WindowRateLimit _linkMediaProbePerChatRateLimit = WindowRateLimit(
+  maxEvents: _inboundAttachmentAutoDownloadMaxEventsPerChat,
+  window: _inboundAttachmentAutoDownloadRateLimitWindow,
+);
+const WindowRateLimit _linkMediaProbeGlobalRateLimit = WindowRateLimit(
+  maxEvents: _inboundAttachmentAutoDownloadMaxEventsGlobal,
+  window: _inboundAttachmentAutoDownloadRateLimitWindow,
+);
 const int mamLoginBackfillMessageLimit = 50;
 const int _sharedPinBootstrapPageSize = mamLoginBackfillMessageLimit;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
@@ -1327,6 +1342,40 @@ enum _DraftSyncDecision { applyRemote, publishLocal, skip }
 
 enum _CalendarSyncAuthorizationResult { allowed, rejected, unresolved }
 
+enum _LinkMediaProbeMethod { head, get }
+
+final class _LinkMediaProbeResponse {
+  const _LinkMediaProbeResponse({
+    required this.requestUrl,
+    required this.finalUri,
+    required this.mimeType,
+    required this.contentLength,
+    required this.contentDisposition,
+    required this.bodyBytes,
+  });
+
+  final String requestUrl;
+  final Uri finalUri;
+  final String? mimeType;
+  final int? contentLength;
+  final String? contentDisposition;
+  final List<int> bodyBytes;
+}
+
+final class _ResolvedLinkMedia {
+  const _ResolvedLinkMedia({
+    required this.url,
+    required this.filename,
+    required this.mimeType,
+    this.sizeBytes,
+  });
+
+  final String url;
+  final String filename;
+  final String mimeType;
+  final int? sizeBytes;
+}
+
 mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   bool _draftSnapshotInFlight = false;
   String? _draftSourceId;
@@ -1343,6 +1392,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   bool _mdsDisplayedSnapshotInFlight = false;
   final Map<String, MdsDisplayedPayload> _pendingMdsDisplayedByChat =
       <String, MdsDisplayedPayload>{};
+  final Set<String> _pendingLinkMediaResolutionKeys = <String>{};
+  final Map<String, DateTime> _failedLinkMediaResolutions =
+      <String, DateTime>{};
 
   DraftsPubSubManager? get _draftsManager =>
       _connection.getManager<DraftsPubSubManager>();
@@ -1662,7 +1714,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   ) async {
     if (metadataIds.isEmpty) return const [];
     final attachments = <Attachment>[];
-    for (final metadataId in metadataIds) {
+    for (final rawMetadataId in metadataIds) {
+      final metadataId = rawMetadataId.trim();
+      if (metadataId.isEmpty || isLinkMediaFileMetadata(metadataId)) {
+        continue;
+      }
       final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
         (db) => db.getFileMetadata(metadataId),
       );
@@ -2305,6 +2361,9 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     final attachments = <DraftAttachmentRef>[];
     for (final metadataId in metadataIds) {
       final normalized = metadataId.trim();
+      if (isLinkMediaFileMetadata(normalized)) {
+        continue;
+      }
       if (normalized.isEmpty) {
         return null;
       }
@@ -3865,13 +3924,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  Future<void> _hydrateDuplicatePayload({
+  Future<String?> _hydrateDuplicatePayload({
     required Message incoming,
     FileMetadataData? metadata,
     String? body,
     bool isArchivedDuplicate = false,
   }) async {
     final hasText = body?.trim().isNotEmpty == true;
+    String? duplicateMessageId;
     String? updatedMessageId;
     var updatedDisplayed = false;
     await _dbOp<XmppDatabase>((db) async {
@@ -3891,6 +3951,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       }
       existing ??= await db.getMessageByStanzaID(incoming.stanzaID);
       if (existing == null) return;
+      duplicateMessageId = existing.stanzaID;
 
       final shouldUpdateDisplayed = incoming.displayed && !existing.displayed;
       final shouldUpdateReceived =
@@ -4001,7 +4062,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await _updateUnreadCountForChat(incoming.chatJid);
     }
     if (updatedMessageId == null) {
-      return;
+      return duplicateMessageId;
     }
     final updatedMessage = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(updatedMessageId!),
@@ -4011,7 +4072,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await _applyPendingInboundReactionsForMessage(updatedMessage);
       await _applyPendingInboundPinMutationsForMessage(updatedMessage);
     }
+    return duplicateMessageId;
   }
+
+  @visibleForTesting
+  Future<String?> hydrateDuplicatePayloadForTest({
+    required Message incoming,
+    FileMetadataData? metadata,
+    String? body,
+    bool isArchivedDuplicate = false,
+  }) => _hydrateDuplicatePayload(
+    incoming: incoming,
+    metadata: metadata,
+    body: body,
+    isArchivedDuplicate: isArchivedDuplicate,
+  );
 
   Future<void> _hydrateInboundGroupchatMucStanzaId(
     InboundGroupchatMucStanzaIdEvent event,
@@ -5160,6 +5235,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         limit: _inboundAttachmentAutoDownloadPerChatRateLimit,
         cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
       );
+  final WindowRateLimiter _linkMediaProbeGlobalLimiter = WindowRateLimiter(
+    _linkMediaProbeGlobalRateLimit,
+  );
+  final KeyedWindowRateLimiter _linkMediaProbeChatLimiter =
+      KeyedWindowRateLimiter(
+        limit: _linkMediaProbePerChatRateLimit,
+        cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
+      );
   final WindowRateLimiter _liveRemoteCalendarSyncLimiter = WindowRateLimiter(
     const WindowRateLimit(maxEvents: 120, window: Duration(seconds: 60)),
   );
@@ -5958,8 +6041,6 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         final reactionOnly = await _handleReactions(event);
         if (reactionOnly) return;
 
-        final hasAttachmentMetadata = metadata != null;
-
         final isGroupChat = event.type == 'groupchat';
         final chatType = isGroupChat ? ChatType.groupChat : ChatType.chat;
         var message = Message.fromMox(
@@ -5970,13 +6051,19 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             chatType: chatType,
           ),
         );
-        final shouldPersistAttachment = metadata != null && !message.noStore;
         final stableKey = _stableKeyForEvent(event);
 
         message = message.copyWith(
           timestamp: message.timestamp ?? DateTime.timestamp(),
         );
         message = _normalizeDefaultDomainSystemMessage(message);
+        final resolvedMetadata =
+            metadata ??
+            (message.pseudoMessageType == null
+                ? _linkMediaFileMetadata(message.body)
+                : null);
+        final persistedMetadata = message.noStore ? null : resolvedMetadata;
+        final hasAttachmentMetadata = resolvedMetadata != null;
         if (message.isMailPushNotifyMarker) {
           await _acknowledgeMessage(event);
           return;
@@ -5993,8 +6080,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             message = message.copyWith(acked: true);
           }
         }
-        if (shouldPersistAttachment) {
-          message = message.copyWith(fileMetadataID: metadata.id);
+        if (persistedMetadata != null) {
+          message = message.copyWith(fileMetadataID: persistedMetadata.id);
         }
         final axiWelcomeDuplicateKey = _axiWelcomeDuplicateKeyForEvent(
           message,
@@ -6010,12 +6097,23 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           _log.fine(
             'Dropping duplicate message for ${message.chatJid} (${message.stanzaID})',
           );
-          await _hydrateDuplicatePayload(
+          final duplicateStanzaId = await _hydrateDuplicatePayload(
             incoming: message,
-            metadata: metadata,
+            metadata: persistedMetadata,
             body: message.body,
             isArchivedDuplicate: event.isFromMAM,
           );
+          if (persistedMetadata == null &&
+              duplicateStanzaId != null &&
+              !message.noStore &&
+              message.pseudoMessageType == null) {
+            _scheduleStoredLinkMediaResolution(
+              stanzaId: duplicateStanzaId,
+              chatJid: message.chatJid,
+              body: message.body,
+              rateLimit: true,
+            );
+          }
           await _acknowledgeMessage(event);
           return;
         }
@@ -6051,9 +6149,11 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         message = _applyArchivedUnreadState(message, event);
         message = await _resolveInboundReplyIds(message, chatType: chatType);
 
-        if (shouldPersistAttachment) {
-          await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
-          message = message.copyWith(fileMetadataID: metadata.id);
+        if (persistedMetadata != null) {
+          await _dbOp<XmppDatabase>(
+            (db) => db.saveFileMetadata(persistedMetadata),
+          );
+          message = message.copyWith(fileMetadataID: persistedMetadata.id);
         }
 
         await _handleFile(event, message.senderJid);
@@ -6102,12 +6202,22 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         if (!message.noStore) {
           await _storeMessage(message, chatType: chatType);
         }
-        if (shouldPersistAttachment &&
+        if (persistedMetadata == null &&
+            !message.noStore &&
+            message.pseudoMessageType == null) {
+          _scheduleStoredLinkMediaResolution(
+            stanzaId: message.stanzaID,
+            chatJid: message.chatJid,
+            body: message.body,
+            rateLimit: true,
+          );
+        }
+        if (persistedMetadata != null &&
             _allowInboundAttachmentAutoDownload(message.chatJid)) {
           fireAndForget(
             () => _autoDownloadTrustedInboundAttachment(
               message: message,
-              metadataId: metadata.id,
+              metadataId: persistedMetadata.id,
             ),
             operationName: 'MessageService.autoDownloadInboundAttachment',
           );
@@ -7177,9 +7287,24 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       'Sending message ${message.stanzaID} (length=${messageText.length} chars)',
     );
     await _rememberReadOnlyTaskShare(message);
+    if (shouldStore && resolvedPseudoType == null) {
+      final metadata = _linkMediaFileMetadata(message.body);
+      if (metadata != null) {
+        await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+        message = message.copyWith(fileMetadataID: metadata.id);
+      }
+    }
     if (shouldStore) {
       await _storeMessage(message, chatType: resolvedChatType);
       onLocalMessageStored?.call(message.stanzaID);
+      if (resolvedPseudoType == null && message.fileMetadataID == null) {
+        _scheduleStoredLinkMediaResolution(
+          stanzaId: message.stanzaID,
+          chatJid: message.chatJid,
+          body: message.body,
+          rateLimit: false,
+        );
+      }
     }
     if (localOnly) {
       return;
@@ -11645,14 +11770,46 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
             !message.editable) {
           return false;
         }
+        final correctedBody = event.extensions.get<mox.MessageBodyData>()?.body;
         await db.saveMessageEdit(
           stanzaID: message.stanzaID,
-          body: event.extensions.get<mox.MessageBodyData>()?.body,
+          body: correctedBody,
+        );
+        await _resyncLinkMediaAfterCorrection(
+          db: db,
+          message: message,
+          body: correctedBody,
         );
         return true;
       }
       return false;
     });
+  }
+
+  Future<void> _resyncLinkMediaAfterCorrection({
+    required XmppDatabase db,
+    required Message message,
+    required String? body,
+  }) async {
+    final metadataId = message.fileMetadataID;
+    if (metadataId != null && !isLinkMediaFileMetadata(metadataId)) return;
+    if (isLinkMediaFileMetadata(metadataId)) {
+      await db.clearMessageAttachment(message.stanzaID);
+    }
+    final metadata = _linkMediaFileMetadata(body);
+    if (metadata == null) {
+      _scheduleStoredLinkMediaResolution(
+        stanzaId: message.stanzaID,
+        chatJid: message.chatJid,
+        body: body,
+        rateLimit: true,
+      );
+      return;
+    }
+    await db.updateMessageAttachment(
+      stanzaID: message.stanzaID,
+      metadata: metadata,
+    );
   }
 
   Future<bool> _handleRetraction(mox.MessageEvent event, String jid) async {
@@ -15128,6 +15285,673 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return null;
   }
 
+  FileMetadataData? _linkMediaFileMetadata(String? body) {
+    final media = firstMediaLinkInText(body);
+    if (media == null) return null;
+    final url = _sanitizeAttachmentUrl(media.url);
+    if (url == null) return null;
+    return _linkMediaFileMetadataData(
+      url: url,
+      filename: media.filename,
+      mimeType: media.mimeType,
+    );
+  }
+
+  @visibleForTesting
+  Future<FileMetadataData?> resolveLinkMediaFileMetadataForTest(
+    String? body, {
+    bool allowHttp = false,
+    bool allowInsecureHosts = false,
+  }) => _resolveLinkMediaFileMetadata(
+    body,
+    allowHttp: allowHttp,
+    allowInsecureHosts: allowInsecureHosts,
+  );
+
+  Future<FileMetadataData?> _resolveLinkMediaFileMetadata(
+    String? body, {
+    bool allowHttp = false,
+    bool allowInsecureHosts = false,
+  }) async {
+    final direct = _linkMediaFileMetadata(body);
+    if (direct != null) return direct;
+    var probedCandidates = 0;
+    for (final url in safeMessageAttachmentLinksInText(
+      body,
+      allowHttp: allowHttp,
+    )) {
+      if (_hasRecentFailedLinkMediaResolution(url)) continue;
+      if (probedCandidates >= _linkMediaProbeMaxCandidatesPerMessage) break;
+      probedCandidates++;
+      final uri = Uri.tryParse(url);
+      if (uri == null) continue;
+      final media = await _resolveRemoteLinkMedia(
+        uri,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
+      );
+      if (media == null) {
+        _rememberFailedLinkMediaResolution(url);
+        continue;
+      }
+      _failedLinkMediaResolutions.remove(url);
+      return _linkMediaFileMetadataData(
+        url: media.url,
+        filename: media.filename,
+        mimeType: media.mimeType,
+        sizeBytes: media.sizeBytes,
+      );
+    }
+    return null;
+  }
+
+  FileMetadataData _linkMediaFileMetadataData({
+    required String url,
+    required String filename,
+    required String? mimeType,
+    int? sizeBytes,
+  }) {
+    return FileMetadataData(
+      id: linkMediaFileMetadataId(uuid.v4()),
+      sourceUrls: [url],
+      filename: _sanitizeAttachmentFilename(filename),
+      mimeType: _sanitizeAttachmentMimeType(mimeType),
+      sizeBytes: sizeBytes,
+    );
+  }
+
+  bool _hasRecentFailedLinkMediaResolution(String url) {
+    final failedAt = _failedLinkMediaResolutions[url];
+    if (failedAt == null) return false;
+    if (DateTime.now().difference(failedAt) < _linkMediaNegativeResolutionTtl) {
+      return true;
+    }
+    _failedLinkMediaResolutions.remove(url);
+    return false;
+  }
+
+  void _rememberFailedLinkMediaResolution(String url) {
+    final now = DateTime.now();
+    _pruneFailedLinkMediaResolutions(now);
+    _failedLinkMediaResolutions[url] = now;
+    while (_failedLinkMediaResolutions.length >
+        _linkMediaNegativeResolutionMaxEntries) {
+      _failedLinkMediaResolutions.remove(
+        _failedLinkMediaResolutions.keys.first,
+      );
+    }
+  }
+
+  void _pruneFailedLinkMediaResolutions(DateTime now) {
+    final expired = _failedLinkMediaResolutions.entries
+        .where(
+          (entry) =>
+              now.difference(entry.value) >= _linkMediaNegativeResolutionTtl,
+        )
+        .map((entry) => entry.key)
+        .toList();
+    for (final url in expired) {
+      _failedLinkMediaResolutions.remove(url);
+    }
+  }
+
+  @visibleForTesting
+  bool scheduleStoredLinkMediaResolutionForTest({
+    required String stanzaId,
+    required String chatJid,
+    required String? body,
+    required bool rateLimit,
+  }) => _scheduleStoredLinkMediaResolution(
+    stanzaId: stanzaId,
+    chatJid: chatJid,
+    body: body,
+    rateLimit: rateLimit,
+  );
+
+  bool _scheduleStoredLinkMediaResolution({
+    required String stanzaId,
+    required String chatJid,
+    required String? body,
+    required bool rateLimit,
+  }) {
+    final normalizedStanzaId = stanzaId.trim();
+    if (normalizedStanzaId.isEmpty || _linkMediaFileMetadata(body) != null) {
+      return false;
+    }
+    if (safeHttpsMessageLinksInText(body).isEmpty) return false;
+    final key = '$normalizedStanzaId\n${body ?? ''}';
+    if (!_pendingLinkMediaResolutionKeys.add(key)) return false;
+    fireAndForget(() async {
+      try {
+        await _resolveAndAttachStoredLinkMedia(
+          stanzaId: normalizedStanzaId,
+          chatJid: chatJid,
+          body: body,
+          rateLimit: rateLimit,
+        );
+      } finally {
+        _pendingLinkMediaResolutionKeys.remove(key);
+      }
+    }, operationName: 'MessageService.resolveStoredLinkMedia');
+    return true;
+  }
+
+  Future<void> _resolveAndAttachStoredLinkMedia({
+    required String stanzaId,
+    required String chatJid,
+    required String? body,
+    required bool rateLimit,
+  }) async {
+    final storedMessage = await _dbOpReturning<XmppDatabase, Message?>((
+      db,
+    ) async {
+      final current = await db.getMessageByStanzaID(stanzaId);
+      if (current == null ||
+          current.body != body ||
+          current.pseudoMessageType != null) {
+        return null;
+      }
+      final existingMetadataId = current.fileMetadataID?.trim();
+      if (existingMetadataId != null && existingMetadataId.isNotEmpty) {
+        return null;
+      }
+      return current;
+    });
+    if (storedMessage == null) return;
+    if (!await _allowRemoteLinkMediaResolution(storedMessage)) return;
+    if (rateLimit && !_allowLinkMediaProbeResolution(chatJid)) return;
+    final metadata = await _resolveLinkMediaFileMetadata(body);
+    if (metadata == null) return;
+    var attached = false;
+    await _dbOp<XmppDatabase>((db) async {
+      final current = await db.getMessageByStanzaID(stanzaId);
+      if (current == null ||
+          current.body != body ||
+          current.pseudoMessageType != null) {
+        return;
+      }
+      final existingMetadataId = current.fileMetadataID?.trim();
+      if (existingMetadataId != null && existingMetadataId.isNotEmpty) {
+        return;
+      }
+      await db.updateMessageAttachment(stanzaID: stanzaId, metadata: metadata);
+      attached = true;
+    });
+    if (!attached) return;
+    if (_allowInboundAttachmentAutoDownload(chatJid)) {
+      fireAndForget(
+        () => _autoDownloadTrustedInboundAttachment(
+          message: storedMessage.copyWith(fileMetadataID: metadata.id),
+          metadataId: metadata.id,
+        ),
+        operationName: 'MessageService.autoDownloadResolvedLinkMedia',
+      );
+    }
+  }
+
+  Future<bool> _allowRemoteLinkMediaResolution(Message message) async {
+    if (message.isFromAccount(myJid)) return true;
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(message.chatJid),
+    );
+    if (chat == null || chat.spam) return false;
+    if (await isJidBlocked(chat.jid)) return false;
+    return switch (chat.attachmentAutoDownload) {
+      AttachmentAutoDownload.allowed => true,
+      AttachmentAutoDownload.blocked => false,
+      null => autoDownloadImages && autoDownloadVideos,
+    };
+  }
+
+  @visibleForTesting
+  Future<bool> allowRemoteLinkMediaResolutionForTest(Message message) =>
+      _allowRemoteLinkMediaResolution(message);
+
+  Future<_ResolvedLinkMedia?> _resolveRemoteLinkMedia(
+    Uri uri, {
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    final direct = await _resolveRemoteMediaCandidate(
+      uri,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+    if (direct != null) return direct;
+    return _resolveLinkMediaFromPageContext(
+      uri,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+  }
+
+  Future<_ResolvedLinkMedia?> _resolveLinkMediaFromPageContext(
+    Uri uri, {
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    var probedCandidates = 0;
+    for (final candidate in _linkMediaQueryUriCandidates(
+      uri,
+      allowHttp: allowHttp,
+    )) {
+      if (probedCandidates >= _linkMediaHtmlCandidateProbeMaxCount) break;
+      probedCandidates++;
+      final media = await _resolveRemoteMediaCandidate(
+        candidate,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
+      );
+      if (media != null) return media;
+    }
+    return _resolveLinkMediaFromHtmlPage(
+      uri,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+  }
+
+  Iterable<Uri> _linkMediaQueryUriCandidates(
+    Uri uri, {
+    required bool allowHttp,
+  }) sync* {
+    if (uri.query.isEmpty) return;
+    final seen = <String>{};
+    for (final part in uri.query.split('&')) {
+      final separator = part.indexOf('=');
+      if (separator < 0) continue;
+      final String value;
+      try {
+        value = Uri.decodeQueryComponent(part.substring(separator + 1));
+      } on FormatException {
+        continue;
+      }
+      final parsed = Uri.tryParse(value.trim());
+      if (parsed == null || !parsed.hasScheme) continue;
+      final candidate = _safeResolvedLinkMediaUri(
+        uri,
+        value,
+        allowHttp: allowHttp,
+      );
+      if (candidate == null) continue;
+      if (seen.add(candidate.toString())) yield candidate;
+    }
+  }
+
+  Future<_ResolvedLinkMedia?> _resolveLinkMediaFromHtmlPage(
+    Uri uri, {
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    final page = await _tryProbeLinkMediaUrl(
+      uri,
+      method: _LinkMediaProbeMethod.get,
+      bodyByteLimit: _linkMediaHtmlProbeMaxBytes,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+    if (page == null ||
+        !_isLinkMediaHtmlMimeType(page.mimeType) ||
+        page.bodyBytes.isEmpty) {
+      return null;
+    }
+    var probedCandidates = 0;
+    for (final candidate in _linkMediaCandidateUrisFromHtml(
+      page,
+      allowHttp: allowHttp,
+    )) {
+      if (probedCandidates >= _linkMediaHtmlCandidateProbeMaxCount) break;
+      probedCandidates++;
+      final media = await _resolveRemoteMediaCandidate(
+        candidate,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
+      );
+      if (media != null) return media;
+    }
+    return null;
+  }
+
+  Future<_ResolvedLinkMedia?> _resolveRemoteMediaCandidate(
+    Uri uri, {
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    final head = await _tryProbeLinkMediaUrl(
+      uri,
+      method: _LinkMediaProbeMethod.head,
+      bodyByteLimit: 0,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+    final headMedia = _resolvedLinkMediaFromProbe(head);
+    if (headMedia != null) return headMedia;
+    final get = await _tryProbeLinkMediaUrl(
+      uri,
+      method: _LinkMediaProbeMethod.get,
+      bodyByteLimit: 0,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+    return _resolvedLinkMediaFromProbe(get);
+  }
+
+  _ResolvedLinkMedia? _resolvedLinkMediaFromProbe(
+    _LinkMediaProbeResponse? response,
+  ) {
+    if (response == null) return null;
+    final mimeType = _normalizedLinkMediaMimeType(response.mimeType);
+    if (!_isLinkMediaPreviewMimeType(mimeType)) return null;
+    final sizeBytes = response.contentLength;
+    if (sizeBytes != null && sizeBytes > maxAttachmentAutoDownloadBytes) {
+      return null;
+    }
+    return _ResolvedLinkMedia(
+      url: response.requestUrl,
+      filename: _linkMediaFilename(
+        contentDisposition: response.contentDisposition,
+        uri: response.finalUri,
+        mimeType: mimeType!,
+      ),
+      mimeType: mimeType,
+      sizeBytes: sizeBytes,
+    );
+  }
+
+  Future<_LinkMediaProbeResponse?> _tryProbeLinkMediaUrl(
+    Uri uri, {
+    required _LinkMediaProbeMethod method,
+    required int bodyByteLimit,
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    try {
+      return await _probeLinkMediaUrl(
+        uri,
+        method: method,
+        bodyByteLimit: bodyByteLimit,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
+      );
+    } on XmppException {
+      return null;
+    } on TimeoutException {
+      return null;
+    } on SocketException {
+      return null;
+    } on TlsException {
+      return null;
+    } on HttpException {
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<_LinkMediaProbeResponse> _probeLinkMediaUrl(
+    Uri uri, {
+    required _LinkMediaProbeMethod method,
+    required int bodyByteLimit,
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    final client = HttpClient()..connectionTimeout = _linkMediaResolveTimeout;
+    try {
+      var redirects = 0;
+      var current = uri;
+      while (true) {
+        await _validateInboundAttachmentDownloadUri(
+          current,
+          allowHttp: allowHttp,
+          allowInsecureHosts: allowInsecureHosts,
+        );
+        final request = await (switch (method) {
+          _LinkMediaProbeMethod.head => client.headUrl(current),
+          _LinkMediaProbeMethod.get => client.getUrl(current),
+        }).timeout(_linkMediaResolveTimeout);
+        request
+          ..followRedirects = false
+          ..maxRedirects = 0;
+        request.headers.set(
+          HttpHeaders.acceptHeader,
+          'image/*,video/*,text/html;q=0.8,*/*;q=0.1',
+        );
+        if (method == _LinkMediaProbeMethod.get && bodyByteLimit > 0) {
+          request.headers.set(
+            HttpHeaders.rangeHeader,
+            'bytes=0-${bodyByteLimit - 1}',
+          );
+        }
+        final response = await request.close().timeout(
+          _linkMediaResolveTimeout,
+        );
+        final statusCode = response.statusCode;
+        if (_isHttpRedirectStatusCode(statusCode)) {
+          final location = response.headers.value(HttpHeaders.locationHeader);
+          await response.listen((_) {}).cancel();
+          if (location == null || location.trim().isEmpty) {
+            throw XmppMessageException();
+          }
+          if (redirects >= _xmppAttachmentDownloadMaxRedirects) {
+            throw XmppMessageException();
+          }
+          final redirected = current.resolve(location.trim());
+          if (current.scheme.toLowerCase() == 'https' &&
+              redirected.scheme.toLowerCase() == 'http') {
+            throw XmppMessageException();
+          }
+          current = redirected;
+          redirects += 1;
+          continue;
+        }
+        if (statusCode < 200 || statusCode >= 300) {
+          await response.listen((_) {}).cancel();
+          throw XmppMessageException();
+        }
+        final contentLength = response.contentLength < 0
+            ? null
+            : response.contentLength;
+        final readBody =
+            method == _LinkMediaProbeMethod.get && bodyByteLimit > 0;
+        final bodyBytes = readBody
+            ? await _readLinkMediaProbeBytes(response, bodyByteLimit)
+            : <int>[];
+        if (!readBody) {
+          await response.listen((_) {}).cancel();
+        }
+        return _LinkMediaProbeResponse(
+          requestUrl: uri.toString(),
+          finalUri: current,
+          mimeType: response.headers.contentType?.mimeType,
+          contentLength: contentLength,
+          contentDisposition: response.headers.value('content-disposition'),
+          bodyBytes: bodyBytes,
+        );
+      }
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<List<int>> _readLinkMediaProbeBytes(
+    HttpClientResponse response,
+    int maxBytes,
+  ) async {
+    final bytes = <int>[];
+    final stopwatch = Stopwatch()..start();
+    await for (final chunk in response.timeout(_linkMediaResolveTimeout)) {
+      if (stopwatch.elapsed > _linkMediaResolveTimeout) break;
+      final remaining = maxBytes - bytes.length;
+      if (remaining <= 0) break;
+      if (chunk.length <= remaining) {
+        bytes.addAll(chunk);
+      } else {
+        bytes.addAll(chunk.take(remaining));
+        break;
+      }
+    }
+    return bytes;
+  }
+
+  Iterable<Uri> _linkMediaCandidateUrisFromHtml(
+    _LinkMediaProbeResponse response, {
+    required bool allowHttp,
+  }) sync* {
+    final document = html_parser.parse(
+      utf8.decode(response.bodyBytes, allowMalformed: true),
+    );
+    final seen = <String>{};
+    final candidates = <Uri>[];
+    void addCandidate(String? value) {
+      final candidate = _safeResolvedLinkMediaUri(
+        response.finalUri,
+        value,
+        allowHttp: allowHttp,
+      );
+      if (candidate == null) return;
+      if (seen.add(candidate.toString())) candidates.add(candidate);
+    }
+
+    for (final element in document.querySelectorAll('meta')) {
+      final key = (element.attributes['property'] ?? element.attributes['name'])
+          ?.trim()
+          .toLowerCase();
+      if (!_isLinkMediaMetaKey(key)) continue;
+      addCandidate(element.attributes['content']);
+    }
+    for (final element in document.querySelectorAll('link')) {
+      final rel = element.attributes['rel']?.trim().toLowerCase();
+      if (rel == null || !rel.split(RegExp(r'\s+')).contains('image_src')) {
+        continue;
+      }
+      addCandidate(element.attributes['href']);
+    }
+    yield* candidates.take(_linkMediaHtmlCandidateMaxCount);
+  }
+
+  Uri? _safeResolvedLinkMediaUri(
+    Uri base,
+    String? value, {
+    required bool allowHttp,
+  }) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed == null) return null;
+    final resolved = parsed.hasScheme ? parsed : base.resolve(trimmed);
+    if (!isSafeAttachmentUri(resolved)) return null;
+    if (resolved.scheme != 'https' &&
+        !(allowHttp && resolved.scheme == 'http')) {
+      return null;
+    }
+    return resolved;
+  }
+
+  bool _isLinkMediaMetaKey(String? key) {
+    return switch (key) {
+      'og:image' ||
+      'og:image:url' ||
+      'og:image:secure_url' ||
+      'twitter:image' ||
+      'twitter:image:src' ||
+      'og:video' ||
+      'og:video:url' ||
+      'og:video:secure_url' ||
+      'twitter:player:stream' => true,
+      _ => false,
+    };
+  }
+
+  String? _normalizedLinkMediaMimeType(String? value) {
+    final normalized = value?.split(';').first.trim().toLowerCase();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+
+  bool _isLinkMediaPreviewMimeType(String? mimeType) {
+    if (mimeType == null || mimeType == 'image/svg+xml') return false;
+    return mimeType.startsWith('image/') || mimeType.startsWith('video/');
+  }
+
+  bool _isLinkMediaHtmlMimeType(String? mimeType) {
+    final normalized = _normalizedLinkMediaMimeType(mimeType);
+    return normalized == 'text/html' || normalized == 'application/xhtml+xml';
+  }
+
+  String _linkMediaFilename({
+    required String? contentDisposition,
+    required Uri uri,
+    required String mimeType,
+  }) {
+    final candidate =
+        _filenameFromContentDisposition(contentDisposition) ??
+        p.basename(uri.path);
+    final trimmed = candidate.trim();
+    final fallback = _fallbackLinkMediaFilename(mimeType);
+    if (trimmed.isEmpty || trimmed == '/' || trimmed == '.') return fallback;
+    if (p.extension(trimmed).isEmpty) {
+      return '$trimmed${_fallbackLinkMediaExtension(mimeType)}';
+    }
+    return trimmed;
+  }
+
+  String _fallbackLinkMediaFilename(String mimeType) {
+    final prefix = mimeType.startsWith('video/') ? 'video' : 'image';
+    return '$prefix${_fallbackLinkMediaExtension(mimeType)}';
+  }
+
+  String _fallbackLinkMediaExtension(String mimeType) {
+    return switch (mimeType) {
+      'image/jpeg' || 'image/jpg' => '.jpg',
+      'image/png' => '.png',
+      'image/gif' => '.gif',
+      'image/webp' => '.webp',
+      'video/mp4' => '.mp4',
+      'video/quicktime' => '.mov',
+      'video/webm' => '.webm',
+      _ when mimeType.startsWith('video/') => '.mp4',
+      _ => '.jpg',
+    };
+  }
+
+  String? _filenameFromContentDisposition(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final encoded = RegExp(
+      r'''filename\*=([^;]+)''',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (encoded != null) {
+      return _decodeContentDispositionFilename(encoded.group(1));
+    }
+    final plain = RegExp(
+      r'''filename=([^;]+)''',
+      caseSensitive: false,
+    ).firstMatch(value);
+    return plain == null ? null : _unquoteHeaderValue(plain.group(1));
+  }
+
+  String? _decodeContentDispositionFilename(String? value) {
+    final unquoted = _unquoteHeaderValue(value);
+    if (unquoted == null || unquoted.isEmpty) return null;
+    final parts = unquoted.split("''");
+    final encoded = parts.length == 2 ? parts.last : unquoted;
+    try {
+      return Uri.decodeFull(encoded);
+    } on FormatException {
+      return encoded;
+    }
+  }
+
+  String? _unquoteHeaderValue(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (trimmed.length >= 2 &&
+        trimmed.startsWith('"') &&
+        trimmed.endsWith('"')) {
+      return trimmed.substring(1, trimmed.length - 1);
+    }
+    return trimmed;
+  }
+
   String _filenameFromUrl(String url) {
     final uri = Uri.tryParse(url);
     final segments = uri?.pathSegments;
@@ -15341,13 +16165,23 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       if (expectedSize != null && expectedSize > 0 && expectedSize > maxBytes) {
         throw XmppFileTooBigException(maxBytes);
       }
-      final responseMimeType = await _downloadUrlToFile(
+      var responseMimeType = await _downloadUrlToFile(
         uri: uri,
         destination: tmpFile,
         maxBytes: maxBytes,
         allowHttp: allowHttp,
         allowInsecureHosts: allowInsecureHosts,
       );
+      if (isLinkMediaFileMetadata(metadata.id)) {
+        responseMimeType = await _ensureLinkMediaDownloadIsMedia(
+          uri: uri,
+          destination: tmpFile,
+          responseMimeType: responseMimeType,
+          maxBytes: maxBytes,
+          allowHttp: allowHttp,
+          allowInsecureHosts: allowInsecureHosts,
+        );
+      }
 
       late final int fileSizeBytes;
       if (encrypted) {
@@ -15381,11 +16215,15 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         fileSizeBytes = await finalFile.length();
       }
 
-      final downloadMimeType = metadata.mimeType?.trim().isNotEmpty == true
+      final declaredMimeType = metadata.mimeType?.trim().isNotEmpty == true
           ? metadata.mimeType
-          : responseMimeType?.trim().isNotEmpty == true
+          : null;
+      final resolvedMimeType = responseMimeType?.trim().isNotEmpty == true
           ? responseMimeType
           : null;
+      final downloadMimeType = isLinkMediaFileMetadata(metadata.id)
+          ? (resolvedMimeType ?? declaredMimeType)
+          : (declaredMimeType ?? resolvedMimeType);
       final updatedMetadata = metadata.copyWith(
         path: finalFile.path,
         mimeType: downloadMimeType,
@@ -15406,26 +16244,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     } on XmppAbortedException {
       return null;
     } on XmppException catch (_) {
-      if (stanzaId != null) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.saveMessageError(
-            stanzaID: stanzaId,
-            error: MessageError.fileDownloadFailure,
-          ),
-          awaitDatabase: true,
-        );
-      }
+      await _saveInboundAttachmentDownloadFailure(
+        metadataId: metadataId,
+        stanzaId: stanzaId,
+      );
       rethrow;
     } on Exception {
-      if (stanzaId != null) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.saveMessageError(
-            stanzaID: stanzaId,
-            error: MessageError.fileDownloadFailure,
-          ),
-          awaitDatabase: true,
-        );
-      }
+      await _saveInboundAttachmentDownloadFailure(
+        metadataId: metadataId,
+        stanzaId: stanzaId,
+      );
       throw XmppMessageException();
     } finally {
       try {
@@ -15439,6 +16267,25 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         // Ignore cleanup failures.
       }
     }
+  }
+
+  Future<void> _saveInboundAttachmentDownloadFailure({
+    required String metadataId,
+    required String? stanzaId,
+  }) async {
+    final normalizedStanzaId = stanzaId?.trim();
+    if (normalizedStanzaId == null ||
+        normalizedStanzaId.isEmpty ||
+        isLinkMediaFileMetadata(metadataId)) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.saveMessageError(
+        stanzaID: normalizedStanzaId,
+        error: MessageError.fileDownloadFailure,
+      ),
+      awaitDatabase: true,
+    );
   }
 
   int _attachmentDownloadLimitBytes(FileMetadataData metadata) {
@@ -15639,6 +16486,45 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       await destination.delete();
     }
     await source.rename(destination.path);
+  }
+
+  Future<String?> _ensureLinkMediaDownloadIsMedia({
+    required Uri uri,
+    required File destination,
+    required String? responseMimeType,
+    required int maxBytes,
+    required bool allowHttp,
+    required bool allowInsecureHosts,
+  }) async {
+    final normalized = _normalizedLinkMediaMimeType(responseMimeType);
+    if (normalized == null || _isLinkMediaPreviewMimeType(normalized)) {
+      return normalized;
+    }
+    if (!_isLinkMediaHtmlMimeType(normalized)) {
+      throw XmppMessageException();
+    }
+    final media = await _resolveLinkMediaFromPageContext(
+      uri,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+    final resolvedUri = media == null ? null : Uri.tryParse(media.url);
+    if (resolvedUri == null) {
+      throw XmppMessageException();
+    }
+    final resolvedMimeType = await _downloadUrlToFile(
+      uri: resolvedUri,
+      destination: destination,
+      maxBytes: maxBytes,
+      allowHttp: allowHttp,
+      allowInsecureHosts: allowInsecureHosts,
+    );
+    final resolvedNormalized = _normalizedLinkMediaMimeType(resolvedMimeType);
+    if (resolvedNormalized != null &&
+        !_isLinkMediaPreviewMimeType(resolvedNormalized)) {
+      throw XmppMessageException();
+    }
+    return resolvedNormalized ?? media!.mimeType;
   }
 
   Future<String?> _downloadUrlToFile({
@@ -16627,6 +17513,30 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     return _inboundAttachmentAutoDownloadGlobalLimiter.allowEvent(nowMs: nowMs);
   }
 
+  bool _allowLinkMediaProbeResolution(String chatJid) {
+    final normalized = normalizedBareAddressValue(chatJid);
+    if (normalized == null) {
+      return true;
+    }
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final chatAllowed = _linkMediaProbeChatLimiter.allowEvent(
+      normalized,
+      nowMs: nowMs,
+    );
+    if (!chatAllowed) {
+      return false;
+    }
+    return _linkMediaProbeGlobalLimiter.allowEvent(nowMs: nowMs);
+  }
+
+  @visibleForTesting
+  bool consumeInboundAttachmentAutoDownloadSlotForTest(String chatJid) =>
+      _allowInboundAttachmentAutoDownload(chatJid);
+
+  @visibleForTesting
+  bool consumeLinkMediaProbeSlotForTest(String chatJid) =>
+      _allowLinkMediaProbeResolution(chatJid);
+
   Future<void> _autoDownloadTrustedInboundAttachment({
     required Message message,
     required String metadataId,
@@ -16663,7 +17573,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         maxBytesOverride: maxAttachmentAutoDownloadBytes,
       );
     } on Exception {
-      // Best-effort: errors are reflected on the message via fileDownloadFailure.
+      // Best-effort: real attachment errors are reflected on the message.
     }
   }
 

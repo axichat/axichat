@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/message_links.dart';
 import 'package:flutter/material.dart';
 
 class ParsedMessageText {
@@ -10,13 +11,6 @@ class ParsedMessageText {
   final TextSpan body;
   final List<DynamicTextLink> links;
 }
-
-final _linkPattern = RegExp(
-  r'((https?:\/\/|mailto:|xmpp:|www\.)[^\s<>()\[\]{}]+)',
-  caseSensitive: false,
-);
-
-const _trailingPunctuation = '.,!?:;)';
 
 ParsedMessageText parseMessageText({
   required String text,
@@ -34,7 +28,7 @@ ParsedMessageText parseMessageText({
   final links = <DynamicTextLink>[];
   var index = 0;
 
-  for (final match in _linkPattern.allMatches(text)) {
+  for (final match in messageLinkPattern.allMatches(text)) {
     if (match.start > index) {
       spans.add(
         TextSpan(text: text.substring(index, match.start), style: baseStyle),
@@ -45,11 +39,8 @@ ParsedMessageText parseMessageText({
     var linkText = matchText;
     var linkStart = match.start;
     var linkEnd = match.end;
-    while (linkText.isNotEmpty &&
-        _trailingPunctuation.contains(linkText[linkText.length - 1])) {
-      linkText = linkText.substring(0, linkText.length - 1);
-      linkEnd -= 1;
-    }
+    linkText = trimTrailingLinkPunctuation(linkText);
+    linkEnd -= matchText.length - linkText.length;
 
     if (linkText.isEmpty) {
       spans.add(TextSpan(text: matchText, style: baseStyle));
@@ -57,7 +48,7 @@ ParsedMessageText parseMessageText({
       continue;
     }
 
-    final normalized = _normalizeLink(linkText);
+    final normalized = normalizeMessageLink(linkText);
     spans.add(TextSpan(text: linkText, style: linkStyle));
     links.add(
       DynamicTextLink(
@@ -83,19 +74,4 @@ ParsedMessageText parseMessageText({
     body: TextSpan(style: baseStyle, children: spans),
     links: links,
   );
-}
-
-String _normalizeLink(String value) {
-  final trimmed = value.trim();
-  final lower = trimmed.toLowerCase();
-  if (lower.startsWith('http://') ||
-      lower.startsWith('https://') ||
-      lower.startsWith('mailto:') ||
-      lower.startsWith('xmpp:')) {
-    return trimmed;
-  }
-  if (lower.startsWith('www.')) {
-    return 'https://$trimmed';
-  }
-  return 'https://$trimmed';
 }

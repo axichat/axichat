@@ -503,6 +503,8 @@ abstract interface class XmppDatabase implements Database {
     String? body,
   });
 
+  Future<void> clearMessageAttachment(String stanzaID);
+
   Future<void> addMessageAttachment({
     required String messageId,
     required String fileMetadataId,
@@ -6178,6 +6180,28 @@ ORDER BY timestamp ASC, rowid ASC
         ),
       );
     });
+  }
+
+  @override
+  Future<void> clearMessageAttachment(String stanzaID) async {
+    final existing = await messagesAccessor.selectOne(stanzaID);
+    if (existing == null) return;
+    final metadataIds = <String>{};
+    final directMetadataId = existing.fileMetadataID?.trim();
+    if (directMetadataId != null && directMetadataId.isNotEmpty) {
+      metadataIds.add(directMetadataId);
+    }
+    await transaction(() async {
+      await (update(messages)
+            ..where((messages) => messages.stanzaID.equals(stanzaID)))
+          .write(const MessagesCompanion(fileMetadataID: Value(null)));
+      if (existing.id != null) {
+        metadataIds.addAll(await deleteMessageAttachments(existing.id!));
+      }
+    });
+    for (final metadataId in metadataIds) {
+      await _deleteFileMetadataIfOrphaned(metadataId);
+    }
   }
 
   @override

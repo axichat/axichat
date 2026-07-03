@@ -29,6 +29,7 @@ import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_links.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/safe_logging.dart';
@@ -8392,13 +8393,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final stateIds =
         state.attachmentMetadataIdsByMessageId[_messageKey(message)];
     if (stateIds != null && stateIds.isNotEmpty) {
-      return _trimmedUniqueMetadataIds(stateIds);
+      return _transferableAttachmentMetadataIds(stateIds);
     }
     final fallbackId = message.fileMetadataID?.trim();
     if (fallbackId == null || fallbackId.isEmpty) {
       return const <String>[];
     }
-    return [fallbackId];
+    return _transferableAttachmentMetadataIds([fallbackId]);
   }
 
   String? _resolvedEmailHtmlBodyForMessage(Message message) {
@@ -8452,7 +8453,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     for (final message in group.messages) {
       metadataIds.addAll(await _attachmentMetadataIdsForForwardDraft(message));
     }
-    return _trimmedUniqueMetadataIds(metadataIds);
+    return _transferableAttachmentMetadataIds(metadataIds);
   }
 
   DraftForwardedQuoteContext? _forwardedQuoteContext(Message message) {
@@ -8574,7 +8575,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final stateIds =
         state.attachmentMetadataIdsByMessageId[_messageKey(message)];
     if (stateIds != null && stateIds.isNotEmpty) {
-      return _trimmedUniqueMetadataIds(stateIds);
+      return _transferableAttachmentMetadataIds(stateIds);
     }
     final metadataIds = <String>[];
     final messageId = message.id;
@@ -8600,14 +8601,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         metadataIds.add(fallbackId);
       }
     }
-    return _trimmedUniqueMetadataIds(metadataIds);
+    return _transferableAttachmentMetadataIds(metadataIds);
   }
 
-  List<String> _trimmedUniqueMetadataIds(Iterable<String> ids) {
+  List<String> _transferableAttachmentMetadataIds(Iterable<String> ids) {
     final uniqueIds = <String>{};
     for (final id in ids) {
       final trimmed = id.trim();
-      if (trimmed.isEmpty) {
+      if (trimmed.isEmpty || isLinkMediaFileMetadata(trimmed)) {
         continue;
       }
       uniqueIds.add(trimmed);
@@ -11483,7 +11484,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<List<Attachment>> _attachmentsFromMetadataIds(
     Iterable<String> metadataIds,
   ) async {
-    final orderedIds = LinkedHashSet<String>.from(metadataIds);
+    final orderedIds = <String>{};
+    for (final metadataId in metadataIds) {
+      final trimmed = metadataId.trim();
+      if (trimmed.isEmpty || isLinkMediaFileMetadata(trimmed)) {
+        continue;
+      }
+      orderedIds.add(trimmed);
+    }
     if (orderedIds.isEmpty) return const [];
     final resolved = <Attachment>[];
     for (final metadataId in orderedIds) {

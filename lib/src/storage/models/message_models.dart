@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/interop/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_links.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -667,7 +668,7 @@ abstract class Message with _$Message implements Insertable<Message> {
 
   bool get editable =>
       error.isNone &&
-      fileMetadataID == null &&
+      (fileMetadataID == null || isLinkMediaFileMetadata(fileMetadataID)) &&
       !isFileUploadNotification &&
       !fileUploading &&
       !fileDownloading;
