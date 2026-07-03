@@ -29,6 +29,29 @@ bool exportSaveShouldWriteBytes(TargetPlatform platform) {
   };
 }
 
+Future<String?> saveFileWithPicker({
+  required File file,
+  required String filename,
+  required TargetPlatform platform,
+  FilePicker? filePicker,
+  int? maxBytesForBytesSave,
+}) async {
+  final picker = filePicker ?? FilePicker.platform;
+  if (!exportSaveShouldWriteBytes(platform)) {
+    return picker.saveFile(fileName: filename);
+  }
+  if (maxBytesForBytesSave != null) {
+    final byteCount = await file.length();
+    if (byteCount > maxBytesForBytesSave) {
+      throw ExportSaveFileTooLargeException(
+        byteCount: byteCount,
+        maxBytes: maxBytesForBytesSave,
+      );
+    }
+  }
+  return picker.saveFile(fileName: filename, bytes: await file.readAsBytes());
+}
+
 Future<String?> saveExportFileWithPicker({
   required File file,
   required String filename,
@@ -39,23 +62,16 @@ Future<String?> saveExportFileWithPicker({
 }) async {
   var savedSourceInPlace = false;
   try {
+    final savePath = await saveFileWithPicker(
+      file: file,
+      filename: filename,
+      platform: platform,
+      filePicker: filePicker,
+      maxBytesForBytesSave: maxBytesForBytesSave,
+    );
     if (exportSaveShouldWriteBytes(platform)) {
-      final byteCount = await file.length();
-      if (maxBytesForBytesSave != null && byteCount > maxBytesForBytesSave) {
-        throw ExportSaveFileTooLargeException(
-          byteCount: byteCount,
-          maxBytes: maxBytesForBytesSave,
-        );
-      }
-      final picker = filePicker ?? FilePicker.platform;
-      return picker.saveFile(
-        fileName: filename,
-        bytes: await file.readAsBytes(),
-      );
+      return savePath;
     }
-
-    final picker = filePicker ?? FilePicker.platform;
-    final savePath = await picker.saveFile(fileName: filename);
     if (savePath == null || savePath.trim().isEmpty) {
       return savePath;
     }

@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 import 'package:axichat/src/chat/models/rfc_email_group.dart';
+import 'package:axichat/src/chats/utils/export_tools.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -16,7 +17,6 @@ import 'package:path/path.dart' as p;
 
 const String emailEmlExportTempDirectoryName = 'email_exports';
 const int _messageAttachmentLookupBatchSize = 900;
-const int _emailExportPageSize = 200;
 const int _emailContentResolutionConcurrency = 6;
 
 typedef EmailEmlExportProgressCallback =
@@ -226,7 +226,11 @@ class EmailEmlExporter {
       }
       if (warnings.isNotEmpty) {
         final warningsFile = File(p.join(emlDirectory.path, 'warnings.txt'));
-        await _writeWarningsFile(file: warningsFile, warnings: warnings);
+        await writeExportWarningsFile(
+          file: warningsFile,
+          header: 'Axichat email export warnings',
+          warnings: warnings,
+        );
         await zipEncoder.addFile(warningsFile, 'warnings.txt');
       }
 
@@ -313,24 +317,11 @@ Stream<List<Message>> _emailExportMessagePages({
     yield await loadHistory(chat.jid);
     return;
   }
-  final total = await countHistory(chat.jid);
-  var remaining = total;
-  while (remaining > 0) {
-    final offset = remaining > _emailExportPageSize
-        ? remaining - _emailExportPageSize
-        : 0;
-    final limit = remaining - offset;
-    final page = await loadHistoryPage(
-      jid: chat.jid,
-      offset: offset,
-      limit: limit,
-    );
-    if (page.isEmpty) {
-      break;
-    }
-    yield page.reversed.toList(growable: false);
-    remaining = offset;
-  }
+  yield* exportHistoryPages(
+    jid: chat.jid,
+    countHistory: countHistory,
+    loadHistoryPage: loadHistoryPage,
+  );
 }
 
 Future<List<Message>> _expandedEmailExportMessages({
@@ -425,15 +416,17 @@ Future<List<_EmailExportJob>> _emailExportJobsForMessages({
   }
   final refsByStanzaId = <String, List<_EmailAttachmentRef>>{};
   final metadataIds = <String>{};
+  final attachmentsByGroup = <String, List<MessageAttachmentData>>{};
   for (final message in exportMessages) {
     var messageAttachments = attachmentsByMessage[message.id] ?? const [];
     final transportGroupId = messageAttachments.isEmpty
         ? null
         : messageAttachments.first.transportGroupId?.trim();
     if (transportGroupId != null && transportGroupId.isNotEmpty) {
-      messageAttachments = await loadMessageAttachmentsForGroup(
-        transportGroupId,
-      );
+      messageAttachments =
+          attachmentsByGroup[transportGroupId] ??
+          await loadMessageAttachmentsForGroup(transportGroupId);
+      attachmentsByGroup[transportGroupId] = messageAttachments;
     }
     final refs = _attachmentRefsForMessage(
       message: message,
@@ -1018,23 +1011,6 @@ Future<void> _writeEmlFile({
     }
 
     _writeSingleBody(sink, plainText: plainText, htmlBody: htmlBody);
-  } finally {
-    await sink.flush();
-    await sink.close();
-  }
-}
-
-Future<void> _writeWarningsFile({
-  required File file,
-  required List<String> warnings,
-}) async {
-  final sink = file.openWrite();
-  try {
-    sink.writeln('Axichat email export warnings');
-    sink.writeln();
-    for (final warning in warnings) {
-      sink.writeln('- $warning');
-    }
   } finally {
     await sink.flush();
     await sink.close();

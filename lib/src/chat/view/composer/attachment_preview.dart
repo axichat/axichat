@@ -10,6 +10,7 @@ import 'package:axichat/src/attachments/view/attachment_file_preview.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
+import 'package:axichat/src/common/export_file_saver.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
@@ -22,7 +23,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart'
     show XmppFileTooBigException;
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -3596,12 +3596,12 @@ Future<void> saveAttachmentToDevice(
     maxLength: _attachmentSaveNameMaxLength,
   );
   try {
-    final savePath = await saveAttachmentFileWithPicker(
+    final savePath = await saveFileWithPicker(
       file: file,
       filename: resolvedName,
       platform: defaultTargetPlatform,
     );
-    if (attachmentSaveShouldWriteBytes(defaultTargetPlatform)) {
+    if (exportSaveShouldWriteBytes(defaultTargetPlatform)) {
       return;
     }
     if (savePath == null || savePath.trim().isEmpty) return;
@@ -3627,31 +3627,6 @@ Future<void> saveAttachmentToDevice(
       destructive: true,
     );
   }
-}
-
-@visibleForTesting
-bool attachmentSaveShouldWriteBytes(TargetPlatform platform) {
-  return switch (platform) {
-    TargetPlatform.android || TargetPlatform.iOS => true,
-    TargetPlatform.fuchsia ||
-    TargetPlatform.linux ||
-    TargetPlatform.macOS ||
-    TargetPlatform.windows => false,
-  };
-}
-
-@visibleForTesting
-Future<String?> saveAttachmentFileWithPicker({
-  required File file,
-  required String filename,
-  required TargetPlatform platform,
-  FilePicker? filePicker,
-}) async {
-  final picker = filePicker ?? FilePicker.platform;
-  if (attachmentSaveShouldWriteBytes(platform)) {
-    return picker.saveFile(fileName: filename, bytes: await file.readAsBytes());
-  }
-  return picker.saveFile(fileName: filename);
 }
 
 Future<File?> _prepareShareAttachmentFile({

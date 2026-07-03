@@ -3,6 +3,7 @@
 
 import 'dart:io';
 
+import 'package:axichat/src/chats/utils/export_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:intl/intl.dart' as intl;
 
@@ -157,66 +158,34 @@ class ChatHistoryExporter {
     lineFormatter,
     bool Function(Message message)? messageFilter,
   }) async {
-    if (loadHistoryPage != null && countHistory != null) {
-      final total = await countHistory(chat.jid);
-      if (total == 0) return 0;
-      const pageSize = 200;
-      var remaining = total;
-      var appended = 0;
-      var wroteHeader = false;
-      while (remaining > 0) {
-        final offset = remaining > pageSize ? remaining - pageSize : 0;
-        final limit = remaining - offset;
-        final page = await loadHistoryPage(
-          jid: chat.jid,
-          offset: offset,
-          limit: limit,
-        );
-        if (page.isEmpty) break;
-        for (final message in page.reversed) {
-          if (messageFilter != null && !messageFilter(message)) {
-            continue;
-          }
-          final line = lineFormatter?.call(
-            chat: chat,
-            message: message,
-            format: format,
-          );
-          final content = line ?? _defaultMessageLine(message, format: format);
-          if (content == null || content.isEmpty) continue;
-          if (!wroteHeader) {
-            _writeChatHeader(sink, chat);
-            wroteHeader = true;
-          }
-          sink.writeln(content);
-          appended++;
-        }
-        remaining = offset;
-      }
-      return appended;
-    }
-
-    final history = await loadHistory(chat.jid);
-    if (history.isEmpty) return 0;
+    final pages = loadHistoryPage != null && countHistory != null
+        ? exportHistoryPages(
+            jid: chat.jid,
+            countHistory: countHistory,
+            loadHistoryPage: loadHistoryPage,
+          )
+        : Stream<List<Message>>.fromFuture(loadHistory(chat.jid));
     var appended = 0;
     var wroteHeader = false;
-    for (final message in history) {
-      if (messageFilter != null && !messageFilter(message)) {
-        continue;
+    await for (final page in pages) {
+      for (final message in page) {
+        if (messageFilter != null && !messageFilter(message)) {
+          continue;
+        }
+        final line = lineFormatter?.call(
+          chat: chat,
+          message: message,
+          format: format,
+        );
+        final content = line ?? _defaultMessageLine(message, format: format);
+        if (content == null || content.isEmpty) continue;
+        if (!wroteHeader) {
+          _writeChatHeader(sink, chat);
+          wroteHeader = true;
+        }
+        sink.writeln(content);
+        appended++;
       }
-      final line = lineFormatter?.call(
-        chat: chat,
-        message: message,
-        format: format,
-      );
-      final content = line ?? _defaultMessageLine(message, format: format);
-      if (content == null || content.isEmpty) continue;
-      if (!wroteHeader) {
-        _writeChatHeader(sink, chat);
-        wroteHeader = true;
-      }
-      sink.writeln(content);
-      appended++;
     }
     return appended;
   }

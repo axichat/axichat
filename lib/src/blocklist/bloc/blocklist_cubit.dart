@@ -126,25 +126,13 @@ class BlocklistCubit extends Cubit<BlocklistState>
         );
         return;
       }
-      try {
-        await _blockEmail(address: normalized);
-      } on EmailServiceException catch (_) {
-        _emitFailure(
-          BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
-          operation: operation,
-        );
-        return;
-      } on DeltaChatException catch (_) {
-        _emitFailure(
-          BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
-          operation: operation,
-        );
-        return;
-      } on XmppException catch (_) {
-        _emitFailure(
-          BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
-          operation: operation,
-        );
+      final blocked = await _runEmailBlocklistAction(
+        action: () => _blockEmail(address: normalized),
+        failureNotice: BlocklistNoticeType.blockFailed,
+        address: normalized,
+        operation: operation,
+      );
+      if (!blocked) {
         return;
       }
       _emitSuccess(
@@ -288,34 +276,13 @@ class BlocklistCubit extends Cubit<BlocklistState>
         );
         return;
       }
-      try {
-        await _blockEmail(address: emailAddress);
-      } on EmailServiceException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.blockFailed,
-            address: emailAddress,
-          ),
-          operation: operation,
-        );
-        return;
-      } on DeltaChatException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.blockFailed,
-            address: emailAddress,
-          ),
-          operation: operation,
-        );
-        return;
-      } on XmppException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.blockFailed,
-            address: emailAddress,
-          ),
-          operation: operation,
-        );
+      final blocked = await _runEmailBlocklistAction(
+        action: () => _blockEmail(address: emailAddress),
+        failureNotice: BlocklistNoticeType.blockFailed,
+        address: emailAddress,
+        operation: operation,
+      );
+      if (!blocked) {
         return;
       }
     }
@@ -376,6 +343,25 @@ class BlocklistCubit extends Cubit<BlocklistState>
     );
     await _xmppService.setAddressBlockStatus(address: address, blocked: false);
     return result;
+  }
+
+  Future<bool> _runEmailBlocklistAction({
+    required Future<void> Function() action,
+    required BlocklistNoticeType failureNotice,
+    required String address,
+    required BlocklistOperation operation,
+  }) async {
+    try {
+      await action();
+      return true;
+    } on EmailServiceException catch (_) {
+    } on DeltaChatException catch (_) {
+    } on XmppException catch (_) {}
+    _emitFailure(
+      BlocklistNotice(failureNotice, address: address),
+      operation: operation,
+    );
+    return false;
   }
 
   Future<EmailCoreBlockStateResult> _applyEmailBlocklistCoreState({
@@ -450,34 +436,13 @@ class BlocklistCubit extends Cubit<BlocklistState>
     }
     _emitLoading(operation: operation);
     if (entry.transport.isEmail) {
-      try {
-        await _unblockEmail(address: normalized);
-      } on EmailServiceException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.unblockFailed,
-            address: normalized,
-          ),
-          operation: operation,
-        );
-        return;
-      } on DeltaChatException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.unblockFailed,
-            address: normalized,
-          ),
-          operation: operation,
-        );
-        return;
-      } on XmppException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.unblockFailed,
-            address: normalized,
-          ),
-          operation: operation,
-        );
+      final unblocked = await _runEmailBlocklistAction(
+        action: () => _unblockEmail(address: normalized),
+        failureNotice: BlocklistNoticeType.unblockFailed,
+        address: normalized,
+        operation: operation,
+      );
+      if (!unblocked) {
         return;
       }
       _emitSuccess(
@@ -534,34 +499,13 @@ class BlocklistCubit extends Cubit<BlocklistState>
         );
         return;
       }
-      try {
-        await _unblockEmail(address: emailAddress);
-      } on EmailServiceException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.unblockFailed,
-            address: normalized,
-          ),
-          operation: operation,
-        );
-        return;
-      } on DeltaChatException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.unblockFailed,
-            address: normalized,
-          ),
-          operation: operation,
-        );
-        return;
-      } on XmppException catch (_) {
-        _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.unblockFailed,
-            address: normalized,
-          ),
-          operation: operation,
-        );
+      final unblocked = await _runEmailBlocklistAction(
+        action: () => _unblockEmail(address: emailAddress),
+        failureNotice: BlocklistNoticeType.unblockFailed,
+        address: normalized,
+        operation: operation,
+      );
+      if (!unblocked) {
         return;
       }
     }

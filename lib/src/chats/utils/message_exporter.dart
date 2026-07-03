@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
 import 'package:axichat/src/chats/utils/email_eml_exporter.dart';
+import 'package:axichat/src/chats/utils/export_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -252,7 +253,11 @@ class MessageExporter {
         await encoder.addFile(part.file, part.path);
       }
       if (incompleteWithFile) {
-        await _writeMessageWarningsFile(file: warningsFile, warnings: warnings);
+        await writeExportWarningsFile(
+          file: warningsFile,
+          header: 'Axichat message export warnings',
+          warnings: warnings,
+        );
         await encoder.addFile(warningsFile, 'warnings.txt');
       }
       await encoder.close();
@@ -484,21 +489,4 @@ List<String> _mixedExportWarnings({
     warnings.add('Email message export failed.');
   }
   return warnings;
-}
-
-Future<void> _writeMessageWarningsFile({
-  required File file,
-  required List<String> warnings,
-}) async {
-  final sink = file.openWrite();
-  try {
-    sink.writeln('Axichat message export warnings');
-    sink.writeln();
-    for (final warning in warnings) {
-      sink.writeln('- $warning');
-    }
-  } finally {
-    await sink.flush();
-    await sink.close();
-  }
 }

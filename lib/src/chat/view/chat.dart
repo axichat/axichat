@@ -471,7 +471,10 @@ bool shouldShowEmailWebViewTipForTesting({
 bool shouldDeferReadThresholdSyncForTesting({
   required bool messagesLoaded,
   required bool initialTimelineReadinessPending,
-}) => !messagesLoaded || initialTimelineReadinessPending;
+}) => _chatTimelineLoadingOverlayVisible(
+  messagesLoaded: messagesLoaded,
+  initialTimelineReadinessPending: initialTimelineReadinessPending,
+);
 
 bool _chatTimelineLoadingOverlayVisible({
   required bool messagesLoaded,
