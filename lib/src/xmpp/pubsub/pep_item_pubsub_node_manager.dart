@@ -35,6 +35,7 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
   String get refreshOperationName;
   XmppOperationKind? get operationKind;
   SyncRateLimiter get rateLimiter;
+  String? get sendLastPublishedItemValue => null;
 
   List<mox.AccessModel> get candidateAccessModels => const <mox.AccessModel>[
     mox.AccessModel.whitelist,
@@ -161,10 +162,9 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
       getAttributes().sendEvent(ensureStartEvent);
     }
     try {
-      final sendLastPublishedItem = await _resolveSendLastPublishedItem(
-        pubsub,
-        host,
-      );
+      final sendLastPublishedItem =
+          sendLastPublishedItemValue ??
+          await _resolveSendLastPublishedItem(pubsub, host);
       final configs = <mox.AccessModel, AxiPubSubNodeConfig>{
         for (final candidate in candidateAccessModels)
           candidate: _nodeConfig(
@@ -343,10 +343,11 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
       return false;
     }
     final itemId = itemIdOf(payload);
+    final payloadXml = payloadToXml(payload);
     final result = await pubsub.publish(
       host,
       nodeId,
-      payloadToXml(payload),
+      payloadXml,
       id: itemId,
       options: _publishOptions(),
       autoCreate: publishAutoCreate,
@@ -355,7 +356,25 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
           : null,
     );
     if (result.isType<mox.PubSubError>()) {
-      return false;
+      final error = result.get<mox.PubSubError>();
+      if (sendLastPublishedItemValue == null ||
+          error is! mox.PreconditionsNotMetError) {
+        return false;
+      }
+      final strippedResult = await pubsub.publish(
+        host,
+        nodeId,
+        payloadXml,
+        id: itemId,
+        options: _publishOptions(includeSendLastPublishedItem: false),
+        autoCreate: publishAutoCreate,
+        createNodeConfig: publishAutoCreate
+            ? _nodeConfig(accessModel).toNodeConfig()
+            : null,
+      );
+      if (strippedResult.isType<mox.PubSubError>()) {
+        return false;
+      }
     }
     cache[itemId] = payload;
     emitUpdatePayload(payload);
@@ -436,11 +455,16 @@ abstract class PepItemPubSubNodeManager<TPayload> extends mox.XmppManagerBase
     return !result.isType<mox.PubSubError>();
   }
 
-  mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
+  mox.PubSubPublishOptions _publishOptions({
+    bool includeSendLastPublishedItem = true,
+  }) => mox.PubSubPublishOptions(
     accessModel: accessModel.value,
     maxItems: maxItemsValue,
     persistItems: persistItemsEnabled,
     publishModel: publishModelPublishers,
+    sendLastPublishedItem: includeSendLastPublishedItem
+        ? sendLastPublishedItemValue
+        : null,
   );
 
   Future<void> _bootstrap() async {

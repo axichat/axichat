@@ -193,8 +193,6 @@ final class XmppDisplayedThroughResult {
   final String? anchorId;
   final int updatedRows;
   final XmppReadMarkerSyncStatus markerStatus;
-
-  bool get advancedLocalState => updatedRows > 0;
 }
 
 final class _PendingInboundAcknowledgement {
@@ -1112,6 +1110,8 @@ const String _messageCollectionSyncFlushPendingOperationName =
     'MessageService.flushPendingMessageCollectionSyncOnResume';
 const String _messageCollectionSyncSnapshotBootstrapOperationName =
     'MessageService.bootstrapMessageCollectionSnapshotOnNegotiations';
+const String _mdsDisplayedSyncSnapshotBootstrapOperationName =
+    'MessageService.bootstrapMdsDisplayedSnapshotOnNegotiations';
 const String _calendarSyncFlushOperationName =
     'MessageService.flushPendingCalendarSyncOnNegotiations';
 final _messageCollectionSyncSourceKey = XmppStateStore.registerKey(
@@ -1340,11 +1340,16 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   String? _messageCollectionSourceId;
   bool _pendingMessageCollectionSyncLoaded = false;
   final Set<String> _pendingMessageCollectionPublishes = <String>{};
+  bool _mdsDisplayedSnapshotInFlight = false;
+  final Map<String, MdsDisplayedPayload> _pendingMdsDisplayedByChat =
+      <String, MdsDisplayedPayload>{};
 
   DraftsPubSubManager? get _draftsManager =>
       _connection.getManager<DraftsPubSubManager>();
   MessageCollectionsPubSubManager? get _messageCollectionsManager =>
       _connection.getManager<MessageCollectionsPubSubManager>();
+  MdsDisplayedPubSubManager? get _mdsDisplayedManager =>
+      _connection.getManager<MdsDisplayedPubSubManager>();
 
   Stream<List<Draft>> draftsStream({
     int start = 0,
@@ -1976,6 +1981,51 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       return;
     } finally {
       _messageCollectionSnapshotInFlight = false;
+    }
+  }
+
+  Future<void> syncMdsDisplayedSnapshot() async {
+    if (_mdsDisplayedSnapshotInFlight) {
+      return;
+    }
+    _mdsDisplayedSnapshotInFlight = true;
+    try {
+      await database;
+      final manager = _mdsDisplayedManager;
+      if (manager == null) {
+        return;
+      }
+      await manager.ensureNode();
+      await manager.subscribe();
+      final snapshot = await manager.fetchAllWithStatus();
+      if (!snapshot.isSuccess) {
+        return;
+      }
+      final remoteByChat = <String, MdsDisplayedPayload>{};
+      for (final payload in snapshot.items) {
+        final normalizedPayload = _normalizedMdsDisplayedPayload(payload);
+        if (normalizedPayload == null) {
+          continue;
+        }
+        remoteByChat[normalizedPayload.chatJid] = normalizedPayload;
+        await _applyMdsDisplayedPayload(normalizedPayload);
+      }
+      if (snapshot.isComplete) {
+        manager.cache.clear();
+      }
+      for (final payload in remoteByChat.values) {
+        manager.cache[payload.itemId] = payload;
+      }
+      if (snapshot.isComplete) {
+        await _repairMdsDisplayedSnapshot(
+          remoteByChat: remoteByChat,
+          manager: manager,
+        );
+      }
+    } on XmppAbortedException {
+      return;
+    } finally {
+      _mdsDisplayedSnapshotInFlight = false;
     }
   }
 
@@ -3181,6 +3231,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (shouldSeedConversationIndex) {
       await _seedConversationIndexForDirectChatCreation(message.chatJid);
     }
+    await _applyPendingMdsDisplayedForChat(message.chatJid);
     await _applyPendingSelfDisplayedMarkersForChat(message.chatJid);
     await _applyPendingOutboundMessageStatusesForChat(message.chatJid);
     await _applyPendingInboundReactionsForMessage(message);
@@ -3856,6 +3907,18 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           incomingMucStanzaId != null &&
           incomingMucStanzaId.isNotEmpty &&
           (existingMucStanzaId == null || existingMucStanzaId.isEmpty);
+      final incomingServerStanzaId = incoming.serverStanzaId?.trim();
+      final existingServerStanzaId = existing.serverStanzaId?.trim();
+      final shouldUpdateServerStanzaId =
+          incomingServerStanzaId != null &&
+          incomingServerStanzaId.isNotEmpty &&
+          (existingServerStanzaId == null || existingServerStanzaId.isEmpty);
+      final incomingServerStanzaBy = incoming.serverStanzaBy?.trim();
+      final existingServerStanzaBy = existing.serverStanzaBy?.trim();
+      final shouldUpdateServerStanzaBy =
+          incomingServerStanzaBy != null &&
+          incomingServerStanzaBy.isNotEmpty &&
+          (existingServerStanzaBy == null || existingServerStanzaBy.isEmpty);
       final incomingSenderRealJid = incoming.effectiveSenderRealJid;
       final existingSenderRealJid = existing.effectiveSenderRealJid;
       final shouldUpdateSenderRealJid =
@@ -3877,6 +3940,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       if (!needsMetadata &&
           !needsBody &&
           !shouldUpdateMucStanzaId &&
+          !shouldUpdateServerStanzaId &&
+          !shouldUpdateServerStanzaBy &&
           !shouldUpdateSenderRealJid &&
           !shouldUpdateOccupantID &&
           !shouldUpdateAcked &&
@@ -3895,6 +3960,14 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         await db.saveMessageMucStanzaId(
           stanzaID: existing.stanzaID,
           mucStanzaId: incomingMucStanzaId,
+        );
+      }
+      if (shouldUpdateServerStanzaId || shouldUpdateServerStanzaBy) {
+        updatedMessageId = existing.stanzaID;
+        await db.saveMessageServerStanzaId(
+          stanzaID: existing.stanzaID,
+          serverStanzaId: incomingServerStanzaId,
+          serverStanzaBy: incomingServerStanzaBy,
         );
       }
       if (shouldUpdateSenderRealJid || shouldUpdateOccupantID) {
@@ -3934,6 +4007,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       (db) => db.getMessageByStanzaID(updatedMessageId!),
     );
     if (updatedMessage != null) {
+      await _applyPendingMdsDisplayedForChat(updatedMessage.chatJid);
       await _applyPendingInboundReactionsForMessage(updatedMessage);
       await _applyPendingInboundPinMutationsForMessage(updatedMessage);
     }
@@ -5728,6 +5802,21 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     );
     registerBootstrapOperation(
       XmppBootstrapOperation(
+        key: _mdsDisplayedSyncSnapshotBootstrapOperationName,
+        priority: 0,
+        triggers: const <XmppBootstrapTrigger>{
+          XmppBootstrapTrigger.fullNegotiation,
+          XmppBootstrapTrigger.resumedNegotiation,
+          XmppBootstrapTrigger.manualRefresh,
+        },
+        operationName: _mdsDisplayedSyncSnapshotBootstrapOperationName,
+        run: () async {
+          await syncMdsDisplayedSnapshot();
+        },
+      ),
+    );
+    registerBootstrapOperation(
+      XmppBootstrapOperation(
         key: _httpUploadBootstrapOperationName,
         priority: 0,
         triggers: const <XmppBootstrapTrigger>{
@@ -5811,6 +5900,12 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
           case MessageCollectionSyncPayload():
             await _applyMessageCollectionSyncUpdate(payload);
         }
+      })
+      ..registerHandler<MdsDisplayedUpdatedEvent>((event) async {
+        await _applyMdsDisplayedPayload(event.payload);
+      })
+      ..registerHandler<MdsDisplayedRetractedEvent>((event) async {
+        _pendingMdsDisplayedByChat.remove(event.chatJid.trim());
       })
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         if (event.state == ConnectionState.connected) return;
@@ -6449,6 +6544,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     ...super.pubSubFeatureManagers,
     DraftsPubSubManager(),
     MessageCollectionsPubSubManager(),
+    MdsDisplayedPubSubManager(),
   ];
 
   @override
@@ -6456,6 +6552,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     ...super.discoFeatures,
     draftsNotifyFeature,
     messageCollectionsNotifyFeature,
+    mdsDisplayedNotifyFeature,
   ];
 
   mox.MessageEvent _buildOutgoingMessageEvent({
@@ -8598,6 +8695,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     if (updatedRows > 0) {
       await _updateUnreadCountForChat(normalizedChatJid);
     }
+    fireAndForget(
+      () => _publishMdsDisplayedForChat(normalizedChatJid),
+      operationName: 'MessageService.publishMdsDisplayedForVisibleMessages',
+    );
     final markerStatus =
         updatedRows > 0 && markerPolicy == XmppDisplayedMarkerPolicy.sendOrQueue
         ? await _sendReadMarkerForDisplayedThrough(
@@ -8622,6 +8723,388 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       anchorId: anchorId,
       updatedRows: updatedRows,
       markerStatus: markerStatus,
+    );
+  }
+
+  Future<void> _repairMdsDisplayedSnapshot({
+    required Map<String, MdsDisplayedPayload> remoteByChat,
+    required MdsDisplayedPubSubManager manager,
+  }) async {
+    final chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
+      (db) => db.getAllChats(),
+    );
+    for (final chat in chats) {
+      if (chat.type != ChatType.chat) {
+        continue;
+      }
+      final local =
+          await _dbOpReturning<
+            XmppDatabase,
+            ({MdsDisplayedPayload payload, Message message})?
+          >((db) async {
+            final frontier = await _localMdsPublishFrontierForChat(
+              db,
+              chat.jid,
+            );
+            if (frontier == null ||
+                await _isStoredMdsCursorStrictlyAheadOfLocalFrontier(
+                  db,
+                  frontier,
+                )) {
+              return null;
+            }
+            return frontier;
+          });
+      if (local == null) {
+        continue;
+      }
+      final remote = remoteByChat[local.payload.chatJid];
+      if (remote != null &&
+          !await _isLocalMdsDisplayedCursorNewerThanRemote(
+            remote: remote,
+            local: local,
+          )) {
+        continue;
+      }
+      final published = await manager.publishDisplayed(local.payload);
+      if (published) {
+        await _saveMdsDisplayedCursor(
+          payload: local.payload,
+          messageStanzaId: local.message.stanzaID,
+        );
+      }
+    }
+  }
+
+  Future<void> _publishMdsDisplayedForChat(
+    String chatJid, {
+    MdsDisplayedPubSubManager? managerOverride,
+    bool managerReady = false,
+  }) async {
+    try {
+      final normalizedChatJid = chatJid.trim();
+      if (normalizedChatJid.isEmpty ||
+          !_connection.hasConnectionSettings ||
+          myJid == null) {
+        return;
+      }
+      final local =
+          await _dbOpReturning<
+            XmppDatabase,
+            ({MdsDisplayedPayload payload, Message message})?
+          >((db) async {
+            final frontier = await _localMdsPublishFrontierForChat(
+              db,
+              normalizedChatJid,
+            );
+            if (frontier == null ||
+                await _isStoredMdsCursorAtOrAheadOfLocalFrontier(
+                  db,
+                  frontier,
+                )) {
+              return null;
+            }
+            return frontier;
+          });
+      if (local == null) {
+        return;
+      }
+      final manager = managerOverride ?? _mdsDisplayedManager;
+      if (manager == null) {
+        return;
+      }
+      if (!managerReady) {
+        await manager.ensureNode();
+        await manager.subscribe();
+      }
+      final remote = manager.cache[local.payload.chatJid];
+      if (remote != null &&
+          !await _isLocalMdsDisplayedCursorNewerThanRemote(
+            remote: remote,
+            local: local,
+          )) {
+        return;
+      }
+      final published = await manager.publishDisplayed(local.payload);
+      if (!published) {
+        return;
+      }
+      await _saveMdsDisplayedCursor(
+        payload: local.payload,
+        messageStanzaId: local.message.stanzaID,
+      );
+    } on XmppAbortedException {
+      return;
+    }
+  }
+
+  Future<bool> _applyMdsDisplayedPayload(
+    MdsDisplayedPayload payload, {
+    bool allowQueue = true,
+  }) async {
+    final normalized = _normalizedMdsDisplayedPayload(payload);
+    if (normalized == null) {
+      return false;
+    }
+    final result =
+        await _dbOpReturning<XmppDatabase, ({bool resolved, int updatedRows})>((
+          db,
+        ) async {
+          final chat = await db.getChat(normalized.chatJid);
+          if (chat != null && chat.type != ChatType.chat) {
+            return (resolved: true, updatedRows: 0);
+          }
+          final target = await db.getMessageByServerStanzaId(
+            chatJid: normalized.chatJid,
+            serverStanzaId: normalized.serverStanzaId,
+            serverStanzaBy: normalized.serverStanzaBy,
+          );
+          if (target == null) {
+            return (resolved: false, updatedRows: 0);
+          }
+          final local = await _effectiveMdsDisplayedCursorForChat(
+            db,
+            normalized.chatJid,
+          );
+          if (local != null) {
+            final comparison = await db.compareChatMessageTimelineOrder(
+              chatJid: normalized.chatJid,
+              leftStanzaId: target.stanzaID,
+              rightStanzaId: local.message.stanzaID,
+            );
+            if (comparison == null || comparison <= 0) {
+              return (resolved: true, updatedRows: 0);
+            }
+          }
+          final updatedRows = await db.markMessagesStatusThrough(
+            messageId: target.stanzaID,
+            chatJid: normalized.chatJid,
+            senderJid: normalized.chatJid,
+            displayed: true,
+            includeEmailBacked: false,
+          );
+          await db.upsertMdsDisplayedCursor(
+            chatJid: normalized.chatJid,
+            serverStanzaId: normalized.serverStanzaId,
+            serverStanzaBy: normalized.serverStanzaBy,
+            messageStanzaId: target.stanzaID,
+          );
+          return (resolved: true, updatedRows: updatedRows);
+        });
+    if (!result.resolved) {
+      if (allowQueue) {
+        _pendingMdsDisplayedByChat[normalized.chatJid] = normalized;
+      }
+      return false;
+    }
+    _pendingMdsDisplayedByChat.remove(normalized.chatJid);
+    if (result.updatedRows > 0) {
+      await _updateUnreadCountForChat(normalized.chatJid);
+    }
+    return true;
+  }
+
+  Future<void> _applyPendingMdsDisplayedForChat(String chatJid) async {
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedChatJid.isEmpty) {
+      return;
+    }
+    final pending = _pendingMdsDisplayedByChat[normalizedChatJid];
+    if (pending == null) {
+      return;
+    }
+    final applied = await _applyMdsDisplayedPayload(pending, allowQueue: false);
+    if (applied) {
+      _pendingMdsDisplayedByChat.remove(normalizedChatJid);
+    }
+  }
+
+  Future<bool> _isLocalMdsDisplayedCursorNewerThanRemote({
+    required MdsDisplayedPayload remote,
+    required ({MdsDisplayedPayload payload, Message message}) local,
+  }) async {
+    final normalizedRemote = _normalizedMdsDisplayedPayload(remote);
+    if (normalizedRemote == null) {
+      return true;
+    }
+    final result = await _dbOpReturning<XmppDatabase, bool>((db) async {
+      final remoteTarget = await db.getMessageByServerStanzaId(
+        chatJid: normalizedRemote.chatJid,
+        serverStanzaId: normalizedRemote.serverStanzaId,
+        serverStanzaBy: normalizedRemote.serverStanzaBy,
+      );
+      if (remoteTarget == null) {
+        _pendingMdsDisplayedByChat[normalizedRemote.chatJid] = normalizedRemote;
+        return false;
+      }
+      final comparison = await db.compareChatMessageTimelineOrder(
+        chatJid: normalizedRemote.chatJid,
+        leftStanzaId: local.message.stanzaID,
+        rightStanzaId: remoteTarget.stanzaID,
+      );
+      return comparison == 1;
+    });
+    return result;
+  }
+
+  Future<void> _saveMdsDisplayedCursor({
+    required MdsDisplayedPayload payload,
+    required String messageStanzaId,
+  }) async {
+    final normalized = _normalizedMdsDisplayedPayload(payload);
+    if (normalized == null) {
+      return;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.upsertMdsDisplayedCursor(
+        chatJid: normalized.chatJid,
+        serverStanzaId: normalized.serverStanzaId,
+        serverStanzaBy: normalized.serverStanzaBy,
+        messageStanzaId: messageStanzaId,
+      ),
+    );
+  }
+
+  Future<bool> _isStoredMdsCursorAtOrAheadOfLocalFrontier(
+    XmppDatabase db,
+    ({MdsDisplayedPayload payload, Message message}) local,
+  ) async {
+    final comparison = await _compareStoredMdsCursorToLocalFrontier(db, local);
+    return comparison == null || comparison >= 0;
+  }
+
+  Future<bool> _isStoredMdsCursorStrictlyAheadOfLocalFrontier(
+    XmppDatabase db,
+    ({MdsDisplayedPayload payload, Message message}) local,
+  ) async {
+    final comparison = await _compareStoredMdsCursorToLocalFrontier(db, local);
+    return comparison == null || comparison > 0;
+  }
+
+  Future<int?> _compareStoredMdsCursorToLocalFrontier(
+    XmppDatabase db,
+    ({MdsDisplayedPayload payload, Message message}) local,
+  ) async {
+    final stored = await db.getMdsDisplayedCursor(local.payload.chatJid);
+    if (stored == null) {
+      return -1;
+    }
+    final storedPayload = _payloadForStoredMdsCursor(stored);
+    if (storedPayload == null) {
+      return -1;
+    }
+    return db.compareChatMessageTimelineOrder(
+      chatJid: local.payload.chatJid,
+      leftStanzaId: stored.message.stanzaID,
+      rightStanzaId: local.message.stanzaID,
+    );
+  }
+
+  Future<({MdsDisplayedPayload payload, Message message})?>
+  _localMdsPublishFrontierForChat(XmppDatabase db, String chatJid) async {
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedChatJid.isEmpty) {
+      return null;
+    }
+    final inbound = await db.getLatestDisplayedInboundMdsFrontier(
+      chatJid: normalizedChatJid,
+    );
+    final inboundPayload = inbound == null
+        ? null
+        : _mdsDisplayedPayloadForMessage(normalizedChatJid, inbound);
+    if (inbound == null || inboundPayload == null) {
+      return null;
+    }
+    return (payload: inboundPayload, message: inbound);
+  }
+
+  Future<({MdsDisplayedPayload payload, Message message})?>
+  _effectiveMdsDisplayedCursorForChat(XmppDatabase db, String chatJid) async {
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedChatJid.isEmpty) {
+      return null;
+    }
+    final stored = await db.getMdsDisplayedCursor(normalizedChatJid);
+    final storedPayload = stored == null
+        ? null
+        : _payloadForStoredMdsCursor(stored);
+    final inbound = await _localMdsPublishFrontierForChat(
+      db,
+      normalizedChatJid,
+    );
+    if (stored != null && storedPayload != null && inbound != null) {
+      final comparison = await db.compareChatMessageTimelineOrder(
+        chatJid: normalizedChatJid,
+        leftStanzaId: stored.message.stanzaID,
+        rightStanzaId: inbound.message.stanzaID,
+      );
+      if (comparison == null || comparison >= 0) {
+        return (payload: storedPayload, message: stored.message);
+      }
+      return inbound;
+    }
+    if (stored != null && storedPayload != null) {
+      return (payload: storedPayload, message: stored.message);
+    }
+    if (inbound != null) {
+      return inbound;
+    }
+    return null;
+  }
+
+  MdsDisplayedPayload? _payloadForStoredMdsCursor(MdsDisplayedCursor stored) =>
+      _normalizedMdsDisplayedPayload(
+        MdsDisplayedPayload(
+          chatJid: stored.chatJid,
+          serverStanzaId: stored.serverStanzaId,
+          serverStanzaBy: stored.serverStanzaBy,
+        ),
+      );
+
+  MdsDisplayedPayload? _mdsDisplayedPayloadForMessage(
+    String chatJid,
+    Message message,
+  ) {
+    final serverStanzaId = message.serverStanzaId?.trim();
+    final serverStanzaBy = message.serverStanzaBy?.trim();
+    if (serverStanzaId == null ||
+        serverStanzaId.isEmpty ||
+        serverStanzaBy == null ||
+        serverStanzaBy.isEmpty) {
+      return null;
+    }
+    return _normalizedMdsDisplayedPayload(
+      MdsDisplayedPayload(
+        chatJid: chatJid,
+        serverStanzaId: serverStanzaId,
+        serverStanzaBy: serverStanzaBy,
+      ),
+    );
+  }
+
+  MdsDisplayedPayload? _normalizedMdsDisplayedPayload(
+    MdsDisplayedPayload payload,
+  ) {
+    final accountJid = myJid;
+    if (accountJid == null || accountJid.isEmpty) {
+      return null;
+    }
+    final normalizedChatJid =
+        normalizedBareAddressValue(payload.chatJid) ?? payload.chatJid.trim();
+    final serverStanzaBy =
+        normalizedBareAddressValue(payload.serverStanzaBy) ??
+        payload.serverStanzaBy.trim();
+    final serverStanzaId = payload.serverStanzaId.trim();
+    if (normalizedChatJid.isEmpty ||
+        serverStanzaId.isEmpty ||
+        serverStanzaBy.isEmpty ||
+        !sameNormalizedAddressValue(serverStanzaBy, accountJid)) {
+      return null;
+    }
+    return MdsDisplayedPayload(
+      chatJid: normalizedChatJid,
+      serverStanzaId: serverStanzaId,
+      serverStanzaBy: serverStanzaBy,
     );
   }
 
@@ -8805,6 +9288,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
       stanzaID: pending.stanzaId,
       marker: mox.ChatMarker.displayed,
       messageType: _messageTypeChat,
+      store: true,
     );
   }
 
@@ -10620,6 +11104,10 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     }
 
     await _updateUnreadCountForChat(chatJid);
+    fireAndForget(
+      () => _publishMdsDisplayedForChat(chatJid),
+      operationName: 'MessageService.publishMdsDisplayedForSelfMarker',
+    );
     return true;
   }
 
@@ -10859,6 +11347,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
 
     await _resetMessageStreams();
     _mamGlobalSyncInFlight = false;
+    _mdsDisplayedSnapshotInFlight = false;
     _clearMamNegotiationState();
     _mamGlobalDeniedUntil = null;
     _mamGlobalDeniedUntilScope = null;
@@ -10875,6 +11364,7 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
     _capabilityRequests.clear();
     _capabilityCacheLoaded = false;
     _pendingOutboundMessageStatusesByChat.clear();
+    _pendingMdsDisplayedByChat.clear();
     _pendingSelfDisplayedMarkersByChat.clear();
     _pendingReadMarkersByTarget.clear();
     _pendingInboundAcknowledgementsByTarget.clear();

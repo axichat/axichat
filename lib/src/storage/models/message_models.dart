@@ -340,6 +340,8 @@ abstract class Message with _$Message implements Insertable<Message> {
     String? id,
     String? originID,
     String? mucStanzaId,
+    String? serverStanzaId,
+    String? serverStanzaBy,
     String? occupantID,
     String? body,
     String? htmlBody,
@@ -381,6 +383,8 @@ abstract class Message with _$Message implements Insertable<Message> {
     required String stanzaID,
     required String? originID,
     required String? mucStanzaId,
+    required String? serverStanzaId,
+    required String? serverStanzaBy,
     required String? occupantID,
     required String senderJid,
     required String? senderRealJid,
@@ -481,12 +485,30 @@ abstract class Message with _$Message implements Insertable<Message> {
     final resolvedText = boundedText.isNotEmpty ? boundedText : fallbackText;
     final subjectText = get<MessageSubjectData>()?.subject.trim();
     final stableIdData = get<mox.StableIdData>();
+    final accountBareJid = bareAddress(accountJid)?.trim();
+    final stableStanzaIds = stableIdData?.stanzaIds;
     final String? mucStanzaId = isGroupChat
         ? stableIdData?.stanzaIds
               ?.where((stanzaId) => stanzaId.by.toBare().toString() == chatJid)
               .map((stanzaId) => stanzaId.id.trim())
               .firstWhere((id) => id.isNotEmpty, orElse: () => '')
         : '';
+    final accountServerStanzaId = !isGroupChat && accountBareJid != null
+        ? stableStanzaIds
+              ?.where(
+                (stanzaId) => sameNormalizedAddressValue(
+                  stanzaId.by.toBare().toString(),
+                  accountBareJid,
+                ),
+              )
+              .firstOrNull
+        : null;
+    final accountServerStanzaBy = accountServerStanzaId == null
+        ? null
+        : normalizedBareAddressValue(
+                accountServerStanzaId.by.toBare().toString(),
+              ) ??
+              accountServerStanzaId.by.toBare().toString().trim();
 
     final rawOccupantId = get<mox.OccupantIdData>()?.id.trim();
     final occupantId = rawOccupantId == null || rawOccupantId.isEmpty
@@ -519,6 +541,15 @@ abstract class Message with _$Message implements Insertable<Message> {
       mucStanzaId: mucStanzaId == null || mucStanzaId.isEmpty
           ? null
           : mucStanzaId,
+      serverStanzaId:
+          accountServerStanzaId == null ||
+              accountServerStanzaId.id.trim().isEmpty
+          ? null
+          : accountServerStanzaId.id.trim(),
+      serverStanzaBy:
+          accountServerStanzaBy == null || accountServerStanzaBy.isEmpty
+          ? null
+          : accountServerStanzaBy,
       occupantID: occupantId,
       encryptionProtocol: event.encrypted
           ? EncryptionProtocol.omemo
@@ -749,6 +780,12 @@ abstract class Message with _$Message implements Insertable<Message> {
     }
     if (mucStanzaId != null) {
       map['muc_stanza_id'] = Variable<String>(mucStanzaId);
+    }
+    if (serverStanzaId != null) {
+      map['server_stanza_id'] = Variable<String>(serverStanzaId);
+    }
+    if (serverStanzaBy != null) {
+      map['server_stanza_by'] = Variable<String>(serverStanzaBy);
     }
     if (occupantID != null) {
       map['occupant_i_d'] = Variable<String>(occupantID);
@@ -1674,6 +1711,10 @@ class Messages extends Table {
 
   TextColumn get mucStanzaId => text().nullable()();
 
+  TextColumn get serverStanzaId => text().nullable()();
+
+  TextColumn get serverStanzaBy => text().nullable()();
+
   TextColumn get occupantID => text().nullable()();
 
   TextColumn get senderJid => text()();
@@ -1759,6 +1800,23 @@ class Messages extends Table {
 
   @override
   Set<Column<Object>>? get primaryKey => {stanzaID};
+}
+
+@DataClassName('MdsDisplayedCursorRow')
+class MdsDisplayedCursors extends Table {
+  TextColumn get chatJid => text()();
+
+  TextColumn get serverStanzaId => text()();
+
+  TextColumn get serverStanzaBy => text()();
+
+  TextColumn get messageStanzaId => text().references(Messages, #stanzaID)();
+
+  DateTimeColumn get updatedAt =>
+      dateTime().clientDefault(() => DateTime.timestamp())();
+
+  @override
+  Set<Column<Object>>? get primaryKey => {chatJid};
 }
 
 @DataClassName('MessageAttachmentData')

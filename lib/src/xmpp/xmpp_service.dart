@@ -79,6 +79,7 @@ import 'package:axichat/src/xmpp/pubsub/contacts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/address_block_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/connection/foreground_socket.dart';
+import 'package:axichat/src/xmpp/pubsub/mds_displayed_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub/pubsub_events.dart';

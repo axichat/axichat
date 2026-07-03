@@ -198,12 +198,17 @@ class XmppConnection extends mox.XmppConnection {
     required String stanzaID,
     required mox.ChatMarker marker,
     String messageType = 'chat',
+    bool store = false,
   }) async {
     if (getManager<mox.MessageManager>() case final mm?) {
       await mm.sendMessage(
         mox.JID.fromString(to),
         mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
           mox.ChatMarkerData(marker, stanzaID),
+          if (store)
+            const mox.MessageProcessingHintData([
+              mox.MessageProcessingHint.store,
+            ]),
         ]),
         type: messageType,
       );

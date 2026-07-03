@@ -11,16 +11,10 @@ mixin PubSubService on XmppBase, BaseStreamService {
   );
 
   @override
-  PubSubSupport get pubSubSupport => _hasInitializedConnection
-      ? _connection.getManager<PubSubManager>()?.support ??
-            _assumedPubSubSupport
-      : _assumedPubSubSupport;
+  PubSubSupport get pubSubSupport => _assumedPubSubSupport;
 
   @override
   Stream<PubSubSupport> get pubSubSupportStream =>
-      (_hasInitializedConnection
-          ? _connection.getManager<PubSubManager>()?.supportStream
-          : null) ??
       const Stream<PubSubSupport>.empty();
 
   @override

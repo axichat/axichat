@@ -136,6 +136,20 @@ final class EmailUnreadBoundaryResolution {
   final Message windowTarget;
 }
 
+final class MdsDisplayedCursor {
+  const MdsDisplayedCursor({
+    required this.chatJid,
+    required this.serverStanzaId,
+    required this.serverStanzaBy,
+    required this.message,
+  });
+
+  final String chatJid;
+  final String serverStanzaId;
+  final String serverStanzaBy;
+  final Message message;
+}
+
 abstract interface class XmppDatabase implements Database {
   Stream<List<Message>> watchChatMessages(
     String jid, {
@@ -227,6 +241,31 @@ abstract interface class XmppDatabase implements Database {
   });
 
   Future<Message?> getMessageByReferenceId(String messageId, {String? chatJid});
+
+  Future<Message?> getMessageByServerStanzaId({
+    required String chatJid,
+    required String serverStanzaId,
+    required String serverStanzaBy,
+  });
+
+  Future<Message?> getLatestDisplayedInboundMdsFrontier({
+    required String chatJid,
+  });
+
+  Future<MdsDisplayedCursor?> getMdsDisplayedCursor(String chatJid);
+
+  Future<void> upsertMdsDisplayedCursor({
+    required String chatJid,
+    required String serverStanzaId,
+    required String serverStanzaBy,
+    required String messageStanzaId,
+  });
+
+  Future<int?> compareChatMessageTimelineOrder({
+    required String chatJid,
+    required String leftStanzaId,
+    required String rightStanzaId,
+  });
 
   Future<Message?> getNewestChatMessageByReferenceIds({
     required String chatJid,
@@ -434,6 +473,12 @@ abstract interface class XmppDatabase implements Database {
   Future<void> saveMessageMucStanzaId({
     required String stanzaID,
     required String mucStanzaId,
+  });
+
+  Future<void> saveMessageServerStanzaId({
+    required String stanzaID,
+    String? serverStanzaId,
+    String? serverStanzaBy,
   });
 
   Future<void> saveMessageError({
@@ -2215,6 +2260,7 @@ class EmailSpamlistAccessor
 @DriftDatabase(
   tables: [
     Messages,
+    MdsDisplayedCursors,
     MessageCollections,
     MessageCollectionMemberships,
     PinnedMessages,
@@ -2341,7 +2387,7 @@ class XmppDrift extends _$XmppDrift
   }
 
   @override
-  int get schemaVersion => 75;
+  int get schemaVersion => 76;
 
   @override
   MigrationStrategy get migration {
@@ -2787,6 +2833,10 @@ WHERE transport IS NULL
         }
         if (from < 73) {
           await _ensureMessageColumnsReadByMigrationDataRepairs(m);
+        }
+        if (from < 76) {
+          await _ensureMessageServerStanzaColumns(m);
+          await m.createTable(mdsDisplayedCursors);
         }
         if (from < 58) {
           await _rebuildEmailChatAccountsForMultipleDeltaChats();
@@ -3923,6 +3973,9 @@ WHERE stanza_i_d = ?
     await transaction(() async {
       await reactionsAccessor.deleteByMessages(ids);
       await reactionsAccessor.deleteStatesByMessages(ids);
+      await (delete(
+        mdsDisplayedCursors,
+      )..where((tbl) => tbl.messageStanzaId.isIn(ids))).go();
       await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(ids))).go();
     });
   }
@@ -4175,6 +4228,160 @@ WHERE stanza_i_d = ?
     return await getMessageByStanzaID(normalized) ??
         await getMessageByOriginID(normalized) ??
         await messagesAccessor.selectOneByMucStanzaId(normalized);
+  }
+
+  @override
+  Future<Message?> getMessageByServerStanzaId({
+    required String chatJid,
+    required String serverStanzaId,
+    required String serverStanzaBy,
+  }) {
+    final normalizedChatJid = chatJid.trim();
+    final normalizedServerStanzaId = serverStanzaId.trim();
+    final normalizedServerStanzaBy =
+        normalizedBareAddressValue(serverStanzaBy) ?? serverStanzaBy.trim();
+    if (normalizedChatJid.isEmpty ||
+        normalizedServerStanzaId.isEmpty ||
+        normalizedServerStanzaBy.isEmpty) {
+      return Future<Message?>.value();
+    }
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.chatJid.equals(normalizedChatJid) &
+            tbl.serverStanzaId.equals(normalizedServerStanzaId) &
+            tbl.serverStanzaBy.equals(normalizedServerStanzaBy) &
+            tbl.deltaChatId.isNull() &
+            tbl.deltaMsgId.isNull(),
+      )
+      ..orderBy(_timelineMessageOrdering(newestFirst: false))
+      ..limit(1);
+    return query.getSingleOrNull();
+  }
+
+  @override
+  Future<Message?> getLatestDisplayedInboundMdsFrontier({
+    required String chatJid,
+  }) {
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedChatJid.isEmpty) {
+      return Future<Message?>.value();
+    }
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.chatJid.equals(normalizedChatJid) &
+            tbl.senderJid.equals(normalizedChatJid) &
+            tbl.displayed.equals(true) &
+            tbl.serverStanzaId.isNotNull() &
+            tbl.serverStanzaId.isBiggerThanValue('') &
+            tbl.serverStanzaBy.isNotNull() &
+            tbl.serverStanzaBy.isBiggerThanValue('') &
+            tbl.deltaChatId.isNull() &
+            tbl.deltaMsgId.isNull(),
+      )
+      ..orderBy(_timelineMessageOrdering(newestFirst: true))
+      ..limit(1);
+    return query.getSingleOrNull();
+  }
+
+  @override
+  Future<MdsDisplayedCursor?> getMdsDisplayedCursor(String chatJid) async {
+    final normalizedChatJid = chatJid.trim();
+    if (normalizedChatJid.isEmpty) {
+      return null;
+    }
+    final query =
+        select(mdsDisplayedCursors).join([
+          innerJoin(
+            messages,
+            messages.stanzaID.equalsExp(mdsDisplayedCursors.messageStanzaId),
+          ),
+        ])..where(
+          mdsDisplayedCursors.chatJid.equals(normalizedChatJid) &
+              messages.chatJid.equals(normalizedChatJid) &
+              messages.deltaChatId.isNull() &
+              messages.deltaMsgId.isNull(),
+        );
+    final row = await query.getSingleOrNull();
+    if (row == null) {
+      return null;
+    }
+    final cursor = row.readTable(mdsDisplayedCursors);
+    return MdsDisplayedCursor(
+      chatJid: cursor.chatJid,
+      serverStanzaId: cursor.serverStanzaId,
+      serverStanzaBy: cursor.serverStanzaBy,
+      message: row.readTable(messages),
+    );
+  }
+
+  @override
+  Future<void> upsertMdsDisplayedCursor({
+    required String chatJid,
+    required String serverStanzaId,
+    required String serverStanzaBy,
+    required String messageStanzaId,
+  }) async {
+    final normalizedChatJid = chatJid.trim();
+    final normalizedServerStanzaId = serverStanzaId.trim();
+    final normalizedServerStanzaBy =
+        normalizedBareAddressValue(serverStanzaBy) ?? serverStanzaBy.trim();
+    final normalizedMessageStanzaId = messageStanzaId.trim();
+    if (normalizedChatJid.isEmpty ||
+        normalizedServerStanzaId.isEmpty ||
+        normalizedServerStanzaBy.isEmpty ||
+        normalizedMessageStanzaId.isEmpty) {
+      return;
+    }
+    await into(mdsDisplayedCursors).insertOnConflictUpdate(
+      MdsDisplayedCursorsCompanion.insert(
+        chatJid: normalizedChatJid,
+        serverStanzaId: normalizedServerStanzaId,
+        serverStanzaBy: normalizedServerStanzaBy,
+        messageStanzaId: normalizedMessageStanzaId,
+        updatedAt: Value(DateTime.timestamp().toUtc()),
+      ),
+    );
+  }
+
+  @override
+  Future<int?> compareChatMessageTimelineOrder({
+    required String chatJid,
+    required String leftStanzaId,
+    required String rightStanzaId,
+  }) async {
+    final normalizedChatJid = chatJid.trim();
+    final normalizedLeftStanzaId = leftStanzaId.trim();
+    final normalizedRightStanzaId = rightStanzaId.trim();
+    if (normalizedChatJid.isEmpty ||
+        normalizedLeftStanzaId.isEmpty ||
+        normalizedRightStanzaId.isEmpty) {
+      return null;
+    }
+    if (normalizedLeftStanzaId == normalizedRightStanzaId) {
+      return 0;
+    }
+    final rows = await customSelect(
+      '''
+SELECT stanza_i_d
+FROM messages
+WHERE chat_jid = ?
+  AND stanza_i_d IN (?, ?)
+ORDER BY timestamp ASC, rowid ASC
+''',
+      variables: [
+        Variable<String>(normalizedChatJid),
+        Variable<String>(normalizedLeftStanzaId),
+        Variable<String>(normalizedRightStanzaId),
+      ],
+      readsFrom: {messages},
+    ).get();
+    if (rows.length != 2) {
+      return null;
+    }
+    final first = rows.first.read<String>('stanza_i_d');
+    return first == normalizedLeftStanzaId ? -1 : 1;
   }
 
   @override
@@ -5607,6 +5814,18 @@ WHERE stanza_i_d = ?
       final hasIncomingMucStanzaId = incomingMucStanzaId?.isNotEmpty == true;
       final persistedMucStanzaId = persisted.mucStanzaId?.trim();
       final hasPersistedMucStanzaId = persistedMucStanzaId?.isNotEmpty == true;
+      final incomingServerStanzaId = messageToSave.serverStanzaId?.trim();
+      final hasIncomingServerStanzaId =
+          incomingServerStanzaId?.isNotEmpty == true;
+      final persistedServerStanzaId = persisted.serverStanzaId?.trim();
+      final hasPersistedServerStanzaId =
+          persistedServerStanzaId?.isNotEmpty == true;
+      final incomingServerStanzaBy = messageToSave.serverStanzaBy?.trim();
+      final hasIncomingServerStanzaBy =
+          incomingServerStanzaBy?.isNotEmpty == true;
+      final persistedServerStanzaBy = persisted.serverStanzaBy?.trim();
+      final hasPersistedServerStanzaBy =
+          persistedServerStanzaBy?.isNotEmpty == true;
       final incomingSenderRealJid = messageToSave.effectiveSenderRealJid;
       final persistedSenderRealJid = persisted.effectiveSenderRealJid;
       final hasIncomingSenderRealJid =
@@ -5624,6 +5843,10 @@ WHERE stanza_i_d = ?
           hasIncomingMetadataId && !hasPersistedMetadataId;
       final shouldMergeMucStanzaId =
           hasIncomingMucStanzaId && !hasPersistedMucStanzaId;
+      final shouldMergeServerStanzaId =
+          hasIncomingServerStanzaId && !hasPersistedServerStanzaId;
+      final shouldMergeServerStanzaBy =
+          hasIncomingServerStanzaBy && !hasPersistedServerStanzaBy;
       final shouldMergeSenderRealJid =
           hasIncomingSenderRealJid && !hasPersistedSenderRealJid;
       final shouldMergeOccupantID =
@@ -5632,6 +5855,8 @@ WHERE stanza_i_d = ?
           !shouldMergeHtml &&
           !shouldMergeMetadataId &&
           !shouldMergeMucStanzaId &&
+          !shouldMergeServerStanzaId &&
+          !shouldMergeServerStanzaBy &&
           !shouldMergeSenderRealJid &&
           !shouldMergeOccupantID) {
         return result(
@@ -5656,6 +5881,12 @@ WHERE stanza_i_d = ?
               : const Value.absent(),
           mucStanzaId: shouldMergeMucStanzaId
               ? Value(incomingMucStanzaId)
+              : const Value.absent(),
+          serverStanzaId: shouldMergeServerStanzaId
+              ? Value(incomingServerStanzaId)
+              : const Value.absent(),
+          serverStanzaBy: shouldMergeServerStanzaBy
+              ? Value(incomingServerStanzaBy)
               : const Value.absent(),
           senderRealJid: shouldMergeSenderRealJid
               ? Value(incomingSenderRealJid)
@@ -6182,6 +6413,9 @@ WHERE chat_jid = ?
     await transaction(() async {
       await reactionsAccessor.deleteByMessage(stanzaID);
       await reactionsAccessor.deleteStatesByMessage(stanzaID);
+      await (delete(
+        mdsDisplayedCursors,
+      )..where((tbl) => tbl.messageStanzaId.equals(stanzaID))).go();
       if (existing.id != null) {
         metadataIds.addAll(await deleteMessageAttachments(existing.id!));
       }
@@ -6327,6 +6561,7 @@ WHERE email_from_address IN ($placeholderClause)
         await delete(messageCopies).go();
         await delete(messageShares).go();
         await delete(messageAttachments).go();
+        await delete(mdsDisplayedCursors).go();
         await delete(messages).go();
         await delete(messagePins).go();
         await delete(pinnedMessages).go();
@@ -6483,6 +6718,11 @@ WHERE email_from_address IN ($placeholderClause)
                 ..where((tbl) => tbl.messageStanzaId.isIn(batch))
                 ..where((tbl) => tbl.chatJid.equals(jid)))
               .go();
+        }
+        for (final batch in chunked(stanzaIds)) {
+          await (delete(
+            mdsDisplayedCursors,
+          )..where((tbl) => tbl.messageStanzaId.isIn(batch))).go();
         }
         for (final batch in chunked(stanzaIds)) {
           await (delete(
@@ -6897,6 +7137,40 @@ WHERE stanza_i_d = ?
     await (update(messages)
           ..where((tbl) => tbl.stanzaID.equals(normalizedStanzaId)))
         .write(MessagesCompanion(mucStanzaId: Value(normalizedMucStanzaId)));
+  }
+
+  @override
+  Future<void> saveMessageServerStanzaId({
+    required String stanzaID,
+    String? serverStanzaId,
+    String? serverStanzaBy,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedServerStanzaId = serverStanzaId?.trim();
+    final normalizedServerStanzaBy = serverStanzaBy == null
+        ? null
+        : normalizedBareAddressValue(serverStanzaBy) ?? serverStanzaBy.trim();
+    if (normalizedStanzaId.isEmpty ||
+        (normalizedServerStanzaId == null ||
+                normalizedServerStanzaId.isEmpty) &&
+            (normalizedServerStanzaBy == null ||
+                normalizedServerStanzaBy.isEmpty)) {
+      return;
+    }
+    await (update(
+      messages,
+    )..where((tbl) => tbl.stanzaID.equals(normalizedStanzaId))).write(
+      MessagesCompanion(
+        serverStanzaId:
+            normalizedServerStanzaId == null || normalizedServerStanzaId.isEmpty
+            ? const Value.absent()
+            : Value(normalizedServerStanzaId),
+        serverStanzaBy:
+            normalizedServerStanzaBy == null || normalizedServerStanzaBy.isEmpty
+            ? const Value.absent()
+            : Value(normalizedServerStanzaBy),
+      ),
+    );
   }
 
   @override
@@ -10264,6 +10538,14 @@ WHERE jid = ?
     final merged = keeper.copyWith(
       originID: _preferPresentString(keeper.originID, extra.originID),
       mucStanzaId: _preferPresentString(keeper.mucStanzaId, extra.mucStanzaId),
+      serverStanzaId: _preferPresentString(
+        keeper.serverStanzaId,
+        extra.serverStanzaId,
+      ),
+      serverStanzaBy: _preferPresentString(
+        keeper.serverStanzaBy,
+        extra.serverStanzaBy,
+      ),
       occupantID: _preferPresentString(keeper.occupantID, extra.occupantID),
       senderRealJid: _preferPresentString(
         keeper.senderRealJid,
@@ -10839,6 +11121,9 @@ WHERE (delta_msg_id IS NOT NULL OR delta_chat_id IS NOT NULL)
   Future<void> _deleteMessageRowWithDependents(Message extra) async {
     await reactionsAccessor.deleteByMessage(extra.stanzaID);
     await reactionsAccessor.deleteStatesByMessage(extra.stanzaID);
+    await (delete(
+      mdsDisplayedCursors,
+    )..where((tbl) => tbl.messageStanzaId.equals(extra.stanzaID))).go();
     final attachmentOwnerIds = <String>{extra.stanzaID};
     final rowId = extra.id?.trim();
     if (rowId != null && rowId.isNotEmpty) {
@@ -13231,6 +13516,22 @@ ON CONFLICT(address) DO UPDATE SET
         targetColumns.add('"delta_seen_synced"');
         sourceColumns.add('"delta_seen_synced"');
       }
+      final hasServerStanzaId = await _tableHasColumn(
+        tempTableName,
+        'server_stanza_id',
+      );
+      if (hasServerStanzaId) {
+        targetColumns.add('"server_stanza_id"');
+        sourceColumns.add('"server_stanza_id"');
+      }
+      final hasServerStanzaBy = await _tableHasColumn(
+        tempTableName,
+        'server_stanza_by',
+      );
+      if (hasServerStanzaBy) {
+        targetColumns.add('"server_stanza_by"');
+        sourceColumns.add('"server_stanza_by"');
+      }
       final hasLegacyQuoting = await _tableHasColumn(tempTableName, 'quoting');
       if (hasLegacyQuoting) {
         targetColumns.add('"reply_stanza_id"');
@@ -13289,12 +13590,22 @@ WHERE reply_stanza_id IS NOT NULL AND trim(reply_stanza_id) != ''
     await m.addColumn(messages, messages.deltaSeenSynced);
   }
 
+  Future<void> _ensureMessageServerStanzaColumns(Migrator m) async {
+    if (!await _tableHasColumn(messages.actualTableName, 'server_stanza_id')) {
+      await m.addColumn(messages, messages.serverStanzaId);
+    }
+    if (!await _tableHasColumn(messages.actualTableName, 'server_stanza_by')) {
+      await m.addColumn(messages, messages.serverStanzaBy);
+    }
+  }
+
   Future<void> _ensureMessageColumnsReadByMigrationDataRepairs(
     Migrator m,
   ) async {
     await _ensureMessageRfc822BodyStatusColumn(m);
     await _ensureMessageReplyColumns(m);
     await _ensureMessageDeltaSeenSyncedColumn(m);
+    await _ensureMessageServerStanzaColumns(m);
   }
 
   Future<void> _ensureMessageRfc822BodyStatusColumn(Migrator m) async {
