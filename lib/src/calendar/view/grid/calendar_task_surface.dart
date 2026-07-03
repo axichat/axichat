@@ -279,6 +279,8 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 : width;
 
             Widget buildBaseTask({required bool enableInteractions}) {
+              final void Function(CalendarTask, Rect)? taskTap =
+                  _callbacks.onTap;
               final resizable = ResizableTaskWidget(
                 key: ValueKey(task.id),
                 interactionController: _interactionController,
@@ -323,7 +325,12 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                         }
                       }
                     : null,
-                onTap: enableInteractions ? _callbacks.onTap : null,
+                onTap: enableInteractions && taskTap != null
+                    ? (task, bounds) {
+                        notifyCalendarTaskDragTipTaskPickedUp(context);
+                        taskTap(task, bounds);
+                      }
+                    : null,
               );
               final Widget dragTipTarget = CalendarTaskDragTipCandidate(
                 source: CalendarTaskDragTipSource.grid,

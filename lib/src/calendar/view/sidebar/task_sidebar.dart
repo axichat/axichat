@@ -2767,6 +2767,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     BuildContext context,
     CalendarTask task,
   ) async {
+    notifyCalendarTaskDragTipTaskPickedUp(context);
     if (!TaskEditSessionTracker.instance.begin(task.id, this)) {
       return;
     }
@@ -3392,6 +3393,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     required TaskPopoverAnchorToken anchorToken,
     required ShadPopoverController controller,
   }) {
+    notifyCalendarTaskDragTipTaskPickedUp(context);
     if (controller.isOpen) {
       unawaited(_requestCloseTaskPopover(taskId));
       return;
