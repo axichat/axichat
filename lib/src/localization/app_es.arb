@@ -3205,6 +3205,7 @@
   "messageErrorEmailAuthenticationFailed": "Autenticacion de correo fallida",
   "messageErrorEmailBounced": "Correo rebotado",
   "messageErrorEmailThrottled": "Correo limitado",
+  "messageErrorNotDelivered": "No entregado",
   "chatEmailResendFailedDetails": "No se pudo reenviar el correo.",
   "authEnableXmppOrSmtp": "Habilita XMPP o SMTP para continuar.",
   "authUsernamePasswordMismatch": "El nombre de usuario y la contraseña no tienen la misma nulabilidad.",

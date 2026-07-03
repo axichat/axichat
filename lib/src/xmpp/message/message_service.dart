@@ -9769,6 +9769,8 @@ mixin MessageService on XmppBase, BaseStreamService, BlockingService {
         after: afterId,
       );
       if (result.complete) {
+        // A bounded timestamp window can prove delivery when ingestion finds
+        // the stanza, but a miss is only negative evidence.
         return;
       }
       final nextAfterId = result.lastId ?? afterId;

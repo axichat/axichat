@@ -690,6 +690,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markMessageDisplayed(String stanzaID, {String? chatJid});
 
+  Future<int> markMessagesNotDelivered(
+    Iterable<String> stanzaIDs, {
+    required String chatJid,
+  });
+
   Future<void> markMessageManualSendAgain({
     required String stanzaID,
     required String sendAgainStanzaID,
@@ -6235,6 +6240,33 @@ ORDER BY timestamp ASC, rowid ASC
     }
   }
 
+  Future<void> _clearNotDeliveredMessageError(
+    String stanzaID, {
+    String? chatJid,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedStanzaId.isEmpty) {
+      return;
+    }
+    final query = update(messages)
+      ..where(
+        (tbl) =>
+            (normalizedChatJid == null || normalizedChatJid.isEmpty
+                ? const Constant(true)
+                : tbl.chatJid.equals(normalizedChatJid)) &
+            (tbl.stanzaID.equals(normalizedStanzaId) |
+                tbl.originID.equals(normalizedStanzaId)) &
+            tbl.error.isInValues(const [MessageError.notDelivered]),
+      );
+    final updatedRows = await query.write(
+      const MessagesCompanion(error: Value(MessageError.none)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Cleared not-delivered message error');
+    }
+  }
+
   @override
   Future<void> markMessageAcked(String stanzaID, {String? chatJid}) async {
     final normalizedChatJid = chatJid?.trim();
@@ -6253,6 +6285,7 @@ ORDER BY timestamp ASC, rowid ASC
     if (updatedRows > 0) {
       _log.info('Marking message acked');
     }
+    await _clearNotDeliveredMessageError(stanzaID, chatJid: chatJid);
   }
 
   @override
@@ -6273,6 +6306,7 @@ ORDER BY timestamp ASC, rowid ASC
     if (updatedRows > 0) {
       _log.info('Marking message received');
     }
+    await _clearNotDeliveredMessageError(stanzaID, chatJid: chatJid);
   }
 
   @override
@@ -6293,6 +6327,39 @@ ORDER BY timestamp ASC, rowid ASC
     if (updatedRows > 0) {
       _log.info('Marking message displayed');
     }
+    await _clearNotDeliveredMessageError(stanzaID, chatJid: chatJid);
+  }
+
+  @override
+  Future<int> markMessagesNotDelivered(
+    Iterable<String> stanzaIDs, {
+    required String chatJid,
+  }) async {
+    final normalizedChatJid = chatJid.trim();
+    final normalizedStanzaIds = stanzaIDs
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (normalizedChatJid.isEmpty || normalizedStanzaIds.isEmpty) {
+      return 0;
+    }
+    final query = update(messages)
+      ..where(
+        (tbl) =>
+            tbl.chatJid.equals(normalizedChatJid) &
+            tbl.stanzaID.isIn(normalizedStanzaIds) &
+            tbl.acked.equals(false) &
+            tbl.received.equals(false) &
+            tbl.displayed.equals(false) &
+            tbl.error.isInValues(const [MessageError.none]),
+      );
+    final updatedRows = await query.write(
+      const MessagesCompanion(error: Value(MessageError.notDelivered)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Marked $updatedRows messages not delivered');
+    }
+    return updatedRows;
   }
 
   @override
@@ -6402,6 +6469,71 @@ WHERE chat_jid = ?
         'Marking messages through $normalizedMessageId '
         '(acked=$acked received=$received displayed=$displayed)',
       );
+    }
+    await _clearNotDeliveredMessagesStatusThrough(
+      messageId: normalizedMessageId,
+      chatJid: normalizedChatJid,
+      senderJid: normalizedSenderJid,
+      includeEmailBacked: includeEmailBacked,
+    );
+    return updatedRows;
+  }
+
+  Future<int> _clearNotDeliveredMessagesStatusThrough({
+    required String messageId,
+    required String chatJid,
+    required String senderJid,
+    required bool includeEmailBacked,
+  }) async {
+    final updatedRows = await customUpdate(
+      '''
+UPDATE messages
+SET error = ?
+WHERE chat_jid = ?
+  AND LOWER(sender_jid) = LOWER(?)
+  AND error = ?
+  AND (
+    ? = 1
+    OR (delta_chat_id IS NULL AND delta_msg_id IS NULL)
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM messages target
+    WHERE target.chat_jid = ?
+      AND (
+        target.stanza_i_d = ?
+        OR target.origin_i_d = ?
+        OR target.muc_stanza_id = ?
+      )
+      AND (
+        ? = 1
+        OR (target.delta_chat_id IS NULL AND target.delta_msg_id IS NULL)
+      )
+      AND (
+        messages.timestamp < target.timestamp
+        OR (
+          messages.timestamp = target.timestamp
+          AND messages.rowid <= target.rowid
+        )
+      )
+  )
+''',
+      variables: [
+        Variable<int>(MessageError.none.index),
+        Variable<String>(chatJid),
+        Variable<String>(senderJid),
+        Variable<int>(MessageError.notDelivered.index),
+        Variable<int>(includeEmailBacked ? 1 : 0),
+        Variable<String>(chatJid),
+        Variable<String>(messageId),
+        Variable<String>(messageId),
+        Variable<String>(messageId),
+        Variable<int>(includeEmailBacked ? 1 : 0),
+      ],
+      updates: {messages},
+    );
+    if (updatedRows > 0) {
+      _log.info('Cleared $updatedRows not-delivered message errors');
     }
     return updatedRows;
   }

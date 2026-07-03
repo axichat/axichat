@@ -5503,6 +5503,16 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
     );
   }
 
+  @override
+  Future<void> onXmppEvent(mox.XmppEvent event) async {
+    if (event is mox.StreamResumedEvent &&
+        getUnackedStanzaCount() == 0 &&
+        event.h != state.c2s) {
+      await setState(state.copyWith(c2s: event.h));
+    }
+    await super.onXmppEvent(event);
+  }
+
   // This is for delivery receipts in UI, not XEP-0198.
   @override
   bool shouldTriggerAckedEvent(mox.Stanza stanza) {

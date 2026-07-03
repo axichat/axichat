@@ -7055,6 +7055,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get messageErrorEmailThrottled => 'Correo limitado';
 
   @override
+  String get messageErrorNotDelivered => 'No entregado';
+
+  @override
   String get chatEmailResendFailedDetails => 'No se pudo reenviar el correo.';
 
   @override

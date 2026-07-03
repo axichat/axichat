@@ -3182,6 +3182,7 @@
   "messageErrorEmailAuthenticationFailed": "Echec de l authentification email",
   "messageErrorEmailBounced": "Email rebondi",
   "messageErrorEmailThrottled": "Email limite",
+  "messageErrorNotDelivered": "Non livre",
   "chatEmailResendFailedDetails": "Impossible de renvoyer l email.",
   "chatTaskViewTitle": "Details de la tache",
   "chatTaskViewSubtitle": "Tache en lecture seule.",

@@ -3388,6 +3388,7 @@
   "messageErrorEmailAuthenticationFailed": "Email authentication failed",
   "messageErrorEmailBounced": "Email bounced",
   "messageErrorEmailThrottled": "Email throttled",
+  "messageErrorNotDelivered": "Not delivered",
   "chatEmailResendFailedDetails": "Unable to resend the email.",
   "authEnableXmppOrSmtp": "Enable XMPP or SMTP to continue.",
   "authUsernamePasswordMismatch": "Username and password have different nullness.",

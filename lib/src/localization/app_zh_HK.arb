@@ -3179,6 +3179,7 @@
   "messageErrorEmailAuthenticationFailed": "電郵驗證失敗",
   "messageErrorEmailBounced": "電郵被退回",
   "messageErrorEmailThrottled": "電郵傳送受限",
+  "messageErrorNotDelivered": "未送達",
   "chatEmailResendFailedDetails": "無法重新傳送電郵。",
   "chatTaskViewTitle": "任務詳情",
   "chatTaskViewSubtitle": "唯讀任務。",

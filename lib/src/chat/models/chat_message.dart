@@ -36,6 +36,7 @@ enum ChatMessageKey {
   messageErrorEmailAuthenticationFailed,
   messageErrorEmailBounced,
   messageErrorEmailThrottled,
+  messageErrorNotDelivered,
   chatComposerEmptyMessage,
   chatComposerEmailUnavailable,
   chatComposerFileUploadUnavailable,
@@ -148,6 +149,7 @@ extension ChatMessageKeyL10n on ChatMessageKey {
     ChatMessageKey.messageErrorEmailBounced => l10n.messageErrorEmailBounced,
     ChatMessageKey.messageErrorEmailThrottled =>
       l10n.messageErrorEmailThrottled,
+    ChatMessageKey.messageErrorNotDelivered => l10n.messageErrorNotDelivered,
     ChatMessageKey.chatComposerEmptyMessage => l10n.chatComposerEmptyMessage,
     ChatMessageKey.chatComposerEmailUnavailable =>
       l10n.chatComposerEmailUnavailable,

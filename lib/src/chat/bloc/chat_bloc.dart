@@ -677,7 +677,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   var _composerHydrationSeed = 0;
   String? _lastEmailSendSignature;
   String? _lastXmppSendSignature;
-  List<Message>? _preChatInitialMessages;
+  bool _preChatMessagesSeen = false;
+  bool _initialStaleUnackedVerifyLaunched = false;
   Set<String> _readThresholdMessageIds = const <String>{};
   ({
     String chatJid,
@@ -1743,7 +1744,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return _staleUnackedSendAgainCandidatesForMessages(chat, state.items);
   }
 
-  Future<void> _verifyStaleUnackedMessagesFromMam(Chat chat) async {
+  Future<void> _verifyStaleUnackedMessagesFromMam(
+    Chat chat, {
+    List<Message>? candidates,
+  }) async {
+    if (!_xmppAllowedForChat(chat)) {
+      return;
+    }
+    final verificationCandidates =
+        candidates ?? _staleUnackedSendAgainCandidates(chat);
+    if (verificationCandidates.isEmpty) {
+      return;
+    }
+    try {
+      await _messageService.verifyUnackedMessagesFromMamForChat(
+        chat: chat,
+        candidates: verificationCandidates,
+        pageSize: messageBatchSize,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
+    }
+  }
+
+  void _launchInitialStaleUnackedVerify(Chat chat) {
+    if (_initialStaleUnackedVerifyLaunched) {
+      return;
+    }
     if (!_xmppAllowedForChat(chat)) {
       return;
     }
@@ -1751,89 +1778,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (candidates.isEmpty) {
       return;
     }
-    try {
-      await _messageService.verifyUnackedMessagesFromMamForChat(
-        chat: chat,
-        candidates: candidates,
-        pageSize: messageBatchSize,
-      );
-    } on Exception catch (error, stackTrace) {
-      _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
-    }
-  }
-
-  Future<List<Message>> _verifyAndRefreshInitialStaleUnackedMessages({
-    required Chat chat,
-    required List<Message> messages,
-  }) async {
-    if (!_xmppAllowedForChat(chat)) {
-      return messages;
-    }
-    final candidates = _staleUnackedSendAgainCandidatesForMessages(
-      chat,
-      messages,
-    );
-    if (candidates.isEmpty) {
-      return messages;
-    }
-    try {
-      await _messageService.verifyUnackedMessagesFromMamForChat(
-        chat: chat,
-        candidates: candidates,
-        pageSize: messageBatchSize,
-      );
-      final refreshed = await _messageService.loadMessagesByReferenceIds(
-        candidates.map((message) => message.stanzaID),
-        chatJid: chat.jid,
-      );
-      if (refreshed.isEmpty) {
-        return messages;
-      }
-      final refreshedById = <String, Message>{};
-      for (final message in refreshed) {
-        refreshedById[message.stanzaID] = message;
-      }
-      return [
-        for (final message in messages)
-          refreshedById[message.stanzaID] ?? message,
-      ];
-    } on Exception catch (error, stackTrace) {
-      _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
-      return messages;
-    }
-  }
-
-  Future<void> _publishVerifiedInitialMessagesForChat(
-    Chat chat,
-    Emitter<ChatState> emit,
-  ) async {
-    if (state.messagesLoaded) {
-      return;
-    }
-    final initialMessages = state.items.isNotEmpty
-        ? state.items
-        : _preChatInitialMessages;
-    if (initialMessages == null) {
-      return;
-    }
-    if (initialMessages.isEmpty) {
-      _preChatInitialMessages = null;
-      if (emit.isDone) return;
-      emit(state.copyWith(messagesLoaded: true));
-      return;
-    }
-    final verifiedItems = await _verifyAndRefreshInitialStaleUnackedMessages(
-      chat: chat,
-      messages: initialMessages,
-    );
-    if (emit.isDone) return;
-    _preChatInitialMessages = null;
-    emit(
-      state.copyWith(
-        items: _messagesNewestFirst(verifiedItems),
-        messagesLoaded: true,
-      ),
-    );
+    _initialStaleUnackedVerifyLaunched = true;
+    unawaited(_verifyStaleUnackedMessagesFromMam(chat, candidates: candidates));
   }
 
   Future<void> _ensureMucMembership(Chat chat) async {
@@ -2484,13 +2430,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_canPageXmppHistory(chat)) {
       await _hydrateLatestFromMam(chat);
       if (_isClosing || emit.isDone) return;
-      if (state.messagesLoaded) {
-        await _verifyStaleUnackedMessagesFromMam(chat);
-        if (_isClosing || emit.isDone) return;
-      } else {
-        await _publishVerifiedInitialMessagesForChat(chat, emit);
-        if (_isClosing || emit.isDone) return;
-      }
+    }
+    if (!state.messagesLoaded && _preChatMessagesSeen && !emit.isDone) {
+      emit(state.copyWith(messagesLoaded: true));
+      _launchInitialStaleUnackedVerify(chat);
     }
     if (showXmppCapabilities) {
       final capabilities = await _resolvePeerCapabilities(chat);
@@ -2868,26 +2811,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     _unreadBootstrapRefreshLimit = null;
     final chat = state.chat;
-    final shouldVerifyInitialStaleUnacked =
-        chat != null && !state.messagesLoaded;
-    final shouldAwaitPageEnrichment =
-        shouldVerifyInitialStaleUnacked || event.awaitPageEnrichment;
+    final isFirstLoadForChat = chat != null && !state.messagesLoaded;
+    final shouldAwaitPageEnrichment = event.awaitPageEnrichment;
     final pendingUnreadBoundaryCount = _pendingUnreadBoundaryCount;
     var prepared = await _prepareVisibleChatMessagePage(
       sourceItems: event.items,
-      chat: chat,
-      verifyInitialStaleUnacked: false,
       loadAttachmentEnrichment: false,
     );
     var filteredItems = prepared.items;
     var hasMoreLocalMessages = prepared.hasMoreLocalMessages;
     var preparedSourceCount = prepared.sourceCount;
     filteredCount = filteredItems.length;
-    if (chat == null) {
-      _preChatInitialMessages = filteredItems;
-    } else {
-      _preChatInitialMessages = null;
-    }
     if (emit.isDone) {
       result = 'emitDoneAfterPrepare';
       traceEnd();
@@ -2899,19 +2833,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     if (chat == null) {
-      _preChatInitialMessages = filteredItems;
+      _preChatMessagesSeen = true;
     } else {
-      _preChatInitialMessages = null;
-    }
-    if (emit.isDone) {
-      result = 'emitDoneAfterStaleRefresh';
-      traceEnd();
-      return;
-    }
-    if (event.generation != _messageSubscriptionGeneration) {
-      result = 'staleGenerationAfterStaleRefresh';
-      traceEnd();
-      return;
+      _preChatMessagesSeen = false;
     }
     final referencedQuotes = <String, Message>{};
     final knownMessageIds = <String>{...state.quotedMessagesById.keys};
@@ -3034,6 +2958,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       traceEnd();
       return;
     }
+    if (isFirstLoadForChat) {
+      _launchInitialStaleUnackedVerify(chat);
+    }
     if (shouldAwaitPageEnrichment) {
       hydrationQueued = await _applyChatMessagePageEnrichment(
         sourceItems: event.items,
@@ -3041,7 +2968,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         chatJid: chat.jid,
         limit: _currentMessageLimit,
         filter: state.viewFilter,
-        verifyInitialStaleUnacked: shouldVerifyInitialStaleUnacked,
         pendingUnreadBoundaryCount: pendingUnreadBoundaryCount,
         emit: emit,
       );
@@ -3058,7 +2984,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chatJid: chat.jid,
           limit: _currentMessageLimit,
           filter: state.viewFilter,
-          verifyInitialStaleUnacked: shouldVerifyInitialStaleUnacked,
           pendingUnreadBoundaryCount: pendingUnreadBoundaryCount,
         ),
       );
@@ -3099,7 +3024,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chatJid: event.chatJid,
       limit: event.limit,
       filter: event.filter,
-      verifyInitialStaleUnacked: event.verifyInitialStaleUnacked,
       pendingUnreadBoundaryCount: event.pendingUnreadBoundaryCount,
       emit: emit,
     );
@@ -3111,7 +3035,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required String chatJid,
     required int limit,
     required MessageTimelineFilter filter,
-    required bool verifyInitialStaleUnacked,
     required int? pendingUnreadBoundaryCount,
     required Emitter<ChatState> emit,
   }) async {
@@ -3125,14 +3048,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (staleRequest()) {
       return false;
     }
-    final chat = state.chat;
-    if (chat == null) {
+    if (state.chat == null) {
       return false;
     }
     final prepared = await _prepareVisibleChatMessagePage(
       sourceItems: sourceItems,
-      chat: chat,
-      verifyInitialStaleUnacked: verifyInitialStaleUnacked,
       loadAttachmentEnrichment: true,
     );
     if (emit.isDone || staleRequest()) {
@@ -3637,8 +3557,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   >
   _prepareVisibleChatMessagePage({
     required List<Message> sourceItems,
-    required Chat? chat,
-    required bool verifyInitialStaleUnacked,
     required bool loadAttachmentEnrichment,
   }) async {
     final attachmentMaps = loadAttachmentEnrichment
@@ -3668,18 +3586,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       filteredItems = filteredItems
           .take(_currentMessageLimit)
           .toList(growable: false);
-    }
-    if (chat != null && verifyInitialStaleUnacked) {
-      filteredItems = await _verifyAndRefreshInitialStaleUnackedMessages(
-        chat: chat,
-        messages: filteredItems,
-      );
-      filteredItems = _messagesWithAttachmentGroupQuoteFallback(
-        messages: filteredItems,
-        groupQuotedReferenceByMessageId:
-            attachmentMaps.groupQuotedReferenceByMessageId,
-      );
-      filteredItems = _messagesNewestFirst(filteredItems);
     }
     return (
       items: filteredItems,
@@ -5734,10 +5640,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (_isClosing || isClosed) {
         return;
       }
-      await _verifyStaleUnackedMessagesFromMam(chat);
-      if (_isClosing || isClosed) {
-        return;
-      }
+      unawaited(_verifyStaleUnackedMessagesFromMam(chat));
     }
     await _syncPinnedMessagesForChat(chat);
   }
@@ -10925,6 +10828,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ChatMessageKey.messageErrorEmailAuthenticationFailed,
     MessageError.emailBounced => ChatMessageKey.messageErrorEmailBounced,
     MessageError.emailThrottled => ChatMessageKey.messageErrorEmailThrottled,
+    MessageError.notDelivered => ChatMessageKey.messageErrorNotDelivered,
     _ => ChatMessageKey.messageErrorUnknown,
   };
 

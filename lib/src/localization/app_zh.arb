@@ -3186,6 +3186,7 @@
   "messageErrorEmailAuthenticationFailed": "邮件认证失败",
   "messageErrorEmailBounced": "邮件被退回",
   "messageErrorEmailThrottled": "邮件发送受限",
+  "messageErrorNotDelivered": "未送达",
   "chatEmailResendFailedDetails": "无法重新发送邮件。",
   "chatTaskViewTitle": "任务详情",
   "chatTaskViewSubtitle": "只读任务。",

@@ -3209,6 +3209,7 @@
   "messageErrorEmailAuthenticationFailed": "E-Mail-Authentifizierung fehlgeschlagen",
   "messageErrorEmailBounced": "E-Mail unzustellbar",
   "messageErrorEmailThrottled": "E-Mail gedrosselt",
+  "messageErrorNotDelivered": "Nicht zugestellt",
   "chatEmailResendFailedDetails": "E-Mail konnte nicht erneut gesendet werden.",
   "authEnableXmppOrSmtp": "Aktiviere XMPP oder SMTP, um fortzufahren.",
   "authUsernamePasswordMismatch": "Benutzername und Passwort haben unterschiedliche Nullwerte.",

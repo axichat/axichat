@@ -109,14 +109,13 @@ enum MessageError {
   fileDecryptionFailure,
   fileEncryptionFailure,
   plaintextFileInOmemo,
-  // Email-specific failures must remain at the end to preserve
-  // the stored enum indexes.
   emailSendFailure,
   emailAttachmentTooLarge,
   emailRecipientRejected,
   emailAuthenticationFailed,
   emailBounced,
-  emailThrottled;
+  emailThrottled,
+  notDelivered;
 
   bool get isNone => this == none;
 
@@ -197,6 +196,7 @@ extension MessageErrorLocalization on MessageError {
       l10n.messageErrorEmailAuthenticationFailed,
     MessageError.emailBounced => l10n.messageErrorEmailBounced,
     MessageError.emailThrottled => l10n.messageErrorEmailThrottled,
+    MessageError.notDelivered => l10n.messageErrorNotDelivered,
     _ => l10n.messageErrorUnknown,
   };
 }

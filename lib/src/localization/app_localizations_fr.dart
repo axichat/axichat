@@ -7082,6 +7082,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get messageErrorEmailThrottled => 'Email limite';
 
   @override
+  String get messageErrorNotDelivered => 'Non livre';
+
+  @override
   String get chatEmailResendFailedDetails => 'Impossible de renvoyer l email.';
 
   @override

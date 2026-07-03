@@ -45,7 +45,6 @@ final class _ChatMessagePageEnrichmentRequested extends ChatEvent {
     required this.chatJid,
     required this.limit,
     required this.filter,
-    required this.verifyInitialStaleUnacked,
     required this.pendingUnreadBoundaryCount,
   }) : sourceItems = List<Message>.unmodifiable(sourceItems);
 
@@ -54,7 +53,6 @@ final class _ChatMessagePageEnrichmentRequested extends ChatEvent {
   final String chatJid;
   final int limit;
   final MessageTimelineFilter filter;
-  final bool verifyInitialStaleUnacked;
   final int? pendingUnreadBoundaryCount;
 
   @override
@@ -64,7 +62,6 @@ final class _ChatMessagePageEnrichmentRequested extends ChatEvent {
     chatJid,
     limit,
     filter,
-    verifyInitialStaleUnacked,
     pendingUnreadBoundaryCount,
   ];
 }

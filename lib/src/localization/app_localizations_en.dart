@@ -6949,6 +6949,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get messageErrorEmailThrottled => 'Email throttled';
 
   @override
+  String get messageErrorNotDelivered => 'Not delivered';
+
+  @override
   String get chatEmailResendFailedDetails => 'Unable to resend the email.';
 
   @override

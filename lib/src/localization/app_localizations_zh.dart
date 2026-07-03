@@ -6635,6 +6635,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageErrorEmailThrottled => '邮件发送受限';
 
   @override
+  String get messageErrorNotDelivered => '未送达';
+
+  @override
   String get chatEmailResendFailedDetails => '无法重新发送邮件。';
 
   @override
@@ -14117,6 +14120,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get messageErrorEmailThrottled => '電郵傳送受限';
+
+  @override
+  String get messageErrorNotDelivered => '未送達';
 
   @override
   String get chatEmailResendFailedDetails => '無法重新傳送電郵。';

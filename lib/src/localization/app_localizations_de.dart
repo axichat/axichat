@@ -7060,6 +7060,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get messageErrorEmailThrottled => 'E-Mail gedrosselt';
 
   @override
+  String get messageErrorNotDelivered => 'Nicht zugestellt';
+
+  @override
   String get chatEmailResendFailedDetails =>
       'E-Mail konnte nicht erneut gesendet werden.';
 

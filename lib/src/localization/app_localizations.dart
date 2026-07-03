@@ -11990,6 +11990,12 @@ abstract class AppLocalizations {
   /// **'Email throttled'**
   String get messageErrorEmailThrottled;
 
+  /// No description provided for @messageErrorNotDelivered.
+  ///
+  /// In en, this message translates to:
+  /// **'Not delivered'**
+  String get messageErrorNotDelivered;
+
   /// No description provided for @chatEmailResendFailedDetails.
   ///
   /// In en, this message translates to:
