@@ -1803,6 +1803,31 @@ Future<void> _openImagePreview(
   );
 }
 
+List<InlineSpan> _attachmentPreviewDetailsWithColor(
+  List<InlineSpan> details,
+  Color color,
+) {
+  if (details.isEmpty) return details;
+  return [
+    for (final detail in details)
+      if (detail is TextSpan)
+        TextSpan(
+          text: detail.text,
+          children: detail.children,
+          style: detail.style?.copyWith(color: color),
+          recognizer: detail.recognizer,
+          mouseCursor: detail.mouseCursor,
+          onEnter: detail.onEnter,
+          onExit: detail.onExit,
+          semanticsLabel: detail.semanticsLabel,
+          locale: detail.locale,
+          spellOut: detail.spellOut,
+        )
+      else
+        detail,
+  ];
+}
+
 class _ImageAttachmentPreviewDialog extends StatelessWidget {
   const _ImageAttachmentPreviewDialog({
     required this.composeContext,
@@ -1827,6 +1852,7 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
     final sizing = context.sizing;
     final intrinsic = _intrinsicSizeFrom(metadata);
     final l10n = context.l10n;
+    final ghostColors = AttachmentPreviewGhostColors.resolve(context);
     final actions = localAttachmentPreviewDialogActions(
       ownerContext: composeContext,
       file: file,
@@ -1905,8 +1931,13 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                 child: _AttachmentMetadataSummary(
                   metadata: metadata,
                   hasLocalFile: true,
-                  details: messageDetails,
+                  details: _attachmentPreviewDetailsWithColor(
+                    messageDetails,
+                    ghostColors.foreground,
+                  ),
                   detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+                  foregroundColor: ghostColors.foreground,
+                  supportingColor: ghostColors.foreground,
                 ),
               ),
               SizedBox(height: spacing.s),
