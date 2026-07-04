@@ -5,20 +5,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/media_decode_safety.dart';
 import 'package:axichat/src/common/unicode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:charset_converter/charset_converter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:video_player/video_player.dart';
 
 enum AttachmentPreviewKind {
   image,
@@ -29,10 +31,30 @@ enum AttachmentPreviewKind {
 
   bool get opensDialog => switch (this) {
     AttachmentPreviewKind.image ||
+    AttachmentPreviewKind.video ||
     AttachmentPreviewKind.pdf ||
     AttachmentPreviewKind.text ||
     AttachmentPreviewKind.unsupported => true,
-    AttachmentPreviewKind.video => false,
+  };
+}
+
+const int _attachmentVideoPreviewMaxBytes = 64 * 1024 * 1024;
+const int _attachmentVideoMaxPixels = 32 * 1024 * 1024;
+const int _attachmentVideoMinBytes = 1;
+const int _attachmentVideoMinDimensionPixels = 1;
+const double _attachmentVideoMinDimension = 1.0;
+const Duration _attachmentVideoInitTimeout = Duration(seconds: 3);
+const String _attachmentPreviewDecodeGuardPrefix = 'attachment-preview:';
+
+bool get supportsAttachmentVideoPlayback {
+  if (kIsWeb) return true;
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.android ||
+    TargetPlatform.iOS ||
+    TargetPlatform.macOS => true,
+    TargetPlatform.fuchsia ||
+    TargetPlatform.linux ||
+    TargetPlatform.windows => false,
   };
 }
 
@@ -535,9 +557,10 @@ class AttachmentPreviewDialog extends StatelessWidget {
         final maxWidth = math.max(0.0, availableWidth - spacing.xl);
         final maxHeight = math.max(0.0, availableHeight - spacing.xl);
         final actionRowHeight = sizing.iconButtonTapTarget;
+        final metadataHeight = sizing.menuItemHeight * 2;
         final previewMaxHeight = math.max(
           0.0,
-          maxHeight - spacing.s - actionRowHeight,
+          maxHeight - spacing.s - metadataHeight - spacing.s - actionRowHeight,
         );
         return Center(
           child: Column(
@@ -552,6 +575,13 @@ class AttachmentPreviewDialog extends StatelessWidget {
                   data: data,
                   maxWidth: maxWidth,
                   maxHeight: previewMaxHeight,
+                ),
+              ),
+              SizedBox(height: spacing.s),
+              SizedBox(
+                width: maxWidth,
+                child: AttachmentPreviewMetadataSummary(
+                  attachment: data.attachment,
                 ),
               ),
               SizedBox(height: spacing.s),
@@ -649,6 +679,50 @@ class _AttachmentPreviewActionRowState
   }
 }
 
+class AttachmentPreviewMetadataSummary extends StatelessWidget {
+  const AttachmentPreviewMetadataSummary({super.key, required this.attachment});
+
+  final Attachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final ghostColors = AttachmentPreviewGhostColors.resolve(context);
+    final spacing = context.spacing;
+    final sizeLabel = _formatAttachmentPreviewSize(
+      context,
+      attachment.sizeBytes,
+    );
+    final mimeType = attachment.mimeType?.trim();
+    final detailText = mimeType == null || mimeType.isEmpty
+        ? sizeLabel
+        : '$sizeLabel - $mimeType';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          sanitizeUnicodeControls(attachment.fileName).value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.small.copyWith(
+            color: ghostColors.foreground,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: spacing.xxs),
+        Text(
+          detailText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.textTheme.small.copyWith(
+            color: ghostColors.foreground,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class AttachmentPreviewContent extends StatelessWidget {
   const AttachmentPreviewContent({
     super.key,
@@ -679,8 +753,8 @@ class AttachmentPreviewContent extends StatelessWidget {
         maxWidth: maxWidth,
         maxHeight: maxHeight,
       ),
-      AttachmentPreviewKind.video => AttachmentUnsupportedPreviewContent(
-        fileName: data.attachment.fileName,
+      AttachmentPreviewKind.video => AttachmentVideoPreviewContent(
+        data: data,
         maxWidth: maxWidth,
         maxHeight: maxHeight,
       ),
@@ -722,6 +796,266 @@ class AttachmentImagePreviewContent extends StatelessWidget {
       ),
     );
   }
+}
+
+class AttachmentVideoPreviewContent extends StatefulWidget {
+  const AttachmentVideoPreviewContent({
+    super.key,
+    required this.data,
+    required this.maxWidth,
+    required this.maxHeight,
+  });
+
+  final AttachmentPreviewData data;
+  final double maxWidth;
+  final double maxHeight;
+
+  @override
+  State<AttachmentVideoPreviewContent> createState() =>
+      _AttachmentVideoPreviewContentState();
+}
+
+class _AttachmentVideoPreviewContentState
+    extends State<AttachmentVideoPreviewContent> {
+  VideoPlayerController? _controller;
+  var _initFailed = false;
+  var _videoInitGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideo();
+  }
+
+  @override
+  void didUpdateWidget(covariant AttachmentVideoPreviewContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data.file.path == widget.data.file.path &&
+        oldWidget.data.attachment.metadataId ==
+            widget.data.attachment.metadataId) {
+      return;
+    }
+    _resetController();
+    _initializeVideo();
+  }
+
+  @override
+  void dispose() {
+    _resetController();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_initFailed) {
+      return AttachmentUnsupportedPreviewContent(
+        fileName: widget.data.attachment.fileName,
+        maxWidth: widget.maxWidth,
+        maxHeight: widget.maxHeight,
+      );
+    }
+
+    final colors = context.colorScheme;
+    final controller = _controller;
+    final ghostColors = AttachmentPreviewGhostColors.resolve(context);
+    final targetSize = AttachmentPreviewSize(
+      intrinsicSize: _videoIntrinsicSize(controller),
+      maxWidth: widget.maxWidth,
+      maxHeight: widget.maxHeight,
+      fallbackAspectRatio: 16 / 9,
+    ).resolve(context);
+    return SizedBox(
+      width: targetSize.width,
+      height: targetSize.height,
+      child: AxiModalSurface(
+        backgroundColor: colors.card,
+        padding: EdgeInsets.zero,
+        child: controller == null
+            ? Center(child: AxiProgressIndicator(color: colors.primary))
+            : ValueListenableBuilder<VideoPlayerValue>(
+                valueListenable: controller,
+                builder: (context, value, child) {
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (value.isInitialized)
+                        VideoPlayer(controller)
+                      else
+                        Center(
+                          child: AxiProgressIndicator(color: colors.primary),
+                        ),
+                      if (value.isInitialized)
+                        Center(
+                          child: AxiIconButton.ghost(
+                            iconData: value.isPlaying
+                                ? LucideIcons.pause
+                                : LucideIcons.play,
+                            tooltip: context.l10n.chatAttachmentPreview,
+                            color: ghostColors.foreground,
+                            backgroundColor: ghostColors.background,
+                            onPressed: _togglePlayback,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+      ),
+    );
+  }
+
+  Future<void> _initializeVideo() async {
+    final generation = ++_videoInitGeneration;
+    _initFailed = false;
+    if (!supportsAttachmentVideoPlayback) {
+      _markInitFailed(generation);
+      return;
+    }
+    final guardKey = _attachmentPreviewVideoGuardKey(widget.data);
+    if (!MediaDecodeGuard.instance.allowAttempt(guardKey)) {
+      _markInitFailed(generation);
+      return;
+    }
+    final file = widget.data.file;
+    if (!await file.exists()) {
+      _markInitFailed(generation);
+      return;
+    }
+    if (!_isActiveVideoInit(generation)) return;
+    if (!_isVideoMetadataAllowed(widget.data.attachment)) {
+      _markInitFailed(generation);
+      return;
+    }
+    final length = await _safeFileLength(file);
+    if (!_isActiveVideoInit(generation)) return;
+    if (length == null ||
+        length < _attachmentVideoMinBytes ||
+        length > _attachmentVideoPreviewMaxBytes) {
+      _markInitFailed(generation);
+      return;
+    }
+
+    final controller = VideoPlayerController.file(file);
+    _controller = controller;
+    try {
+      await controller.initialize().timeout(_attachmentVideoInitTimeout);
+      if (!_isActiveVideoController(controller, generation)) return;
+      if (!_isVideoFrameAllowed(controller.value.size)) {
+        _disposeVideoController(controller);
+        MediaDecodeGuard.instance.registerFailure(guardKey);
+        _markInitFailed(generation);
+        return;
+      }
+      MediaDecodeGuard.instance.registerSuccess(guardKey);
+      setState(() {});
+    } on Exception {
+      if (!_isActiveVideoController(controller, generation)) return;
+      _disposeVideoController(controller);
+      MediaDecodeGuard.instance.registerFailure(guardKey);
+      _markInitFailed(generation);
+    }
+  }
+
+  Future<int?> _safeFileLength(File file) async {
+    try {
+      return await file.length();
+    } on Exception {
+      return null;
+    }
+  }
+
+  bool _isVideoMetadataAllowed(Attachment attachment) {
+    if (attachment.sizeBytes > _attachmentVideoPreviewMaxBytes) {
+      return false;
+    }
+    final width = attachment.width;
+    final height = attachment.height;
+    if (width == null || height == null) return true;
+    if (width < _attachmentVideoMinDimensionPixels ||
+        height < _attachmentVideoMinDimensionPixels) {
+      return true;
+    }
+    return width * height <= _attachmentVideoMaxPixels;
+  }
+
+  bool _isVideoFrameAllowed(Size size) {
+    final width = size.width;
+    final height = size.height;
+    if (width < _attachmentVideoMinDimension ||
+        height < _attachmentVideoMinDimension) {
+      return false;
+    }
+    return width * height <= _attachmentVideoMaxPixels.toDouble();
+  }
+
+  Size? _videoIntrinsicSize(VideoPlayerController? controller) {
+    final controllerValue = controller?.value;
+    final controllerSize = controllerValue?.size;
+    if (controllerSize != null &&
+        controllerSize.width > 0 &&
+        controllerSize.height > 0) {
+      return controllerSize;
+    }
+    final width = widget.data.attachment.width;
+    final height = widget.data.attachment.height;
+    if (width != null && height != null && width > 0 && height > 0) {
+      return Size(width.toDouble(), height.toDouble());
+    }
+    return null;
+  }
+
+  void _togglePlayback() {
+    final controller = _controller;
+    if (controller == null) return;
+    if (controller.value.isPlaying) {
+      controller.pause();
+    } else {
+      controller.play();
+    }
+  }
+
+  void _markInitFailed(int generation) {
+    if (generation != _videoInitGeneration) return;
+    if (!mounted) {
+      _initFailed = true;
+      return;
+    }
+    setState(() {
+      _initFailed = true;
+    });
+  }
+
+  bool _isActiveVideoInit(int generation) =>
+      mounted && generation == _videoInitGeneration;
+
+  bool _isActiveVideoController(
+    VideoPlayerController controller,
+    int generation,
+  ) => _isActiveVideoInit(generation) && identical(_controller, controller);
+
+  void _disposeVideoController(VideoPlayerController controller) {
+    controller.dispose();
+    if (identical(_controller, controller)) {
+      _controller = null;
+    }
+  }
+
+  void _resetController() {
+    _videoInitGeneration++;
+    final controller = _controller;
+    if (controller == null) return;
+    controller.dispose();
+    _controller = null;
+    _initFailed = false;
+  }
+}
+
+String _attachmentPreviewVideoGuardKey(AttachmentPreviewData data) {
+  final metadataId = data.attachment.metadataId?.trim();
+  if (metadataId != null && metadataId.isNotEmpty) {
+    return '$_attachmentPreviewDecodeGuardPrefix$metadataId';
+  }
+  return '$_attachmentPreviewDecodeGuardPrefix${data.file.path}';
 }
 
 class AttachmentPdfPreviewContent extends StatelessWidget {
@@ -824,16 +1158,37 @@ class AttachmentUnsupportedPreviewContent extends StatelessWidget {
   }
 }
 
+String _formatAttachmentPreviewSize(BuildContext context, int bytes) {
+  if (bytes <= 0) return context.l10n.chatAttachmentUnknownSize;
+  final l10n = context.l10n;
+  final units = [
+    l10n.commonFileSizeUnitBytes,
+    l10n.commonFileSizeUnitKilobytes,
+    l10n.commonFileSizeUnitMegabytes,
+    l10n.commonFileSizeUnitGigabytes,
+    l10n.commonFileSizeUnitTerabytes,
+  ];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return '${value.toStringAsFixed(value >= 10 || unit == 0 ? 0 : 1)} ${units[unit]}';
+}
+
 class AttachmentPreviewSize {
   const AttachmentPreviewSize({
     required this.intrinsicSize,
     required this.maxWidth,
     required this.maxHeight,
+    this.fallbackAspectRatio,
   });
 
   final Size? intrinsicSize;
   final double maxWidth;
   final double maxHeight;
+  final double? fallbackAspectRatio;
 
   Size resolve(BuildContext context) {
     final cappedWidth = math.max(0.0, maxWidth);
@@ -841,6 +1196,16 @@ class AttachmentPreviewSize {
     final size = intrinsicSize;
     if (size == null || size.width <= 0 || size.height <= 0) {
       final width = math.min(cappedWidth, context.sizing.dialogMaxWidth);
+      final aspectRatio = fallbackAspectRatio;
+      if (aspectRatio != null && aspectRatio > 0 && aspectRatio.isFinite) {
+        var fallbackWidth = width;
+        var fallbackHeight = fallbackWidth / aspectRatio;
+        if (fallbackHeight > cappedHeight) {
+          fallbackHeight = cappedHeight;
+          fallbackWidth = fallbackHeight * aspectRatio;
+        }
+        return Size(fallbackWidth, fallbackHeight);
+      }
       final height = math.min(cappedHeight, width);
       return Size(width, height);
     }

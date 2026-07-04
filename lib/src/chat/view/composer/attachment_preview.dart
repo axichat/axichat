@@ -1270,6 +1270,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   var _downloading = false;
   var _initFailed = false;
   VideoPlayerController? _controller;
+  var _videoInitGeneration = 0;
 
   bool get _encrypted =>
       widget.metadata.encryptionScheme?.trim().isNotEmpty == true;
@@ -1361,7 +1362,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final sizing = context.sizing;
     final controller = _controller;
     final initialized = controller?.value.isInitialized == true;
-    final playing = controller?.value.isPlaying == true;
     final aspectRatio = widget.galleryTapMode
         ? sizing.attachmentGalleryTileAspectRatio
         : _videoAspectRatio(metadata: metadata, controller: controller);
@@ -1374,6 +1374,15 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       closeBeforeSend: false,
       enabled: !_downloading,
     );
+    final previewActions = [
+      AttachmentPreviewDialogAction(
+        iconData: LucideIcons.eye,
+        tooltip: context.l10n.chatAttachmentPreview,
+        enabled: initialized && !_downloading,
+        onPressed: (_) => _openVideoPreview(localFile),
+      ),
+      ...actions,
+    ];
     final actionButtons = widget.galleryTapMode
         ? null
         : Positioned(
@@ -1381,7 +1390,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
             right: spacing.s,
             child: AttachmentPreviewActionRow(
               closeTooltip: context.l10n.commonClose,
-              actions: actions,
+              actions: previewActions,
               showClose: false,
             ),
           );
@@ -1400,7 +1409,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                 ? _attachmentMetadataOverlayMinWidth(context)
                 : _attachmentPreviewActionRowMinWidth(
                         context,
-                        actionCount: actions.length,
+                        actionCount: previewActions.length,
                         showClose: false,
                       ) +
                       (spacing.s * 2),
@@ -1427,27 +1436,45 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
                         shape: const RoundedRectangleBorder(),
                       ),
                     ),
-                    if (initialized && controller != null)
-                      VideoPlayer(controller)
+                    if (controller == null)
+                      Center(child: AxiProgressIndicator(color: colors.primary))
                     else
-                      Center(
-                        child: AxiProgressIndicator(color: colors.primary),
+                      ValueListenableBuilder<VideoPlayerValue>(
+                        valueListenable: controller,
+                        builder: (context, value, child) {
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (value.isInitialized)
+                                VideoPlayer(controller)
+                              else
+                                Center(
+                                  child: AxiProgressIndicator(
+                                    color: colors.primary,
+                                  ),
+                                ),
+                              if (value.isInitialized)
+                                Center(
+                                  child: widget.galleryTapMode
+                                      ? Icon(
+                                          value.isPlaying
+                                              ? LucideIcons.pause
+                                              : LucideIcons.play,
+                                          size: sizing.iconButtonIconSize,
+                                        )
+                                      : AxiIconButton.ghost(
+                                          iconData: value.isPlaying
+                                              ? LucideIcons.pause
+                                              : LucideIcons.play,
+                                          onPressed: _togglePlayback,
+                                        ),
+                                ),
+                              if (value.isInitialized && actionButtons != null)
+                                actionButtons,
+                            ],
+                          );
+                        },
                       ),
-                    if (initialized && controller != null)
-                      Center(
-                        child: widget.galleryTapMode
-                            ? Icon(
-                                playing ? LucideIcons.pause : LucideIcons.play,
-                                size: sizing.iconButtonIconSize,
-                              )
-                            : AxiIconButton.ghost(
-                                iconData: playing
-                                    ? LucideIcons.pause
-                                    : LucideIcons.play,
-                                onPressed: _togglePlayback,
-                              ),
-                      ),
-                    if (initialized && actionButtons != null) actionButtons,
                     _AttachmentMetadataVignette(
                       metadata: metadata,
                       hasLocalFile: hasLocalFile,
@@ -1542,6 +1569,73 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     }
   }
 
+  Future<void> _openVideoPreview(File file) async {
+    final l10n = context.l10n;
+    final toaster = ShadToaster.maybeOf(context);
+    try {
+      if (!await file.exists()) return;
+      final report =
+          widget.typeReport ??
+          await inspectFileType(
+            file: file,
+            declaredMimeType: widget.metadata.mimeType,
+            fileName: widget.metadata.filename,
+          );
+      if (!mounted) return;
+      final previewData = await resolveAttachmentPreviewData(
+        file: file,
+        attachment: attachmentPreviewSourceFromMetadata(
+          metadata: widget.metadata,
+          file: file,
+        ),
+        typeReport: report,
+      );
+      if (!mounted) return;
+      if (previewData == null || !previewData.kind.opensDialog) {
+        _showToast(
+          l10n,
+          toaster,
+          l10n.chatAttachmentUnavailable,
+          destructive: true,
+        );
+        return;
+      }
+      final dialogActions = localAttachmentPreviewDialogActions(
+        ownerContext: context,
+        file: file,
+        metadata: widget.metadata,
+        report: report,
+        l10n: l10n,
+      );
+      final inlineController = _controller;
+      if (inlineController == null || !inlineController.value.isPlaying) {
+        await showAttachmentPreviewDialog(
+          context: context,
+          data: previewData,
+          closeTooltip: l10n.commonClose,
+          actions: dialogActions,
+        );
+        return;
+      }
+      await inlineController.pause();
+      if (!mounted) return;
+      await showAttachmentPreviewDialog(
+        context: context,
+        data: previewData,
+        closeTooltip: l10n.commonClose,
+        actions: dialogActions,
+      );
+    } on Exception {
+      if (!mounted) return;
+      _showToast(
+        l10n,
+        toaster,
+        l10n.chatAttachmentUnavailable,
+        destructive: true,
+      );
+    }
+  }
+
   void _togglePlayback() {
     final controller = _controller;
     if (controller == null) return;
@@ -1551,52 +1645,58 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     } else {
       controller.play();
     }
-    setState(() {});
   }
 
   Future<void> _initializeVideoIfAvailable() async {
+    final generation = ++_videoInitGeneration;
     _initFailed = false;
+    if (!supportsAttachmentVideoPlayback) {
+      _markVideoInitFailed(generation);
+      return;
+    }
     final guardKey = _mediaDecodeGuardKey(widget.metadata.id);
     if (!MediaDecodeGuard.instance.allowAttempt(guardKey)) {
-      _markVideoInitFailed();
+      _markVideoInitFailed(generation);
       return;
     }
     final path = widget.metadata.path?.trim();
     if (path == null || path.isEmpty) return;
     final file = File(path);
     if (!await file.exists()) return;
+    if (!_isActiveVideoInit(generation)) return;
     if (!_isVideoMetadataAllowed(widget.metadata)) {
-      _markVideoInitFailed();
+      _markVideoInitFailed(generation);
       return;
     }
     final length = await _safeFileLength(file);
+    if (!_isActiveVideoInit(generation)) return;
     if (length == null || length < _attachmentVideoMinBytes) {
-      _markVideoInitFailed();
+      _markVideoInitFailed(generation);
       return;
     }
     if (length > _attachmentVideoPreviewMaxBytes) {
-      _markVideoInitFailed();
+      _markVideoInitFailed(generation);
       return;
     }
     final controller = VideoPlayerController.file(file);
     _controller = controller;
     try {
       await controller.initialize().timeout(_attachmentVideoInitTimeout);
-      if (!mounted) return;
+      if (!_isActiveVideoController(controller, generation)) return;
       final size = controller.value.size;
       if (!_isVideoFrameAllowed(size)) {
         _disposeVideoController(controller);
         MediaDecodeGuard.instance.registerFailure(guardKey);
-        _markVideoInitFailed();
+        _markVideoInitFailed(generation);
         return;
       }
       MediaDecodeGuard.instance.registerSuccess(guardKey);
       setState(() {});
     } on Exception {
-      if (!mounted) return;
+      if (!_isActiveVideoController(controller, generation)) return;
       _disposeVideoController(controller);
       MediaDecodeGuard.instance.registerFailure(guardKey);
-      _markVideoInitFailed();
+      _markVideoInitFailed(generation);
     }
   }
 
@@ -1637,7 +1737,8 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     return pixelCount <= _attachmentVideoMaxPixels.toDouble();
   }
 
-  void _markVideoInitFailed() {
+  void _markVideoInitFailed(int generation) {
+    if (generation != _videoInitGeneration) return;
     if (!mounted) {
       _initFailed = true;
       return;
@@ -1647,6 +1748,14 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     });
   }
 
+  bool _isActiveVideoInit(int generation) =>
+      mounted && generation == _videoInitGeneration;
+
+  bool _isActiveVideoController(
+    VideoPlayerController controller,
+    int generation,
+  ) => _isActiveVideoInit(generation) && identical(_controller, controller);
+
   void _disposeVideoController(VideoPlayerController controller) {
     controller.dispose();
     if (identical(_controller, controller)) {
@@ -1655,6 +1764,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
   }
 
   void _resetController() {
+    _videoInitGeneration++;
     final controller = _controller;
     if (controller == null) return;
     controller.dispose();
