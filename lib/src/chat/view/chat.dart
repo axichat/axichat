@@ -77,6 +77,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/message_links.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/policy.dart';
@@ -905,6 +906,7 @@ class _ChatState extends State<Chat> {
         chatReadReceipts: settings.chatReadReceipts,
         emailReadReceipts: settings.emailReadReceipts,
         shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+        autoLoadEmailImages: settings.autoLoadEmailImages,
         autoDownloadImages: settings.autoDownloadImages,
         autoDownloadVideos: settings.autoDownloadVideos,
         autoDownloadDocuments: settings.autoDownloadDocuments,
@@ -2859,18 +2861,14 @@ class _ChatState extends State<Chat> {
         ? false
         : _isOneTimeAttachmentAllowed(messageModel.stanzaID);
     final locate = context.read;
-    final attachmentUsesEmailProtocol =
-        messageModel.isEmailBacked ||
-        (isEmailChat &&
-            (messageModel.hasRfc822BodyContent ||
-                messageModel.hasGeneratedEmailAttachmentCaption));
-    final emailDownloadDelegate = attachmentUsesEmailProtocol
-        ? AttachmentDownloadDelegate(() async {
-            return locate<ChatBloc>().downloadFullEmailMessage(messageModel);
-          })
-        : null;
     for (var index = 0; index < attachmentIds.length; index += 1) {
       final attachmentId = attachmentIds[index];
+      final downloadResolution = resolveAttachmentDownloadResolution(
+        message: messageModel,
+        metadataId: attachmentId,
+        chat: state.chat,
+        isEmailChat: isEmailChat,
+      );
       final metadata = _metadataFor(state: state, metadataId: attachmentId);
       final allowAttachmentByTrust = _shouldAllowAttachment(
         isSelf: isSelfBubble,
@@ -2881,11 +2879,19 @@ class _ChatState extends State<Chat> {
       );
       final allowAttachment =
           !attachmentsBlockedForChat &&
-          (attachmentUsesEmailProtocol ||
-              allowAttachmentByTrust ||
-              allowAttachmentOnce);
-      final downloadDelegate = attachmentUsesEmailProtocol
-          ? emailDownloadDelegate
+          (switch (downloadResolution) {
+            AttachmentDownloadResolution.emailAttachment => true,
+            AttachmentDownloadResolution.emailLinkMedia =>
+              isSelfBubble ||
+                  _emailRemoteContentAllowed(state, settings) ||
+                  allowAttachmentOnce,
+            AttachmentDownloadResolution.attachment =>
+              allowAttachmentByTrust || allowAttachmentOnce,
+          });
+      final downloadDelegate = downloadResolution.usesFullEmailDownload
+          ? AttachmentDownloadDelegate(() async {
+              return locate<ChatBloc>().downloadFullEmailMessage(messageModel);
+            })
           : AttachmentDownloadDelegate(() async {
               final approved = await _confirmManualAttachmentDownload(
                 senderJid: messageModel.senderJid,
@@ -2950,6 +2956,9 @@ class _ChatState extends State<Chat> {
       );
     }
   }
+
+  bool _emailRemoteContentAllowed(ChatState state, SettingsState settings) =>
+      state.chat?.emailRemoteImagesEnabled ?? settings.autoLoadEmailImages;
 
   void _appendMessageSubjectBanner({
     required BuildContext context,
@@ -5178,6 +5187,7 @@ class _ChatState extends State<Chat> {
   Future<bool> _confirmManualAttachmentDownload({
     required String senderJid,
     required bool isSelf,
+    bool emailRemoteContentPolicy = false,
     String? senderEmail,
   }) async {
     if (!mounted) return false;
@@ -5186,7 +5196,7 @@ class _ChatState extends State<Chat> {
         ? senderEmail!
         : senderJid;
     final chat = context.read<ChatBloc>().state.chat;
-    final canTrustChat = !isSelf && chat != null;
+    final canTrustChat = !emailRemoteContentPolicy && !isSelf && chat != null;
     final showAutoTrustToggle = canTrustChat;
     final autoTrustLabel = l10n.attachmentGalleryChatTrustLabel;
     final autoTrustHint = l10n.attachmentGalleryChatTrustHint;
@@ -5199,9 +5209,15 @@ class _ChatState extends State<Chat> {
       barrierDismissible: true,
       builder: (dialogContext) {
         return AttachmentApprovalDialog(
-          title: l10n.chatAttachmentConfirmTitle,
-          message: l10n.chatAttachmentConfirmMessage(displaySender),
-          confirmLabel: l10n.chatAttachmentConfirmButton,
+          title: emailRemoteContentPolicy
+              ? l10n.settingsAutoLoadEmailImages
+              : l10n.chatAttachmentConfirmTitle,
+          message: emailRemoteContentPolicy
+              ? l10n.settingsAutoLoadEmailImagesDescription
+              : l10n.chatAttachmentConfirmMessage(displaySender),
+          confirmLabel: emailRemoteContentPolicy
+              ? l10n.chatEmailLoadImagesButton
+              : l10n.chatAttachmentConfirmButton,
           cancelLabel: l10n.commonCancel,
           showAutoTrustToggle: showAutoTrustToggle,
           autoDownloadValue: chat?.attachmentAutoDownload,
@@ -5236,14 +5252,25 @@ class _ChatState extends State<Chat> {
     required bool isEmailChat,
     String? senderEmail,
   }) async {
+    final emailRemoteContentPolicy =
+        isEmailChat && isLinkMediaFileMetadata(message.fileMetadataID);
     final approved = await _confirmManualAttachmentDownload(
       senderJid: senderJid,
       isSelf: isSelf,
+      emailRemoteContentPolicy: emailRemoteContentPolicy,
       senderEmail: senderEmail,
     );
     if (!approved || !mounted) return;
 
     if (mounted) {
+      if (emailRemoteContentPolicy) {
+        final chat = context.read<ChatBloc>().state.chat;
+        if (chat != null && chat.emailRemoteImagesEnabled != true) {
+          context.read<ChatBloc>().add(
+            ChatEmailRemoteImagesChanged(chatJid: chat.jid, enabled: true),
+          );
+        }
+      }
       setState(() {
         _oneTimeAllowedAttachmentStanzaIds.add(stanzaId.trim());
       });
@@ -8349,6 +8376,8 @@ class _ChatState extends State<Chat> {
                     previous.language != current.language ||
                     previous.chatReadReceipts != current.chatReadReceipts ||
                     previous.emailReadReceipts != current.emailReadReceipts ||
+                    previous.autoLoadEmailImages !=
+                        current.autoLoadEmailImages ||
                     previous.autoDownloadImages != current.autoDownloadImages ||
                     previous.autoDownloadVideos != current.autoDownloadVideos ||
                     previous.autoDownloadDocuments !=

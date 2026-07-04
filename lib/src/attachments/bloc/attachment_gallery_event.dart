@@ -34,6 +34,7 @@ abstract class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
   const factory AttachmentGalleryEvent.approvalGranted({
     required Message message,
     required Chat? chat,
+    required String metadataId,
     required AttachmentAutoDownload? autoDownloadValue,
     required bool updateAutoDownloadValue,
     required bool isEmailChat,
@@ -45,9 +46,10 @@ abstract class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
     required Completer<bool> completer,
   }) = AttachmentGalleryEmailDownloadRequested;
 
-  const factory AttachmentGalleryEvent.emailServiceUpdated({
+  const factory AttachmentGalleryEvent.emailSettingsUpdated({
     required EmailService? emailService,
-  }) = AttachmentGalleryEmailServiceUpdated;
+    required bool autoLoadEmailImages,
+  }) = AttachmentGalleryEmailSettingsUpdated;
 
   const factory AttachmentGalleryEvent.fileMetadataBatchUpdated({
     required Map<String, FileMetadataData?> metadataById,

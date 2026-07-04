@@ -3,6 +3,8 @@
 
 import 'package:path/path.dart' as p;
 import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/message_links.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 
 class Attachment {
@@ -92,6 +94,18 @@ class Attachment {
 enum FileMetadataMediaKind { image, video, file }
 
 enum FileMetadataDownloadCategory { image, video, document, archive }
+
+enum AttachmentDownloadResolution {
+  attachment,
+  emailAttachment,
+  emailLinkMedia;
+
+  bool get usesFullEmailDownload => this == emailAttachment;
+
+  bool get usesInboundAttachmentDownload => this != emailAttachment;
+
+  bool get usesEmailRemoteContentPolicy => this == emailLinkMedia;
+}
 
 extension FileMetadataDownloadCategoryTools on FileMetadataDownloadCategory {
   bool isAutoDownloadAllowed({
@@ -235,6 +249,28 @@ bool allowsAttachmentAutoDownload({
       archivesEnabled: archivesEnabled,
     ),
   };
+}
+
+AttachmentDownloadResolution resolveAttachmentDownloadResolution({
+  required Message message,
+  required String? metadataId,
+  Chat? chat,
+  bool isEmailChat = false,
+}) {
+  final chatUsesEmail =
+      isEmailChat || (chat?.defaultTransport.isEmail ?? false);
+  final usesEmailProtocol =
+      message.isEmailBacked ||
+      (chatUsesEmail &&
+          (message.hasRfc822BodyContent ||
+              message.hasGeneratedEmailAttachmentCaption));
+  if (!usesEmailProtocol) {
+    return AttachmentDownloadResolution.attachment;
+  }
+  if (isLinkMediaFileMetadata(metadataId)) {
+    return AttachmentDownloadResolution.emailLinkMedia;
+  }
+  return AttachmentDownloadResolution.emailAttachment;
 }
 
 String deltaFileMetadataId(int messageId) => 'dc-file-$messageId';

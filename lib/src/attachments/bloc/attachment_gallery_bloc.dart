@@ -170,10 +170,12 @@ class AttachmentGalleryBloc
     String? chatJid,
     Chat? chatOverride,
     required bool showChatLabel,
+    required bool autoLoadEmailImages,
   }) : _xmppService = xmppService,
        _emailService = emailService,
        _chatOverride = chatOverride,
        _showChatLabel = showChatLabel,
+       _autoLoadEmailImages = autoLoadEmailImages,
        super(const AttachmentGalleryState(status: RequestStatus.loading)) {
     on<AttachmentGalleryItemsUpdated>(_onItemsUpdated);
     on<AttachmentGalleryLoadFailed>(_onLoadFailed);
@@ -184,7 +186,7 @@ class AttachmentGalleryBloc
     on<AttachmentGalleryLayoutChanged>(_onLayoutChanged);
     on<AttachmentGalleryApprovalGranted>(_onApprovalGranted);
     on<AttachmentGalleryEmailDownloadRequested>(_onEmailDownloadRequested);
-    on<AttachmentGalleryEmailServiceUpdated>(_onEmailServiceUpdated);
+    on<AttachmentGalleryEmailSettingsUpdated>(_onEmailSettingsUpdated);
     on<AttachmentGalleryFileMetadataBatchUpdated>(_onFileMetadataBatchUpdated);
     _itemsSubscription = _xmppService
         .attachmentGalleryStream(chatJid: chatJid)
@@ -199,6 +201,7 @@ class AttachmentGalleryBloc
   EmailService? _emailService;
   final Chat? _chatOverride;
   final bool _showChatLabel;
+  bool _autoLoadEmailImages;
   StreamSubscription<List<AttachmentGalleryItem>>? _itemsSubscription;
   StreamSubscription<Map<String, FileMetadataData?>>? _fileMetadataSubscription;
   Set<String> _trackedFileMetadataIds = const <String>{};
@@ -399,7 +402,13 @@ class AttachmentGalleryBloc
         value: event.autoDownloadValue,
       );
     }
-    if (event.isEmailChat) {
+    final downloadResolution = resolveAttachmentDownloadResolution(
+      message: event.message,
+      metadataId: event.metadataId,
+      chat: event.chat,
+      isEmailChat: event.isEmailChat,
+    );
+    if (downloadResolution.usesFullEmailDownload) {
       await downloadEmailMessage(event.message);
     }
   }
@@ -419,15 +428,17 @@ class AttachmentGalleryBloc
     }
   }
 
-  void _onEmailServiceUpdated(
-    AttachmentGalleryEmailServiceUpdated event,
+  void _onEmailSettingsUpdated(
+    AttachmentGalleryEmailSettingsUpdated event,
     Emitter<AttachmentGalleryState> emit,
   ) {
     final emailService = event.emailService;
-    if (identical(_emailService, emailService)) {
+    if (identical(_emailService, emailService) &&
+        _autoLoadEmailImages == event.autoLoadEmailImages) {
       return;
     }
     _emailService = emailService;
+    _autoLoadEmailImages = event.autoLoadEmailImages;
     emit(
       state.copyWith(
         entries: _resolveEntries(
@@ -481,7 +492,13 @@ class AttachmentGalleryBloc
             _normalizeStanzaId(item.message.stanzaID),
           ),
           allowByTrust:
-              isSelf || _chatAllowsAutoDownload(chat, metadata: item.metadata),
+              isSelf ||
+              _chatAllowsAttachmentByPolicy(
+                chat: chat,
+                message: item.message,
+                metadata: item.metadata,
+                isSelf: isSelf,
+              ),
         ),
       );
     }
@@ -509,6 +526,29 @@ class AttachmentGalleryBloc
       requireKnownSize: false,
       maxBytes: maxAttachmentAutoDownloadBytes,
     );
+  }
+
+  bool _chatAllowsAttachmentByPolicy({
+    required Chat? chat,
+    required Message message,
+    required FileMetadataData metadata,
+    required bool isSelf,
+  }) {
+    if (chat == null) return false;
+    final downloadResolution = resolveAttachmentDownloadResolution(
+      message: message,
+      metadataId: metadata.id,
+      chat: chat,
+    );
+    return switch (downloadResolution) {
+      AttachmentDownloadResolution.emailAttachment => true,
+      AttachmentDownloadResolution.emailLinkMedia =>
+        isSelf || (chat.emailRemoteImagesEnabled ?? _autoLoadEmailImages),
+      AttachmentDownloadResolution.attachment => _chatAllowsAutoDownload(
+        chat,
+        metadata: metadata,
+      ),
+    };
   }
 
   Map<String, FileMetadataData?> _pruneFileMetadataById({

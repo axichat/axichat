@@ -985,27 +985,19 @@ class _PinnedMessageTile extends StatelessWidget {
     }
 
     if (effectiveMessage != null && attachmentIds.isNotEmpty) {
-      final isEmailBacked =
-          chat.defaultTransport.isEmail || effectiveMessage.isEmailBacked;
       final bool attachmentsBlockedForPin = attachmentsBlocked;
       final allowAttachmentOnce = attachmentsBlockedForPin
           ? false
           : isOneTimeAttachmentAllowed(effectiveMessage.stanzaID);
-      final emailDownloadDelegate = isEmailBacked
-          ? AttachmentDownloadDelegate(() async {
-              final approved = await onConfirmAttachmentDownload(
-                senderJid: effectiveMessage.senderJid,
-                isSelf: isSelf,
-                senderEmail: chat.emailAddress,
-              );
-              if (!approved) return false;
-              return locate<ChatBloc>().downloadFullEmailMessage(
-                effectiveMessage,
-              );
-            })
-          : null;
+      final emailRemoteContentAllowed =
+          chat.emailRemoteImagesEnabled ?? settings.autoLoadEmailImages;
       for (var index = 0; index < attachmentIds.length; index += 1) {
         final attachmentId = attachmentIds[index];
+        final downloadResolution = resolveAttachmentDownloadResolution(
+          message: effectiveMessage,
+          metadataId: attachmentId,
+          chat: chat,
+        );
         final metadata = metadataFor(attachmentId);
         final allowAttachmentByTrust = shouldAllowAttachment(
           isSelf: isSelf,
@@ -1015,9 +1007,25 @@ class _PinnedMessageTile extends StatelessWidget {
         );
         final allowAttachment =
             !attachmentsBlockedForPin &&
-            (allowAttachmentByTrust || allowAttachmentOnce);
-        final downloadDelegate = isEmailBacked
-            ? emailDownloadDelegate
+            (switch (downloadResolution) {
+              AttachmentDownloadResolution.emailAttachment => true,
+              AttachmentDownloadResolution.emailLinkMedia =>
+                isSelf || emailRemoteContentAllowed || allowAttachmentOnce,
+              AttachmentDownloadResolution.attachment =>
+                allowAttachmentByTrust || allowAttachmentOnce,
+            });
+        final downloadDelegate = downloadResolution.usesFullEmailDownload
+            ? AttachmentDownloadDelegate(() async {
+                final approved = await onConfirmAttachmentDownload(
+                  senderJid: effectiveMessage.senderJid,
+                  isSelf: isSelf,
+                  senderEmail: chat.emailAddress,
+                );
+                if (!approved) return false;
+                return locate<ChatBloc>().downloadFullEmailMessage(
+                  effectiveMessage,
+                );
+              })
             : AttachmentDownloadDelegate(() async {
                 final approved = await onConfirmAttachmentDownload(
                   senderJid: effectiveMessage.senderJid,
@@ -1058,7 +1066,9 @@ class _PinnedMessageTile extends StatelessWidget {
                     senderJid: effectiveMessage.senderJid,
                     stanzaId: effectiveMessage.stanzaID,
                     isSelf: isSelf,
-                    isEmailChat: isEmailBacked,
+                    isEmailChat:
+                        downloadResolution.usesFullEmailDownload ||
+                        downloadResolution.usesEmailRemoteContentPolicy,
                     senderEmail: chat.emailAddress,
                   ),
           ),

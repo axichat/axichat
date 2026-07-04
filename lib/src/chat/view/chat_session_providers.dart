@@ -34,6 +34,7 @@ class ChatSessionProviders extends StatelessWidget {
     chatReadReceipts: settings.chatReadReceipts,
     emailReadReceipts: settings.emailReadReceipts,
     shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+    autoLoadEmailImages: settings.autoLoadEmailImages,
     autoDownloadImages: settings.autoDownloadImages,
     autoDownloadVideos: settings.autoDownloadVideos,
     autoDownloadDocuments: settings.autoDownloadDocuments,

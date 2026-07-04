@@ -5,6 +5,7 @@ import 'package:axichat/src/chat/models/chat_timeline.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/message_links.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/share_context.dart';
@@ -933,8 +934,11 @@ ChatTimelineMessageItem? buildMainChatTimelineMessageItem({
   }
   final attachmentIds = attachmentsForMessage(message);
   final hasAttachment = attachmentIds.isNotEmpty;
+  final hasRealEmailAttachment = attachmentIds.any(
+    (id) => !isLinkMediaFileMetadata(id),
+  );
   if (isEmailMessage &&
-      hasAttachment &&
+      hasRealEmailAttachment &&
       bodyText.trim().isNotEmpty &&
       rfcEmailBodyText(
         message: message,

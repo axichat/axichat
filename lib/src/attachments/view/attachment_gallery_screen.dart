@@ -24,8 +24,8 @@ class AttachmentGalleryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     final leadingWidth = AxiIconButton.kDefaultSize + spacing.m;
-    final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
-    final EmailService? emailService = endpointConfig.smtpEnabled
+    final settings = locate<SettingsCubit>().state;
+    final EmailService? emailService = settings.endpointConfig.smtpEnabled
         ? locate<EmailService>()
         : null;
     return BlocProvider(
@@ -35,6 +35,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
         chatJid: chat?.jid,
         chatOverride: chat,
         showChatLabel: chat == null,
+        autoLoadEmailImages: settings.autoLoadEmailImages,
       ),
       child: Scaffold(
         backgroundColor: context.colorScheme.background,

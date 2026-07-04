@@ -51,6 +51,7 @@ import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart';
+import 'package:axichat/src/email/util/email_link_media_metadata.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -326,6 +327,12 @@ final class EmailFullMessageHydrationResult {
   final bool settled;
   final bool timedOut;
   final bool bodyAvailable;
+}
+
+enum _EmailLinkMediaMetadataHydrationAction {
+  syncFromMessageBody,
+  preserveExisting,
+  deferUntilHtmlDerivation,
 }
 
 enum _ExistingHistoryImportProjectionState {
@@ -13083,8 +13090,16 @@ class EmailService {
             message: message,
             derivation: derivation,
           );
-          usableByKey[entry.key] = _emailContentPreparationComplete(settled);
-          if (settled == message) {
+          final reconciled = settled.rfc822BodyStatus.isPendingDownload
+              ? settled
+              : await syncEmailLinkMediaMetadataFromText(
+                  db: db,
+                  message: settled,
+                  deltaId: entry.key.deltaMsgId,
+                  text: settled.body,
+                );
+          usableByKey[entry.key] = _emailContentPreparationComplete(reconciled);
+          if (reconciled == message) {
             continue;
           }
           if (!_pendingEmailBodyHydrationCanContinue(
@@ -13094,7 +13109,7 @@ class EmailService {
           )) {
             return false;
           }
-          await db.updateMessage(settled);
+          await db.updateMessage(reconciled);
           if (!_pendingEmailBodyHydrationCanContinue(
             deadline: deadline,
             pendingHydrationGeneration: task.generation,
@@ -13102,7 +13117,7 @@ class EmailService {
           )) {
             return false;
           }
-          await db.repairChatSummaryFromMessages(settled.chatJid);
+          await db.repairChatSummaryFromMessages(reconciled.chatJid);
         }
         return true;
       }),
@@ -14598,7 +14613,19 @@ class EmailService {
         )) {
           return false;
         }
-        final updated = prepared.message;
+        final updated = switch (prepared.linkMediaAction) {
+          _EmailLinkMediaMetadataHydrationAction.syncFromMessageBody =>
+            await syncEmailLinkMediaMetadataFromText(
+              db: db,
+              message: prepared.message,
+              deltaId: deltaId,
+              text: prepared.message.body,
+            ),
+          _EmailLinkMediaMetadataHydrationAction.preserveExisting =>
+            prepared.message,
+          _EmailLinkMediaMetadataHydrationAction.deferUntilHtmlDerivation =>
+            prepared.message,
+        };
         await db.updateMessage(updated);
         if (!_pendingEmailBodyHydrationCanContinue(
           deadline: deadline,
@@ -14654,7 +14681,14 @@ class EmailService {
     return (html: hydratedHtml, settled: settled, timedOut: false);
   }
 
-  Future<({Message message, bool timedOut})> _messageWithRfc822BodyContent({
+  Future<
+    ({
+      Message message,
+      bool timedOut,
+      _EmailLinkMediaMetadataHydrationAction linkMediaAction,
+    })
+  >
+  _messageWithRfc822BodyContent({
     required Message message,
     required DeltaMessageRfc822Body? rfc822Body,
     DateTime? deadline,
@@ -14663,12 +14697,12 @@ class EmailService {
     if (rfc822Body == null || !rfc822Body.hasBody) {
       return (
         message: message.copyWith(
-          body: null,
-          htmlBody: null,
           rfc822BodyStatus: EmailRfc822BodyStatus.unavailable,
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
         timedOut: false,
+        linkMediaAction:
+            _EmailLinkMediaMetadataHydrationAction.preserveExisting,
       );
     }
     final normalizedHtml = HtmlContentCodec.normalizeHtml(rfc822Body.htmlBody);
@@ -14695,6 +14729,8 @@ class EmailService {
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
         timedOut: false,
+        linkMediaAction:
+            _EmailLinkMediaMetadataHydrationAction.syncFromMessageBody,
       );
     }
     if (normalizedHtml == null &&
@@ -14707,6 +14743,8 @@ class EmailService {
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
         timedOut: false,
+        linkMediaAction:
+            _EmailLinkMediaMetadataHydrationAction.syncFromMessageBody,
       );
     }
     if (normalizedHtml == null) {
@@ -14718,16 +14756,21 @@ class EmailService {
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
         timedOut: false,
+        linkMediaAction:
+            _EmailLinkMediaMetadataHydrationAction.syncFromMessageBody,
       );
     }
     if (cachedDerivation == null) {
       return (
         message: message.copyWith(
+          body: null,
           htmlBody: normalizedHtml,
           rfc822BodyStatus: EmailRfc822BodyStatus.hydrated,
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
         timedOut: false,
+        linkMediaAction:
+            _EmailLinkMediaMetadataHydrationAction.deferUntilHtmlDerivation,
       );
     }
     final visibleHtmlText = cachedDerivation.visibleBodyText.trim();
@@ -14744,6 +14787,8 @@ class EmailService {
           pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
         ),
         timedOut: false,
+        linkMediaAction:
+            _EmailLinkMediaMetadataHydrationAction.syncFromMessageBody,
       );
     }
     return (
@@ -14754,6 +14799,8 @@ class EmailService {
         pseudoMessageData: message.pseudoMessageDataWithoutRfc822BodyStatus,
       ),
       timedOut: false,
+      linkMediaAction:
+          _EmailLinkMediaMetadataHydrationAction.syncFromMessageBody,
     );
   }
 

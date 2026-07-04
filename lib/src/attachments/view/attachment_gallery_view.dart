@@ -64,11 +64,8 @@ class AttachmentGalleryPanel extends StatelessWidget {
     }
     return BlocProvider(
       create: (context) {
-        final endpointConfig = context
-            .read<SettingsCubit>()
-            .state
-            .endpointConfig;
-        final emailService = endpointConfig.smtpEnabled
+        final settings = context.read<SettingsCubit>().state;
+        final emailService = settings.endpointConfig.smtpEnabled
             ? context.read<EmailService>()
             : null;
         return AttachmentGalleryBloc(
@@ -77,6 +74,7 @@ class AttachmentGalleryPanel extends StatelessWidget {
           chatJid: chat!.jid,
           chatOverride: chat!,
           showChatLabel: false,
+          autoLoadEmailImages: settings.autoLoadEmailImages,
         );
       },
       child: AxiSheetScaffold(
@@ -111,6 +109,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   Future<bool> _approveAttachment({
     required Message message,
+    required String metadataId,
     required String senderJid,
     required String stanzaId,
     required Chat? chat,
@@ -151,6 +150,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
       AttachmentGalleryApprovalGranted(
         message: message,
         chat: chat,
+        metadataId: metadataId,
         autoDownloadValue: decision.autoDownloadValue,
         updateAutoDownloadValue: decision.updateAutoDownloadValue,
         isEmailChat: isEmailChat,
@@ -179,13 +179,17 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     final sizing = context.sizing;
     return BlocListener<SettingsCubit, SettingsState>(
       listenWhen: (previous, current) =>
-          previous.endpointConfig != current.endpointConfig,
+          previous.endpointConfig != current.endpointConfig ||
+          previous.autoLoadEmailImages != current.autoLoadEmailImages,
       listener: (context, settings) {
         final emailService = settings.endpointConfig.smtpEnabled
             ? context.read<EmailService>()
             : null;
         context.read<AttachmentGalleryBloc>().add(
-          AttachmentGalleryEmailServiceUpdated(emailService: emailService),
+          AttachmentGalleryEmailSettingsUpdated(
+            emailService: emailService,
+            autoLoadEmailImages: settings.autoLoadEmailImages,
+          ),
         );
       },
       child: BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
@@ -480,6 +484,7 @@ class AttachmentGalleryEntry extends StatelessWidget {
   final AttachmentGalleryEntryData entry;
   final Future<bool> Function({
     required Message message,
+    required String metadataId,
     required String senderJid,
     required String stanzaId,
     required Chat? chat,
@@ -514,11 +519,18 @@ class AttachmentGalleryEntry extends StatelessWidget {
             (chat?.defaultTransport.isEmail ?? false) ||
             message.deltaMsgId != null ||
             message.deltaChatId != null;
+        final downloadResolution = resolveAttachmentDownloadResolution(
+          message: message,
+          metadataId: initialMetadata.id,
+          chat: chat,
+          isEmailChat: isEmailChat,
+        );
         final allowAttachment = entry.allowByTrust || entry.allowOnce;
-        final downloadDelegate = isEmailChat
+        final downloadDelegate = downloadResolution.usesFullEmailDownload
             ? AttachmentDownloadDelegate(() async {
                 final approved = await onApproveAttachment(
                   message: message,
+                  metadataId: initialMetadata.id,
                   senderJid: message.senderJid,
                   stanzaId: message.stanzaID,
                   chat: chat,
@@ -538,6 +550,7 @@ class AttachmentGalleryEntry extends StatelessWidget {
             : AttachmentDownloadDelegate(() async {
                 final approved = await onApproveAttachment(
                   message: message,
+                  metadataId: initialMetadata.id,
                   senderJid: message.senderJid,
                   stanzaId: message.stanzaID,
                   chat: chat,
@@ -555,6 +568,7 @@ class AttachmentGalleryEntry extends StatelessWidget {
             ? null
             : () => onApproveAttachment(
                 message: message,
+                metadataId: initialMetadata.id,
                 senderJid: message.senderJid,
                 stanzaId: message.stanzaID,
                 chat: chat,

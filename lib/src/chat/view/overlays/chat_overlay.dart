@@ -258,11 +258,8 @@ class _ChatGalleryOverlay extends StatelessWidget {
     }
     return BlocProvider(
       create: (context) {
-        final endpointConfig = context
-            .read<SettingsCubit>()
-            .state
-            .endpointConfig;
-        final emailService = endpointConfig.smtpEnabled
+        final settings = context.read<SettingsCubit>().state;
+        final emailService = settings.endpointConfig.smtpEnabled
             ? context.read<EmailService>()
             : null;
         return AttachmentGalleryBloc(
@@ -271,6 +268,7 @@ class _ChatGalleryOverlay extends StatelessWidget {
           chatJid: currentChat.jid,
           chatOverride: currentChat,
           showChatLabel: false,
+          autoLoadEmailImages: settings.autoLoadEmailImages,
         );
       },
       child: ColoredBox(

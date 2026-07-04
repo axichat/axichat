@@ -279,6 +279,7 @@ class ChatSettingsSnapshot extends Equatable {
     required this.chatReadReceipts,
     required this.emailReadReceipts,
     required this.shareTokenSignatureEnabled,
+    this.autoLoadEmailImages = false,
     required this.autoDownloadImages,
     required this.autoDownloadVideos,
     required this.autoDownloadDocuments,
@@ -289,6 +290,7 @@ class ChatSettingsSnapshot extends Equatable {
   final bool chatReadReceipts;
   final bool emailReadReceipts;
   final bool shareTokenSignatureEnabled;
+  final bool autoLoadEmailImages;
   final bool autoDownloadImages;
   final bool autoDownloadVideos;
   final bool autoDownloadDocuments;
@@ -299,6 +301,7 @@ class ChatSettingsSnapshot extends Equatable {
     bool? chatReadReceipts,
     bool? emailReadReceipts,
     bool? shareTokenSignatureEnabled,
+    bool? autoLoadEmailImages,
     bool? autoDownloadImages,
     bool? autoDownloadVideos,
     bool? autoDownloadDocuments,
@@ -309,6 +312,7 @@ class ChatSettingsSnapshot extends Equatable {
     emailReadReceipts: emailReadReceipts ?? this.emailReadReceipts,
     shareTokenSignatureEnabled:
         shareTokenSignatureEnabled ?? this.shareTokenSignatureEnabled,
+    autoLoadEmailImages: autoLoadEmailImages ?? this.autoLoadEmailImages,
     autoDownloadImages: autoDownloadImages ?? this.autoDownloadImages,
     autoDownloadVideos: autoDownloadVideos ?? this.autoDownloadVideos,
     autoDownloadDocuments: autoDownloadDocuments ?? this.autoDownloadDocuments,
@@ -321,6 +325,7 @@ class ChatSettingsSnapshot extends Equatable {
     chatReadReceipts,
     emailReadReceipts,
     shareTokenSignatureEnabled,
+    autoLoadEmailImages,
     autoDownloadImages,
     autoDownloadVideos,
     autoDownloadDocuments,
@@ -7547,6 +7552,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         enabled: event.enabled,
       ),
     );
+    if ((event.enabled ?? _settingsSnapshot.autoLoadEmailImages) == true) {
+      _queueAutoDownloadAttachments(
+        messages: state.items,
+        attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
+      );
+    }
   }
 
   Future<void> _onChatEmailReadReceiptsChanged(
@@ -10132,26 +10143,35 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final ids = messageKeys[key];
       if (ids == null || ids.isEmpty) continue;
 
-      if (chat.defaultTransport.isEmail || message.isEmailBacked) {
-        continue;
-      }
-
       for (final metadataId in ids) {
         final metadata = metadataById[metadataId];
         if (metadata == null) continue;
-        if (!force &&
-            (_autoDownloadAttemptedMetadataIds.contains(metadataId) ||
-                !allowsAttachmentAutoDownload(
-                  chat: chat,
-                  metadata: metadata,
-                  imagesEnabled: _settingsSnapshot.autoDownloadImages,
-                  videosEnabled: _settingsSnapshot.autoDownloadVideos,
-                  documentsEnabled: _settingsSnapshot.autoDownloadDocuments,
-                  archivesEnabled: _settingsSnapshot.autoDownloadArchives,
-                  chatBlocked: isChatBlocked,
-                  requireKnownSize: false,
-                  maxBytes: maxAttachmentAutoDownloadBytes,
-                ))) {
+        final usesEmailProtocol =
+            chat.defaultTransport.isEmail || message.isEmailBacked;
+        if (usesEmailProtocol) {
+          if (!_emailLinkMediaAutoDownloadAllowed(
+            chat: chat,
+            message: message,
+            metadata: metadata,
+            force: force,
+          )) {
+            continue;
+          }
+        } else if (!force &&
+            !allowsAttachmentAutoDownload(
+              chat: chat,
+              metadata: metadata,
+              imagesEnabled: _settingsSnapshot.autoDownloadImages,
+              videosEnabled: _settingsSnapshot.autoDownloadVideos,
+              documentsEnabled: _settingsSnapshot.autoDownloadDocuments,
+              archivesEnabled: _settingsSnapshot.autoDownloadArchives,
+              chatBlocked: isChatBlocked,
+              requireKnownSize: false,
+              maxBytes: maxAttachmentAutoDownloadBytes,
+            )) {
+          continue;
+        }
+        if (!force && _autoDownloadAttemptedMetadataIds.contains(metadataId)) {
           continue;
         }
         if (force && metadata.isHighRiskForAutoDownload) {
@@ -10182,6 +10202,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _log.warning('Auto-download attachment failed.', error, stackTrace);
       }
     }
+  }
+
+  bool _emailLinkMediaAutoDownloadAllowed({
+    required Chat chat,
+    required Message message,
+    required FileMetadataData metadata,
+    required bool force,
+  }) {
+    if (!isLinkMediaFileMetadata(metadata.id)) return false;
+    if (force) return true;
+    if (!metadata.isImage) return false;
+    if (message.isEmailBacked && (message.acked || !message.received)) {
+      return true;
+    }
+    return chat.emailRemoteImagesEnabled ??
+        _settingsSnapshot.autoLoadEmailImages;
   }
 
   Future<bool> downloadFullEmailMessage(Message message) async {

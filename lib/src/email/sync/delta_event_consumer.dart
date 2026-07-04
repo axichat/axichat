@@ -12,6 +12,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/message_links.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -20,6 +21,7 @@ import 'package:axichat/src/email/util/async_queue.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/email_header_safety.dart'
     as email_headers;
+import 'package:axichat/src/email/util/email_link_media_metadata.dart';
 import 'package:axichat/src/email/util/email_message_ids.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
@@ -510,6 +512,15 @@ extension DeltaMessageStateChecks on DeltaMessage {
       DeltaMessageType.vcard => true,
       _ => false,
     };
+  }
+
+  bool get hasAttachmentMetadata {
+    if (fileMime?.trim().toLowerCase() == 'message/rfc822') {
+      return false;
+    }
+    return hasUserVisibleAttachment ||
+        filePath?.trim().isNotEmpty == true ||
+        fileName?.trim().isNotEmpty == true;
   }
 
   bool get isOutgoingDelivered =>
@@ -3524,7 +3535,7 @@ class DeltaEventConsumer {
       return (missReason: null, reuse: true);
     }
     if (existing.hasRfc822BodyContent &&
-        (hasStoredContent || msg.hasUserVisibleAttachment)) {
+        (hasStoredContent || msg.hasAttachmentMetadata)) {
       return (missReason: null, reuse: true);
     }
     if (msg.isOutgoing &&
@@ -3538,7 +3549,7 @@ class DeltaEventConsumer {
         reuse: false,
       );
     }
-    if (!hasStoredContent && !msg.hasUserVisibleAttachment) {
+    if (!hasStoredContent && !msg.hasAttachmentMetadata) {
       return (missReason: 'noStoredContent', reuse: false);
     }
     if (_deltaInlineContentHasStoredFields(inlineContent)) {
@@ -3582,7 +3593,7 @@ class DeltaEventConsumer {
       if (metadataId == null ||
           metadataId.isEmpty ||
           deltaMsgId == null ||
-          metadataId != deltaFileMetadataId(deltaMsgId)) {
+          !_isExpectedDeltaProjectionMetadataId(metadataId, deltaMsgId)) {
         continue;
       }
       expectedIds.add(metadataId);
@@ -3607,7 +3618,8 @@ class DeltaEventConsumer {
     final metadataId = message.fileMetadataID?.trim();
     if (metadataId != null && metadataId.isNotEmpty) {
       final deltaMsgId = message.deltaMsgId;
-      if (deltaMsgId == null || metadataId != deltaFileMetadataId(deltaMsgId)) {
+      if (deltaMsgId == null ||
+          !_isExpectedDeltaProjectionMetadataId(metadataId, deltaMsgId)) {
         return false;
       }
       return existingFileMetadataIds.contains(metadataId) &&
@@ -3622,8 +3634,21 @@ class DeltaEventConsumer {
     required DeltaMessage msg,
   }) async {
     final existingMetadataId = existing.fileMetadataID?.trim();
-    if (!msg.hasUserVisibleAttachment) {
-      return existingMetadataId == null || existingMetadataId.isEmpty;
+    if (!msg.hasAttachmentMetadata) {
+      if (existingMetadataId == null || existingMetadataId.isEmpty) {
+        return true;
+      }
+      if (!isLinkMediaFileMetadata(existingMetadataId)) {
+        return false;
+      }
+      final storedMetadata = await db.getFileMetadata(existingMetadataId);
+      if (storedMetadata == null) return false;
+      final mediaUrl = _linkMediaUrlForDeltaComparison(
+        existing: existing,
+        msg: msg,
+      );
+      return mediaUrl != null &&
+          storedMetadata.sourceUrls?.firstOrNull == mediaUrl;
     }
     final expectedMetadataId = deltaFileMetadataId(msg.id);
     if (existingMetadataId != expectedMetadataId) {
@@ -3639,6 +3664,21 @@ class DeltaEventConsumer {
     );
     final mergedMetadata = _mergeMetadata(storedMetadata, resolvedMetadata);
     return mergedMetadata == storedMetadata;
+  }
+
+  bool _isExpectedDeltaProjectionMetadataId(String metadataId, int deltaMsgId) {
+    return metadataId == deltaFileMetadataId(deltaMsgId) ||
+        metadataId == emailLinkMediaFileMetadataId(deltaMsgId);
+  }
+
+  String? _linkMediaUrlForDeltaComparison({
+    required Message existing,
+    required DeltaMessage msg,
+  }) {
+    final body = existing.hasRfc822BodyContent
+        ? existing.body
+        : _deltaInlineContentProjection(msg).body;
+    return firstMediaLinkInText(body)?.url;
   }
 
   bool _storedContentMatchesDeltaInlineProjection({
@@ -3956,7 +3996,7 @@ class DeltaEventConsumer {
     if (previewText != null) {
       return previewText;
     }
-    if (message.hasUserVisibleAttachment) {
+    if (message.hasAttachmentMetadata) {
       final metadataId = deltaFileMetadataId(message.id);
       final metadata = _metadataFromDelta(
         delta: message,
@@ -4262,6 +4302,26 @@ class DeltaEventConsumer {
         }
       },
     );
+    next = await _timedDeltaTraceStep(
+      () async {
+        final text =
+            message.rfc822BodyContentUnavailable &&
+                isLinkMediaFileMetadata(message.fileMetadataID)
+            ? message.body
+            : next.body;
+        return syncEmailLinkMediaMetadataFromText(
+          db: db,
+          message: next,
+          deltaId: msg.id,
+          text: text,
+        );
+      },
+      (elapsedMs) {
+        if (timing != null) {
+          timing.attachmentMetadataMs += elapsedMs;
+        }
+      },
+    );
     return next;
   }
 
@@ -4514,12 +4574,19 @@ class DeltaEventConsumer {
     required Message message,
     required DeltaMessage delta,
   }) async {
-    if (!delta.hasUserVisibleAttachment) {
-      final metadataId = message.fileMetadataID?.trim();
+    var next = message;
+    final previousMetadataId = next.fileMetadataID?.trim();
+    if (delta.hasAttachmentMetadata &&
+        isLinkMediaFileMetadata(previousMetadataId)) {
+      await db.clearMessageAttachment(next.stanzaID);
+      next = next.copyWith(fileMetadataID: null);
+    }
+    if (!delta.hasAttachmentMetadata) {
+      final metadataId = next.fileMetadataID?.trim();
       if (metadataId == null || metadataId != deltaFileMetadataId(delta.id)) {
-        return message;
+        return next;
       }
-      final messageId = message.id?.trim();
+      final messageId = next.id?.trim();
       if (messageId != null && messageId.isNotEmpty) {
         await db.replaceMessageAttachments(
           messageId: messageId,
@@ -4527,18 +4594,19 @@ class DeltaEventConsumer {
         );
         await db.deleteFileMetadata(metadataId);
       }
-      return message.copyWith(fileMetadataID: null);
+      return next.copyWith(fileMetadataID: null);
     }
     final metadataId = deltaFileMetadataId(delta.id);
     final existing = await db.getFileMetadata(metadataId);
-    final previousMetadataId = message.fileMetadataID?.trim();
+    final resolvedPreviousMetadataId = next.fileMetadataID?.trim();
     FileMetadataData? previousMetadata;
     if (existing == null &&
-        previousMetadataId != null &&
-        previousMetadataId.isNotEmpty &&
-        previousMetadataId != metadataId &&
+        resolvedPreviousMetadataId != null &&
+        resolvedPreviousMetadataId.isNotEmpty &&
+        resolvedPreviousMetadataId != metadataId &&
+        !isLinkMediaFileMetadata(resolvedPreviousMetadataId) &&
         delta.fileName?.trim().isNotEmpty != true) {
-      previousMetadata = await db.getFileMetadata(previousMetadataId);
+      previousMetadata = await db.getFileMetadata(resolvedPreviousMetadataId);
     }
     final resolvedMetadata = _metadataFromDelta(
       delta: delta,
@@ -4554,23 +4622,23 @@ class DeltaEventConsumer {
     final resolvedMetadataId =
         merged?.id ?? existing?.id ?? resolvedMetadata.id;
     final resolvedMetadataForMessage = merged ?? existing ?? resolvedMetadata;
-    final messageId = message.id?.trim();
-    if (previousMetadataId != null &&
-        previousMetadataId.isNotEmpty &&
-        previousMetadataId != resolvedMetadataId &&
+    final messageId = next.id?.trim();
+    if (resolvedPreviousMetadataId != null &&
+        resolvedPreviousMetadataId.isNotEmpty &&
+        resolvedPreviousMetadataId != resolvedMetadataId &&
         messageId != null &&
         messageId.isNotEmpty) {
       await db.updateMessageAttachment(
-        stanzaID: message.stanzaID,
+        stanzaID: next.stanzaID,
         metadata: resolvedMetadataForMessage,
       );
       await db.replaceMessageAttachments(
         messageId: messageId,
         fileMetadataIds: [resolvedMetadataId],
       );
-      await db.deleteFileMetadata(previousMetadataId);
+      await db.deleteFileMetadata(resolvedPreviousMetadataId);
     }
-    return message.copyWith(fileMetadataID: resolvedMetadataId);
+    return next.copyWith(fileMetadataID: resolvedMetadataId);
   }
 
   FileMetadataData _metadataFromDelta({
