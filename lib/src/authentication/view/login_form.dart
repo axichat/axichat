@@ -83,12 +83,6 @@ class _LoginFormState extends State<LoginForm> {
         selection: TextSelection.collapsed(offset: loginTarget.username.length),
       );
     }
-    if (loginTarget.endpointConfig != settingsCubit.state.endpointConfig) {
-      await settingsCubit.updateEndpointConfig(loginTarget.endpointConfig);
-      if (!mounted) {
-        return;
-      }
-    }
     await context.read<AuthenticationCubit>().login(
       username: loginTarget.username,
       password: _passwordTextController.value.text,
@@ -116,7 +110,9 @@ class _LoginFormState extends State<LoginForm> {
     }
     final localPart = addressLocalPart(bare);
     final domainPart = addressDomainPart(bare);
-    if (localPart == null || domainPart == null) {
+    if (localPart == null ||
+        domainPart == null ||
+        !_loginLocalPartPattern.hasMatch(localPart)) {
       return normalized.contains('@') ||
               !_loginLocalPartPattern.hasMatch(normalized)
           ? null
