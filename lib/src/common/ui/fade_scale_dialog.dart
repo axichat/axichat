@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const Color _defaultDialogBarrierColor = Color(0xcc000000);
+const Color defaultDialogBarrierColor = Color(0xcc000000);
 
 Future<T?> showFadeScaleDialog<T>({
   required BuildContext context,
@@ -25,7 +25,7 @@ Future<T?> showFadeScaleDialog<T>({
 }) {
   final Color? themeBarrierColor = Theme.of(context).dialogTheme.barrierColor;
   final Color resolvedBarrierColor =
-      barrierColor ?? themeBarrierColor ?? _defaultDialogBarrierColor;
+      barrierColor ?? themeBarrierColor ?? defaultDialogBarrierColor;
   final String resolvedBarrierLabel =
       barrierLabel ??
       MaterialLocalizations.of(context).modalBarrierDismissLabel;

@@ -89,6 +89,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       <String, Map<String, dynamic>>{};
   Map<String, dynamic>? _legacyAccountSettingsJson;
   String? _activeAccountKey;
+  bool _systemReducedMotion = false;
 
   bool get canBackgroundMessaging =>
       _capability?.canBackgroundMessaging ?? false;
@@ -106,10 +107,24 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   Duration get animationDuration =>
-      state.lowMotion ? Duration.zero : baseAnimationDuration;
+      state.reducedMotion ? Duration.zero : baseAnimationDuration;
 
-  Duration get authCompletionDuration =>
-      state.lowMotion ? baseAnimationDuration : authCompletionAnimationDuration;
+  Duration get authCompletionDuration => state.reducedMotion
+      ? baseAnimationDuration
+      : authCompletionAnimationDuration;
+
+  @override
+  void emit(SettingsState state) {
+    super.emit(state.copyWith(systemReducedMotion: _systemReducedMotion));
+  }
+
+  void updateSystemReducedMotion(bool reduced) {
+    if (_systemReducedMotion == reduced) {
+      return;
+    }
+    _systemReducedMotion = reduced;
+    emit(state);
+  }
 
   Future<void> updateLanguage(AppLanguage language) async {
     await _emitLocalSettingsState(
@@ -1401,7 +1416,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     } catch (_) {
       _bootstrapState = _initialStateFor(
         _capability,
-      ).copyWith(themeMode: ThemeMode.light, shadColor: ShadColor.neutral);
+      ).copyWith(themeMode: ThemeMode.system, shadColor: ShadColor.neutral);
       _accountSettingsJsonByKey.clear();
       _pendingRemoteSettingsSyncByKey.clear();
       _legacyAccountSettingsJson = null;
@@ -1545,7 +1560,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     } catch (_) {
       return _initialStateFor(
         _capability,
-      ).copyWith(themeMode: ThemeMode.light, shadColor: ShadColor.neutral);
+      ).copyWith(themeMode: ThemeMode.system, shadColor: ShadColor.neutral);
     }
   }
 

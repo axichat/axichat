@@ -40,6 +40,7 @@ class AxiTextFormField extends StatelessWidget {
     this.constraints,
     this.padding,
     this.groupId,
+    this.autofillHints,
   });
 
   final TextEditingController? controller;
@@ -72,6 +73,7 @@ class AxiTextFormField extends StatelessWidget {
   final BoxConstraints? constraints;
   final EdgeInsets? padding;
   final Object? groupId;
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +108,7 @@ class AxiTextFormField extends StatelessWidget {
       constraints: constraints,
       padding: padding,
       groupId: groupId,
+      autofillHints: autofillHints,
     );
   }
 }

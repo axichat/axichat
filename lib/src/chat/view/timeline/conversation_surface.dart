@@ -597,7 +597,7 @@ class _ChatMainConversationSection extends StatelessWidget {
       active: active,
       identity: chatEntity?.jid ?? '',
       accountJid: profileJid,
-      lowMotion: context.watch<SettingsCubit>().state.lowMotion,
+      lowMotion: context.watch<SettingsCubit>().state.reducedMotion,
       alwaysShow: false,
       builder: (context) => _ChatConversationPane(
         pinnedPanel: _ChatPinnedPanelSection(

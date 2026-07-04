@@ -823,12 +823,14 @@ class _RecoveryNewPasswordFields extends StatelessWidget {
           enabled: enabled,
           controller: newPasswordController,
           placeholder: context.l10n.authPasswordNewPlaceholder,
+          autofillHints: const [AutofillHints.newPassword],
         ),
         SizedBox(height: context.spacing.s),
         PasswordInput(
           enabled: enabled,
           controller: confirmController,
           placeholder: context.l10n.authPasswordConfirmNewPlaceholder,
+          autofillHints: const [AutofillHints.newPassword],
           confirmValidator: (value) {
             if (value != newPasswordController.text) {
               return context.l10n.authPasswordsMismatch;

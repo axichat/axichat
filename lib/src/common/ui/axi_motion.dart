@@ -26,6 +26,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     required this.authLoginCancelRevealDelay,
     required this.endpointBorderShineDuration,
     required this.endpointBorderShinePauseDuration,
+    required this.compactPaneSwipeScrimOpacityFactor,
   });
 
   final double buttonBounceScale;
@@ -49,6 +50,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
   final Duration authLoginCancelRevealDelay;
   final Duration endpointBorderShineDuration;
   final Duration endpointBorderShinePauseDuration;
+  final double compactPaneSwipeScrimOpacityFactor;
 
   @override
   AxiMotion copyWith({
@@ -73,6 +75,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     Duration? authLoginCancelRevealDelay,
     Duration? endpointBorderShineDuration,
     Duration? endpointBorderShinePauseDuration,
+    double? compactPaneSwipeScrimOpacityFactor,
   }) {
     return AxiMotion(
       buttonBounceScale: buttonBounceScale ?? this.buttonBounceScale,
@@ -115,6 +118,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
       endpointBorderShinePauseDuration:
           endpointBorderShinePauseDuration ??
           this.endpointBorderShinePauseDuration,
+      compactPaneSwipeScrimOpacityFactor:
+          compactPaneSwipeScrimOpacityFactor ??
+          this.compactPaneSwipeScrimOpacityFactor,
     );
   }
 
@@ -147,4 +153,5 @@ const AxiMotion axiMotion = AxiMotion(
   authLoginCancelRevealDelay: Duration(milliseconds: 500),
   endpointBorderShineDuration: Duration(milliseconds: 1800),
   endpointBorderShinePauseDuration: Duration(seconds: 5),
+  compactPaneSwipeScrimOpacityFactor: 0.15,
 );

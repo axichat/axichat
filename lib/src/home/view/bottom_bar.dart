@@ -566,7 +566,10 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final colors = context.colorScheme;
     final chatsState = context.watch<ChatsCubit>().state;
     final homeBadgeCount = widget.homeBadgeCount;
-    final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
+    final bool reducedMotion = context
+        .watch<SettingsCubit>()
+        .state
+        .reducedMotion;
     return AxiNowTicker(
       interval: calendarClockTickInterval,
       builder: (context, nowListenable) {
@@ -626,7 +629,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                           : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
                                 safeCalendarTab;
                       final bool dragHintActive =
-                          !lowMotion &&
+                          !reducedMotion &&
                           widget.calendarAvailable &&
                           (openCalendar || chatCalendarActive) &&
                           dragSourceTab != null;

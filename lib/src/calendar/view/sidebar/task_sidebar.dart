@@ -787,7 +787,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         .watch<SettingsCubit>();
                     final SettingsState settingsState = settingsCubit.state;
                     final Duration advancedOptionsAnimationDuration =
-                        settingsState.lowMotion
+                        settingsState.reducedMotion
                         ? Duration.zero
                         : calendarSidebarAdvancedAnimationDuration;
                     final CalendarTaskListSortMode taskListSortMode =

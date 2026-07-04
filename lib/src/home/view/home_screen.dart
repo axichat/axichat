@@ -748,8 +748,11 @@ class _FoldersListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final locate = context.read;
-    final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
-    final Duration animationDuration = lowMotion
+    final bool reducedMotion = context
+        .watch<SettingsCubit>()
+        .state
+        .reducedMotion;
+    final Duration animationDuration = reducedMotion
         ? Duration.zero
         : context.watch<SettingsCubit>().animationDuration;
     final shadTheme = ShadTheme.of(context);
@@ -2264,6 +2267,15 @@ class _HomeContentState extends State<_HomeContent> {
                               animatePaneChanges: true,
                               primaryAlignment: Alignment.topLeft,
                               secondaryAlignment: Alignment.topLeft,
+                              onCompactSecondaryDismiss: () {
+                                final locate = context.read;
+                                final chatsState = locate<ChatsCubit>().state;
+                                if (chatsState.openStack.skip(1).isNotEmpty) {
+                                  locate<ChatsCubit>().popChat();
+                                  return;
+                                }
+                                locate<ChatsCubit>().closeAllChats();
+                              },
                               primaryChild: Nexus(
                                 badgeCounts: badgeCounts.tabs,
                                 tabs: tabs,

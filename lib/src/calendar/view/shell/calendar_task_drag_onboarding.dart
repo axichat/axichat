@@ -229,7 +229,7 @@ class _CalendarTaskDragTipHostState extends State<CalendarTaskDragTipHost> {
             widget.visibleSources,
           ),
         ),
-        lowMotion: context.watch<SettingsCubit>().state.lowMotion,
+        lowMotion: context.watch<SettingsCubit>().state.reducedMotion,
         onCompleted: _markTipShown,
         child: widget.child,
       ),

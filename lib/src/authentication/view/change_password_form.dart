@@ -221,6 +221,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                     placeholder: context.l10n.authPasswordCurrentPlaceholder,
                     enabled: !submitting,
                     controller: _passwordTextController,
+                    autofillHints: const [AutofillHints.password],
                   ),
                 ),
               Padding(
@@ -229,6 +230,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   placeholder: context.l10n.authPasswordNewPlaceholder,
                   enabled: !submitting,
                   controller: _newPasswordTextController,
+                  autofillHints: const [AutofillHints.newPassword],
                 ),
               ),
               Padding(
@@ -237,6 +239,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                   placeholder: context.l10n.authPasswordConfirmNewPlaceholder,
                   enabled: !submitting,
                   controller: _newPassword2TextController,
+                  autofillHints: const [AutofillHints.newPassword],
                   validator: (value) {
                     final newPassword = _newPasswordTextController.text;
                     if (value != null &&

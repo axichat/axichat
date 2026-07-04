@@ -392,6 +392,7 @@ class _RecoveryStatusPasswordForm extends StatelessWidget {
               controller: controller,
               enabled: true,
               placeholder: context.l10n.authPasswordPlaceholder,
+              autofillHints: const [AutofillHints.password],
               textInputAction: TextInputAction.done,
               onEditingComplete: () async => await onSubmit(),
             ),
@@ -505,6 +506,7 @@ class _RecoveryPasswordPromptDialogState
           controller: _passwordController,
           enabled: true,
           placeholder: context.l10n.authPasswordPlaceholder,
+          autofillHints: const [AutofillHints.password],
           textInputAction: TextInputAction.done,
           onEditingComplete: _submit,
         ),
@@ -764,6 +766,7 @@ class _RecoveryEmailSetupFields extends StatelessWidget {
                 enabled: enabled,
                 controller: passwordController,
                 placeholder: context.l10n.authPasswordPlaceholder,
+                autofillHints: const [AutofillHints.password],
               ),
               SizedBox(height: spacing.s),
             ] else
@@ -790,6 +793,7 @@ class _RecoveryEmailSetupFields extends StatelessWidget {
                 enabled: enabled,
                 controller: passwordController,
                 placeholder: context.l10n.authPasswordPlaceholder,
+                autofillHints: const [AutofillHints.password],
               ),
               SizedBox(height: spacing.s),
             ] else
@@ -1048,6 +1052,7 @@ class _RecoveryTotpSetupFields extends StatelessWidget {
                 enabled: enabled,
                 controller: passwordController,
                 placeholder: context.l10n.authPasswordPlaceholder,
+                autofillHints: const [AutofillHints.password],
               ),
             ] else ...[
               Text(
@@ -1069,6 +1074,7 @@ class _RecoveryTotpSetupFields extends StatelessWidget {
                 enabled: enabled,
                 controller: passwordController,
                 placeholder: context.l10n.authPasswordPlaceholder,
+                autofillHints: const [AutofillHints.password],
               ),
               SizedBox(height: spacing.s),
             ],

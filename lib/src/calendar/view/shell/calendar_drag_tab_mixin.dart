@@ -198,7 +198,10 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final l10n = context.l10n;
-    final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
+    final bool reducedMotion = context
+        .watch<SettingsCubit>()
+        .state
+        .reducedMotion;
     final Duration animationDuration = context
         .watch<SettingsCubit>()
         .animationDuration;
@@ -268,7 +271,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
               icon: LucideIcons.calendarClock,
               text: l10n.homeRailCalendar,
               leading: AxiAttentionShake(
-                enabled: !lowMotion && scheduleSwitchHintActive,
+                enabled: !reducedMotion && scheduleSwitchHintActive,
                 child: IconTheme.merge(
                   data: IconThemeData(color: scheduleColor, size: iconSize),
                   child: scheduleTabLabel,
@@ -281,7 +284,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
               icon: LucideIcons.squareCheck,
               text: l10n.calendarFragmentTaskLabel,
               leading: AxiAttentionShake(
-                enabled: !lowMotion && tasksSwitchHintActive,
+                enabled: !reducedMotion && tasksSwitchHintActive,
                 child: IconTheme.merge(
                   data: IconThemeData(color: tasksColor, size: iconSize),
                   child: tasksTabLabel,

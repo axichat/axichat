@@ -141,136 +141,142 @@ class _LoginFormState extends State<LoginForm> {
             state is AuthenticationFailure && state.canOfferLocalCleanup;
         return Form(
           key: _formKey,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: sizing.dialogMaxWidth),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: errorPadding,
-                    child: Text(
-                      context.l10n.authLogin,
-                      style: context.modalHeaderTextStyle,
+          child: AutofillGroup(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: sizing.dialogMaxWidth),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: errorPadding,
+                      child: Text(
+                        context.l10n.authLogin,
+                        style: context.modalHeaderTextStyle,
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: errorMessagePadding,
-                    child: errorText == null || errorText.isEmpty
-                        ? const SizedBox.shrink()
-                        : Semantics(
-                            liveRegion: true,
-                            container: true,
-                            label: context.l10n.signupErrorPrefix(errorText),
-                            child: Text(
-                              errorText,
-                              style: context.textTheme.small.copyWith(
-                                color: context.colorScheme.destructive,
+                    Padding(
+                      padding: errorMessagePadding,
+                      child: errorText == null || errorText.isEmpty
+                          ? const SizedBox.shrink()
+                          : Semantics(
+                              liveRegion: true,
+                              container: true,
+                              label: context.l10n.signupErrorPrefix(errorText),
+                              child: Text(
+                                errorText,
+                                style: context.textTheme.small.copyWith(
+                                  color: context.colorScheme.destructive,
+                                ),
                               ),
                             ),
+                    ),
+                    if (canOfferLocalCleanup &&
+                        errorText != null &&
+                        errorText.isNotEmpty)
+                      Padding(
+                        padding: horizontalPadding,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 1,
+                          child: AxiButton.destructive(
+                            onPressed: isBusy || _localCleanupInProgress
+                                ? null
+                                : _onRemoveLocalDataPressed,
+                            child: Text(
+                              context.l10n.authLocalDataCleanupAction,
+                            ),
                           ),
-                  ),
-                  if (canOfferLocalCleanup &&
-                      errorText != null &&
-                      errorText.isNotEmpty)
+                        ),
+                      ),
+                    if (canOfferLocalCleanup &&
+                        errorText != null &&
+                        errorText.isNotEmpty)
+                      SizedBox(height: spacing.m),
                     Padding(
                       padding: horizontalPadding,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        widthFactor: 1,
-                        child: AxiButton.destructive(
-                          onPressed: isBusy || _localCleanupInProgress
-                              ? null
-                              : _onRemoveLocalDataPressed,
-                          child: Text(context.l10n.authLocalDataCleanupAction),
+                      child: Semantics(
+                        label: context.l10n.authUsername,
+                        textField: true,
+                        child: AxiTextFormField(
+                          key: loginUsernameKey,
+                          autocorrect: false,
+                          textInputAction: TextInputAction.next,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              usernameCharactersPattern,
+                            ),
+                          ],
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.username],
+                          placeholder: Text(context.l10n.authUsername),
+                          enabled: !isBusy,
+                          controller: _jidTextController,
+                          onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                          trailing: EndpointSuffix(server: state.server),
+                          validator: (text) {
+                            final value = text;
+                            if (value.isEmpty) {
+                              return context.l10n.authUsernameRequired;
+                            }
+                            return null;
+                          },
                         ),
                       ),
                     ),
-                  if (canOfferLocalCleanup &&
-                      errorText != null &&
-                      errorText.isNotEmpty)
-                    SizedBox(height: spacing.m),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: Semantics(
-                      label: context.l10n.authUsername,
-                      textField: true,
-                      child: AxiTextFormField(
-                        key: loginUsernameKey,
-                        autocorrect: false,
-                        textInputAction: TextInputAction.next,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                            usernameCharactersPattern,
-                          ),
-                        ],
-                        keyboardType: TextInputType.emailAddress,
-                        placeholder: Text(context.l10n.authUsername),
+                    SizedBox(height: spacing.s),
+                    Padding(
+                      padding: horizontalPadding,
+                      child: PasswordInput(
+                        key: loginPasswordKey,
                         enabled: !isBusy,
-                        controller: _jidTextController,
-                        onSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                        trailing: EndpointSuffix(server: state.server),
-                        validator: (text) {
-                          final value = text;
-                          if (value.isEmpty) {
-                            return context.l10n.authUsernameRequired;
-                          }
-                          return null;
+                        controller: _passwordTextController,
+                        focusNode: _passwordFocusNode,
+                        autofillHints: const [AutofillHints.password],
+                        textInputAction: TextInputAction.done,
+                      ),
+                    ),
+                    SizedBox(height: spacing.m),
+                    Padding(
+                      padding: horizontalPadding,
+                      child: AxiCheckboxFormField(
+                        key: _rememberMeFieldKey,
+                        enabled: !isBusy,
+                        initialValue: rememberMe,
+                        inputLabel: Text(context.l10n.authRememberMeLabel),
+                        onChanged: (value) async {
+                          setState(() {
+                            rememberMe = value;
+                          });
+                          await context
+                              .read<AuthenticationCubit>()
+                              .persistRememberMeChoice(rememberMe);
                         },
                       ),
                     ),
-                  ),
-                  SizedBox(height: spacing.s),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: PasswordInput(
-                      key: loginPasswordKey,
-                      enabled: !isBusy,
-                      controller: _passwordTextController,
-                      focusNode: _passwordFocusNode,
-                      textInputAction: TextInputAction.done,
-                    ),
-                  ),
-                  SizedBox(height: spacing.m),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: AxiCheckboxFormField(
-                      key: _rememberMeFieldKey,
-                      enabled: !isBusy,
-                      initialValue: rememberMe,
-                      inputLabel: Text(context.l10n.authRememberMeLabel),
-                      onChanged: (value) async {
-                        setState(() {
-                          rememberMe = value;
-                        });
-                        await context
-                            .read<AuthenticationCubit>()
-                            .persistRememberMeChoice(rememberMe);
-                      },
-                    ),
-                  ),
-                  SizedBox(height: spacing.l),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: AxiAnimatedSize(
-                      duration: animationDuration,
-                      curve: Curves.easeInOut,
-                      alignment: Alignment.centerLeft,
-                      child: Align(
+                    SizedBox(height: spacing.l),
+                    Padding(
+                      padding: horizontalPadding,
+                      child: AxiAnimatedSize(
+                        duration: animationDuration,
+                        curve: Curves.easeInOut,
                         alignment: Alignment.centerLeft,
-                        widthFactor: 1,
-                        child: AxiButton.primary(
-                          key: loginSubmitKey,
-                          loading: isBusy,
-                          onPressed: isBusy ? null : _onPressed,
-                          child: Text(context.l10n.authLogin),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 1,
+                          child: AxiButton.primary(
+                            key: loginSubmitKey,
+                            loading: isBusy,
+                            onPressed: isBusy ? null : _onPressed,
+                            child: Text(context.l10n.authLogin),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(height: spacing.m),
-                ],
+                    SizedBox(height: spacing.m),
+                  ],
+                ),
               ),
             ),
           ),

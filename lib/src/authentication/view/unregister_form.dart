@@ -108,6 +108,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
                     placeholder: context.l10n.authPasswordPlaceholder,
                     enabled: !loading,
                     controller: _passwordTextController,
+                    autofillHints: const [AutofillHints.password],
                   ),
                 ),
               SizedBox(height: spacing.s),

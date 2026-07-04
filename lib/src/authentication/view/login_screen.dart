@@ -27,6 +27,7 @@ import 'package:axichat/src/storage/models.dart' as models;
 import 'package:axichat/src/xmpp/xmpp_service.dart' hide ConnectionState;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -255,6 +256,7 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
       _completionHandled = true;
+      TextInput.finishAutofillContext();
       final preloadHome = _preloadHomeScreenCache();
       await _authProgressController.complete(
         duration: context.read<SettingsCubit>().authCompletionDuration,

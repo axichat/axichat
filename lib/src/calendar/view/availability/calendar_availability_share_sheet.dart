@@ -290,8 +290,9 @@ class _CalendarAvailabilityShareScreenState
             ),
             Expanded(
               child: BlocSelector<SettingsCubit, SettingsState, Duration>(
-                selector: (settings) =>
-                    settings.lowMotion ? Duration.zero : baseAnimationDuration,
+                selector: (settings) => settings.reducedMotion
+                    ? Duration.zero
+                    : baseAnimationDuration,
                 builder: (context, animationDuration) => PageTransitionSwitcher(
                   duration: animationDuration,
                   reverse: _stepReversing,

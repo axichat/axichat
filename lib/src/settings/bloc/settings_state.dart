@@ -188,7 +188,7 @@ const List<String> _syncedSettingsKeys = <String>[
 abstract class SettingsState with _$SettingsState {
   const factory SettingsState({
     @Default(AppLanguage.english) AppLanguage language,
-    @Default(ThemeMode.light) ThemeMode themeMode,
+    @Default(ThemeMode.system) ThemeMode themeMode,
     @Default(ShadColor.neutral) ShadColor shadColor,
     @Default(EndpointConfig()) EndpointConfig endpointConfig,
     @Default(false) bool backgroundMessagingEnabled,
@@ -230,6 +230,10 @@ abstract class SettingsState with _$SettingsState {
     @JsonKey(includeFromJson: false, includeToJson: false)
     @Default(<GlobalSettingId, RequestStatus>{})
     Map<GlobalSettingId, RequestStatus> globalSettingStatuses,
+    // ignore: invalid_annotation_target
+    @JsonKey(includeFromJson: false, includeToJson: false)
+    @Default(false)
+    bool systemReducedMotion,
     @Default(false) bool settingsSyncHasConfirmedSnapshot,
     @Default(<String, dynamic>{})
     Map<String, dynamic> settingsSyncConfirmedJson,
@@ -255,6 +259,10 @@ extension SettingsStateAttachmentDefaults on SettingsState {
 extension SettingsStateNotificationSettings on SettingsState {
   bool get allNotificationsMuted =>
       chatNotificationsMuted && emailNotificationsMuted;
+}
+
+extension SettingsStateMotion on SettingsState {
+  bool get reducedMotion => lowMotion || systemReducedMotion;
 }
 
 extension SettingsStateSync on SettingsState {

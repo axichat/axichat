@@ -23,6 +23,7 @@ class PasswordInput extends StatefulWidget {
     this.confirmValidator,
     this.validator,
     this.semanticsLabel,
+    this.autofillHints,
   });
 
   final bool enabled;
@@ -35,6 +36,7 @@ class PasswordInput extends StatefulWidget {
   final FormFieldValidator<String>? validator;
   final TextEditingController controller;
   final String? semanticsLabel;
+  final Iterable<String>? autofillHints;
 
   @override
   State<PasswordInput> createState() => _PasswordInputState();
@@ -61,6 +63,7 @@ class _PasswordInputState extends State<PasswordInput> {
         obscureText: obscure,
         controller: widget.controller,
         textInputAction: widget.textInputAction,
+        autofillHints: widget.autofillHints,
         onEditingComplete: widget.onEditingComplete,
         onSubmitted: widget.onSubmitted,
         trailing: ExcludeFocusTraversal(

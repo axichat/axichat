@@ -14,7 +14,8 @@ import 'package:axichat/src/avatar/view/avatar_editor_screen.dart';
 import 'package:axichat/src/home/view/home_screen.dart';
 import 'package:axichat/src/profile/view/profile_screen.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -106,8 +107,11 @@ class TransitionGoRouteData extends GoRouteData {
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     final pageKey = ValueKey<String>(state.uri.toString());
-    if (context.watch<SettingsCubit>().state.lowMotion) {
+    if (context.watch<SettingsCubit>().state.reducedMotion) {
       return NoTransitionPage(key: pageKey, child: build(context, state));
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return CupertinoPage<void>(key: pageKey, child: build(context, state));
     }
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
     return CustomTransitionPage(

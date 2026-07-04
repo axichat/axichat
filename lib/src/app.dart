@@ -525,7 +525,8 @@ class MaterialAxichat extends StatefulWidget {
   State<MaterialAxichat> createState() => _MaterialAxichatState();
 }
 
-class _MaterialAxichatState extends State<MaterialAxichat> {
+class _MaterialAxichatState extends State<MaterialAxichat>
+    with WidgetsBindingObserver {
   static final Logger _exitLogger = Logger('AppExit');
   static const Duration _exitCleanupTimeout = Duration(seconds: 8);
 
@@ -575,8 +576,15 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _syncSystemReducedMotion();
     _lifecycleListener;
     _router.routerDelegate.addListener(_handleRouteChange);
+  }
+
+  @override
+  void didChangeAccessibilityFeatures() {
+    _syncSystemReducedMotion();
   }
 
   @override
@@ -607,7 +615,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     _lifecycleListener.dispose();
     _router.routerDelegate.removeListener(_handleRouteChange);
     _router.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _syncSystemReducedMotion() {
+    final features =
+        WidgetsBinding.instance.platformDispatcher.accessibilityFeatures;
+    context.read<SettingsCubit>().updateSystemReducedMotion(
+      features.disableAnimations,
+    );
   }
 
   Future<void> _restoreForegroundRuntimeIfPreferredForContext(
@@ -1396,6 +1413,9 @@ extension ThemeExtension on BuildContext {
   AxiSizing get sizing => Theme.of(this).extension<AxiSizing>() ?? axiSizing;
 
   AxiMotion get motion => Theme.of(this).extension<AxiMotion>() ?? axiMotion;
+
+  Color get dialogBarrierColor =>
+      Theme.of(this).dialogTheme.barrierColor ?? defaultDialogBarrierColor;
 
   AxiBorders get borders =>
       Theme.of(this).extension<AxiBorders>() ?? axiBorders;

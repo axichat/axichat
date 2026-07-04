@@ -712,53 +712,31 @@ class _SignupFormState extends State<SignupForm>
                             .watch<SettingsCubit>()
                             .animationDuration,
                         curve: Curves.easeIn,
-                        child: AnimatedSwitcher(
-                          duration: context
-                              .watch<SettingsCubit>()
-                              .animationDuration,
-                          switchInCurve: Curves.easeIn,
-                          switchOutCurve: Curves.easeOut,
-                          transitionBuilder:
-                              AnimatedSwitcher.defaultTransitionBuilder,
-                          child: [
-                            Form(
-                              key: _formKeys[0],
-                              child: Padding(
-                                padding: fieldSpacing,
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  spacing: spacing.s,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        usernameDescriptionHeight == null
-                                            ? SignupAvatarSelector(
-                                                bytes:
-                                                    avatarState.displayedBytes,
-                                                username:
-                                                    _jidTextController.text,
-                                                processing:
-                                                    avatarState.processing,
-                                                showRotationTimer:
-                                                    avatarState.carouselRunning,
-                                                rotationStartedAt: avatarState
-                                                    .carouselStartedAt,
-                                                animationDuration:
-                                                    animationDuration,
-                                                rotationDuration:
-                                                    SignupAvatarCubit
-                                                        .avatarCarouselInterval,
-                                                onTap: _openAvatarEditor,
-                                              )
-                                            : Transform.translate(
-                                                offset: Offset(
-                                                  0,
-                                                  -usernameDescriptionHeight,
-                                                ),
-                                                child: SignupAvatarSelector(
+                        child: AutofillGroup(
+                          child: AnimatedSwitcher(
+                            duration: context
+                                .watch<SettingsCubit>()
+                                .animationDuration,
+                            switchInCurve: Curves.easeIn,
+                            switchOutCurve: Curves.easeOut,
+                            transitionBuilder:
+                                AnimatedSwitcher.defaultTransitionBuilder,
+                            child: [
+                              Form(
+                                key: _formKeys[0],
+                                child: Padding(
+                                  padding: fieldSpacing,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    spacing: spacing.s,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          usernameDescriptionHeight == null
+                                              ? SignupAvatarSelector(
                                                   bytes: avatarState
                                                       .displayedBytes,
                                                   username:
@@ -775,413 +753,470 @@ class _SignupFormState extends State<SignupForm>
                                                       SignupAvatarCubit
                                                           .avatarCarouselInterval,
                                                   onTap: _openAvatarEditor,
+                                                )
+                                              : Transform.translate(
+                                                  offset: Offset(
+                                                    0,
+                                                    -usernameDescriptionHeight,
+                                                  ),
+                                                  child: SignupAvatarSelector(
+                                                    bytes: avatarState
+                                                        .displayedBytes,
+                                                    username:
+                                                        _jidTextController.text,
+                                                    processing:
+                                                        avatarState.processing,
+                                                    showRotationTimer:
+                                                        avatarState
+                                                            .carouselRunning,
+                                                    rotationStartedAt:
+                                                        avatarState
+                                                            .carouselStartedAt,
+                                                    animationDuration:
+                                                        animationDuration,
+                                                    rotationDuration:
+                                                        SignupAvatarCubit
+                                                            .avatarCarouselInterval,
+                                                    onTap: _openAvatarEditor,
+                                                  ),
+                                                ),
+                                          SizedBox(width: spacing.s),
+                                          Expanded(
+                                            child: AxiTextFormField(
+                                              autocorrect: false,
+                                              inputFormatters: [
+                                                FilteringTextInputFormatter.allow(
+                                                  RegExp(r'[a-z0-9._-]'),
+                                                ),
+                                              ],
+                                              keyboardType: TextInputType.name,
+                                              autofillHints: const [
+                                                AutofillHints.newUsername,
+                                              ],
+                                              description: Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: spacing.xs,
+                                                ),
+                                                child: Text(
+                                                  context
+                                                      .l10n
+                                                      .authUsernameCaseInsensitive,
                                                 ),
                                               ),
-                                        SizedBox(width: spacing.s),
-                                        Expanded(
-                                          child: AxiTextFormField(
-                                            autocorrect: false,
-                                            inputFormatters: [
-                                              FilteringTextInputFormatter.allow(
-                                                RegExp(r'[a-z0-9._-]'),
+                                              placeholder: Text(
+                                                context.l10n.authUsername,
                                               ),
-                                            ],
-                                            keyboardType: TextInputType.name,
-                                            description: Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: spacing.xs,
-                                              ),
-                                              child: Text(
-                                                context
-                                                    .l10n
-                                                    .authUsernameCaseInsensitive,
-                                              ),
-                                            ),
-                                            placeholder: Text(
-                                              context.l10n.authUsername,
-                                            ),
-                                            enabled: !isBusy,
-                                            controller: _jidTextController,
-                                            focusNode: _usernameFocusNode,
-                                            textInputAction:
-                                                TextInputAction.next,
-                                            onEditingComplete: () => unawaited(
-                                              _handleContinuePressed(context),
-                                            ),
-                                            trailing: SignupEndpointSuffix(
-                                              config: _signupEndpointConfig,
-                                              onChanged: (config) =>
-                                                  _handleSignupEndpointChanged(
-                                                    config,
+                                              enabled: !isBusy,
+                                              controller: _jidTextController,
+                                              focusNode: _usernameFocusNode,
+                                              textInputAction:
+                                                  TextInputAction.next,
+                                              onEditingComplete: () =>
+                                                  unawaited(
+                                                    _handleContinuePressed(
+                                                      context,
+                                                    ),
                                                   ),
-                                            ),
-                                            validator: (text) {
-                                              if (!_signupEndpointConfigured) {
-                                                return context
-                                                    .l10n
-                                                    .signupCustomEndpointRequired;
-                                              }
-                                              if (text.isEmpty) {
-                                                return context
-                                                    .l10n
-                                                    .authUsernameRequired;
-                                              }
-                                              if (!_usernamePattern.hasMatch(
-                                                text,
-                                              )) {
-                                                return context
-                                                    .l10n
-                                                    .authUsernameRules;
-                                              }
-                                              return null;
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (avatarErrorText != null)
-                                      Text(
-                                        avatarErrorText,
-                                        style: destructiveTextStyle,
-                                      ),
-                                    if (_showAvatarEditor)
-                                      Padding(
-                                        padding: EdgeInsets.only(
-                                          top: spacing.s,
-                                        ),
-                                        child: Center(
-                                          child: ConstrainedBox(
-                                            constraints: BoxConstraints(
-                                              maxWidth: math.min(
-                                                MediaQuery.sizeOf(
-                                                  context,
-                                                ).width,
-                                                sizing.dialogMaxWidth,
+                                              trailing: SignupEndpointSuffix(
+                                                config: _signupEndpointConfig,
+                                                onChanged: (config) =>
+                                                    _handleSignupEndpointChanged(
+                                                      config,
+                                                    ),
                                               ),
+                                              validator: (text) {
+                                                if (!_signupEndpointConfigured) {
+                                                  return context
+                                                      .l10n
+                                                      .signupCustomEndpointRequired;
+                                                }
+                                                if (text.isEmpty) {
+                                                  return context
+                                                      .l10n
+                                                      .authUsernameRequired;
+                                                }
+                                                if (!_usernamePattern.hasMatch(
+                                                  text,
+                                                )) {
+                                                  return context
+                                                      .l10n
+                                                      .authUsernameRules;
+                                                }
+                                                return null;
+                                              },
                                             ),
-                                            child: Stack(
-                                              children: [
-                                                SignupAvatarEditorPanel(
-                                                  mode: avatarState.editorMode,
-                                                  avatarBytes:
-                                                      avatarState.previewBytes,
-                                                  animationDuration:
-                                                      animationDuration,
-                                                  showRotationTimer: avatarState
-                                                      .carouselRunning,
-                                                  rotationStartedAt: avatarState
-                                                      .carouselStartedAt,
-                                                  rotationDuration:
-                                                      SignupAvatarCubit
-                                                          .avatarCarouselInterval,
-                                                  cropBytes: avatarState
-                                                      .avatar
-                                                      ?.sourceBytes,
-                                                  cropRect: avatarState
-                                                      .avatar
-                                                      ?.cropRect,
-                                                  imageWidth: avatarState
-                                                      .avatar
-                                                      ?.sourceWidth
-                                                      ?.toDouble(),
-                                                  imageHeight: avatarState
-                                                      .avatar
-                                                      ?.sourceHeight
-                                                      ?.toDouble(),
-                                                  onCropChanged: (rect) =>
-                                                      context
-                                                          .read<
-                                                            SignupAvatarCubit
-                                                          >()
-                                                          .updateCropRect(rect),
-                                                  onCropReset: context
-                                                      .read<SignupAvatarCubit>()
-                                                      .resetCrop,
-                                                  onCropCommitted: (rect) =>
-                                                      context
-                                                          .read<
-                                                            SignupAvatarCubit
-                                                          >()
-                                                          .commitCrop(rect),
-                                                  onShuffle: () => context
-                                                      .read<SignupAvatarCubit>()
-                                                      .pauseOnPreviewAvatar(
-                                                        context.colorScheme,
-                                                      ),
-                                                  onUpload: context
-                                                      .read<SignupAvatarCubit>()
-                                                      .pickAvatarFromFiles,
-                                                  onUseCurrent: () => context
-                                                      .read<SignupAvatarCubit>()
-                                                      .selectCarouselAvatar(),
-                                                  useActionEnabled: avatarState
-                                                      .canUseCarouselAvatar,
-                                                  canShuffleBackground:
-                                                      avatarState
-                                                          .canShuffleBackground,
-                                                  onShuffleBackground:
-                                                      avatarState
-                                                          .canShuffleBackground
-                                                      ? () => context
+                                          ),
+                                        ],
+                                      ),
+                                      if (avatarErrorText != null)
+                                        Text(
+                                          avatarErrorText,
+                                          style: destructiveTextStyle,
+                                        ),
+                                      if (_showAvatarEditor)
+                                        Padding(
+                                          padding: EdgeInsets.only(
+                                            top: spacing.s,
+                                          ),
+                                          child: Center(
+                                            child: ConstrainedBox(
+                                              constraints: BoxConstraints(
+                                                maxWidth: math.min(
+                                                  MediaQuery.sizeOf(
+                                                    context,
+                                                  ).width,
+                                                  sizing.dialogMaxWidth,
+                                                ),
+                                              ),
+                                              child: Stack(
+                                                children: [
+                                                  SignupAvatarEditorPanel(
+                                                    mode:
+                                                        avatarState.editorMode,
+                                                    avatarBytes: avatarState
+                                                        .previewBytes,
+                                                    animationDuration:
+                                                        animationDuration,
+                                                    showRotationTimer:
+                                                        avatarState
+                                                            .carouselRunning,
+                                                    rotationStartedAt:
+                                                        avatarState
+                                                            .carouselStartedAt,
+                                                    rotationDuration:
+                                                        SignupAvatarCubit
+                                                            .avatarCarouselInterval,
+                                                    cropBytes: avatarState
+                                                        .avatar
+                                                        ?.sourceBytes,
+                                                    cropRect: avatarState
+                                                        .avatar
+                                                        ?.cropRect,
+                                                    imageWidth: avatarState
+                                                        .avatar
+                                                        ?.sourceWidth
+                                                        ?.toDouble(),
+                                                    imageHeight: avatarState
+                                                        .avatar
+                                                        ?.sourceHeight
+                                                        ?.toDouble(),
+                                                    onCropChanged: (rect) =>
+                                                        context
                                                             .read<
                                                               SignupAvatarCubit
                                                             >()
-                                                            .shuffleBackground(
-                                                              context
-                                                                  .colorScheme,
-                                                            )
-                                                      : null,
+                                                            .updateCropRect(
+                                                              rect,
+                                                            ),
+                                                    onCropReset: context
+                                                        .read<
+                                                          SignupAvatarCubit
+                                                        >()
+                                                        .resetCrop,
+                                                    onCropCommitted: (rect) =>
+                                                        context
+                                                            .read<
+                                                              SignupAvatarCubit
+                                                            >()
+                                                            .commitCrop(rect),
+                                                    onShuffle: () => context
+                                                        .read<
+                                                          SignupAvatarCubit
+                                                        >()
+                                                        .pauseOnPreviewAvatar(
+                                                          context.colorScheme,
+                                                        ),
+                                                    onUpload: context
+                                                        .read<
+                                                          SignupAvatarCubit
+                                                        >()
+                                                        .pickAvatarFromFiles,
+                                                    onUseCurrent: () => context
+                                                        .read<
+                                                          SignupAvatarCubit
+                                                        >()
+                                                        .selectCarouselAvatar(),
+                                                    useActionEnabled: avatarState
+                                                        .canUseCarouselAvatar,
+                                                    canShuffleBackground:
+                                                        avatarState
+                                                            .canShuffleBackground,
+                                                    onShuffleBackground:
+                                                        avatarState
+                                                            .canShuffleBackground
+                                                        ? () => context
+                                                              .read<
+                                                                SignupAvatarCubit
+                                                              >()
+                                                              .shuffleBackground(
+                                                                context
+                                                                    .colorScheme,
+                                                              )
+                                                        : null,
+                                                  ),
+                                                  Positioned(
+                                                    top: spacing.xs,
+                                                    right: spacing.xs,
+                                                    child: AxiIconButton(
+                                                      iconData: LucideIcons.x,
+                                                      tooltip: context
+                                                          .l10n
+                                                          .commonClose,
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          _showAvatarEditor =
+                                                              false;
+                                                        });
+                                                      },
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              Form(
+                                key: _formKeys[1],
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Padding(
+                                      padding: fieldSpacing,
+                                      child: PasswordInput(
+                                        enabled: !isBusy,
+                                        controller: _passwordTextController,
+                                        focusNode: _passwordFocusNode,
+                                        autofillHints: const [
+                                          AutofillHints.newPassword,
+                                        ],
+                                        textInputAction: TextInputAction.next,
+                                        onEditingComplete: () =>
+                                            _password2FocusNode.requestFocus(),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: fieldSpacing,
+                                      child: PasswordInput(
+                                        enabled: !isBusy,
+                                        controller: _password2TextController,
+                                        focusNode: _password2FocusNode,
+                                        autofillHints: const [
+                                          AutofillHints.newPassword,
+                                        ],
+                                        textInputAction: TextInputAction.next,
+                                        onEditingComplete: () => unawaited(
+                                          _handleContinuePressed(context),
+                                        ),
+                                        confirmValidator: (text) =>
+                                            text != _passwordTextController.text
+                                            ? context.l10n.authPasswordsMismatch
+                                            : null,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: fieldSpacing,
+                                      child: AuthPasswordStrengthMeter(
+                                        assessment: _passwordAssessment,
+                                        showBreachWarning:
+                                            _visibleSignupPasswordRisk ==
+                                            AuthPasswordRisk.breached,
+                                        showSafetyUnavailableWarning:
+                                            _visibleSignupPasswordRisk ==
+                                            AuthPasswordRisk.unavailable,
+                                        animationDuration: animationDuration,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: fieldSpacing,
+                                      child: AuthPasswordRiskNotice(
+                                        risk: _visibleSignupPasswordRisk,
+                                        allowed: _passwordRiskAcknowledged,
+                                        enabled:
+                                            !isBusy && !_pwnedCheckInProgress,
+                                        showError: _showPasswordRiskError,
+                                        animationDuration: animationDuration,
+                                        resetTick: _passwordRiskResetTick,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _acknowledgedPasswordRisk = value
+                                                ? _visibleSignupPasswordRisk
+                                                : null;
+                                            if (value) {
+                                              _showPasswordRiskError = false;
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Form(
+                                key: _formKeys[2],
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Padding(
+                                      padding:
+                                          fieldSpacing +
+                                          EdgeInsets.only(top: spacing.m),
+                                      child: Builder(
+                                        builder: (context) {
+                                          final captchaLoading =
+                                              _captchaLoadState ==
+                                              _CaptchaLoadState.loading;
+                                          final captchaUrl = _captchaSrcUrl;
+                                          final captchaSurface =
+                                              switch (_captchaLoadState) {
+                                                _CaptchaLoadState.failed =>
+                                                  const _CaptchaErrorSurface(),
+                                                _CaptchaLoadState.ready ||
+                                                _CaptchaLoadState.loading ||
+                                                _CaptchaLoadState.idle =>
+                                                  captchaUrl == null
+                                                      ? _CaptchaSkeleton(
+                                                          animationDuration:
+                                                              animationDuration,
+                                                        )
+                                                      : _CaptchaImage(
+                                                          url: captchaUrl,
+                                                          animationDuration:
+                                                              animationDuration,
+                                                          onLoaded: () =>
+                                                              _markCaptchaImageLoaded(
+                                                                captchaUrl,
+                                                              ),
+                                                          onError: () =>
+                                                              _handleCaptchaImageError(
+                                                                captchaUrl,
+                                                              ),
+                                                        ),
+                                              };
+                                          return Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Semantics(
+                                                  label: context
+                                                      .l10n
+                                                      .signupCaptchaChallenge,
+                                                  hint: context
+                                                      .l10n
+                                                      .signupCaptchaInstructions,
+                                                  image: true,
+                                                  child: _CaptchaFrame(
+                                                    constraints: BoxConstraints(
+                                                      minHeight: captchaHeight,
+                                                      maxHeight: captchaHeight,
+                                                      minWidth: captchaWidth,
+                                                      maxWidth: captchaWidth,
+                                                    ),
+                                                    child: captchaSurface,
+                                                  ),
                                                 ),
-                                                Positioned(
-                                                  top: spacing.xs,
-                                                  right: spacing.xs,
+                                                SizedBox(width: spacing.s),
+                                                Semantics(
+                                                  button: true,
+                                                  enabled:
+                                                      !isBusy &&
+                                                      !captchaLoading,
+                                                  label: context
+                                                      .l10n
+                                                      .signupCaptchaReload,
+                                                  hint: context
+                                                      .l10n
+                                                      .signupCaptchaReloadHint,
                                                   child: AxiIconButton(
-                                                    iconData: LucideIcons.x,
+                                                    iconData:
+                                                        LucideIcons.refreshCw,
                                                     tooltip: context
                                                         .l10n
-                                                        .commonClose,
-                                                    onPressed: () {
-                                                      setState(() {
-                                                        _showAvatarEditor =
-                                                            false;
-                                                      });
-                                                    },
+                                                        .signupCaptchaReload,
+                                                    tapTargetSize:
+                                                        sizing.appBarHeight,
+                                                    onPressed:
+                                                        isBusy || captchaLoading
+                                                        ? null
+                                                        : () =>
+                                                              _reloadCaptcha(),
                                                   ),
                                                 ),
                                               ],
                                             ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: fieldSpacing,
+                                      child: SizedBox(
+                                        width: captchaWidth,
+                                        child: AxiTextFormField(
+                                          autocorrect: false,
+                                          keyboardType: TextInputType.number,
+                                          placeholder: Text(
+                                            context
+                                                .l10n
+                                                .signupCaptchaPlaceholder,
                                           ),
+                                          enabled: !isBusy,
+                                          controller: _captchaTextController,
+                                          focusNode: _captchaFocusNode,
+                                          textInputAction: TextInputAction.done,
+                                          validator: (text) {
+                                            final value = text;
+                                            if (value.isEmpty) {
+                                              return context
+                                                  .l10n
+                                                  .signupCaptchaValidation;
+                                            }
+                                            return null;
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: fieldSpacing,
+                                      child: TermsCheckbox(enabled: !isBusy),
+                                    ),
+                                    if (!_passwordWasSkipped)
+                                      Padding(
+                                        padding: fieldSpacing,
+                                        child: AxiCheckboxFormField(
+                                          key: _rememberMeFieldKey,
+                                          enabled: !isBusy,
+                                          initialValue: rememberMe,
+                                          inputLabel: Text(
+                                            context.l10n.authRememberMeLabel,
+                                          ),
+                                          onChanged: (value) async {
+                                            setState(() {
+                                              rememberMe = value;
+                                            });
+                                            await context
+                                                .read<AuthenticationCubit>()
+                                                .persistRememberMeChoice(
+                                                  rememberMe,
+                                                );
+                                          },
                                         ),
                                       ),
                                   ],
                                 ),
                               ),
-                            ),
-                            Form(
-                              key: _formKeys[1],
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Padding(
-                                    padding: fieldSpacing,
-                                    child: PasswordInput(
-                                      enabled: !isBusy,
-                                      controller: _passwordTextController,
-                                      focusNode: _passwordFocusNode,
-                                      textInputAction: TextInputAction.next,
-                                      onEditingComplete: () =>
-                                          _password2FocusNode.requestFocus(),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: fieldSpacing,
-                                    child: PasswordInput(
-                                      enabled: !isBusy,
-                                      controller: _password2TextController,
-                                      focusNode: _password2FocusNode,
-                                      textInputAction: TextInputAction.next,
-                                      onEditingComplete: () => unawaited(
-                                        _handleContinuePressed(context),
-                                      ),
-                                      confirmValidator: (text) =>
-                                          text != _passwordTextController.text
-                                          ? context.l10n.authPasswordsMismatch
-                                          : null,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: fieldSpacing,
-                                    child: AuthPasswordStrengthMeter(
-                                      assessment: _passwordAssessment,
-                                      showBreachWarning:
-                                          _visibleSignupPasswordRisk ==
-                                          AuthPasswordRisk.breached,
-                                      showSafetyUnavailableWarning:
-                                          _visibleSignupPasswordRisk ==
-                                          AuthPasswordRisk.unavailable,
-                                      animationDuration: animationDuration,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: fieldSpacing,
-                                    child: AuthPasswordRiskNotice(
-                                      risk: _visibleSignupPasswordRisk,
-                                      allowed: _passwordRiskAcknowledged,
-                                      enabled:
-                                          !isBusy && !_pwnedCheckInProgress,
-                                      showError: _showPasswordRiskError,
-                                      animationDuration: animationDuration,
-                                      resetTick: _passwordRiskResetTick,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _acknowledgedPasswordRisk = value
-                                              ? _visibleSignupPasswordRisk
-                                              : null;
-                                          if (value) {
-                                            _showPasswordRiskError = false;
-                                          }
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Form(
-                              key: _formKeys[2],
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Padding(
-                                    padding:
-                                        fieldSpacing +
-                                        EdgeInsets.only(top: spacing.m),
-                                    child: Builder(
-                                      builder: (context) {
-                                        final captchaLoading =
-                                            _captchaLoadState ==
-                                            _CaptchaLoadState.loading;
-                                        final captchaUrl = _captchaSrcUrl;
-                                        final captchaSurface =
-                                            switch (_captchaLoadState) {
-                                              _CaptchaLoadState.failed =>
-                                                const _CaptchaErrorSurface(),
-                                              _CaptchaLoadState.ready ||
-                                              _CaptchaLoadState.loading ||
-                                              _CaptchaLoadState.idle =>
-                                                captchaUrl == null
-                                                    ? _CaptchaSkeleton(
-                                                        animationDuration:
-                                                            animationDuration,
-                                                      )
-                                                    : _CaptchaImage(
-                                                        url: captchaUrl,
-                                                        animationDuration:
-                                                            animationDuration,
-                                                        onLoaded: () =>
-                                                            _markCaptchaImageLoaded(
-                                                              captchaUrl,
-                                                            ),
-                                                        onError: () =>
-                                                            _handleCaptchaImageError(
-                                                              captchaUrl,
-                                                            ),
-                                                      ),
-                                            };
-                                        return Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Semantics(
-                                                label: context
-                                                    .l10n
-                                                    .signupCaptchaChallenge,
-                                                hint: context
-                                                    .l10n
-                                                    .signupCaptchaInstructions,
-                                                image: true,
-                                                child: _CaptchaFrame(
-                                                  constraints: BoxConstraints(
-                                                    minHeight: captchaHeight,
-                                                    maxHeight: captchaHeight,
-                                                    minWidth: captchaWidth,
-                                                    maxWidth: captchaWidth,
-                                                  ),
-                                                  child: captchaSurface,
-                                                ),
-                                              ),
-                                              SizedBox(width: spacing.s),
-                                              Semantics(
-                                                button: true,
-                                                enabled:
-                                                    !isBusy && !captchaLoading,
-                                                label: context
-                                                    .l10n
-                                                    .signupCaptchaReload,
-                                                hint: context
-                                                    .l10n
-                                                    .signupCaptchaReloadHint,
-                                                child: AxiIconButton(
-                                                  iconData:
-                                                      LucideIcons.refreshCw,
-                                                  tooltip: context
-                                                      .l10n
-                                                      .signupCaptchaReload,
-                                                  tapTargetSize:
-                                                      sizing.appBarHeight,
-                                                  onPressed:
-                                                      isBusy || captchaLoading
-                                                      ? null
-                                                      : () => _reloadCaptcha(),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: fieldSpacing,
-                                    child: SizedBox(
-                                      width: captchaWidth,
-                                      child: AxiTextFormField(
-                                        autocorrect: false,
-                                        keyboardType: TextInputType.number,
-                                        placeholder: Text(
-                                          context.l10n.signupCaptchaPlaceholder,
-                                        ),
-                                        enabled: !isBusy,
-                                        controller: _captchaTextController,
-                                        focusNode: _captchaFocusNode,
-                                        textInputAction: TextInputAction.done,
-                                        validator: (text) {
-                                          final value = text;
-                                          if (value.isEmpty) {
-                                            return context
-                                                .l10n
-                                                .signupCaptchaValidation;
-                                          }
-                                          return null;
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: fieldSpacing,
-                                    child: TermsCheckbox(enabled: !isBusy),
-                                  ),
-                                  if (!_passwordWasSkipped)
-                                    Padding(
-                                      padding: fieldSpacing,
-                                      child: AxiCheckboxFormField(
-                                        key: _rememberMeFieldKey,
-                                        enabled: !isBusy,
-                                        initialValue: rememberMe,
-                                        inputLabel: Text(
-                                          context.l10n.authRememberMeLabel,
-                                        ),
-                                        onChanged: (value) async {
-                                          setState(() {
-                                            rememberMe = value;
-                                          });
-                                          await context
-                                              .read<AuthenticationCubit>()
-                                              .persistRememberMeChoice(
-                                                rememberMe,
-                                              );
-                                        },
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ][_currentIndex],
+                            ][_currentIndex],
+                          ),
                         ),
                       ),
                     ),

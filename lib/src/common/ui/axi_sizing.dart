@@ -46,6 +46,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.progressIndicatorStrokeWidth,
     required this.progressIndicatorBarHeight,
     required this.statusDotSize,
+    required this.compactPaneEdgeSwipeWidth,
     required this.profileCompactMaxWidth,
     required this.profileWideSidebarMinWidth,
     required this.profileWideSidebarMaxWidth,
@@ -94,6 +95,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double progressIndicatorStrokeWidth;
   final double progressIndicatorBarHeight;
   final double statusDotSize;
+  final double compactPaneEdgeSwipeWidth;
   final double profileCompactMaxWidth;
   final double profileWideSidebarMinWidth;
   final double profileWideSidebarMaxWidth;
@@ -143,6 +145,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? progressIndicatorStrokeWidth,
     double? progressIndicatorBarHeight,
     double? statusDotSize,
+    double? compactPaneEdgeSwipeWidth,
     double? profileCompactMaxWidth,
     double? profileWideSidebarMinWidth,
     double? profileWideSidebarMaxWidth,
@@ -208,6 +211,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
       progressIndicatorBarHeight:
           progressIndicatorBarHeight ?? this.progressIndicatorBarHeight,
       statusDotSize: statusDotSize ?? this.statusDotSize,
+      compactPaneEdgeSwipeWidth:
+          compactPaneEdgeSwipeWidth ?? this.compactPaneEdgeSwipeWidth,
       profileCompactMaxWidth:
           profileCompactMaxWidth ?? this.profileCompactMaxWidth,
       profileWideSidebarMinWidth:
@@ -271,6 +276,7 @@ const AxiSizing axiSizing = AxiSizing(
   progressIndicatorStrokeWidth: 2,
   progressIndicatorBarHeight: 8,
   statusDotSize: 8,
+  compactPaneEdgeSwipeWidth: 20,
   profileCompactMaxWidth: 500,
   profileWideSidebarMinWidth: 340,
   profileWideSidebarMaxWidth: 460,
