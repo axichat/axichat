@@ -138,6 +138,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeRailHideMenu => '隐藏菜单';
 
   @override
+  String get homeSplitCollapseLeftPane => '折叠左侧窗格';
+
+  @override
+  String get homeSplitExpandLeftPane => '展开左侧窗格';
+
+  @override
   String get homeRailCalendar => '日历';
 
   @override
@@ -7631,6 +7637,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get homeRailHideMenu => '隱藏選單';
+
+  @override
+  String get homeSplitCollapseLeftPane => '摺疊左側窗格';
+
+  @override
+  String get homeSplitExpandLeftPane => '展開左側窗格';
 
   @override
   String get homeRailCalendar => '日曆';

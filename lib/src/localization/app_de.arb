@@ -42,6 +42,8 @@
   "homeNoModules": "Keine Module verfügbar",
   "homeRailShowMenu": "Menü anzeigen",
   "homeRailHideMenu": "Menü ausblenden",
+  "homeSplitCollapseLeftPane": "Linken Bereich einklappen",
+  "homeSplitExpandLeftPane": "Linken Bereich ausklappen",
   "homeRailCalendar": "Kalender",
   "homeSyncTooltip": "Jetzt synchronisieren",
   "homeSearchPlaceholderTabs": "Tabs durchsuchen",

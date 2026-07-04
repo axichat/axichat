@@ -42,6 +42,8 @@
   "homeNoModules": "Aucun module disponible",
   "homeRailShowMenu": "Afficher le menu",
   "homeRailHideMenu": "Masquer le menu",
+  "homeSplitCollapseLeftPane": "Réduire le volet gauche",
+  "homeSplitExpandLeftPane": "Développer le volet gauche",
   "homeRailCalendar": "Calendrier",
   "homeSyncTooltip": "Synchroniser maintenant",
   "homeSearchPlaceholderTabs": "Rechercher dans les onglets",

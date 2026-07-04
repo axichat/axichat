@@ -154,6 +154,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get homeRailHideMenu => 'Masquer le menu';
 
   @override
+  String get homeSplitCollapseLeftPane => 'Réduire le volet gauche';
+
+  @override
+  String get homeSplitExpandLeftPane => 'Développer le volet gauche';
+
+  @override
   String get homeRailCalendar => 'Calendrier';
 
   @override

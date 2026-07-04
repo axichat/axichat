@@ -2259,9 +2259,13 @@ class _HomeContentState extends State<_HomeContent> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(
-                            child: AxiAdaptiveLayout(
+                            child: _HomeSplitAdaptiveLayout(
                               invertPriority: pane.hasChatPane,
                               showPrimary: !showChatCalendar,
+                              primaryCollapseAvailable:
+                                  navPlacement != NavPlacement.bottom &&
+                                  !showChatCalendar &&
+                                  pane.hasChatPane,
                               centerSecondary: false,
                               centerPrimary: false,
                               animatePaneChanges: true,
@@ -2436,6 +2440,86 @@ class _HomeContentState extends State<_HomeContent> {
           child: scaffold,
         );
       },
+    );
+  }
+}
+
+class _HomeSplitAdaptiveLayout extends StatefulWidget {
+  const _HomeSplitAdaptiveLayout({
+    required this.primaryChild,
+    required this.secondaryChild,
+    required this.invertPriority,
+    required this.showPrimary,
+    required this.primaryCollapseAvailable,
+    required this.centerSecondary,
+    required this.centerPrimary,
+    required this.animatePaneChanges,
+    required this.primaryAlignment,
+    required this.secondaryAlignment,
+    required this.onCompactSecondaryDismiss,
+  });
+
+  final Widget primaryChild;
+  final Widget secondaryChild;
+  final bool invertPriority;
+  final bool showPrimary;
+  final bool primaryCollapseAvailable;
+  final bool centerSecondary;
+  final bool centerPrimary;
+  final bool animatePaneChanges;
+  final Alignment primaryAlignment;
+  final Alignment secondaryAlignment;
+  final VoidCallback onCompactSecondaryDismiss;
+
+  @override
+  State<_HomeSplitAdaptiveLayout> createState() =>
+      _HomeSplitAdaptiveLayoutState();
+}
+
+class _HomeSplitAdaptiveLayoutState extends State<_HomeSplitAdaptiveLayout> {
+  var _primaryCollapsed = false;
+
+  bool get _collapseAvailable =>
+      widget.primaryCollapseAvailable && widget.showPrimary;
+
+  @override
+  void didUpdateWidget(covariant _HomeSplitAdaptiveLayout oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_collapseAvailable || !_primaryCollapsed) {
+      return;
+    }
+    _primaryCollapsed = false;
+  }
+
+  void _setPrimaryCollapsed(bool value) {
+    if (!_collapseAvailable || _primaryCollapsed == value) {
+      return;
+    }
+    setState(() {
+      _primaryCollapsed = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AxiAdaptiveLayout(
+      invertPriority: widget.invertPriority,
+      showPrimary: widget.showPrimary,
+      centerSecondary: widget.centerSecondary,
+      centerPrimary: widget.centerPrimary,
+      animatePaneChanges: widget.animatePaneChanges,
+      primaryAlignment: widget.primaryAlignment,
+      secondaryAlignment: widget.secondaryAlignment,
+      primaryCollapsed: _collapseAvailable && _primaryCollapsed,
+      onPrimaryCollapsedChanged: _collapseAvailable
+          ? _setPrimaryCollapsed
+          : null,
+      primaryCollapseTooltip: l10n.homeSplitCollapseLeftPane,
+      primaryExpandTooltip: l10n.homeSplitExpandLeftPane,
+      onCompactSecondaryDismiss: widget.onCompactSecondaryDismiss,
+      primaryChild: widget.primaryChild,
+      secondaryChild: widget.secondaryChild,
     );
   }
 }

@@ -151,6 +151,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get homeRailHideMenu => 'Ocultar menú';
 
   @override
+  String get homeSplitCollapseLeftPane => 'Contraer panel izquierdo';
+
+  @override
+  String get homeSplitExpandLeftPane => 'Expandir panel izquierdo';
+
+  @override
   String get homeRailCalendar => 'Calendario';
 
   @override

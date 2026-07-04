@@ -42,6 +42,8 @@
   "homeNoModules": "没有可用模块",
   "homeRailShowMenu": "显示菜单",
   "homeRailHideMenu": "隐藏菜单",
+  "homeSplitCollapseLeftPane": "折叠左侧窗格",
+  "homeSplitExpandLeftPane": "展开左侧窗格",
   "homeRailCalendar": "日历",
   "homeSyncTooltip": "立即同步",
   "homeSearchPlaceholderTabs": "搜索标签页",

@@ -153,6 +153,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get homeRailHideMenu => 'Menü ausblenden';
 
   @override
+  String get homeSplitCollapseLeftPane => 'Linken Bereich einklappen';
+
+  @override
+  String get homeSplitExpandLeftPane => 'Linken Bereich ausklappen';
+
+  @override
   String get homeRailCalendar => 'Kalender';
 
   @override

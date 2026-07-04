@@ -45,6 +45,14 @@
   "homeNoModules": "No modules available",
   "homeRailShowMenu": "Show menu",
   "homeRailHideMenu": "Hide menu",
+  "homeSplitCollapseLeftPane": "Collapse left pane",
+  "@homeSplitCollapseLeftPane": {
+    "description": "Tooltip and semantic label for the wide home split divider control that hides the left pane."
+  },
+  "homeSplitExpandLeftPane": "Expand left pane",
+  "@homeSplitExpandLeftPane": {
+    "description": "Tooltip and semantic label for the wide home split divider control that restores the left pane."
+  },
   "homeRailCalendar": "Calendar",
   "homeSyncTooltip": "Sync now",
   "homeSearchPlaceholderTabs": "Search tabs",

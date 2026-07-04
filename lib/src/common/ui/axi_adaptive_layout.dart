@@ -13,6 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 class AxiAdaptiveLayout extends StatelessWidget {
   static const Curve _paneResizeCurve = Curves.easeInOutCubic;
   static const Curve _compactSlideCurve = Curves.easeIn;
+  static const double _primaryCollapseHandleWidth = 24;
 
   const AxiAdaptiveLayout({
     super.key,
@@ -29,6 +30,10 @@ class AxiAdaptiveLayout extends StatelessWidget {
     this.secondaryAlignment,
     this.primaryFlex = 4,
     this.secondaryFlex = 6,
+    this.primaryCollapsed = false,
+    this.onPrimaryCollapsedChanged,
+    this.primaryCollapseTooltip,
+    this.primaryExpandTooltip,
     this.onCompactSecondaryDismiss,
     EdgeInsets? primaryPadding,
     EdgeInsets? secondaryPadding,
@@ -50,6 +55,10 @@ class AxiAdaptiveLayout extends StatelessWidget {
   final Alignment? secondaryAlignment;
   final int primaryFlex;
   final int secondaryFlex;
+  final bool primaryCollapsed;
+  final ValueChanged<bool>? onPrimaryCollapsedChanged;
+  final String? primaryCollapseTooltip;
+  final String? primaryExpandTooltip;
   final VoidCallback? onCompactSecondaryDismiss;
 
   @override
@@ -78,6 +87,10 @@ class AxiAdaptiveLayout extends StatelessWidget {
         }
 
         final bool showSecondaryDivider = showPrimary && showSecondary;
+        final bool showPrimaryCollapseToggle =
+            onPrimaryCollapsedChanged != null && showPrimary && showSecondary;
+        final bool collapsePrimary =
+            showPrimaryCollapseToggle && primaryCollapsed;
         final BoxDecoration secondaryDividerDecoration = BoxDecoration(
           border: Border(left: context.borderSide),
         );
@@ -90,7 +103,7 @@ class AxiAdaptiveLayout extends StatelessWidget {
         final animationDuration = context
             .watch<SettingsCubit>()
             .animationDuration;
-        if (!animatePaneChanges) {
+        if (!animatePaneChanges && !showPrimaryCollapseToggle) {
           return ConstrainedBox(
             constraints: constraints,
             child: Row(
@@ -123,7 +136,9 @@ class AxiAdaptiveLayout extends StatelessWidget {
             ),
           );
         }
-        final int resolvedPrimaryFlex = showPrimary ? primaryFlex : 0;
+        final int resolvedPrimaryFlex = showPrimary && !collapsePrimary
+            ? primaryFlex
+            : 0;
         final int resolvedSecondaryFlex = showSecondary ? secondaryFlex : 0;
         final int totalFlex = resolvedPrimaryFlex + resolvedSecondaryFlex;
         final double availableWidth = constraints.maxWidth;
@@ -136,44 +151,202 @@ class AxiAdaptiveLayout extends StatelessWidget {
         final double secondaryWidth = showSecondary
             ? (availableWidth - primaryWidth).clamp(0.0, availableWidth)
             : 0.0;
+        final paneAnimationDuration = animatePaneChanges
+            ? animationDuration
+            : Duration.zero;
+        final double collapseHandleStart = collapsePrimary
+            ? primaryWidth
+            : (primaryWidth - _primaryCollapseHandleWidth).clamp(
+                0.0,
+                availableWidth,
+              );
         return ConstrainedBox(
           constraints: constraints,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Stack(
             children: [
-              AnimatedContainer(
-                duration: animationDuration,
-                curve: _paneResizeCurve,
-                width: primaryWidth,
-                child: ClipRect(
-                  child: AxiAdaptivePane(
-                    alignment: primaryAlign,
-                    padding: primaryPadding,
-                    child: primaryChild,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AnimatedContainer(
+                    duration: paneAnimationDuration,
+                    curve: _paneResizeCurve,
+                    width: primaryWidth,
+                    child: ClipRect(
+                      child: AxiAdaptivePane(
+                        alignment: primaryAlign,
+                        padding: primaryPadding,
+                        child: primaryChild,
+                      ),
+                    ),
                   ),
-                ),
+                  AnimatedContainer(
+                    duration: paneAnimationDuration,
+                    curve: _paneResizeCurve,
+                    width: secondaryWidth,
+                    child: DecoratedBox(
+                      decoration: showSecondaryDivider
+                          ? secondaryDividerDecoration
+                          : const BoxDecoration(),
+                      child: ClipRect(
+                        child: AxiAdaptivePane(
+                          alignment: secondaryAlign,
+                          padding: secondaryPadding,
+                          child: secondaryChild,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              AnimatedContainer(
-                duration: animationDuration,
-                curve: _paneResizeCurve,
-                width: secondaryWidth,
-                child: DecoratedBox(
-                  decoration: showSecondaryDivider
-                      ? secondaryDividerDecoration
-                      : const BoxDecoration(),
-                  child: ClipRect(
-                    child: AxiAdaptivePane(
-                      alignment: secondaryAlign,
-                      padding: secondaryPadding,
-                      child: secondaryChild,
+              if (showPrimaryCollapseToggle)
+                AnimatedPositioned(
+                  duration: paneAnimationDuration,
+                  curve: _paneResizeCurve,
+                  left: collapseHandleStart,
+                  top: 0,
+                  bottom: 0,
+                  width: _primaryCollapseHandleWidth,
+                  child: Center(
+                    child: _AxiAdaptivePrimaryCollapseHandle(
+                      collapsed: collapsePrimary,
+                      collapseTooltip: primaryCollapseTooltip,
+                      expandTooltip: primaryExpandTooltip,
+                      onChanged: onPrimaryCollapsedChanged!,
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _AxiAdaptivePrimaryCollapseHandle extends StatelessWidget {
+  static const double _height = 36;
+  static const double _iconSize = 14;
+  static const double _radius = 7;
+
+  const _AxiAdaptivePrimaryCollapseHandle({
+    required this.collapsed,
+    required this.onChanged,
+    required this.collapseTooltip,
+    required this.expandTooltip,
+  });
+
+  final bool collapsed;
+  final ValueChanged<bool> onChanged;
+  final String? collapseTooltip;
+  final String? expandTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final tooltip = collapsed ? expandTooltip : collapseTooltip;
+    final borderRadius = BorderRadius.horizontal(
+      left: Radius.circular(collapsed ? 0 : _radius),
+      right: Radius.circular(collapsed ? _radius : 0),
+    );
+    final button = _AxiAdaptivePrimaryCollapseButton(
+      collapsed: collapsed,
+      borderRadius: borderRadius,
+      onPressed: () => onChanged(!collapsed),
+    );
+    return Semantics(
+      button: true,
+      enabled: true,
+      label: tooltip,
+      child: tooltip == null
+          ? button
+          : Tooltip(message: tooltip, child: button),
+    );
+  }
+}
+
+class _AxiAdaptivePrimaryCollapseButton extends StatefulWidget {
+  const _AxiAdaptivePrimaryCollapseButton({
+    required this.collapsed,
+    required this.borderRadius,
+    required this.onPressed,
+  });
+
+  final bool collapsed;
+  final BorderRadius borderRadius;
+  final VoidCallback onPressed;
+
+  @override
+  State<_AxiAdaptivePrimaryCollapseButton> createState() =>
+      _AxiAdaptivePrimaryCollapseButtonState();
+}
+
+class _AxiAdaptivePrimaryCollapseButtonState
+    extends State<_AxiAdaptivePrimaryCollapseButton> {
+  var _hovered = false;
+  var _pressed = false;
+
+  void _setHovered(bool value) {
+    if (_hovered == value) {
+      return;
+    }
+    setState(() {
+      _hovered = value;
+    });
+  }
+
+  void _setPressed(bool value) {
+    if (_pressed == value) {
+      return;
+    }
+    setState(() {
+      _pressed = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final background = _pressed || _hovered
+        ? Color.alphaBlend(
+            context.colorScheme.secondary.withValues(alpha: 0.72),
+            context.colorScheme.background,
+          )
+        : context.colorScheme.background;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) {
+        _setHovered(false);
+        _setPressed(false);
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onPressed,
+        onTapDown: (_) => _setPressed(true),
+        onTapUp: (_) => _setPressed(false),
+        onTapCancel: () => _setPressed(false),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: widget.borderRadius,
+            border: Border(
+              left: widget.collapsed ? BorderSide.none : context.borderSide,
+              top: context.borderSide,
+              right: widget.collapsed ? context.borderSide : BorderSide.none,
+              bottom: context.borderSide,
+            ),
+          ),
+          child: SizedBox(
+            width: AxiAdaptiveLayout._primaryCollapseHandleWidth,
+            height: _AxiAdaptivePrimaryCollapseHandle._height,
+            child: Center(
+              child: Icon(
+                widget.collapsed ? Icons.chevron_right : Icons.chevron_left,
+                size: _AxiAdaptivePrimaryCollapseHandle._iconSize,
+                color: context.colorScheme.mutedForeground,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

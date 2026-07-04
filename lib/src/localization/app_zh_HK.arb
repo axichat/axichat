@@ -42,6 +42,8 @@
   "homeNoModules": "沒有可用模組",
   "homeRailShowMenu": "顯示選單",
   "homeRailHideMenu": "隱藏選單",
+  "homeSplitCollapseLeftPane": "摺疊左側窗格",
+  "homeSplitExpandLeftPane": "展開左側窗格",
   "homeRailCalendar": "日曆",
   "homeSyncTooltip": "立即同步",
   "homeSearchPlaceholderTabs": "搜尋分頁",

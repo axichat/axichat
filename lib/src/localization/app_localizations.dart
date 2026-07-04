@@ -363,6 +363,18 @@ abstract class AppLocalizations {
   /// **'Hide menu'**
   String get homeRailHideMenu;
 
+  /// Tooltip and semantic label for the wide home split divider control that hides the left pane.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse left pane'**
+  String get homeSplitCollapseLeftPane;
+
+  /// Tooltip and semantic label for the wide home split divider control that restores the left pane.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand left pane'**
+  String get homeSplitExpandLeftPane;
+
   /// No description provided for @homeRailCalendar.
   ///
   /// In en, this message translates to:

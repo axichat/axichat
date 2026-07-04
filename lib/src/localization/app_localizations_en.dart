@@ -146,6 +146,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeRailHideMenu => 'Hide menu';
 
   @override
+  String get homeSplitCollapseLeftPane => 'Collapse left pane';
+
+  @override
+  String get homeSplitExpandLeftPane => 'Expand left pane';
+
+  @override
   String get homeRailCalendar => 'Calendar';
 
   @override
