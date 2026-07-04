@@ -356,6 +356,7 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
                 child ?? const SizedBox.shrink(),
             child: ShadGestureDetector(
               cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+              behavior: HitTestBehavior.opaque,
               hoverStrategies: ShadTheme.of(context).hoverStrategies,
               onHoverChange: enabled
                   ? (value) => _updateState(WidgetState.hovered, value)
