@@ -2878,8 +2878,32 @@ abstract class AppLocalizations {
   /// No description provided for @signupCustomEndpointRequired.
   ///
   /// In en, this message translates to:
-  /// **'Axichat is currently under the radar, so account creation for axi.im is only available on the website. Choose a custom server to sign up in the app.'**
+  /// **'Choose a server to continue.'**
   String get signupCustomEndpointRequired;
+
+  /// No description provided for @signupRegisterPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Register at '**
+  String get signupRegisterPrefix;
+
+  /// No description provided for @signupRegisterFormSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **' or choose a custom server'**
+  String get signupRegisterFormSuffix;
+
+  /// No description provided for @signupRegisterSheetSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **', then log in here.'**
+  String get signupRegisterSheetSuffix;
+
+  /// No description provided for @signupCustomServerDomainRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a custom server domain.'**
+  String get signupCustomServerDomainRequired;
 
   /// No description provided for @signupCaptchaUnavailable.
   ///
@@ -12557,7 +12581,7 @@ abstract class AppLocalizations {
   /// No description provided for @signupAxiImUnavailableDescription.
   ///
   /// In en, this message translates to:
-  /// **'Axichat is currently under the radar, so account creation for axi.im is only available on the website. This app can log in to existing accounts.'**
+  /// **'Axichat is currently under the radar, so axi.im accounts can\'t be created in the app.'**
   String get signupAxiImUnavailableDescription;
 
   /// No description provided for @recoveryTitle.

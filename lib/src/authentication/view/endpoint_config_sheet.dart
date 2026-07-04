@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -132,7 +133,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         (updated.domain.trim().isEmpty ||
             updated.requiresCustomSignupEndpoint)) {
       setState(() {
-        _errorText = context.l10n.signupCustomEndpointRequired;
+        _errorText = context.l10n.signupCustomServerDomainRequired;
       });
       return;
     }
@@ -166,19 +167,17 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         onClose: () => Navigator.of(context).maybePop(),
       ),
       children: [
-        Text(
-          widget.mode.isSignup
-              ? context.l10n.authCustomServerSignupDescription
-              : context.l10n.authCustomServerDescription,
-          style: textTheme.muted,
-        ),
         if (widget.mode.isSignup) ...[
+          _AxiImParagraph(text: context.l10n.signupAxiImUnavailableDescription),
           SizedBox(height: spacing.s),
-          Text(
-            context.l10n.signupAxiImUnavailableDescription,
+          SignupRegisterLink(
+            suffix: context.l10n.signupRegisterSheetSuffix,
             style: textTheme.muted,
           ),
-        ],
+          SizedBox(height: spacing.s),
+          _AxiImParagraph(text: context.l10n.authCustomServerSignupDescription),
+        ] else
+          _AxiImParagraph(text: context.l10n.authCustomServerDescription),
         if (_errorText != null) ...[
           SizedBox(height: spacing.s),
           Text(
@@ -251,6 +250,63 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         ),
         SizedBox(height: spacing.s),
       ],
+    );
+  }
+}
+
+class _AxiImParagraph extends StatelessWidget {
+  const _AxiImParagraph({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = context.textTheme.muted;
+    final spans = <InlineSpan>[];
+    var start = 0;
+    while (start < text.length) {
+      final match = text.indexOf(EndpointConfig.axiImDomain, start);
+      if (match == -1) {
+        spans.add(TextSpan(text: text.substring(start)));
+        start = text.length;
+        continue;
+      }
+      if (match > start) {
+        spans.add(TextSpan(text: text.substring(start, match)));
+      }
+      spans.add(
+        TextSpan(text: EndpointConfig.axiImDomain, style: style.strong),
+      );
+      start = match + EndpointConfig.axiImDomain.length;
+    }
+    return Text.rich(TextSpan(style: style, children: spans));
+  }
+}
+
+class SignupRegisterLink extends StatelessWidget {
+  const SignupRegisterLink({super.key, required this.suffix, this.style});
+
+  final String suffix;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Text.rich(
+      TextSpan(
+        style: style,
+        children: [
+          TextSpan(text: l10n.signupRegisterPrefix),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: AxiLink(
+              text: Uri.parse(registerUrl).host,
+              link: registerUrl,
+            ),
+          ),
+          TextSpan(text: suffix),
+        ],
+      ),
     );
   }
 }

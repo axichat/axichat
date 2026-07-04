@@ -1498,8 +1498,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signupChooseServer => '选择服务器';
 
   @override
-  String get signupCustomEndpointRequired =>
-      'Axichat 仍处于低调运行阶段，因此 axi.im 账号创建目前仅可在网站上完成。请选择自定义服务器以在应用内注册。';
+  String get signupCustomEndpointRequired => '请选择服务器以继续。';
+
+  @override
+  String get signupRegisterPrefix => '在 ';
+
+  @override
+  String get signupRegisterFormSuffix => ' 注册，或选择自定义服务器';
+
+  @override
+  String get signupRegisterSheetSuffix => ' 注册，然后在此登录。';
+
+  @override
+  String get signupCustomServerDomainRequired => '请输入自定义服务器域名。';
 
   @override
   String get signupCaptchaUnavailable => '验证码不可用';
@@ -6923,7 +6934,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get signupAxiImUnavailableDescription =>
-      'Axichat 仍处于低调运行阶段，因此 axi.im 账号创建目前仅可在网站上完成。此应用可以登录现有账号。';
+      'Axichat 仍处于低调运行阶段，因此无法在应用内创建 axi.im 账号。';
 
   @override
   String get recoveryTitle => '账号恢复';
@@ -8983,8 +8994,19 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get signupChooseServer => '選擇伺服器';
 
   @override
-  String get signupCustomEndpointRequired =>
-      'Axichat 仍處於低調運行階段，因此 axi.im 帳號建立目前僅可在網站上完成。請選擇自訂伺服器以在應用程式內註冊。';
+  String get signupCustomEndpointRequired => '請選擇伺服器以繼續。';
+
+  @override
+  String get signupRegisterPrefix => '在 ';
+
+  @override
+  String get signupRegisterFormSuffix => ' 註冊，或選擇自訂伺服器';
+
+  @override
+  String get signupRegisterSheetSuffix => ' 註冊，然後在此登入。';
+
+  @override
+  String get signupCustomServerDomainRequired => '請輸入自訂伺服器網域。';
 
   @override
   String get signupCaptchaUnavailable => '驗證碼無法使用';
@@ -14410,7 +14432,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get signupAxiImUnavailableDescription =>
-      'Axichat 仍處於低調運行階段，因此 axi.im 帳號建立目前僅可在網站上完成。此應用程式可以登入現有帳號。';
+      'Axichat 仍處於低調運行階段，因此無法在應用程式內建立 axi.im 帳號。';
 
   @override
   String get recoveryTitle => '帳號復原';

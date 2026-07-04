@@ -798,11 +798,17 @@ class _SignupFormState extends State<SignupForm>
                                                 padding: EdgeInsets.symmetric(
                                                   horizontal: spacing.xs,
                                                 ),
-                                                child: Text(
-                                                  context
-                                                      .l10n
-                                                      .authUsernameCaseInsensitive,
-                                                ),
+                                                child: _signupEndpointConfigured
+                                                    ? Text(
+                                                        context
+                                                            .l10n
+                                                            .authUsernameCaseInsensitive,
+                                                      )
+                                                    : SignupRegisterLink(
+                                                        suffix: context
+                                                            .l10n
+                                                            .signupRegisterFormSuffix,
+                                                      ),
                                               ),
                                               placeholder: Text(
                                                 context.l10n.authUsername,

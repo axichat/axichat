@@ -1603,7 +1603,21 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get signupCustomEndpointRequired =>
-      'Axichat fliegt noch unter dem Radar, deshalb ist die Kontoerstellung für axi.im nur auf der Website verfügbar. Wähle einen eigenen Server, um dich in der App zu registrieren.';
+      'Wähle einen Server, um fortzufahren.';
+
+  @override
+  String get signupRegisterPrefix => 'Registriere dich auf ';
+
+  @override
+  String get signupRegisterFormSuffix => ' oder wähle einen eigenen Server';
+
+  @override
+  String get signupRegisterSheetSuffix =>
+      ' und melde dich anschließend hier an.';
+
+  @override
+  String get signupCustomServerDomainRequired =>
+      'Gib die Domain eines eigenen Servers ein.';
 
   @override
   String get signupCaptchaUnavailable => 'Captcha nicht verfügbar';
@@ -7406,7 +7420,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get signupAxiImUnavailableDescription =>
-      'Axichat fliegt noch unter dem Radar, deshalb ist die Kontoerstellung für axi.im nur auf der Website verfügbar. Diese App kann sich bei bestehenden Konten anmelden.';
+      'Axichat fliegt noch unter dem Radar, deshalb können axi.im-Konten nicht in der App erstellt werden.';
 
   @override
   String get recoveryTitle => 'Kontowiederherstellung';

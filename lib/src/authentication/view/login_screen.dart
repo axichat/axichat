@@ -58,10 +58,6 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
-    final bootstrap = context.read<AuthBootstrap>();
-    _selectedFlow = bootstrap.hasStoredLoginCredentials
-        ? _AuthFlow.login
-        : _AuthFlow.signup;
     _authProgressController = AuthProgressController(vsync: this);
     context.read<AuthenticationCubit>().beginPendingLogoutRecovery();
     _maybeAutoLogin();

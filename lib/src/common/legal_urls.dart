@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 const String axichatHomeUrl = 'https://axi.chat';
+const String registerUrl = 'https://axi.chat/register';
 const String termsUrl = 'https://axi.chat/axichat_terms.pdf';
 const String privacyUrl = 'https://axi.chat/axichat_privacy.pdf';
 const String licenseUrl = 'https://axi.chat/license.txt';

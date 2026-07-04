@@ -1566,8 +1566,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get signupChooseServer => 'Choose server';
 
   @override
-  String get signupCustomEndpointRequired =>
-      'Axichat is currently under the radar, so account creation for axi.im is only available on the website. Choose a custom server to sign up in the app.';
+  String get signupCustomEndpointRequired => 'Choose a server to continue.';
+
+  @override
+  String get signupRegisterPrefix => 'Register at ';
+
+  @override
+  String get signupRegisterFormSuffix => ' or choose a custom server';
+
+  @override
+  String get signupRegisterSheetSuffix => ', then log in here.';
+
+  @override
+  String get signupCustomServerDomainRequired =>
+      'Enter a custom server domain.';
 
   @override
   String get signupCaptchaUnavailable => 'Captcha unavailable';
@@ -7264,7 +7276,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signupAxiImUnavailableDescription =>
-      'Axichat is currently under the radar, so account creation for axi.im is only available on the website. This app can log in to existing accounts.';
+      'Axichat is currently under the radar, so axi.im accounts can\'t be created in the app.';
 
   @override
   String get recoveryTitle => 'Account recovery';
