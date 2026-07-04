@@ -713,6 +713,7 @@ class _SignupFormState extends State<SignupForm>
                             .animationDuration,
                         curve: Curves.easeIn,
                         child: AutofillGroup(
+                          onDisposeAction: AutofillContextAction.cancel,
                           child: AnimatedSwitcher(
                             duration: context
                                 .watch<SettingsCubit>()

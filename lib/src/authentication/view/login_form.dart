@@ -6,11 +6,11 @@ import 'dart:async';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/endpoint_config_sheet.dart';
+import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class LoginForm extends StatefulWidget {
@@ -24,6 +24,8 @@ class LoginForm extends StatefulWidget {
 }
 
 class _LoginFormState extends State<LoginForm> {
+  static final _loginLocalPartPattern = RegExp(r'^[a-zA-Z0-9._-]+$');
+
   final _formKey = GlobalKey<FormState>();
   final _passwordFocusNode = FocusNode();
   late TextEditingController _jidTextController;
@@ -67,10 +69,89 @@ class _LoginFormState extends State<LoginForm> {
       return;
     }
     widget.onSubmitStart?.call();
+    final settingsCubit = context.read<SettingsCubit>();
+    final loginTarget = _loginTargetForInput(
+      _jidTextController.value.text,
+      settingsCubit.state.endpointConfig,
+    );
+    if (loginTarget == null) {
+      return;
+    }
+    if (loginTarget.fullAddress) {
+      _jidTextController.value = TextEditingValue(
+        text: loginTarget.username,
+        selection: TextSelection.collapsed(offset: loginTarget.username.length),
+      );
+    }
+    if (loginTarget.endpointConfig != settingsCubit.state.endpointConfig) {
+      await settingsCubit.updateEndpointConfig(loginTarget.endpointConfig);
+      if (!mounted) {
+        return;
+      }
+    }
     await context.read<AuthenticationCubit>().login(
-      username: _jidTextController.value.text,
+      username: loginTarget.username,
       password: _passwordTextController.value.text,
       rememberMe: rememberMe,
+      endpointConfigOverride: loginTarget.endpointConfig,
+    );
+  }
+
+  ({String username, EndpointConfig endpointConfig, bool fullAddress})?
+  _loginTargetForInput(String value, EndpointConfig endpointConfig) {
+    final normalized = normalizeAddress(value);
+    if (normalized == null) {
+      return null;
+    }
+    final bare = bareAddressOrNull(normalized);
+    if (bare == null) {
+      return normalized.contains('@') ||
+              !_loginLocalPartPattern.hasMatch(normalized)
+          ? null
+          : (
+              username: normalized,
+              endpointConfig: endpointConfig,
+              fullAddress: false,
+            );
+    }
+    final localPart = addressLocalPart(bare);
+    final domainPart = addressDomainPart(bare);
+    if (localPart == null || domainPart == null) {
+      return normalized.contains('@') ||
+              !_loginLocalPartPattern.hasMatch(normalized)
+          ? null
+          : (
+              username: normalized,
+              endpointConfig: endpointConfig,
+              fullAddress: false,
+            );
+    }
+    return (
+      username: localPart,
+      endpointConfig: _endpointConfigForAutofilledDomain(
+        endpointConfig,
+        domainPart,
+      ),
+      fullAddress: true,
+    );
+  }
+
+  EndpointConfig _endpointConfigForAutofilledDomain(
+    EndpointConfig endpointConfig,
+    String domain,
+  ) {
+    final normalizedDomain = domain.trim();
+    if (normalizedDomain.toLowerCase() ==
+        endpointConfig.domain.trim().toLowerCase()) {
+      return endpointConfig;
+    }
+    return endpointConfig.copyWith(
+      domain: normalizedDomain,
+      imapHost: null,
+      smtpHost: null,
+      imapPort: EndpointConfig.defaultImapPort,
+      smtpPort: EndpointConfig.defaultSmtpPort,
+      apiPort: EndpointConfig.defaultApiPort,
     );
   }
 
@@ -120,7 +201,6 @@ class _LoginFormState extends State<LoginForm> {
             .animationDuration;
         final spacing = context.spacing;
         final sizing = context.sizing;
-        final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
         final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.s);
         final errorPadding = EdgeInsets.fromLTRB(
           spacing.s,
@@ -142,6 +222,7 @@ class _LoginFormState extends State<LoginForm> {
         return Form(
           key: _formKey,
           child: AutofillGroup(
+            onDisposeAction: AutofillContextAction.cancel,
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -203,11 +284,6 @@ class _LoginFormState extends State<LoginForm> {
                           key: loginUsernameKey,
                           autocorrect: false,
                           textInputAction: TextInputAction.next,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              usernameCharactersPattern,
-                            ),
-                          ],
                           keyboardType: TextInputType.emailAddress,
                           autofillHints: const [AutofillHints.username],
                           placeholder: Text(context.l10n.authUsername),
@@ -216,9 +292,18 @@ class _LoginFormState extends State<LoginForm> {
                           onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                           trailing: EndpointSuffix(server: state.server),
                           validator: (text) {
-                            final value = text;
-                            if (value.isEmpty) {
+                            if (text.isEmpty) {
                               return context.l10n.authUsernameRequired;
+                            }
+                            if (_loginTargetForInput(
+                                  text,
+                                  context
+                                      .read<SettingsCubit>()
+                                      .state
+                                      .endpointConfig,
+                                ) ==
+                                null) {
+                              return context.l10n.jidInputInvalid;
                             }
                             return null;
                           },
