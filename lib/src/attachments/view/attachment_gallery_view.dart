@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_file_preview.dart';
+import 'package:axichat/src/calendar/task/time_formatter.dart';
 import 'package:axichat/src/chat/view/composer/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/composer/attachment_preview.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
@@ -30,6 +31,8 @@ String? _resolveMetaText({
   required Chat? chat,
   required bool showChatLabel,
   required String separator,
+  required DateTime? timestamp,
+  required AppLocalizations l10n,
 }) {
   final parts = <String>[];
   if (showChatLabel && chat != null) {
@@ -37,6 +40,9 @@ String? _resolveMetaText({
     if (label.isNotEmpty) {
       parts.add(label);
     }
+  }
+  if (timestamp != null) {
+    parts.add(TimeFormatter.formatFriendlyDateTime(l10n, timestamp.toLocal()));
   }
   if (parts.isEmpty) return null;
   return parts.join(separator);
@@ -584,6 +590,8 @@ class AttachmentGalleryEntry extends StatelessWidget {
           chat: chat,
           showChatLabel: showChatLabel,
           separator: metaSeparator,
+          timestamp: message.timestamp,
+          l10n: context.l10n,
         );
         return AttachmentGalleryTile(
           metadata: metadata,
