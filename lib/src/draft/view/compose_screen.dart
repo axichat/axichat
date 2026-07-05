@@ -27,23 +27,23 @@ class _ComposeScreenState extends State<ComposeScreen> {
   final GlobalKey<DraftFormState> _draftFormKey = GlobalKey<DraftFormState>();
   var _allowPop = false;
 
-  Future<void> _requestClose() async {
+  Future<bool> _requestClose() async {
     final draftFormState = _draftFormKey.currentState;
     if (draftFormState == null) {
-      _popScreen();
-      return;
+      return _popScreen();
     }
-    await draftFormState.handleCloseRequest();
+    return draftFormState.handleCloseRequest();
   }
 
-  void _popScreen() {
+  bool _popScreen() {
     if (!mounted) {
-      return;
+      return false;
     }
     setState(() {
       _allowPop = true;
     });
     Navigator.of(context).pop();
+    return true;
   }
 
   @override
@@ -60,65 +60,69 @@ class _ComposeScreenState extends State<ComposeScreen> {
         }
         unawaited(_requestClose());
       },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Scaffold(
-            backgroundColor: colors.background,
-            appBar: AppBar(
+      child: AxiIosEdgeSwipeDismiss(
+        enabled: Navigator.canPop(context),
+        onDismissRequested: _requestClose,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Scaffold(
               backgroundColor: colors.background,
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              forceMaterialTransparency: true,
-              shape: Border(bottom: context.borderSide),
-              leadingWidth: sizing.iconButtonTapTarget + spacing.m,
-              leading: Navigator.canPop(context)
-                  ? Padding(
-                      padding: EdgeInsets.only(left: spacing.m),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: sizing.iconButtonSize,
-                          height: sizing.iconButtonSize,
-                          child: AxiIconButton.ghost(
-                            iconData: LucideIcons.arrowLeft,
-                            tooltip: l10n.commonBack,
-                            onPressed: () {
-                              unawaited(_requestClose());
-                            },
+              appBar: AppBar(
+                backgroundColor: colors.background,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                forceMaterialTransparency: true,
+                shape: Border(bottom: context.borderSide),
+                leadingWidth: sizing.iconButtonTapTarget + spacing.m,
+                leading: Navigator.canPop(context)
+                    ? Padding(
+                        padding: EdgeInsets.only(left: spacing.m),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: SizedBox(
+                            width: sizing.iconButtonSize,
+                            height: sizing.iconButtonSize,
+                            child: AxiIconButton.ghost(
+                              iconData: LucideIcons.arrowLeft,
+                              tooltip: l10n.commonBack,
+                              onPressed: () {
+                                unawaited(_requestClose());
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    )
-                  : null,
-              title: Text(
-                l10n.composeTitle,
-                style: context.modalHeaderTextStyle,
-              ),
-            ),
-            body: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: sizing.composeWindowExpandedWidth,
-                ),
-                child: ComposeDraftContent(
-                  seed: widget.seed,
-                  draftFormKey: _draftFormKey,
-                  onClosed: _popScreen,
-                  onDiscarded: _popScreen,
+                      )
+                    : null,
+                title: Text(
+                  l10n.composeTitle,
+                  style: context.modalHeaderTextStyle,
                 ),
               ),
+              body: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: sizing.composeWindowExpandedWidth,
+                  ),
+                  child: ComposeDraftContent(
+                    seed: widget.seed,
+                    draftFormKey: _draftFormKey,
+                    onClosed: _popScreen,
+                    onDiscarded: _popScreen,
+                  ),
+                ),
+              ),
             ),
-          ),
-          const Material(
-            type: MaterialType.transparency,
-            child: XmppOperationOverlay(
-              visibleKinds: {XmppOperationKind.draftSave},
-              offsetForOpenChat: false,
+            const Material(
+              type: MaterialType.transparency,
+              child: XmppOperationOverlay(
+                visibleKinds: {XmppOperationKind.draftSave},
+                offsetForOpenChat: false,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

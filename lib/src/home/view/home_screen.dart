@@ -2153,6 +2153,8 @@ class _HomeContent extends StatefulWidget {
 class _HomeContentState extends State<_HomeContent> {
   String? _chatSessionScopeKey;
   GlobalKey? _chatSessionKey;
+  final ChatCompactExitController _chatCompactExitController =
+      ChatCompactExitController();
 
   CalendarStorageManager get storageManager => widget.storageManager;
   FocusNode get shortcutFocusNode => widget.shortcutFocusNode;
@@ -2177,6 +2179,31 @@ class _HomeContentState extends State<_HomeContent> {
       _chatSessionKey = GlobalKey(debugLabel: 'home_chat_session_$scopeKey');
     }
     return _chatSessionKey!;
+  }
+
+  Future<bool> _handleCompactChatPaneDismiss() async {
+    final locate = context.read;
+    final chatsState = locate<ChatsCubit>().state;
+    if (chatsState.openStack.skip(1).isNotEmpty) {
+      final handled = await _chatCompactExitController.requestPopChat();
+      if (handled != null) {
+        return handled;
+      }
+      if (!mounted) {
+        return false;
+      }
+      locate<ChatsCubit>().popChat();
+      return true;
+    }
+    final handled = await _chatCompactExitController.requestCloseAllChats();
+    if (handled != null) {
+      return handled;
+    }
+    if (!mounted) {
+      return false;
+    }
+    locate<ChatsCubit>().closeAllChats();
+    return true;
   }
 
   @override
@@ -2236,6 +2263,7 @@ class _HomeContentState extends State<_HomeContent> {
                           pane: pane,
                           active: chatPaneActive,
                           chatCalendarActive: chatCalendarActive,
+                          compactExitController: _chatCompactExitController,
                         ),
                       );
                       if (resolvedJid != null && resolvedJid.isNotEmpty) {
@@ -2271,15 +2299,10 @@ class _HomeContentState extends State<_HomeContent> {
                               animatePaneChanges: true,
                               primaryAlignment: Alignment.topLeft,
                               secondaryAlignment: Alignment.topLeft,
-                              onCompactSecondaryDismiss: () {
-                                final locate = context.read;
-                                final chatsState = locate<ChatsCubit>().state;
-                                if (chatsState.openStack.skip(1).isNotEmpty) {
-                                  locate<ChatsCubit>().popChat();
-                                  return;
-                                }
-                                locate<ChatsCubit>().closeAllChats();
-                              },
+                              onCompactSecondaryDismiss:
+                                  chatRoute.isDismissibleSubroute
+                                  ? null
+                                  : _handleCompactChatPaneDismiss,
                               primaryChild: Nexus(
                                 badgeCounts: badgeCounts.tabs,
                                 tabs: tabs,
@@ -2469,7 +2492,7 @@ class _HomeSplitAdaptiveLayout extends StatefulWidget {
   final bool animatePaneChanges;
   final Alignment primaryAlignment;
   final Alignment secondaryAlignment;
-  final VoidCallback onCompactSecondaryDismiss;
+  final FutureOr<bool> Function()? onCompactSecondaryDismiss;
 
   @override
   State<_HomeSplitAdaptiveLayout> createState() =>
@@ -2637,11 +2660,13 @@ class _HomeSecondaryChatPane extends StatelessWidget {
     required this.pane,
     required this.active,
     required this.chatCalendarActive,
+    required this.compactExitController,
   });
 
   final HomeSecondaryPane pane;
   final bool active;
   final bool chatCalendarActive;
+  final ChatCompactExitController compactExitController;
 
   @override
   Widget build(BuildContext context) {
@@ -2653,6 +2678,7 @@ class _HomeSecondaryChatPane extends StatelessWidget {
       active: active,
       syncWithOpenChatRoute: pane.syncWithOpenChatRoute,
       calendarSurfaceActive: chatCalendarActive,
+      compactExitController: compactExitController,
     );
   }
 }

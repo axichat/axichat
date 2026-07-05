@@ -651,6 +651,47 @@ enum _InlineComposerCloseAction { save, discard, cancel }
 
 enum _ComposerSendAction { saveDraft, sendAsEmail }
 
+final class ChatCompactExitController {
+  Object? _owner;
+  Future<bool> Function()? _closeAllChats;
+  Future<bool> Function()? _popChat;
+
+  Future<bool?> requestCloseAllChats() async {
+    final closeAllChats = _closeAllChats;
+    if (closeAllChats == null) {
+      return null;
+    }
+    return closeAllChats();
+  }
+
+  Future<bool?> requestPopChat() async {
+    final popChat = _popChat;
+    if (popChat == null) {
+      return null;
+    }
+    return popChat();
+  }
+
+  void _attach(
+    Object owner, {
+    required Future<bool> Function() closeAllChats,
+    required Future<bool> Function() popChat,
+  }) {
+    _owner = owner;
+    _closeAllChats = closeAllChats;
+    _popChat = popChat;
+  }
+
+  void _detach(Object owner) {
+    if (_owner != owner) {
+      return;
+    }
+    _owner = null;
+    _closeAllChats = null;
+    _popChat = null;
+  }
+}
+
 class Chat extends StatefulWidget {
   const Chat({
     super.key,
@@ -658,12 +699,14 @@ class Chat extends StatefulWidget {
     this.active = true,
     this.syncWithOpenChatRoute = true,
     this.calendarSurfaceActive = true,
+    this.compactExitController,
   });
 
   final bool readOnly;
   final bool active;
   final bool syncWithOpenChatRoute;
   final bool calendarSurfaceActive;
+  final ChatCompactExitController? compactExitController;
 
   static const Duration _loadingSpinnerTimeout = Duration(seconds: 10);
 
@@ -873,6 +916,7 @@ class _ChatState extends State<Chat> {
   var _readThresholdSyncScheduled = false;
   final Object _composerTapRegionGroup = Object();
   final Object _selectionTapRegionGroup = Object();
+  final Object _compactExitControllerOwner = Object();
   double _bottomSectionHeight = 0.0;
   int? _outsideTapPointer;
   Offset? _outsideTapStart;
@@ -919,6 +963,32 @@ class _ChatState extends State<Chat> {
   void _dismissTextInputFocus() {
     _inlineComposerController.unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  void _attachCompactExitController() {
+    widget.compactExitController?._attach(
+      _compactExitControllerOwner,
+      closeAllChats: _requestCloseAllChatsFromCompactDismiss,
+      popChat: _requestPopChatFromCompactDismiss,
+    );
+  }
+
+  Future<bool> _requestCloseAllChatsFromCompactDismiss() {
+    return _requestCloseAllChats(
+      openChatCalendar:
+          context.read<ChatsCubit>().state.openChatCalendar ||
+          _chatRoute.isCalendar,
+      chatState: context.read<ChatBloc>().state,
+    );
+  }
+
+  Future<bool> _requestPopChatFromCompactDismiss() {
+    return _requestPopChat(
+      openChatCalendar:
+          context.read<ChatsCubit>().state.openChatCalendar ||
+          _chatRoute.isCalendar,
+      chatState: context.read<ChatBloc>().state,
+    );
   }
 
   void _recreateInlineComposer() {
@@ -6236,7 +6306,7 @@ class _ChatState extends State<Chat> {
     return _handleInlineComposerCloseRequest(chatState);
   }
 
-  Future<void> _handleCloseAllChatsRequested({
+  Future<bool> _requestCloseAllChats({
     required bool openChatCalendar,
     required ChatState chatState,
   }) async {
@@ -6244,28 +6314,50 @@ class _ChatState extends State<Chat> {
       openChatCalendar: openChatCalendar,
       chatState: chatState,
     )) {
-      return;
+      return false;
     }
     if (!mounted) {
-      return;
+      return false;
     }
     context.read<ChatsCubit>().closeAllChats();
+    return true;
+  }
+
+  Future<void> _handleCloseAllChatsRequested({
+    required bool openChatCalendar,
+    required ChatState chatState,
+  }) async {
+    await _requestCloseAllChats(
+      openChatCalendar: openChatCalendar,
+      chatState: chatState,
+    );
+  }
+
+  Future<bool> _requestPopChat({
+    required bool openChatCalendar,
+    required ChatState chatState,
+  }) async {
+    if (!await _prepareChatExit(
+      openChatCalendar: openChatCalendar,
+      chatState: chatState,
+    )) {
+      return false;
+    }
+    if (!mounted) {
+      return false;
+    }
+    context.read<ChatsCubit>().popChat();
+    return true;
   }
 
   Future<void> _handlePopChatRequested({
     required bool openChatCalendar,
     required ChatState chatState,
   }) async {
-    if (!await _prepareChatExit(
+    await _requestPopChat(
       openChatCalendar: openChatCalendar,
       chatState: chatState,
-    )) {
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
-    context.read<ChatsCubit>().popChat();
+    );
   }
 
   Future<void> _handleRestoreChatRequested({
@@ -8250,6 +8342,7 @@ class _ChatState extends State<Chat> {
     super.initState();
     _emojiPopoverController = ShadPopoverController();
     _recreateInlineComposer();
+    _attachCompactExitController();
     _scrollController = ScrollController(
       initialScrollOffset: _restoreScrollOffset(),
     );
@@ -8299,6 +8392,16 @@ class _ChatState extends State<Chat> {
   }
 
   @override
+  void didUpdateWidget(covariant Chat oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.compactExitController == widget.compactExitController) {
+      return;
+    }
+    oldWidget.compactExitController?._detach(_compactExitControllerOwner);
+    _attachCompactExitController();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final chatsState = context.read<ChatsCubit>().state;
@@ -8325,6 +8428,7 @@ class _ChatState extends State<Chat> {
 
   @override
   void dispose() {
+    widget.compactExitController?._detach(_compactExitControllerOwner);
     _cancelInlineAttachmentPreparation();
     unawaited(
       _deleteInlineStagedAttachments(_unsubmittedInlinePendingAttachments()),
@@ -9723,6 +9827,9 @@ class _ChatState extends State<Chat> {
   }) {
     if (!mounted) return;
     final bool leavingCalendar = _chatRoute.isCalendar && !nextRoute.isCalendar;
+    if (!nextRoute.allowsChatInteraction) {
+      _dismissTextInputFocus();
+    }
     if (!nextRoute.isCalendar && _chatCalendarCanHandleBack) {
       _chatCalendarCanHandleBack = false;
     }
@@ -9731,9 +9838,6 @@ class _ChatState extends State<Chat> {
       _previousChatRoute = _chatRoute;
       _chatRoute = nextRoute;
       _pinnedPanelVisible = false;
-      if (_inlineComposerController.hasTextFocus) {
-        _inlineComposerController.unfocus();
-      }
     });
     if (!wasSettings && nextRoute.isSettings) {}
     if (leavingCalendar) {

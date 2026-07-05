@@ -104,6 +104,7 @@ void openComposeDraft(
   final xmppActivityCubit = context.read<XmppActivityCubit>();
   final offGridDragController = context
       .read<CalendarTaskOffGridDragController>();
+  final composeRouteOpaque = !axiShouldEnableIosEdgeSwipe(platform);
 
   Widget providedComposeScreen() {
     return _ComposeRouteProviders(
@@ -134,6 +135,7 @@ void openComposeDraft(
     trackComposeRoute(
       navigatorState.push<void>(
         PageRouteBuilder<void>(
+          opaque: composeRouteOpaque,
           transitionDuration: animationDuration,
           reverseTransitionDuration: animationDuration,
           pageBuilder: (context, animation, secondaryAnimation) =>
@@ -171,6 +173,7 @@ void openComposeDraft(
     navigatorState.push<void>(
       AxiFadePageRoute<void>(
         duration: animationDuration,
+        opaque: composeRouteOpaque,
         builder: (_) => providedComposeScreen(),
       ),
     ),

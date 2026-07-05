@@ -59,7 +59,7 @@ class AxiAdaptiveLayout extends StatelessWidget {
   final ValueChanged<bool>? onPrimaryCollapsedChanged;
   final String? primaryCollapseTooltip;
   final String? primaryExpandTooltip;
-  final VoidCallback? onCompactSecondaryDismiss;
+  final FutureOr<bool> Function()? onCompactSecondaryDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -368,7 +368,7 @@ class _CompactPaneTransition extends StatefulWidget {
   final bool showSecondary;
   final bool invertPriority;
   final Duration duration;
-  final VoidCallback? onCompactSecondaryDismiss;
+  final FutureOr<bool> Function()? onCompactSecondaryDismiss;
 
   @override
   State<_CompactPaneTransition> createState() => _CompactPaneTransitionState();
@@ -376,7 +376,6 @@ class _CompactPaneTransition extends StatefulWidget {
 
 class _CompactPaneTransitionState extends State<_CompactPaneTransition>
     with SingleTickerProviderStateMixin {
-  static const double _primaryParallaxFraction = 1 / 3;
   static const double _dismissProgressThreshold = 0.40;
   static const double _dismissVelocityThreshold = 500;
 
@@ -398,11 +397,14 @@ class _CompactPaneTransitionState extends State<_CompactPaneTransition>
       widget.showPrimary &&
       widget.showSecondary &&
       widget.invertPriority &&
-      defaultTargetPlatform == TargetPlatform.iOS;
+      axiShouldEnableIosEdgeSwipe(defaultTargetPlatform);
 
   @override
   void didUpdateWidget(covariant _CompactPaneTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_dismissInProgress) {
+      return;
+    }
     final oldTargetValue = _targetValueFor(
       showPrimary: oldWidget.showPrimary,
       showSecondary: oldWidget.showSecondary,
@@ -430,14 +432,18 @@ class _CompactPaneTransitionState extends State<_CompactPaneTransition>
       builder: (context, _) {
         final moving =
             _dragging ||
+            _dismissInProgress ||
             _controller.isAnimating ||
             (_controller.value > 0 && _controller.value < 1);
         final content = moving
-            ? _SlidingCompactPane(
+            ? AxiSwipeBackTransition(
                 value: _controller.value,
-                primaryChild: widget.primaryChild,
-                secondaryChild: widget.secondaryChild,
-                cupertinoStyle: defaultTargetPlatform == TargetPlatform.iOS,
+                background: widget.primaryChild,
+                foreground: widget.secondaryChild,
+                cupertinoStyle: axiShouldEnableIosEdgeSwipe(
+                  defaultTargetPlatform,
+                ),
+                centerChildren: true,
               )
             : Center(child: _activeChild);
         if (!_gestureEnabled) {
@@ -524,7 +530,7 @@ class _CompactPaneTransitionState extends State<_CompactPaneTransition>
     setState(() {
       _dragging = false;
     });
-    unawaited(_animateTo(1));
+    unawaited(_animateTo(1, useMinimumBaseDuration: true));
   }
 
   void _handleHorizontalDragCancel() {
@@ -534,7 +540,7 @@ class _CompactPaneTransitionState extends State<_CompactPaneTransition>
     setState(() {
       _dragging = false;
     });
-    unawaited(_animateTo(1));
+    unawaited(_animateTo(1, useMinimumBaseDuration: true));
   }
 
   Future<void> _completeDismiss() async {
@@ -542,84 +548,44 @@ class _CompactPaneTransitionState extends State<_CompactPaneTransition>
       _dismissInProgress = true;
       _dragging = false;
     });
-    await _animateTo(0);
+    await _animateTo(0, useMinimumBaseDuration: true);
     if (!mounted) {
       return;
     }
-    _dismissInProgress = false;
-    widget.onCompactSecondaryDismiss?.call();
+    final dismissed = await widget.onCompactSecondaryDismiss?.call() ?? false;
+    if (!mounted) {
+      return;
+    }
+    if (!dismissed) {
+      setState(() {
+        _dismissInProgress = false;
+      });
+      await _animateTo(1, useMinimumBaseDuration: true);
+      return;
+    }
+    setState(() {
+      _dismissInProgress = false;
+    });
   }
 
-  Future<void> _animateTo(double value) async {
+  Future<void> _animateTo(
+    double value, {
+    bool useMinimumBaseDuration = false,
+  }) async {
     if (_controller.value == value) {
       return;
     }
-    if (widget.duration == Duration.zero) {
+    final duration = useMinimumBaseDuration
+        ? axiAtLeastBaseAnimationDuration(widget.duration)
+        : widget.duration;
+    if (duration == Duration.zero) {
       _controller.value = value;
       return;
     }
     await _controller.animateTo(
       value,
-      duration: widget.duration,
+      duration: duration,
       curve: AxiAdaptiveLayout._compactSlideCurve,
-    );
-  }
-}
-
-class _SlidingCompactPane extends StatelessWidget {
-  const _SlidingCompactPane({
-    required this.value,
-    required this.primaryChild,
-    required this.secondaryChild,
-    required this.cupertinoStyle,
-  });
-
-  final double value;
-  final Widget primaryChild;
-  final Widget secondaryChild;
-  final bool cupertinoStyle;
-
-  @override
-  Widget build(BuildContext context) {
-    final barrierColor = context.dialogBarrierColor;
-    final scrimAlpha = cupertinoStyle
-        ? (barrierColor.a *
-                  context.motion.compactPaneSwipeScrimOpacityFactor *
-                  value)
-              .clamp(0.0, 1.0)
-        : 0.0;
-    return ClipRect(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Transform.translate(
-                offset: Offset(
-                  cupertinoStyle
-                      ? -width *
-                            value *
-                            _CompactPaneTransitionState._primaryParallaxFraction
-                      : 0,
-                  0,
-                ),
-                child: Center(child: primaryChild),
-              ),
-              if (scrimAlpha > 0)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: barrierColor.withValues(alpha: scrimAlpha),
-                  ),
-                ),
-              Transform.translate(
-                offset: Offset(width * (1 - value), 0),
-                child: Center(child: secondaryChild),
-              ),
-            ],
-          );
-        },
-      ),
     );
   }
 }

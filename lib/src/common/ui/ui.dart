@@ -36,6 +36,7 @@ export 'axi_image_cropper.dart';
 export 'axi_input.dart';
 export 'axi_input_form_field.dart';
 export 'axi_input_dialog.dart';
+export 'axi_ios_edge_swipe_dismiss.dart';
 export 'axi_link.dart';
 export 'axi_list_divider.dart';
 export 'axi_list_tile.dart';

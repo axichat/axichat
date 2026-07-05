@@ -11,6 +11,7 @@ class AxiFadePageRoute<T> extends PageRouteBuilder<T> {
     required Duration duration,
     super.settings,
     super.fullscreenDialog,
+    super.opaque,
   }) : super(
          transitionDuration: duration,
          reverseTransitionDuration: duration,

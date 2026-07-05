@@ -46,6 +46,9 @@ enum ChatRouteIndex {
 
   bool get isCalendar => this == ChatRouteIndex.calendar;
 
+  bool get isDismissibleSubroute =>
+      isDetails || isSettings || isImportant || isGallery;
+
   bool get allowsChatInteraction => isMain || isSearch;
 }
 

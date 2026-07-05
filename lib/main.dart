@@ -165,6 +165,10 @@ Future<void> _applyPhoneOrientationPolicy(
   if (kIsWeb || !_supportsPhoneOrientationLock(defaultTargetPlatform)) {
     return;
   }
+  if (kDebugMode) {
+    await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
+    return;
+  }
   ui.Display? display;
   for (final view in views) {
     display = view.display;
