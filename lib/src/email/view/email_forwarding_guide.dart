@@ -461,7 +461,11 @@ class EmailForwardingLinkRow extends StatelessWidget {
       runSpacing: spacing.s,
       children: [
         for (final provider in EmailForwardingProvider.values)
-          AxiLink(text: provider.label(l10n), link: provider.helpUrl),
+          AxiLink(
+            text: provider.label(l10n),
+            link: provider.helpUrl,
+            confirmBeforeOpen: false,
+          ),
       ],
     );
   }
@@ -497,6 +501,7 @@ class EmailForwardingProviderLinkList extends StatelessWidget {
                 AxiLink(
                   text: provider.label(context.l10n),
                   link: provider.helpUrl,
+                  confirmBeforeOpen: false,
                 ),
               ],
             ),

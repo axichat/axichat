@@ -31,6 +31,7 @@ class TermsCheckbox extends StatelessWidget {
                 child: AxiLink(
                   link: termsUrl,
                   text: context.l10n.termsAgreementTerms,
+                  confirmBeforeOpen: false,
                 ),
               ),
               TextSpan(text: context.l10n.termsAgreementAnd),
@@ -39,6 +40,7 @@ class TermsCheckbox extends StatelessWidget {
                 child: AxiLink(
                   link: privacyUrl,
                   text: context.l10n.termsAgreementPrivacy,
+                  confirmBeforeOpen: false,
                 ),
               ),
               const TextSpan(text: '.'),

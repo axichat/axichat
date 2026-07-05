@@ -302,6 +302,7 @@ class SignupRegisterLink extends StatelessWidget {
             child: AxiLink(
               text: Uri.parse(registerUrl).host,
               link: registerUrl,
+              confirmBeforeOpen: false,
             ),
           ),
           TextSpan(text: suffix),

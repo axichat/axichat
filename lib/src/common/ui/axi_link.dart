@@ -11,10 +11,16 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AxiLink extends StatelessWidget {
-  const AxiLink({super.key, required this.text, required this.link});
+  const AxiLink({
+    super.key,
+    required this.text,
+    required this.link,
+    this.confirmBeforeOpen = true,
+  });
 
   final String text;
   final String link;
+  final bool confirmBeforeOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +46,10 @@ class AxiLink extends StatelessWidget {
       _showSnackbar(context, l10n.chatInvalidLink(link.trim()));
       return;
     }
+    if (!confirmBeforeOpen) {
+      await _openLink(context, report);
+      return;
+    }
     final hostLabel = formatLinkSchemeHostLabel(report);
     final baseMessage = report.needsWarning
         ? l10n.chatOpenLinkWarningMessage(report.displayUri, hostLabel)
@@ -59,6 +69,11 @@ class AxiLink extends StatelessWidget {
       await Clipboard.setData(ClipboardData(text: report.displayUri));
       return;
     }
+    await _openLink(context, report);
+  }
+
+  Future<void> _openLink(BuildContext context, LinkSafetyReport report) async {
+    final l10n = context.l10n;
     final launched = await launchUrl(
       report.uri,
       mode: LaunchMode.externalApplication,
