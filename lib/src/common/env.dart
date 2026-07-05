@@ -28,10 +28,9 @@ CommandSurface resolveCommandSurface(BuildContext context) {
 
 @immutable
 class Env {
-  Env({required this.size, required this.platform})
+  Env({required Size size, required this.platform})
     : formFactor = _formFactorFor(size, platform);
 
-  final Size size;
   final TargetPlatform platform;
   final FormFactor formFactor;
 
@@ -74,20 +73,16 @@ class Env {
 
   bool get usesDesktopMenu => isDesktopPlatform;
 
-  Env copyWith({Size? size, TargetPlatform? platform}) {
-    return Env(size: size ?? this.size, platform: platform ?? this.platform);
-  }
-
   @override
-  int get hashCode => Object.hash(size, platform, formFactor);
+  int get hashCode => Object.hash(platform, formFactor);
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         other is Env &&
             runtimeType == other.runtimeType &&
-            size == other.size &&
-            platform == other.platform;
+            platform == other.platform &&
+            formFactor == other.formFactor;
   }
 }
 

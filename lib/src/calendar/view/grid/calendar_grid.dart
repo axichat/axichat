@@ -2289,7 +2289,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         final scaffoldMessenger = ScaffoldMessenger.maybeOf(overlayContext);
         final RenderBox? overlayBox =
             Overlay.of(overlayContext).context.findRenderObject() as RenderBox?;
-        final Offset offset = overlayBox == null
+        final Offset offset = overlayBox == null || !overlayBox.hasSize
             ? layout.topLeft
             : overlayBox.globalToLocal(layout.topLeft);
 
@@ -2307,25 +2307,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                   final RenderBox? currentOverlayBox =
                       Overlay.of(overlayContext).context.findRenderObject()
                           as RenderBox?;
-                  if (currentOverlayBox == null) {
-                    unawaited(
-                      _requestCloseTaskPopover(
-                        currentId,
-                        reason: 'outside-tap',
-                      ),
-                    );
-                    return;
-                  }
                   final TaskPopoverLayout popoverLayout = _taskPopoverController
                       .layoutFor(currentId);
+                  final Offset popoverTopLeft;
+                  final Offset localPosition;
+                  if (currentOverlayBox == null || !currentOverlayBox.hasSize) {
+                    popoverTopLeft = popoverLayout.topLeft;
+                    localPosition = event.position;
+                  } else {
+                    popoverTopLeft = currentOverlayBox.globalToLocal(
+                      popoverLayout.topLeft,
+                    );
+                    localPosition = currentOverlayBox.globalToLocal(
+                      event.position,
+                    );
+                  }
                   final Rect popoverRect = Rect.fromLTWH(
-                    popoverLayout.topLeft.dx,
-                    popoverLayout.topLeft.dy,
+                    popoverTopLeft.dx,
+                    popoverTopLeft.dy,
                     calendarTaskPopoverWidth,
                     popoverLayout.maxHeight,
-                  );
-                  final Offset localPosition = currentOverlayBox.globalToLocal(
-                    event.position,
                   );
                   if (!popoverRect.contains(localPosition)) {
                     unawaited(

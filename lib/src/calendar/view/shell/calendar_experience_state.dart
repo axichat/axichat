@@ -1025,6 +1025,10 @@ abstract class CalendarExperienceState<
     CalendarState state,
     CalendarSizeClass sizeClass,
   ) {
+    if (defaultTargetPlatform.isMobile) {
+      _previousLayoutSizeClass = sizeClass;
+      return;
+    }
     final CalendarSizeClass? previousSizeClass = _previousLayoutSizeClass;
     final bool shouldPromoteDayToWeek = switch ((
       previousSizeClass,

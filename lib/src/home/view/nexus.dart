@@ -61,7 +61,11 @@ class _NexusState extends State<Nexus> {
   void _notifyTabIndex(int index) {
     if (index < 0 || index >= widget.tabs.length) return;
     final locate = context.read;
-    locate<HomeBloc>().add(HomeActiveTabChanged(widget.tabs[index].id));
+    final targetTab = widget.tabs[index].id;
+    final homeBloc = locate<HomeBloc>();
+    if (homeBloc.state.activeTab != targetTab) {
+      homeBloc.add(HomeActiveTabChanged(targetTab));
+    }
     _HomeShellScope.maybeOf(context)?.setHomeTabIndex(index);
   }
 

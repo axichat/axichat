@@ -432,7 +432,8 @@ class _LoginScreenState extends State<LoginScreen>
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final allowSplitView =
         size.shortestSide >= compactDeviceBreakpoint &&
-        size.width >= smallScreen;
+        size.width >= smallScreen &&
+        size.width > size.height;
     return BlocListener<AuthenticationCubit, AuthenticationState>(
       listener: (context, state) => _handleAuthState(state),
       child: ValueListenableBuilder<AuthProgressSnapshot>(
@@ -503,6 +504,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             Expanded(
                               child: AxiAdaptiveLayout(
+                                allowSplitView: allowSplitView,
                                 primaryFlex: 3,
                                 secondaryFlex: 7,
                                 secondaryPadding: EdgeInsets.zero,

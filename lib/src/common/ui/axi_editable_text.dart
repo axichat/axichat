@@ -4526,6 +4526,7 @@ class EditableTextState extends State<EditableText>
   }
 
   late double _lastBottomViewInset;
+  late Size _lastViewPhysicalSize;
 
   bool _shouldRepairFocusAfterKeyboardDismiss(double nextBottomInset) {
     if (kIsWeb || !_hasFocus) {
@@ -4550,6 +4551,7 @@ class EditableTextState extends State<EditableText>
     }
     final ui.FlutterView view = View.of(context);
     final double nextBottomInset = view.viewInsets.bottom;
+    final Size nextViewPhysicalSize = view.physicalSize;
     if (_lastBottomViewInset != nextBottomInset) {
       SchedulerBinding.instance.addPostFrameCallback((Duration _) {
         _selectionOverlay?.updateForScroll();
@@ -4558,11 +4560,13 @@ class EditableTextState extends State<EditableText>
         // Because the metrics change signal from engine will come here every frame
         // (on both iOS and Android). So we don't need to show caret with animation.
         _scheduleShowCaretOnScreen(withAnimation: false);
-      } else if (_shouldRepairFocusAfterKeyboardDismiss(nextBottomInset)) {
+      } else if (_lastViewPhysicalSize == nextViewPhysicalSize &&
+          _shouldRepairFocusAfterKeyboardDismiss(nextBottomInset)) {
         widget.focusNode.unfocus();
       }
     }
     _lastBottomViewInset = nextBottomInset;
+    _lastViewPhysicalSize = nextViewPhysicalSize;
   }
 
   Future<void> _performSpellCheck(final String text) async {
@@ -5763,7 +5767,9 @@ class EditableTextState extends State<EditableText>
     if (_hasFocus) {
       // Listen for changing viewInsets, which indicates keyboard showing up.
       WidgetsBinding.instance.addObserver(this);
-      _lastBottomViewInset = View.of(context).viewInsets.bottom;
+      final ui.FlutterView view = View.of(context);
+      _lastBottomViewInset = view.viewInsets.bottom;
+      _lastViewPhysicalSize = view.physicalSize;
       if (!widget.readOnly) {
         _scheduleShowCaretOnScreen(withAnimation: true);
       }

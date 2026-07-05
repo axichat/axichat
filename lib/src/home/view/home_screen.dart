@@ -2153,6 +2153,7 @@ class _HomeContent extends StatefulWidget {
 class _HomeContentState extends State<_HomeContent> {
   String? _chatSessionScopeKey;
   GlobalKey? _chatSessionKey;
+  late final GlobalKey _nexusKey = GlobalKey(debugLabel: 'home_nexus');
   final ChatCompactExitController _chatCompactExitController =
       ChatCompactExitController();
 
@@ -2304,6 +2305,7 @@ class _HomeContentState extends State<_HomeContent> {
                                   ? null
                                   : _handleCompactChatPaneDismiss,
                               primaryChild: Nexus(
+                                key: _nexusKey,
                                 badgeCounts: badgeCounts.tabs,
                                 tabs: tabs,
                                 navPlacement: navPlacement,

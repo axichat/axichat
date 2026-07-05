@@ -47,6 +47,7 @@ class ChatCalendarWidget extends StatefulWidget {
 
 class _ChatCalendarWidgetState
     extends CalendarExperienceState<ChatCalendarWidget, ChatCalendarBloc> {
+  bool _initialLayoutSyncDone = false;
   bool _mobileInitialScrollSynced = false;
   bool _desktopInitialViewSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
@@ -99,16 +100,15 @@ class _ChatCalendarWidgetState
   @override
   void onLayoutModeResolved(CalendarState state, bool usesDesktopLayout) {
     super.onLayoutModeResolved(state, usesDesktopLayout);
-    if (usesDesktopLayout && _mobileInitialScrollSynced) {
-      _mobileInitialScrollSynced = false;
-    }
-    if (usesDesktopLayout &&
-        previousLayoutSizeClass != CalendarSizeClass.medium) {
-      _maybeSyncDesktopInitialView(state);
+    if (_initialLayoutSyncDone) {
       return;
     }
-    if (_desktopInitialViewSynced) {
-      _desktopInitialViewSynced = false;
+    _initialLayoutSyncDone = true;
+    if (usesDesktopLayout) {
+      if (previousLayoutSizeClass != CalendarSizeClass.medium) {
+        _maybeSyncDesktopInitialView(state);
+      }
+      return;
     }
     _maybeSyncMobileInitialScroll();
   }

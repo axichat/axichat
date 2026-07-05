@@ -35,6 +35,7 @@ class AxiAdaptiveLayout extends StatelessWidget {
     this.primaryCollapseTooltip,
     this.primaryExpandTooltip,
     this.onCompactSecondaryDismiss,
+    this.allowSplitView = true,
     EdgeInsets? primaryPadding,
     EdgeInsets? secondaryPadding,
   }) : primaryPadding = primaryPadding ?? panePadding,
@@ -60,32 +61,28 @@ class AxiAdaptiveLayout extends StatelessWidget {
   final String? primaryCollapseTooltip;
   final String? primaryExpandTooltip;
   final FutureOr<bool> Function()? onCompactSecondaryDismiss;
+  final bool allowSplitView;
 
   @override
   Widget build(BuildContext context) {
+    if (!showPrimary && !showSecondary) {
+      return const SizedBox.shrink();
+    }
+    final splitActive =
+        allowSplitView && MediaQuery.sizeOf(context).width >= smallScreen;
+    if (!splitActive) {
+      return _CompactPaneTransition(
+        primaryChild: primaryChild,
+        secondaryChild: secondaryChild,
+        showPrimary: showPrimary,
+        showSecondary: showSecondary,
+        invertPriority: invertPriority,
+        duration: context.watch<SettingsCubit>().animationDuration,
+        onCompactSecondaryDismiss: onCompactSecondaryDismiss,
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool allowSplitView = constraints.maxWidth >= smallScreen;
-
-        if (!showPrimary && !showSecondary) {
-          return const SizedBox.shrink();
-        }
-
-        if (!allowSplitView) {
-          return ConstrainedBox(
-            constraints: constraints,
-            child: _CompactPaneTransition(
-              primaryChild: primaryChild,
-              secondaryChild: secondaryChild,
-              showPrimary: showPrimary,
-              showSecondary: showSecondary,
-              invertPriority: invertPriority,
-              duration: context.watch<SettingsCubit>().animationDuration,
-              onCompactSecondaryDismiss: onCompactSecondaryDismiss,
-            ),
-          );
-        }
-
         final bool showSecondaryDivider = showPrimary && showSecondary;
         final bool showPrimaryCollapseToggle =
             onPrimaryCollapsedChanged != null && showPrimary && showSecondary;

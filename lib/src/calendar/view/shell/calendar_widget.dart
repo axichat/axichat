@@ -89,6 +89,7 @@ const bool _calendarSurfacePopEnabledDefault = true;
 
 class _CalendarWidgetState
     extends CalendarExperienceState<CalendarWidget, CalendarBloc> {
+  bool _initialLayoutSyncDone = false;
   bool _mobileInitialScrollSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
@@ -232,9 +233,10 @@ class _CalendarWidgetState
 
   @override
   void onLayoutModeResolved(CalendarState state, bool usesDesktopLayout) {
-    if (usesDesktopLayout && _mobileInitialScrollSynced) {
-      _mobileInitialScrollSynced = false;
+    if (_initialLayoutSyncDone) {
+      return;
     }
+    _initialLayoutSyncDone = true;
     if (!usesDesktopLayout) {
       _maybeSyncMobileInitialScroll();
     }
