@@ -1,45 +1,29 @@
-Axichat puts instant messaging, email, and calendar into one Flutter-built experience. It unifies chat and email, includes an intuitive calendar, and avoids every big-tech dependency so you stay in control of your time and conversations.
+Axichat is an open source email and chat client with first-party push notifications (without FCM) and a conversation-focused interface.
 
-What Axichat offers:
-- Chat and email unified in one workflow.
-- Intuitive calendar.
-- Encryption on device and in transit.
-- Conversation-focused interface.
-- Native performance on every platform.
-- 1st party push notifications.
-- Offline functionality.
+Get your.name@axi.im at https://axi.chat/register.
 
-What we avoid:
-- Proprietary dependencies.
-- Trackers.
-- Vendor lock-in.
-- Sharing or selling any data.
-- Centralized servers.
-- 3rd party push notifications.
+For additional privacy and security, run your own server by following the self-hosting guide at https://github.com/axichat/selfhost.
 
-Why?
-- Tools matter - communication should feel organized instead of fragmented across separate apps.
-- Time matters - You can always make more money, but not more time. Axichat's calendar is designed to help you seize the day, and our chat-like email formatting helps you avoid spending it reading what you don't want to, retyping information, opening the wrong emails, and spamming alt+tab.
-- Privacy matters - Axichat avoids trackers, third-party push notifications, and vendor lock-in.
+Feature highlights:
+- First-party push notifications
+- Transform traditional email into instant messenger style
+- Sync across all your devices (mobile and desktop)
+- Group chats
+- Avatars
+- Easy forwarding and replying
+- Emoji reactions
+- Delivery and read receipts
+- Typing indicators
+- Attachments
+- Pinned messages
+- Automatic reconnect to stop messages dropping
+- Easy drag-and-drop calendar
+- Natural-language scheduling without AI
+- Availability sharing that shows overlaps before you schedule
+- One-tap add-to-calendar from simple text messages
+- Guest mode for offline planning
+- Works without Google, Firebase, and FCM
 
-What?
+<strong>Note:</strong> Axichat is still under active development, so things may break.
 
-Beautiful chat interface:
-- Use the same conversation interface for chat and email, even when your recipients are not on Axichat.
-- Read and send emails using our chat interface no matter where your recipients are: Gmail, Outlook, Tuta, and more.
-- When talking to someone also on Axichat, get extra features: Groupchats, Reactions, Delivery Receipts, and more.
-
-Intuitive calendar:
-- Natural language parsing (without any AI) so you can just type in what, when, how long, how often, due by, and more any way you want and the calendar will automatically schedule it for you.
-- If you don't know when it needs to get done, that's fine; we just put it in the unscheduled list so you can quickly and easily dump your stream-of-consciousness.
-- If it has a deadline then we will notify you when it is getting close.
-- Includes planning tools such as a built-in Eisenhower Matrix for organizing tasks.
-- Intuitive UI/UX that works seamlessly on every screen with drag+drop to reschedule, drag to resize, copy+paste, batch edit, and much more.
-- Available in Guest Mode so you don't even need an account or internet to use it.
-- Scheduling, task management, and reminders all in one place with natural language processing (no AI) for frictionless use.
-
-How?
-- Written in Dart + Flutter
-- With Moxxmpp
-- With DeltaChat Core Rust
-- With Drift
+Please report bugs at https://github.com/axichat/axichat/issues.

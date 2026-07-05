@@ -1,67 +1,29 @@
-<strong>说明：</strong> Axichat 仍在积极开发中，因此部分功能可能会出现问题。
+Axichat 是一款开源的电子邮件与聊天客户端，提供第一方推送通知（绝不使用 FCM）和以会话为中心的界面。
 
-如果你发现任何 bug，请到 https://github.com/axichat/axichat/issues 提交反馈，这样我就能修复它们。
+立即在 https://axi.chat/register 获取你的 username@axi.im 地址。
 
-官网：https://axi.chat
-源代码：https://github.com/axichat/axichat
-许可证：AGPL-3.0-or-later
-
-Axichat 是一款开源的电子邮件与聊天客户端，提供第一方推送通知（绝不使用 FCM），且不依赖任何第三方服务。
-
-立即获取你的 username@axi.im 地址。
-
-你可以按照 https://github.com/axichat/selfhost 的步骤，自行托管 Axichat 的邮件 + 聊天服务器。
+如需更高的隐私与安全性，可按照 https://github.com/axichat/selfhost 的自托管指南运行自己的服务器。
 
 功能亮点：
-- 聊天与邮件同屏统一收件箱。
-- 群聊与会话级设置。
-- 引用回复、表情回应、送达/已读回执。
-- 丰富附件与内联预览。
-- 跨聊天、邮件、日历的快速搜索。
-- 协作日历、提醒与任务管理。
-- 自然语言排程（无需 AI）。
-- 共享可用时间，更快安排会议。
-- 关键路径与议程聚焦工具。
-- 智能通知与按会话控制。
-- 访客模式支持离线规划。
-- 第一方推送与离线同步。
-- 不依赖 Google、Firebase 或 FCM。
+- 第一方推送通知
+- 将传统电子邮件变成即时通讯风格
+- 在所有设备间同步（手机与桌面）
+- 群聊
+- 头像
+- 轻松转发与回复
+- 表情回应
+- 送达与已读回执
+- 输入状态提示
+- 附件
+- 置顶消息
+- 自动重连，减少消息丢失
+- 简单易用的拖放日历
+- 自然语言排程（无需 AI）
+- 共享可用时间，排程前先看重叠时段
+- 从普通文本消息一键添加到日历
+- 访客模式支持离线规划
+- 不依赖 Google、Firebase 或 FCM
 
-为什么选择 Axichat？
-- 工具很重要：沟通应该像整洁的工作台，而不是混乱收件箱。
-- 时间很重要：通过“聊天式邮件”和一体化规划，减少频繁切换。
-- 协作很重要：消息、可用时间和日历都在同一处。
+<strong>说明：</strong> Axichat 仍在积极开发中，因此部分功能可能会出现问题。
 
-Axichat 能做什么：
-
-美观的聊天界面：
-- 在会话中心界面中收发消息与邮件。
-- 可联系主流邮箱用户（如 Gmail、Outlook、Tuta），同时保持你在 Axichat 的工作流。
-- 双方支持时可使用更高级的聊天功能。
-
-直观的日历：
-- 用自然语言输入任务和事件并快速排程。
-- 未排程事项可先放入收件箱，稍后安排。
-- 支持拖放、拉伸、复制粘贴和批量编辑。
-- 管理提醒、截止时间、优先级和重复规则。
-- 访客模式可在本地无账号规划。
-
-隐私与独立性：
-- 无追踪器。
-- 无广告。
-- 不出售数据。
-- 无平台锁定。
-- 开放协议与开源代码。
-
-Android 权限说明：
-- INTERNET：收发聊天与邮件数据。
-- POST_NOTIFICATIONS：显示新消息与提醒通知。
-- FOREGROUND_SERVICE 及相关数据同步权限：保证后台消息可靠。
-- RECEIVE_BOOT_COMPLETED：重启后恢复后台消息能力。
-- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS：可选请求，用于提升消息到达可靠性。
-- VIBRATE：通知震动。
-
-支持与更新：
-- 官网：https://axi.chat
-- 版本说明：https://github.com/axichat/axichat/releases
-- 捐助：https://axi.chat/donate
+请在 https://github.com/axichat/axichat/issues 报告 bug。

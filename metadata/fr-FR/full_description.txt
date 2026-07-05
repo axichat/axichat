@@ -1,67 +1,29 @@
+Axichat est un client e-mail et chat open source, avec des notifications push de première partie (jamais FCM) et une interface centrée sur les conversations.
+
+Obtenez votre adresse username@axi.im sur https://axi.chat/register.
+
+Pour plus de confidentialité et de sécurité, hébergez votre propre serveur en suivant le guide sur https://github.com/axichat/selfhost.
+
+Points forts :
+- Notifications push de première partie
+- Transforme l’e-mail traditionnel en messagerie instantanée
+- Synchronisation sur tous vos appareils (mobile et bureau)
+- Discussions de groupe
+- Avatars
+- Transfert et réponse faciles
+- Réactions emoji
+- Accusés de réception et de lecture
+- Indicateurs de saisie
+- Pièces jointes
+- Messages épinglés
+- Reconnexion automatique pour éviter la perte de messages
+- Calendrier simple en glisser-déposer
+- Planification en langage naturel sans IA
+- Partage de disponibilités qui montre les créneaux communs avant de planifier
+- Ajout au calendrier en un geste depuis un simple message
+- Mode invité pour planifier hors ligne
+- Fonctionne sans Google, Firebase ni FCM
+
 <strong>Note :</strong> Axichat est encore en développement actif ; certaines fonctions peuvent donc ne pas fonctionner correctement.
 
-Si vous trouvez des bugs, signalez-les sur https://github.com/axichat/axichat/issues afin que je puisse les corriger.
-
-Site web: https://axi.chat
-Code source: https://github.com/axichat/axichat
-Licence: AGPL-3.0-or-later
-
-Axichat est un client e-mail et chat open source, avec des notifications push de première partie (jamais FCM) et sans dépendances tierces.
-
-Obtenez dès maintenant votre adresse username@axi.im.
-
-Vous pouvez auto-héberger votre propre serveur e-mail et chat pour Axichat en suivant les étapes sur https://github.com/axichat/selfhost.
-
-Points forts:
-- Boîte unifiée : chat et e-mail côte à côte.
-- Discussions de groupe et réglages par conversation.
-- Réponse par citation, réactions et accusés de réception/lecture.
-- Pièces jointes riches et aperçus intégrés.
-- Recherche rapide dans chat, mail et calendrier.
-- Calendrier collaboratif avec rappels et tâches.
-- Planification en langage naturel (sans IA).
-- Partage de disponibilités pour planifier plus vite.
-- Chemin critique et focus agenda.
-- Notifications intelligentes par conversation.
-- Mode invité pour planifier hors ligne.
-- Push de première partie et synchronisation hors ligne.
-- Fonctionne sans Google, Firebase ni FCM.
-
-Pourquoi Axichat ?
-- Les outils comptent : la communication doit ressembler à un bureau clair, pas à une boîte de réception surchargée.
-- Le temps compte : Axichat réduit les changements de contexte grâce à un flux e-mail type chat et une planification intégrée.
-- La collaboration compte : calendrier, disponibilités et messages au même endroit.
-
-Ce que fait Axichat :
-
-Belle interface de chat:
-- Lire et envoyer messages et e-mails dans une interface centrée conversation.
-- Contacter des personnes sur des services e-mail classiques (par ex. Gmail, Outlook, Tuta) tout en gardant votre flux dans Axichat.
-- Utiliser des fonctions de chat avancées quand les deux côtés les prennent en charge.
-
-Calendrier intuitif:
-- Saisir tâches et événements en langage naturel et planifier vite.
-- Garder les éléments non planifiés en inbox jusqu'à leur placement.
-- Planifier par glisser-déposer, redimensionnement, copier/coller, édition par lot.
-- Suivre rappels, échéances, priorités et récurrences.
-- Utiliser le mode invité pour une planification locale sans compte.
-
-Vie privée et indépendance:
-- Aucun traqueur.
-- Aucune publicité.
-- Aucune revente de données.
-- Aucun verrouillage fournisseur.
-- Protocoles ouverts et code open source.
-
-Permissions Android expliquées:
-- INTERNET: envoyer et recevoir les données chat/e-mail.
-- POST_NOTIFICATIONS: afficher les notifications de messages et rappels.
-- FOREGROUND_SERVICE et permissions de synchronisation associées: maintenir une messagerie fiable en arrière-plan.
-- RECEIVE_BOOT_COMPLETED: restaurer la messagerie après redémarrage.
-- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: demande optionnelle pour améliorer la fiabilité.
-- VIBRATE: retour haptique des notifications.
-
-Support et mises à jour:
-- Site web: https://axi.chat
-- Notes de version: https://github.com/axichat/axichat/releases
-- Dons: https://axi.chat/donate
+Signalez les bugs sur https://github.com/axichat/axichat/issues.

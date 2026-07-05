@@ -1,1 +1,1 @@
-Axichat - IM + Email + Calendar
+Axichat: IM + Email + Calendar

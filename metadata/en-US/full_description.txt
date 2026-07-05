@@ -1,11 +1,11 @@
 Axichat is an open source email and chat client with first-party push notifications (without FCM) and a conversation-focused interface.
 
-Get your.name@axi.im now.
+Get your.name@axi.im at https://axi.chat/register.
 
 For additional privacy and security, run your own server by following the self-hosting guide at https://github.com/axichat/selfhost.
 
 Feature highlights:
-- First-party push notifications and offline sync
+- First-party push notifications
 - Transform traditional email into instant messenger style
 - Sync across all your devices (mobile and desktop)
 - Group chats
@@ -16,7 +16,7 @@ Feature highlights:
 - Typing indicators
 - Attachments
 - Pinned messages
-- Stream management with automatic reconnect to stop messages dropping
+- Automatic reconnect to stop messages dropping
 - Easy drag-and-drop calendar
 - Natural-language scheduling without AI
 - Availability sharing that shows overlaps before you schedule
