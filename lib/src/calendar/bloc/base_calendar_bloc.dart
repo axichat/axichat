@@ -79,6 +79,7 @@ abstract class BaseCalendarBloc
     on<CalendarTaskAdded>(_onTaskAdded);
     on<CalendarTaskUpdated>(_onTaskUpdated);
     on<CalendarTaskInteractionAcknowledged>(_onTaskInteractionAcknowledged);
+    on<CalendarAlertBadgesAcknowledged>(_onAlertBadgesAcknowledged);
     on<CalendarTaskDeleted>(_onTaskDeleted);
     on<CalendarTaskCompleted>(_onTaskCompleted);
     on<CalendarTaskDropped>(_onTaskDropped);
@@ -839,6 +840,26 @@ abstract class BaseCalendarBloc
     );
     final CalendarModel updatedModel = state.model.updateTask(readTask);
     emitModel(updatedModel, emit, selectedDate: state.selectedDate);
+  }
+
+  Future<void> _onAlertBadgesAcknowledged(
+    CalendarAlertBadgesAcknowledged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    final Set<String> dueKeys = state.dueCalendarAlertKeys(
+      bucket: event.bucket,
+      now: event.now,
+    );
+    final Set<String> nextKeys = state.model
+        .retainedCalendarAlertAcknowledgmentKeys(event.now, {
+          ...state.acknowledgedCalendarAlertKeys,
+          ...dueKeys,
+        });
+    if (nextKeys.length == state.acknowledgedCalendarAlertKeys.length &&
+        state.acknowledgedCalendarAlertKeys.containsAll(nextKeys)) {
+      return;
+    }
+    emit(state.copyWith(acknowledgedCalendarAlertKeys: nextKeys));
   }
 
   Future<void> _onTaskDeleted(
@@ -3668,7 +3689,12 @@ abstract class BaseCalendarBloc
   CalendarState _stateWithDerived(CalendarState state) {
     final dueReminders = _getDueReminders(state.model);
     final nextTask = _getNextTask(state.model);
-    return state.copyWith(dueReminders: dueReminders, nextTask: nextTask);
+    return state.copyWith(
+      dueReminders: dueReminders,
+      nextTask: nextTask,
+      acknowledgedCalendarAlertKeys: state
+          .retainedCalendarAlertAcknowledgmentKeys(_now()),
+    );
   }
 
   CalendarTask _taskWithNormalizedReminderAnchors(CalendarTask task) {
@@ -4007,6 +4033,11 @@ abstract class BaseCalendarBloc
     final bool resolvedSelectionMode =
         (isSelectionMode ?? state.isSelectionMode) &&
         filteredSelection.isNotEmpty;
+    final Set<String> acknowledgedCalendarAlertKeys = model
+        .retainedCalendarAlertAcknowledgmentKeys(
+          _now(),
+          state.acknowledgedCalendarAlertKeys,
+        );
 
     final nextState = state.copyWith(
       model: model,
@@ -4020,6 +4051,7 @@ abstract class BaseCalendarBloc
       selectedTaskIds: resolvedSelectionMode
           ? filteredSelection
           : const <String>{},
+      acknowledgedCalendarAlertKeys: acknowledgedCalendarAlertKeys,
       canUndo: _undoStack.isNotEmpty,
       canRedo: _redoStack.isNotEmpty,
       focusedCriticalPathId: normalizedFocus,

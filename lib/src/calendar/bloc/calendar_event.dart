@@ -78,6 +78,11 @@ abstract class CalendarEvent with _$CalendarEvent {
     required String taskId,
   }) = CalendarTaskInteractionAcknowledged;
 
+  const factory CalendarEvent.alertBadgesAcknowledged({
+    required CalendarAlertBadgeBucket bucket,
+    required DateTime now,
+  }) = CalendarAlertBadgesAcknowledged;
+
   const factory CalendarEvent.taskDeleted({required String taskId}) =
       CalendarTaskDeleted;
 

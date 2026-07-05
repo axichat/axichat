@@ -43,6 +43,16 @@ enum CalendarSyncWarningType {
   reminderNotificationsDisabled,
 }
 
+enum CalendarAlertBadgeBucket {
+  scheduled,
+  unscheduled;
+
+  bool includes(CalendarTask task) => switch (this) {
+    CalendarAlertBadgeBucket.scheduled => task.scheduledTime != null,
+    CalendarAlertBadgeBucket.unscheduled => task.scheduledTime == null,
+  };
+}
+
 @immutable
 class CalendarAlertBadgeCounts {
   const CalendarAlertBadgeCounts({
@@ -78,6 +88,7 @@ abstract class CalendarState with _$CalendarState {
     CalendarTask? nextTask,
     @Default(false) bool isSelectionMode,
     @Default(<String>{}) Set<String> selectedTaskIds,
+    @Default(<String>{}) Set<String> acknowledgedCalendarAlertKeys,
     @Default(false) bool canUndo,
     @Default(false) bool canRedo,
     TaskFocusRequest? pendingFocus,
@@ -100,8 +111,23 @@ abstract class CalendarState with _$CalendarState {
 }
 
 extension CalendarStateExtensions on CalendarState {
-  CalendarAlertBadgeCounts alertBadgeCounts(DateTime now) =>
-      model.alertBadgeCounts(now);
+  CalendarAlertBadgeCounts alertBadgeCounts(DateTime now) => model
+      .alertBadgeCounts(now, acknowledgedKeys: acknowledgedCalendarAlertKeys);
+
+  Set<String> dueCalendarAlertKeys({
+    required CalendarAlertBadgeBucket bucket,
+    required DateTime now,
+  }) => model.dueCalendarAlertKeys(
+    now: now,
+    bucket: bucket,
+    acknowledgedKeys: acknowledgedCalendarAlertKeys,
+  );
+
+  Set<String> retainedCalendarAlertAcknowledgmentKeys(DateTime now) =>
+      model.retainedCalendarAlertAcknowledgmentKeys(
+        now,
+        acknowledgedCalendarAlertKeys,
+      );
 
   List<CalendarTask> get unscheduledTasks =>
       model.tasks.values.where((task) => task.isUnscheduled).toList();
@@ -365,16 +391,23 @@ extension CalendarStateExtensions on CalendarState {
 }
 
 extension CalendarAlertBadgeModelExtensions on CalendarModel {
-  CalendarAlertBadgeCounts alertBadgeCounts(DateTime now) {
+  CalendarAlertBadgeCounts alertBadgeCounts(
+    DateTime now, {
+    Set<String> acknowledgedKeys = const <String>{},
+  }) {
     var scheduled = 0;
     var unscheduled = 0;
 
     for (final CalendarTask task in tasks.values) {
-      final CalendarTask? dueTask = _dueAlertTaskFor(task, now);
-      if (dueTask == null) {
+      final _CalendarAlertInstance? dueAlert = _firstDueAlertForTask(
+        task,
+        now,
+        acknowledgedKeys,
+      );
+      if (dueAlert == null) {
         continue;
       }
-      if (dueTask.scheduledTime == null) {
+      if (dueAlert.bucket == CalendarAlertBadgeBucket.unscheduled) {
         unscheduled += 1;
       } else {
         scheduled += 1;
@@ -390,9 +423,68 @@ extension CalendarAlertBadgeModelExtensions on CalendarModel {
     );
   }
 
-  CalendarTask? _dueAlertTaskFor(CalendarTask task, DateTime now) {
+  Set<String> dueCalendarAlertKeys({
+    required DateTime now,
+    required CalendarAlertBadgeBucket bucket,
+    Set<String> acknowledgedKeys = const <String>{},
+  }) {
+    final keys = <String>{};
+    for (final CalendarTask task in tasks.values) {
+      for (final _CalendarAlertInstance alert in _dueAlertsForTask(task, now)) {
+        if (alert.bucket != bucket || acknowledgedKeys.contains(alert.key)) {
+          continue;
+        }
+        keys.add(alert.key);
+      }
+    }
+    return keys;
+  }
+
+  Set<String> retainedCalendarAlertAcknowledgmentKeys(
+    DateTime now,
+    Set<String> acknowledgedKeys,
+  ) {
+    if (acknowledgedKeys.isEmpty) {
+      return const <String>{};
+    }
+    final activeKeys = <String>{};
+    for (final CalendarTask task in tasks.values) {
+      for (final _CalendarAlertInstance alert in _dueAlertsForTask(task, now)) {
+        activeKeys.add(alert.key);
+      }
+    }
+    final retained = <String>{};
+    for (final String key in acknowledgedKeys) {
+      if (activeKeys.contains(key)) {
+        retained.add(key);
+      }
+    }
+    return retained;
+  }
+
+  _CalendarAlertInstance? _firstDueAlertForTask(
+    CalendarTask task,
+    DateTime now,
+    Set<String> acknowledgedKeys,
+  ) {
+    final List<_CalendarAlertInstance> due =
+        _dueAlertsForTask(task, now)
+            .where(
+              (_CalendarAlertInstance alert) =>
+                  !acknowledgedKeys.contains(alert.key),
+            )
+            .toList()
+          ..sort(_compareCalendarAlerts);
+    return due.isEmpty ? null : due.first;
+  }
+
+  Iterable<_CalendarAlertInstance> _dueAlertsForTask(
+    CalendarTask task,
+    DateTime now,
+  ) sync* {
     if (!task.hasRecurrenceData) {
-      return _hasDueCalendarAlert(task, now) ? task : null;
+      yield* _dueAlertsForSingleTask(task, now);
+      return;
     }
 
     final Map<String, CalendarTask> candidates = <String, CalendarTask>{};
@@ -413,57 +505,64 @@ extension CalendarAlertBadgeModelExtensions on CalendarModel {
       candidates[occurrence.id] = occurrence;
     }
 
-    final List<CalendarTask> due =
-        candidates.values
-            .where(
-              (CalendarTask candidate) => _hasDueCalendarAlert(candidate, now),
-            )
-            .toList()
-          ..sort((CalendarTask left, CalendarTask right) {
-            final DateTime leftTime = _calendarAlertSortTime(left, now);
-            final DateTime rightTime = _calendarAlertSortTime(right, now);
-            return leftTime.compareTo(rightTime);
-          });
-
-    return due.isEmpty ? null : due.first;
+    for (final CalendarTask candidate in candidates.values) {
+      yield* _dueAlertsForSingleTask(candidate, now);
+    }
   }
 
-  bool _hasDueCalendarAlert(CalendarTask task, DateTime now) {
+  Iterable<_CalendarAlertInstance> _dueAlertsForSingleTask(
+    CalendarTask task,
+    DateTime now,
+  ) sync* {
     if (task.isCompleted) {
-      return false;
+      return;
     }
     final DateTime? deadline = task.deadline;
     if (deadline != null && !deadline.isAfter(now)) {
-      return true;
+      yield _CalendarAlertInstance(
+        task: task,
+        kind: 'deadline',
+        anchorTime: deadline,
+        offset: null,
+        fireTime: deadline,
+      );
     }
 
     final ReminderPreferences reminders = task.effectiveReminders;
     if (!reminders.isEnabled) {
-      return false;
+      return;
     }
     final DateTime? scheduled = task.scheduledTime;
-    if (scheduled != null &&
-        _hasDueReminderFireTime(scheduled, reminders.startOffsets, now)) {
-      return true;
-    }
-    if (deadline != null &&
-        _hasDueReminderFireTime(deadline, reminders.deadlineOffsets, now)) {
-      return true;
-    }
-    return false;
-  }
-
-  bool _hasDueReminderFireTime(
-    DateTime anchor,
-    List<Duration> offsets,
-    DateTime now,
-  ) {
-    for (final Duration offset in offsets) {
-      if (!anchor.subtract(offset).isAfter(now)) {
-        return true;
+    if (scheduled != null) {
+      for (final Duration offset in reminders.startOffsets) {
+        final DateTime fireTime = scheduled.subtract(offset);
+        if (fireTime.isAfter(now)) {
+          continue;
+        }
+        yield _CalendarAlertInstance(
+          task: task,
+          kind: 'start-reminder',
+          anchorTime: scheduled,
+          offset: offset,
+          fireTime: fireTime,
+        );
       }
     }
-    return false;
+    if (deadline != null) {
+      for (final Duration offset in reminders.deadlineOffsets) {
+        final DateTime fireTime = deadline.subtract(offset);
+        if (fireTime.isAfter(now)) {
+          continue;
+        }
+        yield _CalendarAlertInstance(
+          task: task,
+          kind: 'deadline-reminder',
+          anchorTime: deadline,
+          offset: offset,
+          fireTime: fireTime,
+        );
+      }
+    }
   }
 
   Duration _maxReminderOffset(ReminderPreferences reminders) {
@@ -481,33 +580,49 @@ extension CalendarAlertBadgeModelExtensions on CalendarModel {
     return maxOffset;
   }
 
-  DateTime _calendarAlertSortTime(CalendarTask task, DateTime now) {
-    DateTime? earliest;
-    void consider(DateTime value) {
-      if (value.isAfter(now)) {
-        return;
-      }
-      if (earliest == null || value.isBefore(earliest!)) {
-        earliest = value;
-      }
+  int _compareCalendarAlerts(
+    _CalendarAlertInstance left,
+    _CalendarAlertInstance right,
+  ) {
+    final int fireTimeComparison = left.fireTime.compareTo(right.fireTime);
+    if (fireTimeComparison != 0) {
+      return fireTimeComparison;
     }
+    return left.key.compareTo(right.key);
+  }
+}
 
-    final DateTime? deadline = task.deadline;
-    if (deadline != null) {
-      consider(deadline);
-    }
-    final ReminderPreferences reminders = task.effectiveReminders;
-    final DateTime? scheduled = task.scheduledTime;
-    if (scheduled != null) {
-      for (final Duration offset in reminders.startOffsets) {
-        consider(scheduled.subtract(offset));
-      }
-    }
-    if (deadline != null) {
-      for (final Duration offset in reminders.deadlineOffsets) {
-        consider(deadline.subtract(offset));
-      }
-    }
-    return earliest ?? now;
+@immutable
+class _CalendarAlertInstance {
+  const _CalendarAlertInstance({
+    required this.task,
+    required this.kind,
+    required this.anchorTime,
+    required this.offset,
+    required this.fireTime,
+  });
+
+  final CalendarTask task;
+  final String kind;
+  final DateTime anchorTime;
+  final Duration? offset;
+  final DateTime fireTime;
+
+  CalendarAlertBadgeBucket get bucket => task.scheduledTime == null
+      ? CalendarAlertBadgeBucket.unscheduled
+      : CalendarAlertBadgeBucket.scheduled;
+
+  String get key {
+    final Duration? alertOffset = offset;
+    final String offsetKey = alertOffset == null
+        ? 'none'
+        : '${alertOffset.inMicroseconds}';
+    return [
+      task.id,
+      kind,
+      anchorTime.toUtc().toIso8601String(),
+      offsetKey,
+      fireTime.toUtc().toIso8601String(),
+    ].join('|');
   }
 }

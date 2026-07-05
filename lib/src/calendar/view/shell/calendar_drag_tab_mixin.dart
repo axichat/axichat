@@ -65,6 +65,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   bool get _isAnyDragActive => _gridDragActive || _edgeDragActive;
 
+  void onMobileCalendarTabSelected(int index) {}
+
   void onDragDayShiftRequested(int deltaDays);
 
   void _setGridDragActive(bool isActive) {
@@ -263,6 +265,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
           ),
           onTabChange: (value) {
             if (mobileTabController.index != value) {
+              onMobileCalendarTabSelected(value);
               mobileTabController.animateTo(value);
             }
           },

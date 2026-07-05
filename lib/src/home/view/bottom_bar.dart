@@ -340,11 +340,33 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   int _calendarTargetToBottomNavIndex(int calendarTabIndex) =>
       calendarTabIndex == 0 ? 1 : 2;
 
-  void _setBottomNavIndex(int index) {
+  CalendarAlertBadgeBucket? _calendarAlertBucketForBottomNavIndex(int index) =>
+      switch (index) {
+        1 => CalendarAlertBadgeBucket.scheduled,
+        2 => CalendarAlertBadgeBucket.unscheduled,
+        _ => null,
+      };
+
+  void _acknowledgeCalendarAlertsForBottomNavIndex(int index, DateTime now) {
+    if (!widget.calendarAvailable) {
+      return;
+    }
+    final CalendarAlertBadgeBucket? bucket =
+        _calendarAlertBucketForBottomNavIndex(index);
+    if (bucket == null) {
+      return;
+    }
+    context.read<CalendarBloc>().add(
+      CalendarEvent.alertBadgesAcknowledged(bucket: bucket, now: now),
+    );
+  }
+
+  void _setBottomNavIndex(int index, {DateTime? now}) {
     assert(index >= 0 && index <= 3, 'bottom nav index must be 0..3');
     if (index < 0 || index > 3) {
       return;
     }
+    _acknowledgeCalendarAlertsForBottomNavIndex(index, now ?? DateTime.now());
     widget.onBottomNavSelected(index);
     if (index != 0) {
       return;
@@ -672,7 +694,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                               (index == 1 || index == 2)) {
                             return;
                           }
-                          _setBottomNavIndex(index);
+                          _setBottomNavIndex(index, now: now);
                         },
                         tabs: [
                           GButton(

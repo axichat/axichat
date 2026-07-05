@@ -105,7 +105,19 @@ class _HomeShellNavigationRail extends StatelessWidget {
       'bottom nav index must be 0..2',
     );
     final currentIndex = bottomNavIndex.value;
-    onBottomNavSelected(currentIndex == 2 ? 2 : 1);
+    final targetIndex = currentIndex == 2 ? 2 : 1;
+    if (calendarAvailable) {
+      final bucket = targetIndex == 2
+          ? CalendarAlertBadgeBucket.unscheduled
+          : CalendarAlertBadgeBucket.scheduled;
+      context.read<CalendarBloc>().add(
+        CalendarEvent.alertBadgesAcknowledged(
+          bucket: bucket,
+          now: DateTime.now(),
+        ),
+      );
+    }
+    onBottomNavSelected(targetIndex);
   }
 
   void _selectHomeTab(BuildContext context, int index) {

@@ -9,6 +9,8 @@ const String _calendarStateModelKey = 'model';
 const String _calendarStateSelectedDateKey = 'selectedDate';
 const String _calendarStateViewModeKey = 'viewMode';
 const String _calendarStateSelectedDayIndexKey = 'selectedDayIndex';
+const String _calendarStateAcknowledgedAlertKeysKey =
+    'acknowledgedCalendarAlertKeys';
 
 class CalendarStateStorageCodec {
   const CalendarStateStorageCodec._();
@@ -21,6 +23,9 @@ class CalendarStateStorageCodec {
     final selectedDate = json[_calendarStateSelectedDateKey] as String?;
     final view = json[_calendarStateViewModeKey] as String?;
     final selectedDayIndex = json[_calendarStateSelectedDayIndexKey] as int?;
+    final acknowledgedAlertKeys = _decodeStringSet(
+      json[_calendarStateAcknowledgedAlertKeysKey],
+    );
 
     if (modelJson is! Map<String, dynamic> ||
         selectedDate == null ||
@@ -40,6 +45,7 @@ class CalendarStateStorageCodec {
       selectedDate: parsedDate,
       viewMode: viewMode,
       selectedDayIndex: selectedDayIndex,
+      acknowledgedCalendarAlertKeys: acknowledgedAlertKeys,
     );
   }
 
@@ -50,6 +56,23 @@ class CalendarStateStorageCodec {
       _calendarStateViewModeKey: state.viewMode.name,
       if (state.selectedDayIndex != null)
         _calendarStateSelectedDayIndexKey: state.selectedDayIndex,
+      if (state.acknowledgedCalendarAlertKeys.isNotEmpty)
+        _calendarStateAcknowledgedAlertKeysKey:
+            state.acknowledgedCalendarAlertKeys.toList()..sort(),
     };
+  }
+
+  static Set<String> _decodeStringSet(Object? raw) {
+    if (raw is! List) {
+      return const <String>{};
+    }
+    final values = <String>{};
+    for (final Object? value in raw) {
+      if (value is! String || value.trim().isEmpty) {
+        continue;
+      }
+      values.add(value);
+    }
+    return values;
   }
 }

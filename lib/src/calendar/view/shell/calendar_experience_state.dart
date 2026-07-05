@@ -651,6 +651,24 @@ abstract class CalendarExperienceState<
   TabController get mobileTabController => _mobileTabController;
 
   @override
+  void onMobileCalendarTabSelected(int index) {
+    final CalendarAlertBadgeBucket? bucket = switch (index) {
+      0 => CalendarAlertBadgeBucket.scheduled,
+      1 => CalendarAlertBadgeBucket.unscheduled,
+      _ => null,
+    };
+    if (bucket == null) {
+      return;
+    }
+    calendarBloc.add(
+      CalendarEvent.alertBadgesAcknowledged(
+        bucket: bucket,
+        now: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
   bool get isDragSwitcherEnabled => _usesMobileLayout;
 
   @override
@@ -812,24 +830,25 @@ abstract class CalendarExperienceState<
   /// Builds the tab label for the schedule pane. Subclasses can override to
   /// customize text/style.
   Widget buildScheduleTabLabel(BuildContext context) {
-    int scheduledAlertsCount = 0;
-    for (final task in context.watch<B>().state.model.tasks.values) {
-      if (task.isCompleted) {
-        continue;
-      }
-      final hasReminderOffsets = task.effectiveReminders.isEnabled;
-      final hasIcsAlarm = task.icsMeta?.alarms.isNotEmpty ?? false;
-      if (!hasReminderOffsets && !hasIcsAlarm) {
-        continue;
-      }
-      if (task.isScheduled) {
-        scheduledAlertsCount += 1;
-      }
-    }
-    return _CalendarBottomNavBadgeIcon(
-      iconData: LucideIcons.calendarClock,
-      badgeCount: scheduledAlertsCount,
-      iconSize: context.sizing.iconButtonIconSize + context.spacing.xxs,
+    return AxiNowTicker(
+      interval: calendarClockTickInterval,
+      builder: (context, nowListenable) {
+        return ValueListenableBuilder<DateTime>(
+          valueListenable: nowListenable,
+          builder: (context, now, _) {
+            final scheduledAlertsCount = context
+                .watch<B>()
+                .state
+                .alertBadgeCounts(now)
+                .scheduled;
+            return _CalendarBottomNavBadgeIcon(
+              iconData: LucideIcons.calendarClock,
+              badgeCount: scheduledAlertsCount,
+              iconSize: context.sizing.iconButtonIconSize + context.spacing.xxs,
+            );
+          },
+        );
+      },
     );
   }
 
@@ -859,41 +878,47 @@ abstract class CalendarExperienceState<
     bool highlight,
     Animation<double> animation,
   ) {
-    int unscheduledAlertsCount = 0;
-    for (final task in context.watch<B>().state.model.tasks.values) {
-      if (task.isCompleted) {
-        continue;
-      }
-      final hasReminderOffsets = task.effectiveReminders.isEnabled;
-      final hasIcsAlarm = task.icsMeta?.alarms.isNotEmpty ?? false;
-      if (!hasReminderOffsets && !hasIcsAlarm) {
-        continue;
-      }
-      if (!task.isScheduled) {
-        unscheduledAlertsCount += 1;
-      }
-    }
-    final colors = context.colorScheme;
-    final iconSize = context.sizing.iconButtonIconSize + context.spacing.xxs;
-    final baseIcon = _CalendarBottomNavBadgeIcon(
-      iconData: LucideIcons.squareCheck,
-      badgeCount: unscheduledAlertsCount,
-      iconSize: iconSize,
-    );
-    if (!highlight) {
-      return baseIcon;
-    }
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        final t = animation.value;
-        final iconColor = Color.lerp(colors.foreground, colors.primary, t)!;
-        return Transform.scale(
-          scale: 1 + (0.12 * t),
-          child: IconTheme.merge(
-            data: IconThemeData(color: iconColor, size: iconSize),
-            child: baseIcon,
-          ),
+    return AxiNowTicker(
+      interval: calendarClockTickInterval,
+      builder: (context, nowListenable) {
+        return ValueListenableBuilder<DateTime>(
+          valueListenable: nowListenable,
+          builder: (context, now, _) {
+            final unscheduledAlertsCount = context
+                .watch<B>()
+                .state
+                .alertBadgeCounts(now)
+                .unscheduled;
+            final colors = context.colorScheme;
+            final iconSize =
+                context.sizing.iconButtonIconSize + context.spacing.xxs;
+            final baseIcon = _CalendarBottomNavBadgeIcon(
+              iconData: LucideIcons.squareCheck,
+              badgeCount: unscheduledAlertsCount,
+              iconSize: iconSize,
+            );
+            if (!highlight) {
+              return baseIcon;
+            }
+            return AnimatedBuilder(
+              animation: animation,
+              builder: (context, _) {
+                final t = animation.value;
+                final iconColor = Color.lerp(
+                  colors.foreground,
+                  colors.primary,
+                  t,
+                )!;
+                return Transform.scale(
+                  scale: 1 + (0.12 * t),
+                  child: IconTheme.merge(
+                    data: IconThemeData(color: iconColor, size: iconSize),
+                    child: baseIcon,
+                  ),
+                );
+              },
+            );
+          },
         );
       },
     );
