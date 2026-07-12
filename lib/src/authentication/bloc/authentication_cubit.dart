@@ -371,7 +371,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   VoidCallback? _foregroundListener;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
-  _UnregisterCleanupContext? _loginLocalCleanupContext;
   _AuthTransaction? _authTransaction;
   _AxiV1PasswordChangeRequest? _hostedPasswordChangeRequest;
   String? _hostedPasswordChangeIdempotencyKey;
@@ -1976,47 +1975,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  Future<_UnregisterCleanupContext?> _resolveLoginLocalCleanupContext(
-    String jid,
-  ) async {
-    final user = addressLocalPart(jid);
-    final host = addressDomainPart(jid);
-    if (user == null || host == null) {
-      return null;
-    }
-    final cleanupContext = await _resolveUnregisterCleanupContext(
-      jid: jid,
-      user: user,
-      host: host,
-      allowActiveDatabasePrefixFallback: false,
-    );
-    if (cleanupContext.databasePrefix == null) {
-      return null;
-    }
-    return cleanupContext;
-  }
-
-  _UnregisterCleanupContext? _loginLocalCleanupContextFromSecrets(
-    String jid,
-    _DatabaseSecrets databaseSecrets,
-  ) {
-    if (!databaseSecrets.hasSecrets) {
-      return null;
-    }
-    final user = addressLocalPart(jid);
-    final host = addressDomainPart(jid);
-    if (user == null || host == null) {
-      return null;
-    }
-    return _UnregisterCleanupContext(
-      jid: jid,
-      user: user,
-      host: host,
-      databasePrefix: databaseSecrets.prefix,
-      databasePassphrase: databaseSecrets.passphrase,
-    );
-  }
-
   Future<String?> _resolveUnregisterCleanupDatabasePrefix(
     String jid, {
     required bool allowActiveDatabasePrefixFallback,
@@ -2298,7 +2256,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       'smtpEnabled: ${currentConfig.smtpEnabled})',
     );
     _lastEmailProvisioningError = null;
-    _loginLocalCleanupContext = null;
     final AuthenticationState previousState = state;
     final wasAuthenticated = previousState is AuthenticationComplete;
     final loginPhase =
@@ -2419,15 +2376,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     final bool hasStoredDatabaseSecrets = storedSecrets.hasSecrets;
-    final loginLocalCleanupContext = fromSignup
-        ? null
-        : usingStoredCredentials
-        ? _loginLocalCleanupContextFromSecrets(accountJid, storedSecrets)
-        : await _resolveLoginLocalCleanupContext(accountJid);
-    if (_stopLoginIfCancelled(loginAttempt)) {
-      return;
-    }
-    final canOfferLocalCleanup = loginLocalCleanupContext != null;
     final bool hasStoredLoginForJid = storedLogin.matches(accountJid);
     if (hasStoredLoginForJid && !hasStoredDatabaseSecrets) {
       _log.warning(
@@ -2524,13 +2472,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           passwordPreHashed = true;
           await _markXmppConnected();
         } on XmppAuthenticationException catch (_) {
-          if (loginLocalCleanupContext == null) {
-            credentialDisposition = _CredentialDisposition.wipeLoginCredentials;
-            await _updateAuthTransactionCredentialClearance(true);
-          } else {
-            _loginLocalCleanupContext = loginLocalCleanupContext;
-            credentialDisposition = _CredentialDisposition.keep;
-            await _updateAuthTransactionCredentialClearance(false);
+          if (usingStoredCredentials && !wasAuthenticated) {
             await _clearStoredLoginCredentialsForLogout();
             if (smtpEnabled) {
               await _cancelPendingEmailProvisioning(
@@ -2546,9 +2488,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             return;
           }
           _emit(
-            AuthenticationFailure(
-              const AuthKeyMessage(AuthMessageKey.invalidCredentials),
-              canOfferLocalCleanup: canOfferLocalCleanup,
+            const AuthenticationFailure(
+              AuthKeyMessage(AuthMessageKey.invalidCredentials),
             ),
           );
           return;
@@ -3990,21 +3931,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   // storage reachable from auth.
   Future<void> _finishAccountLocalDataCleanup({
     required _UnregisterCleanupContext cleanupContext,
-    required bool offerLocalCleanupRetry,
   }) async {
     if (!await _disconnectForDelete(
       jid: cleanupContext.jid,
       clearEmail: true,
     )) {
-      if (offerLocalCleanupRetry) {
-        _emit(
-          const AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-            canOfferLocalCleanup: true,
-          ),
-        );
-        return;
-      }
       _emit(
         const AuthenticationUnregisterFailure(
           AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
@@ -4017,15 +3948,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       () => _clearStoredSmtpCredentials(cleanupContext.jid),
     );
     if (!await _cleanupAccountLocalData(cleanupContext)) {
-      if (offerLocalCleanupRetry) {
-        _emit(
-          const AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-            canOfferLocalCleanup: true,
-          ),
-        );
-        return;
-      }
       _emit(
         const AuthenticationUnregisterFailure(
           AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
@@ -4054,62 +3976,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       host: host,
       allowActiveDatabasePrefixFallback: true,
     );
-    await _finishAccountLocalDataCleanup(
-      cleanupContext: cleanupContext,
-      offerLocalCleanupRetry: false,
-    );
-  }
-
-  Future<void> removeLocalAccountData({
-    required String username,
-    required String host,
-  }) async {
-    final normalizedUsername = username.trim();
-    final configuredHost = endpointConfig.domain.trim();
-    final effectiveHost = configuredHost.isEmpty ? host.trim() : configuredHost;
-    if (normalizedUsername.isEmpty || effectiveHost.isEmpty) {
-      _emit(
-        const AuthenticationFailure(
-          AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-        ),
-      );
-      return;
-    }
-    final requestedJid = '$normalizedUsername@$effectiveHost';
-    final pendingCleanupContext = _loginLocalCleanupContext;
-    _UnregisterCleanupContext? cleanupContext;
-    if (pendingCleanupContext == null) {
-      cleanupContext = await _resolveUnregisterCleanupContext(
-        jid: requestedJid,
-        user: normalizedUsername,
-        host: effectiveHost,
-        allowActiveDatabasePrefixFallback: false,
-      );
-    } else if (sameNormalizedAddressValue(
-      pendingCleanupContext.jid,
-      requestedJid,
-    )) {
-      cleanupContext = pendingCleanupContext;
-    }
-    if (cleanupContext == null || cleanupContext.databasePrefix == null) {
-      _emit(
-        const AuthenticationFailure(
-          AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
-        ),
-      );
-      return;
-    }
-    await _finishAccountLocalDataCleanup(
-      cleanupContext: cleanupContext,
-      offerLocalCleanupRetry: true,
-    );
-    if (state is AuthenticationNone &&
-        sameNormalizedAddressValue(
-          _loginLocalCleanupContext?.jid,
-          requestedJid,
-        )) {
-      _loginLocalCleanupContext = null;
-    }
+    await _finishAccountLocalDataCleanup(cleanupContext: cleanupContext);
   }
 
   Future<void> _stabilizeAfterEmailDelete(String jid) async {

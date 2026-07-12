@@ -2704,17 +2704,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authUnregisterConfirmAction => 'Supprimer le compte';
 
   @override
-  String get authLocalDataCleanupConfirmTitle =>
-      'Supprimer les données locales ?';
-
-  @override
-  String get authLocalDataCleanupConfirmMessage =>
-      'Cette action supprime les données Axichat locales de ce compte uniquement sur cet appareil. Elle ne contacte pas le serveur et ne supprime pas le compte distant.';
-
-  @override
-  String get authLocalDataCleanupAction => 'Supprimer les données locales';
-
-  @override
   String get authUnregisterProgressLabel =>
       'En attente de la suppression du compte';
 

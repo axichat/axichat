@@ -4770,24 +4770,6 @@ abstract class AppLocalizations {
   /// **'Delete account'**
   String get authUnregisterConfirmAction;
 
-  /// No description provided for @authLocalDataCleanupConfirmTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove local data?'**
-  String get authLocalDataCleanupConfirmTitle;
-
-  /// No description provided for @authLocalDataCleanupConfirmMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'This removes this account\'s local Axichat data from this device only. It will not contact the server or delete the remote account.'**
-  String get authLocalDataCleanupConfirmMessage;
-
-  /// No description provided for @authLocalDataCleanupAction.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove local data'**
-  String get authLocalDataCleanupAction;
-
   /// No description provided for @authUnregisterProgressLabel.
   ///
   /// In en, this message translates to:

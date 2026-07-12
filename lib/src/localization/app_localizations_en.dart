@@ -2645,16 +2645,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authUnregisterConfirmAction => 'Delete account';
 
   @override
-  String get authLocalDataCleanupConfirmTitle => 'Remove local data?';
-
-  @override
-  String get authLocalDataCleanupConfirmMessage =>
-      'This removes this account\'s local Axichat data from this device only. It will not contact the server or delete the remote account.';
-
-  @override
-  String get authLocalDataCleanupAction => 'Remove local data';
-
-  @override
   String get authUnregisterProgressLabel => 'Waiting for account deletion';
 
   @override

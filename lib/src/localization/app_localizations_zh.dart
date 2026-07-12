@@ -2535,16 +2535,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authUnregisterConfirmAction => '删除账号';
 
   @override
-  String get authLocalDataCleanupConfirmTitle => '移除本地数据？';
-
-  @override
-  String get authLocalDataCleanupConfirmMessage =>
-      '这只会从此设备移除此账号的本地 Axichat 数据。不会联系服务器，也不会删除远程账号。';
-
-  @override
-  String get authLocalDataCleanupAction => '移除本地数据';
-
-  @override
   String get authUnregisterProgressLabel => '正在等待删除账户';
 
   @override
@@ -10035,16 +10025,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authUnregisterConfirmAction => '刪除帳號';
-
-  @override
-  String get authLocalDataCleanupConfirmTitle => '移除本機資料？';
-
-  @override
-  String get authLocalDataCleanupConfirmMessage =>
-      '這只會從此裝置移除此帳戶的本機 Axichat 資料。不會聯絡伺服器，也不會刪除遠端帳戶。';
-
-  @override
-  String get authLocalDataCleanupAction => '移除本機資料';
 
   @override
   String get authUnregisterProgressLabel => '正在等待刪除帳戶';
