@@ -40,7 +40,6 @@ Future<void> main(List<String> args) async {
   _installProfileErrorLogging();
   firstFrameGate.defer(binding);
   await _applyPhoneOrientationPolicy(binding.platformDispatcher.views);
-  _installKeyboardGuard();
   await NetworkAvailabilityService.instance.start();
 
   const capability = Capability();
@@ -298,96 +297,4 @@ class BlocLogger extends BlocObserver {
     // logger.info('${bloc.runtimeType} $change');
     super.onChange(bloc, change);
   }
-}
-
-const String _rawKeyHandledResponseKey = 'handled';
-const bool _keyEventNotHandled = false;
-const Set<ui.KeyEventType> _guardedKeyDataTypes = {
-  ui.KeyEventType.up,
-  ui.KeyEventType.repeat,
-};
-const Map<String, dynamic> _rawKeyNotHandledResponse = <String, dynamic>{
-  _rawKeyHandledResponseKey: _keyEventNotHandled,
-};
-
-enum _KeyboardTransitMode {
-  rawKeyData,
-  keyDataThenRawKeyData;
-
-  bool get isRawKeyData => this == _KeyboardTransitMode.rawKeyData;
-
-  bool get isKeyDataThenRawKeyData =>
-      this == _KeyboardTransitMode.keyDataThenRawKeyData;
-}
-
-// ignore: deprecated_member_use
-KeyEventManager? _keyboardGuardKeyEventManager;
-_KeyboardTransitMode? _keyboardTransitMode;
-
-bool _shouldIgnoreKeyData(ui.KeyData data) {
-  final bool isGuardedType = _guardedKeyDataTypes.contains(data.type);
-  final PhysicalKeyboardKey key = PhysicalKeyboardKey(data.physical);
-  final bool isPressed = HardwareKeyboard.instance.physicalKeysPressed.contains(
-    key,
-  );
-  return isGuardedType && !isPressed;
-}
-
-// ignore: deprecated_member_use
-bool _shouldIgnoreRawKeyEvent(RawKeyEvent rawEvent) {
-  // ignore: deprecated_member_use
-  final bool isUpEvent = rawEvent is RawKeyUpEvent;
-  // ignore: deprecated_member_use
-  final bool isRepeatDownEvent = rawEvent is RawKeyDownEvent && rawEvent.repeat;
-  final bool isRepeatOrUp = isUpEvent || isRepeatDownEvent;
-  final PhysicalKeyboardKey key = rawEvent.physicalKey;
-  final bool isPressed = HardwareKeyboard.instance.physicalKeysPressed.contains(
-    key,
-  );
-  return isRepeatOrUp && !isPressed;
-}
-
-bool _handleGuardedKeyData(ui.KeyData data) {
-  // ignore: deprecated_member_use
-  final KeyEventManager? keyEventManager = _keyboardGuardKeyEventManager;
-  if (keyEventManager == null) {
-    return _keyEventNotHandled;
-  }
-  final bool isRawMode =
-      _keyboardTransitMode?.isRawKeyData ?? _keyEventNotHandled;
-  if (isRawMode || _shouldIgnoreKeyData(data)) {
-    return _keyEventNotHandled;
-  }
-  _keyboardTransitMode ??= _KeyboardTransitMode.keyDataThenRawKeyData;
-  // ignore: deprecated_member_use
-  return keyEventManager.handleKeyData(data);
-}
-
-Future<Map<String, dynamic>> _handleGuardedRawKeyMessage(
-  dynamic message,
-) async {
-  // ignore: deprecated_member_use
-  final KeyEventManager? keyEventManager = _keyboardGuardKeyEventManager;
-  if (keyEventManager == null) {
-    return _rawKeyNotHandledResponse;
-  }
-  final Map<String, dynamic> rawMessage = message as Map<String, dynamic>;
-  // ignore: deprecated_member_use
-  final RawKeyEvent rawEvent = RawKeyEvent.fromMessage(rawMessage);
-  if (_shouldIgnoreRawKeyEvent(rawEvent)) {
-    return _rawKeyNotHandledResponse;
-  }
-  _keyboardTransitMode ??= _KeyboardTransitMode.rawKeyData;
-  // ignore: deprecated_member_use
-  return keyEventManager.handleRawKeyMessage(rawMessage);
-}
-
-void _installKeyboardGuard() {
-  final ServicesBinding servicesBinding = ServicesBinding.instance;
-  final ui.PlatformDispatcher dispatcher = servicesBinding.platformDispatcher;
-  // ignore: deprecated_member_use
-  final KeyEventManager keyEventManager = servicesBinding.keyEventManager;
-  _keyboardGuardKeyEventManager = keyEventManager;
-  dispatcher.onKeyData = _handleGuardedKeyData;
-  SystemChannels.keyEvent.setMessageHandler(_handleGuardedRawKeyMessage);
 }
