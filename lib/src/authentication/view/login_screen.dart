@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _completionHandled = false;
   bool _cancelLoginInProgress = false;
   bool _showLoginCancel = false;
-  DateTime? _autoLoginRequestedAt;
+  bool _checkingStoredLogin = false;
   int _loginCancelRevealGeneration = 0;
 
   @override
@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     _authProgressController = AuthProgressController(vsync: this);
     context.read<AuthenticationCubit>().beginPendingLogoutRecovery();
-    _maybeAutoLogin();
+    unawaited(_maybeAutoLogin());
   }
 
   @override
@@ -77,19 +77,39 @@ class _LoginScreenState extends State<LoginScreen>
     _handleAuthState(context.read<AuthenticationCubit>().state);
   }
 
-  void _maybeAutoLogin() {
-    if (_autoLoginRequestedAt != null) {
-      return;
-    }
-    final bootstrap = context.read<AuthBootstrap>();
-    if (!bootstrap.hasStoredLoginCredentials) {
-      return;
-    }
+  Future<void> _maybeAutoLogin() async {
     if (context.read<AuthenticationCubit>().state is! AuthenticationNone) {
       return;
     }
-    _autoLoginRequestedAt = DateTime.now();
-    context.read<AuthenticationCubit>().login();
+    if (context.read<AuthBootstrap>().hasStoredLoginCredentials) {
+      await context.read<AuthenticationCubit>().login();
+      return;
+    }
+
+    _checkingStoredLogin = true;
+    try {
+      await context.read<AuthenticationCubit>().recoverPendingLogoutBarrier();
+      if (!mounted ||
+          context.read<AuthenticationCubit>().state is! AuthenticationNone) {
+        return;
+      }
+      if (!await context
+          .read<AuthenticationCubit>()
+          .hasStoredLoginCredentials()) {
+        return;
+      }
+      if (!mounted ||
+          context.read<AuthenticationCubit>().state is! AuthenticationNone) {
+        return;
+      }
+      await context.read<AuthenticationCubit>().login();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingStoredLogin = false;
+        });
+      }
+    }
   }
 
   Duration _progressRampDuration(Duration animationDuration) {
@@ -440,7 +460,7 @@ class _LoginScreenState extends State<LoginScreen>
         valueListenable: _authProgressController.listenable,
         builder: (context, progress, _) {
           final showProgressBar = progress.isVisible;
-          final formsDisabled = showProgressBar;
+          final formsDisabled = showProgressBar || _checkingStoredLogin;
           final showGuestCalendarShortcut =
               !allowSplitView && !keyboardVisible && !showProgressBar;
           return Scaffold(
@@ -578,7 +598,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                                 key:
                                                                     _loginFormKey,
                                                                 busy:
-                                                                    formsDisabled,
+                                                                    showProgressBar,
+                                                                enabled:
+                                                                    !_checkingStoredLogin,
                                                                 onSubmitStart: () =>
                                                                     _handleSubmissionRequested(
                                                                       _AuthFlow
@@ -606,7 +628,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                                     _AuthFlow
                                                                         .signup,
                                                                 busy:
-                                                                    formsDisabled,
+                                                                    showProgressBar,
+                                                                enabled:
+                                                                    !_checkingStoredLogin,
                                                                 onSubmitStart: () =>
                                                                     _handleSubmissionRequested(
                                                                       _AuthFlow
@@ -766,20 +790,20 @@ class _LoginScreenState extends State<LoginScreen>
                                                           children: [
                                                             Center(
                                                               child: AxiButton.ghost(
-                                                                onPressed: () {
-                                                                  final nextLogin =
-                                                                      _selectedFlow ==
-                                                                          _AuthFlow
-                                                                              .login
-                                                                      ? _AuthFlow
-                                                                            .signup
-                                                                      : _AuthFlow
-                                                                            .login;
-                                                                  setState(() {
-                                                                    _selectedFlow =
-                                                                        nextLogin;
-                                                                  });
-                                                                },
+                                                                onPressed:
+                                                                    formsDisabled
+                                                                    ? null
+                                                                    : () {
+                                                                        final nextLogin =
+                                                                            _selectedFlow ==
+                                                                                _AuthFlow.login
+                                                                            ? _AuthFlow.signup
+                                                                            : _AuthFlow.login;
+                                                                        setState(() {
+                                                                          _selectedFlow =
+                                                                              nextLogin;
+                                                                        });
+                                                                      },
                                                                 child: Text(
                                                                   _selectedFlow ==
                                                                           _AuthFlow

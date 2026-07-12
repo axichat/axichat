@@ -29,11 +29,13 @@ class SignupForm extends StatefulWidget {
     super.key,
     this.onSubmitStart,
     this.busy = false,
+    this.enabled = true,
     this.visible = true,
   });
 
   final VoidCallback? onSubmitStart;
   final bool busy;
+  final bool enabled;
   final bool visible;
 
   @override
@@ -626,6 +628,7 @@ class _SignupFormState extends State<SignupForm>
             final avatarErrorText = _avatarErrorText(avatarState, context.l10n);
             final loading = _isLoadingForState(state);
             final isBusy = widget.busy || loading;
+            final formEnabled = widget.enabled && !isBusy;
             final cleanupBlocked =
                 state is AuthenticationSignupFailure && state.isCleanupBlocked;
             final spacing = context.spacing;
@@ -813,7 +816,7 @@ class _SignupFormState extends State<SignupForm>
                                               placeholder: Text(
                                                 context.l10n.authUsername,
                                               ),
-                                              enabled: !isBusy,
+                                              enabled: formEnabled,
                                               controller: _jidTextController,
                                               focusNode: _usernameFocusNode,
                                               textInputAction:
@@ -996,7 +999,7 @@ class _SignupFormState extends State<SignupForm>
                                     Padding(
                                       padding: fieldSpacing,
                                       child: PasswordInput(
-                                        enabled: !isBusy,
+                                        enabled: formEnabled,
                                         controller: _passwordTextController,
                                         focusNode: _passwordFocusNode,
                                         autofillHints: const [
@@ -1010,7 +1013,7 @@ class _SignupFormState extends State<SignupForm>
                                     Padding(
                                       padding: fieldSpacing,
                                       child: PasswordInput(
-                                        enabled: !isBusy,
+                                        enabled: formEnabled,
                                         controller: _password2TextController,
                                         focusNode: _password2FocusNode,
                                         autofillHints: const [
@@ -1045,7 +1048,8 @@ class _SignupFormState extends State<SignupForm>
                                         risk: _visibleSignupPasswordRisk,
                                         allowed: _passwordRiskAcknowledged,
                                         enabled:
-                                            !isBusy && !_pwnedCheckInProgress,
+                                            formEnabled &&
+                                            !_pwnedCheckInProgress,
                                         showError: _showPasswordRiskError,
                                         animationDuration: animationDuration,
                                         resetTick: _passwordRiskResetTick,
@@ -1136,7 +1140,7 @@ class _SignupFormState extends State<SignupForm>
                                                 Semantics(
                                                   button: true,
                                                   enabled:
-                                                      !isBusy &&
+                                                      formEnabled &&
                                                       !captchaLoading,
                                                   label: context
                                                       .l10n
@@ -1153,7 +1157,8 @@ class _SignupFormState extends State<SignupForm>
                                                     tapTargetSize:
                                                         sizing.appBarHeight,
                                                     onPressed:
-                                                        isBusy || captchaLoading
+                                                        !formEnabled ||
+                                                            captchaLoading
                                                         ? null
                                                         : () =>
                                                               _reloadCaptcha(),
@@ -1177,7 +1182,7 @@ class _SignupFormState extends State<SignupForm>
                                                 .l10n
                                                 .signupCaptchaPlaceholder,
                                           ),
-                                          enabled: !isBusy,
+                                          enabled: formEnabled,
                                           controller: _captchaTextController,
                                           focusNode: _captchaFocusNode,
                                           textInputAction: TextInputAction.done,
@@ -1195,14 +1200,16 @@ class _SignupFormState extends State<SignupForm>
                                     ),
                                     Padding(
                                       padding: fieldSpacing,
-                                      child: TermsCheckbox(enabled: !isBusy),
+                                      child: TermsCheckbox(
+                                        enabled: formEnabled,
+                                      ),
                                     ),
                                     if (!_passwordWasSkipped)
                                       Padding(
                                         padding: fieldSpacing,
                                         child: AxiCheckboxFormField(
                                           key: _rememberMeFieldKey,
-                                          enabled: !isBusy,
+                                          enabled: formEnabled,
                                           initialValue: rememberMe,
                                           inputLabel: Text(
                                             context.l10n.authRememberMeLabel,
@@ -1250,7 +1257,7 @@ class _SignupFormState extends State<SignupForm>
                                 ? Padding(
                                     padding: EdgeInsets.only(right: spacing.s),
                                     child: AxiButton.secondary(
-                                      onPressed: isBusy || isCheckingPwned
+                                      onPressed: !formEnabled || isCheckingPwned
                                           ? null
                                           : _goToPreviousSignupStep,
                                       child: Text(context.l10n.commonBack),
@@ -1263,7 +1270,7 @@ class _SignupFormState extends State<SignupForm>
                               ? AxiButton.primary(
                                   loading: isCheckingPwned,
                                   onPressed:
-                                      isBusy ||
+                                      !formEnabled ||
                                           isCheckingPwned ||
                                           avatarState.processing
                                       ? null
@@ -1277,7 +1284,7 @@ class _SignupFormState extends State<SignupForm>
                           final skipPasswordButton = showSkipPasswordButton
                               ? AxiButton.secondary(
                                   onPressed:
-                                      isBusy ||
+                                      !formEnabled ||
                                           isCheckingPwned ||
                                           avatarState.processing
                                       ? null
@@ -1291,7 +1298,7 @@ class _SignupFormState extends State<SignupForm>
                               ? AxiButton.primary(
                                   loading: isBusy,
                                   onPressed:
-                                      isBusy ||
+                                      !formEnabled ||
                                           cleanupBlocked ||
                                           avatarState.processing
                                       ? null

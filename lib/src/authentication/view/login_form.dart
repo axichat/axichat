@@ -14,10 +14,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class LoginForm extends StatefulWidget {
-  const LoginForm({super.key, this.onSubmitStart, this.busy = false});
+  const LoginForm({
+    super.key,
+    this.onSubmitStart,
+    this.busy = false,
+    this.enabled = true,
+  });
 
   final VoidCallback? onSubmitStart;
   final bool busy;
+  final bool enabled;
 
   @override
   State<LoginForm> createState() => _LoginFormState();
@@ -158,6 +164,7 @@ class _LoginFormState extends State<LoginForm> {
             state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         final isBusy = widget.busy || loading;
+        final formEnabled = widget.enabled && !isBusy;
         final animationDuration = context
             .watch<SettingsCubit>()
             .animationDuration;
@@ -225,7 +232,7 @@ class _LoginFormState extends State<LoginForm> {
                           keyboardType: TextInputType.emailAddress,
                           autofillHints: const [AutofillHints.username],
                           placeholder: Text(context.l10n.authUsername),
-                          enabled: !isBusy,
+                          enabled: formEnabled,
                           controller: _jidTextController,
                           onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                           trailing: EndpointSuffix(server: state.server),
@@ -253,7 +260,7 @@ class _LoginFormState extends State<LoginForm> {
                       padding: horizontalPadding,
                       child: PasswordInput(
                         key: loginPasswordKey,
-                        enabled: !isBusy,
+                        enabled: formEnabled,
                         controller: _passwordTextController,
                         focusNode: _passwordFocusNode,
                         autofillHints: const [AutofillHints.password],
@@ -265,7 +272,7 @@ class _LoginFormState extends State<LoginForm> {
                       padding: horizontalPadding,
                       child: AxiCheckboxFormField(
                         key: _rememberMeFieldKey,
-                        enabled: !isBusy,
+                        enabled: formEnabled,
                         initialValue: rememberMe,
                         inputLabel: Text(context.l10n.authRememberMeLabel),
                         onChanged: (value) async {
@@ -291,7 +298,7 @@ class _LoginFormState extends State<LoginForm> {
                           child: AxiButton.primary(
                             key: loginSubmitKey,
                             loading: isBusy,
-                            onPressed: isBusy ? null : _onPressed,
+                            onPressed: formEnabled ? _onPressed : null,
                             child: Text(context.l10n.authLogin),
                           ),
                         ),

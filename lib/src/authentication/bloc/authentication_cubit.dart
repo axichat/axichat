@@ -1046,15 +1046,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return storedTrimmed;
   }
 
-  Future<void> _clearStoredPassword() async {
-    await _credentialStore.delete(key: passwordStorageKey);
-    await _credentialStore.delete(key: passwordPreHashedStorageKey);
+  Future<bool> _clearStoredPassword() async {
+    var succeeded = true;
+    if (!await _credentialStore.delete(key: passwordStorageKey)) {
+      succeeded = false;
+    }
+    if (!await _credentialStore.delete(key: passwordPreHashedStorageKey)) {
+      succeeded = false;
+    }
+    return succeeded;
   }
 
-  Future<void> _clearStoredLoginCredentialsForLogout() async {
-    await _credentialStore.delete(key: jidStorageKey);
-    await _clearStoredPassword();
-    await _clearSkippedPasswordSecrets();
+  Future<bool> _clearStoredLoginCredentialsForLogout() async {
+    var succeeded = true;
+    if (!await _credentialStore.delete(key: jidStorageKey)) {
+      succeeded = false;
+    }
+    if (!await _clearStoredPassword()) {
+      succeeded = false;
+    }
+    if (!await _clearSkippedPasswordSecrets()) {
+      succeeded = false;
+    }
+    return succeeded;
   }
 
   Future<String?> _readPendingLogoutBarrier() async {
@@ -1119,7 +1133,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         stackTrace,
       );
     }
-    await _clearStoredLoginCredentialsForLogout();
+    final storedLoginCredentialsCleared =
+        await _clearStoredLoginCredentialsForLogout();
     if (accountJid != null) {
       await _clearStoredSmtpCredentials(accountJid);
     }
@@ -1127,8 +1142,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _foregroundRuntimeController
             ?.forceStopAfterExplicitSessionEnd() ??
         true;
-    if (!foregroundStopped) {
-      _log.warning('Leaving logout barrier in place for foreground recovery.');
+    if (!storedLoginCredentialsCleared || !foregroundStopped) {
+      _log.warning('Leaving logout barrier in place for recovery.');
       return;
     }
     _emailService?.clearSessionCredentials();
@@ -1176,10 +1191,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _passwordWasSkipped = true;
   }
 
-  Future<void> _clearSkippedPasswordSecrets() async {
-    await _credentialStore.delete(key: passwordSkippedStorageKey);
-    await _credentialStore.delete(key: skippedPasswordRawStorageKey);
+  Future<bool> _clearSkippedPasswordSecrets() async {
+    var succeeded = true;
+    if (!await _credentialStore.delete(key: passwordSkippedStorageKey)) {
+      succeeded = false;
+    }
+    if (!await _credentialStore.delete(key: skippedPasswordRawStorageKey)) {
+      succeeded = false;
+    }
     _passwordWasSkipped = false;
+    return succeeded;
   }
 
   Future<bool> loadPasswordWasSkippedChoice() async {
@@ -3828,10 +3849,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     if (severity == LogoutSeverity.normal) {
       try {
-        await _runTimedLogoutStep(
+        final storedLoginCredentialsCleared = await _runTimedLogoutStep(
           'clear stored login credentials',
           _clearStoredLoginCredentialsForLogout,
         );
+        if (!storedLoginCredentialsCleared) {
+          normalCleanupSucceeded = false;
+        }
       } on Exception catch (error, stackTrace) {
         normalCleanupSucceeded = false;
         _log.warning(
