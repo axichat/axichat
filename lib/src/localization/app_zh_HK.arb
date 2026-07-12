@@ -3214,6 +3214,7 @@
   "authInvalidCredentials": "使用者名稱或密碼錯誤",
   "authGenericError": "發生錯誤。請稍後再試。",
   "authStorageLocked": "儲存空間被另一個 Axichat 實例鎖定。請關閉其他視窗或程序後再試。",
+  "authLoginCredentialsStorageFailed": "此裝置無法儲存登入憑證。下次開啟應用程式時，你可能需要重新登入。",
   "authEmailServerUnreachable": "無法連線到電郵伺服器。請再試一次。",
   "authEmailSetupFailed": "電郵設定失敗。請再試一次。",
   "authEmailPasswordMissing": "缺少已儲存的電郵密碼。請手動登入。",

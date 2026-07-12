@@ -83,25 +83,27 @@ final class AuthenticationSignUpInProgress extends AuthenticationInProgress {
 }
 
 final class AuthenticationComplete extends AuthenticationState {
-  const AuthenticationComplete({super.config});
+  const AuthenticationComplete({this.notice, super.config});
+
+  final AuthMessage? notice;
 
   @override
   AuthenticationComplete copyWithConfig(EndpointConfig config) =>
-      AuthenticationComplete(config: config);
+      AuthenticationComplete(config: config, notice: notice);
 
   @override
-  List<Object?> get props => [config];
+  List<Object?> get props => [config, notice];
 }
 
 final class AuthenticationCompleteFromSignup extends AuthenticationComplete {
-  const AuthenticationCompleteFromSignup({super.config});
+  const AuthenticationCompleteFromSignup({super.notice, super.config});
 
   @override
   AuthenticationCompleteFromSignup copyWithConfig(EndpointConfig config) =>
-      AuthenticationCompleteFromSignup(config: config);
+      AuthenticationCompleteFromSignup(config: config, notice: notice);
 
   @override
-  List<Object?> get props => [config];
+  List<Object?> get props => [config, notice];
 }
 
 final class AuthenticationPasswordChangeSuccess extends AuthenticationComplete {

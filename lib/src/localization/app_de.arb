@@ -3221,6 +3221,7 @@
   "authInvalidCredentials": "Falscher Benutzername oder falsches Passwort",
   "authGenericError": "Fehler. Bitte später erneut versuchen.",
   "authStorageLocked": "Der Speicher ist durch eine andere Axichat-Instanz gesperrt. Schließe andere Fenster oder Prozesse und versuche es erneut.",
+  "authLoginCredentialsStorageFailed": "Dieses Gerät konnte die Anmeldedaten nicht speichern. Wenn du die App das nächste Mal öffnest, musst du dich möglicherweise erneut anmelden.",
   "authEmailServerUnreachable": "E-Mail-Server nicht erreichbar. Bitte versuche es erneut.",
   "authEmailSetupFailed": "E-Mail-Einrichtung fehlgeschlagen. Bitte versuche es erneut.",
   "authEmailPasswordMissing": "Gespeichertes E-Mail-Passwort fehlt. Bitte melde dich manuell an.",

@@ -1002,6 +1002,24 @@ class _MaterialAxichatState extends State<MaterialAxichat>
                     } else {
                       if (state is AuthenticationComplete &&
                           previousAuthState is! AuthenticationComplete) {
+                        final noticeText = state.notice?.resolve(
+                          AppLocalizations.of(context)!,
+                        );
+                        final scaffoldMessenger = noticeText == null
+                            ? null
+                            : ScaffoldMessenger.of(context);
+                        void showCompletionNotice() {
+                          if (noticeText == null) {
+                            return;
+                          }
+                          scaffoldMessenger?.showSnackBar(
+                            SnackBar(
+                              duration: context.motion.longSnackBarDuration,
+                              content: Text(noticeText),
+                            ),
+                          );
+                        }
+
                         profileCubit.syncSessionIdentity();
                         if (onGuestRoute) {
                           _pendingAuthNavigation?.cancel();
@@ -1020,10 +1038,12 @@ class _MaterialAxichatState extends State<MaterialAxichat>
                             if (currentMatchedLocation ==
                                 const HomeRoute().location) {
                               _pendingAuthNavigation = null;
+                              showCompletionNotice();
                               return;
                             }
                             _router.go(const HomeRoute().location);
                             _pendingAuthNavigation = null;
+                            showCompletionNotice();
                           }
 
                           if (authCompletionDuration == Duration.zero) {
@@ -1034,6 +1054,8 @@ class _MaterialAxichatState extends State<MaterialAxichat>
                               navigateHome,
                             );
                           }
+                        } else {
+                          showCompletionNotice();
                         }
                         await settingsCubit.activateAccountSettings(
                           locate<XmppService>().myJid,

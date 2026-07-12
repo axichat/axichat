@@ -3217,6 +3217,7 @@
   "authInvalidCredentials": "Nom d’utilisateur ou mot de passe incorrect",
   "authGenericError": "Erreur. Veuillez réessayer plus tard.",
   "authStorageLocked": "Le stockage est verrouillé par une autre instance d’Axichat. Fermez les autres fenêtres ou processus et réessayez.",
+  "authLoginCredentialsStorageFailed": "Cet appareil n’a pas pu stocker les identifiants de connexion. La prochaine fois que vous ouvrirez l’application, vous devrez peut-être vous reconnecter.",
   "authEmailServerUnreachable": "Impossible d’atteindre le serveur e-mail. Veuillez réessayer.",
   "authEmailSetupFailed": "Échec de la configuration e-mail. Veuillez réessayer.",
   "authEmailPasswordMissing": "Mot de passe e-mail enregistré manquant. Veuillez vous connecter manuellement.",

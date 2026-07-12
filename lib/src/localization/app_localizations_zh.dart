@@ -6670,6 +6670,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authStorageLocked => '存储被另一个 Axichat 实例锁定。请关闭其他窗口或进程后重试。';
 
   @override
+  String get authLoginCredentialsStorageFailed =>
+      '此设备无法存储登录凭据。下次打开应用时，你可能需要重新登录。';
+
+  @override
   String get authEmailServerUnreachable => '无法连接到邮件服务器。请重试。';
 
   @override
@@ -14162,6 +14166,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authStorageLocked => '儲存空間被另一個 Axichat 實例鎖定。請關閉其他視窗或程序後再試。';
+
+  @override
+  String get authLoginCredentialsStorageFailed =>
+      '此裝置無法儲存登入憑證。下次開啟應用程式時，你可能需要重新登入。';
 
   @override
   String get authEmailServerUnreachable => '無法連線到電郵伺服器。請再試一次。';

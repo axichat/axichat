@@ -3221,6 +3221,7 @@
   "authInvalidCredentials": "用户名或密码错误",
   "authGenericError": "发生错误。请稍后重试。",
   "authStorageLocked": "存储被另一个 Axichat 实例锁定。请关闭其他窗口或进程后重试。",
+  "authLoginCredentialsStorageFailed": "此设备无法存储登录凭据。下次打开应用时，你可能需要重新登录。",
   "authEmailServerUnreachable": "无法连接到邮件服务器。请重试。",
   "authEmailSetupFailed": "邮件设置失败。请重试。",
   "authEmailPasswordMissing": "缺少已保存的邮件密码。请手动登录。",

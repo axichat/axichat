@@ -12062,6 +12062,12 @@ abstract class AppLocalizations {
   /// **'Storage is locked by another Axichat instance. Close other windows or processes and try again.'**
   String get authStorageLocked;
 
+  /// No description provided for @authLoginCredentialsStorageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'This device failed to store login credentials. Next time you open the app, you may have to sign in again.'**
+  String get authLoginCredentialsStorageFailed;
+
   /// No description provided for @authEmailServerUnreachable.
   ///
   /// In en, this message translates to:

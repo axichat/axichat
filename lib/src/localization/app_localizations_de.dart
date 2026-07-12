@@ -7104,6 +7104,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Der Speicher ist durch eine andere Axichat-Instanz gesperrt. Schließe andere Fenster oder Prozesse und versuche es erneut.';
 
   @override
+  String get authLoginCredentialsStorageFailed =>
+      'Dieses Gerät konnte die Anmeldedaten nicht speichern. Wenn du die App das nächste Mal öffnest, musst du dich möglicherweise erneut anmelden.';
+
+  @override
   String get authEmailServerUnreachable =>
       'E-Mail-Server nicht erreichbar. Bitte versuche es erneut.';
 

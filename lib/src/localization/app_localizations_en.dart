@@ -6988,6 +6988,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
 
   @override
+  String get authLoginCredentialsStorageFailed =>
+      'This device failed to store login credentials. Next time you open the app, you may have to sign in again.';
+
+  @override
   String get authEmailServerUnreachable =>
       'Unable to reach the email server. Please try again.';
 

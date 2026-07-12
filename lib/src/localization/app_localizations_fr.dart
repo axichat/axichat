@@ -7123,6 +7123,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le stockage est verrouillé par une autre instance d’Axichat. Fermez les autres fenêtres ou processus et réessayez.';
 
   @override
+  String get authLoginCredentialsStorageFailed =>
+      'Cet appareil n’a pas pu stocker les identifiants de connexion. La prochaine fois que vous ouvrirez l’application, vous devrez peut-être vous reconnecter.';
+
+  @override
   String get authEmailServerUnreachable =>
       'Impossible d’atteindre le serveur e-mail. Veuillez réessayer.';
 

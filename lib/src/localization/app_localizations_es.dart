@@ -7096,6 +7096,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'El almacenamiento está bloqueado por otra instancia de Axichat. Cierra otras ventanas o procesos e inténtalo de nuevo.';
 
   @override
+  String get authLoginCredentialsStorageFailed =>
+      'Este dispositivo no pudo guardar las credenciales de inicio de sesión. La próxima vez que abras la aplicación, es posible que tengas que iniciar sesión de nuevo.';
+
+  @override
   String get authEmailServerUnreachable =>
       'No se pudo contactar con el servidor de correo. Inténtalo de nuevo.';
 

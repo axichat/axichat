@@ -23,6 +23,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     required this.composerBannerMinVisibilityDuration,
     required this.statusBannerSlideOffset,
     required this.statusBannerSuccessDuration,
+    required this.longSnackBarDuration,
     required this.authLoginCancelRevealDelay,
     required this.endpointBorderShineDuration,
     required this.endpointBorderShinePauseDuration,
@@ -47,6 +48,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
   final Duration composerBannerMinVisibilityDuration;
   final Offset statusBannerSlideOffset;
   final Duration statusBannerSuccessDuration;
+  final Duration longSnackBarDuration;
   final Duration authLoginCancelRevealDelay;
   final Duration endpointBorderShineDuration;
   final Duration endpointBorderShinePauseDuration;
@@ -72,6 +74,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     Duration? composerBannerMinVisibilityDuration,
     Offset? statusBannerSlideOffset,
     Duration? statusBannerSuccessDuration,
+    Duration? longSnackBarDuration,
     Duration? authLoginCancelRevealDelay,
     Duration? endpointBorderShineDuration,
     Duration? endpointBorderShinePauseDuration,
@@ -111,6 +114,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
           statusBannerSlideOffset ?? this.statusBannerSlideOffset,
       statusBannerSuccessDuration:
           statusBannerSuccessDuration ?? this.statusBannerSuccessDuration,
+      longSnackBarDuration: longSnackBarDuration ?? this.longSnackBarDuration,
       authLoginCancelRevealDelay:
           authLoginCancelRevealDelay ?? this.authLoginCancelRevealDelay,
       endpointBorderShineDuration:
@@ -150,6 +154,7 @@ const AxiMotion axiMotion = AxiMotion(
   composerBannerMinVisibilityDuration: Duration(milliseconds: 500),
   statusBannerSlideOffset: Offset(0.0, -(1 / 12)),
   statusBannerSuccessDuration: Duration(milliseconds: 900),
+  longSnackBarDuration: Duration(seconds: 8),
   authLoginCancelRevealDelay: Duration(milliseconds: 500),
   endpointBorderShineDuration: Duration(milliseconds: 1800),
   endpointBorderShinePauseDuration: Duration(seconds: 5),

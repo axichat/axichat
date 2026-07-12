@@ -100,6 +100,7 @@ enum AuthMessageKey {
   rateLimited,
   deviceOnlyPasswordUnavailable,
   demoModeFailed,
+  loginCredentialsStorageFailed,
 }
 
 extension AuthMessageLocalization on AuthMessage {
@@ -151,6 +152,8 @@ extension AuthMessageKeyLocalization on AuthMessageKey {
     AuthMessageKey.deviceOnlyPasswordUnavailable =>
       l10n.authDeviceOnlyPasswordUnavailable,
     AuthMessageKey.demoModeFailed => l10n.authDemoModeFailed,
+    AuthMessageKey.loginCredentialsStorageFailed =>
+      l10n.authLoginCredentialsStorageFailed,
   };
 }
 
@@ -2616,6 +2619,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           config: config,
           jid: accountJid,
           rememberMe: rememberMe,
+          reportRememberMePersistenceFailure:
+              !usingStoredCredentials && !wasAuthenticated,
           password: effectivePassword,
           passwordPreHashed: passwordPreHashed,
           passwordWasSkipped: effectivePasswordWasSkipped,
@@ -2725,6 +2730,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         config: config,
         jid: accountJid,
         rememberMe: rememberMe,
+        reportRememberMePersistenceFailure:
+            !usingStoredCredentials && !wasAuthenticated,
         password: effectivePassword,
         passwordPreHashed: passwordPreHashed,
         passwordWasSkipped: effectivePasswordWasSkipped,
@@ -2898,6 +2905,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       config: config,
       jid: jid,
       rememberMe: rememberMe,
+      reportRememberMePersistenceFailure: false,
       password: password,
       passwordPreHashed: passwordPreHashed,
       passwordWasSkipped: passwordWasSkipped,
@@ -3138,6 +3146,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required EndpointConfig config,
     required String jid,
     required bool rememberMe,
+    required bool reportRememberMePersistenceFailure,
     required String? password,
     required bool passwordPreHashed,
     required bool passwordWasSkipped,
@@ -3150,10 +3159,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? signupWelcomeTitle,
     String? signupWelcomeBody,
   }) async {
-    await _persistLoginSecrets(
+    final coreLoginSecretsPersisted = await _persistLoginSecrets(
       config: config,
       jid: jid,
       rememberMe: rememberMe,
+      verifyCorePersistence: reportRememberMePersistenceFailure,
       password: password,
       passwordPreHashed: passwordPreHashed,
       passwordWasSkipped: passwordWasSkipped,
@@ -3184,9 +3194,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     }
     await _clearPartialUnregisterJidIfMatches(jid);
+    final AuthMessage? notice =
+        rememberMe &&
+            reportRememberMePersistenceFailure &&
+            !coreLoginSecretsPersisted
+        ? const AuthKeyMessage(AuthMessageKey.loginCredentialsStorageFailed)
+        : null;
     final AuthenticationState completedState = fromSignup
-        ? AuthenticationCompleteFromSignup(config: config)
-        : AuthenticationComplete(config: config);
+        ? AuthenticationCompleteFromSignup(config: config, notice: notice)
+        : AuthenticationComplete(config: config, notice: notice);
     _emit(completedState, config: config);
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
@@ -3205,10 +3221,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  Future<void> _persistLoginSecrets({
+  Future<bool> _persistLoginSecrets({
     required EndpointConfig config,
     required String jid,
     required bool rememberMe,
+    required bool verifyCorePersistence,
     required String? password,
     required bool passwordPreHashed,
     required bool passwordWasSkipped,
@@ -3226,44 +3243,50 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           preserveActiveSession: true,
         );
       }
-      return;
+      return true;
     }
-    try {
-      await _persistDatabaseSecrets(
-        jid: jid,
-        databasePrefixStorageKey: databasePrefixStorageKey,
-        databasePrefix: databasePrefix,
-        databasePassphraseStorageKey: databasePassphraseStorageKey,
-        databasePassphrase: databasePassphrase,
-      );
-      if (config.smtpEnabled) {
-        await _emailService?.persistActiveCredentials(jid: jid);
-      }
-      await _credentialStore.write(key: jidStorageKey, value: jid);
-      await _persistPasswordCredentials(
-        password: password,
-        passwordPreHashed: passwordPreHashed,
-      );
-      await _persistSkippedPasswordSecrets(
-        passwordWasSkipped: passwordWasSkipped,
-        rawPassword: skippedPasswordRaw,
-      );
-      return;
-    } on Exception catch (error, stackTrace) {
-      _log.warning(
-        'Failed to persist login credentials atomically',
-        error,
-        stackTrace,
-      );
-      if (config.smtpEnabled) {
-        await _emailService?.clearStoredCredentials(
-          jid: jid,
-          preserveActiveSession: true,
-        );
-      }
-      await _clearLoginSecrets(jid: jid);
-      rethrow;
+    await _credentialStore.write(
+      key: rememberMeChoiceKey,
+      value: true.toString(),
+    );
+    await _persistDatabaseSecrets(
+      jid: jid,
+      databasePrefixStorageKey: databasePrefixStorageKey,
+      databasePrefix: databasePrefix,
+      databasePassphraseStorageKey: databasePassphraseStorageKey,
+      databasePassphrase: databasePassphrase,
+    );
+    if (config.smtpEnabled) {
+      await _emailService?.persistActiveCredentials(jid: jid);
     }
+    await _credentialStore.write(key: jidStorageKey, value: jid);
+    await _persistPasswordCredentials(
+      password: password,
+      passwordPreHashed: passwordPreHashed,
+    );
+    await _persistSkippedPasswordSecrets(
+      passwordWasSkipped: passwordWasSkipped,
+      rawPassword: skippedPasswordRaw,
+    );
+    if (!verifyCorePersistence) {
+      return true;
+    }
+    final storedValuesMatch = await _storedCoreLoginSecretsMatch(
+      jid: jid,
+      password: password,
+      passwordPreHashed: passwordPreHashed,
+      passwordWasSkipped: passwordWasSkipped,
+      skippedPasswordRaw: skippedPasswordRaw,
+      databasePrefixStorageKey: databasePrefixStorageKey,
+      databasePrefix: databasePrefix,
+      databasePassphraseStorageKey: databasePassphraseStorageKey,
+      databasePassphrase: databasePassphrase,
+    );
+    if (storedValuesMatch) {
+      return true;
+    }
+    _log.warning('Failed to persist core login credentials completely.');
+    return false;
   }
 
   Future<void> _persistDatabaseSecrets({
@@ -3305,6 +3328,48 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       key: passwordPreHashedStorageKey,
       value: true.toString(),
     );
+  }
+
+  Future<bool> _storedCoreLoginSecretsMatch({
+    required String jid,
+    required String? password,
+    required bool passwordPreHashed,
+    required bool passwordWasSkipped,
+    required String? skippedPasswordRaw,
+    required RegisteredCredentialKey databasePrefixStorageKey,
+    required String databasePrefix,
+    required RegisteredCredentialKey databasePassphraseStorageKey,
+    required String databasePassphrase,
+  }) async {
+    if (!passwordPreHashed || password == null || password.isEmpty) {
+      return false;
+    }
+    final normalizedPrefixKey = CredentialStore.registerKey(
+      '${_normalizeJid(jid)}$_databasePrefixKeySuffix',
+    );
+    final storedValues = await Future.wait<String?>([
+      _credentialStore.read(key: rememberMeChoiceKey),
+      _credentialStore.read(key: jidStorageKey),
+      _credentialStore.read(key: passwordStorageKey),
+      _credentialStore.read(key: passwordPreHashedStorageKey),
+      _credentialStore.read(key: databasePrefixStorageKey),
+      _credentialStore.read(key: normalizedPrefixKey),
+      _credentialStore.read(key: databasePassphraseStorageKey),
+      _credentialStore.read(key: passwordSkippedStorageKey),
+      _credentialStore.read(key: skippedPasswordRawStorageKey),
+    ]);
+    final expectedValues = <String?>[
+      true.toString(),
+      jid,
+      password,
+      true.toString(),
+      databasePrefix,
+      databasePrefix,
+      databasePassphrase,
+      passwordWasSkipped ? true.toString() : null,
+      passwordWasSkipped ? skippedPasswordRaw?.trim() : null,
+    ];
+    return listEquals(storedValues, expectedValues);
   }
 
   bool _looksLikeConnectivityError(Object error) {

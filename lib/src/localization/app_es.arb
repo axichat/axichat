@@ -3217,6 +3217,7 @@
   "authInvalidCredentials": "Nombre de usuario o contraseña incorrectos",
   "authGenericError": "Error. Inténtalo de nuevo más tarde.",
   "authStorageLocked": "El almacenamiento está bloqueado por otra instancia de Axichat. Cierra otras ventanas o procesos e inténtalo de nuevo.",
+  "authLoginCredentialsStorageFailed": "Este dispositivo no pudo guardar las credenciales de inicio de sesión. La próxima vez que abras la aplicación, es posible que tengas que iniciar sesión de nuevo.",
   "authEmailServerUnreachable": "No se pudo contactar con el servidor de correo. Inténtalo de nuevo.",
   "authEmailSetupFailed": "La configuración de correo falló. Inténtalo de nuevo.",
   "authEmailPasswordMissing": "Falta la contraseña de correo guardada. Inicia sesión manualmente.",
