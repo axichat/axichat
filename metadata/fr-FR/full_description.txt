@@ -19,10 +19,10 @@ Points forts :
 - Reconnexion automatique pour éviter la perte de messages
 - Calendrier simple en glisser-déposer
 - Planification en langage naturel sans IA
-- Partage de disponibilités qui montre les créneaux communs avant de planifier
 - Ajout au calendrier en un geste depuis un simple message
 - Mode invité pour planifier hors ligne
 - Fonctionne sans Google, Firebase ni FCM
+- Sans traqueurs ni publicités
 
 <strong>Note :</strong> Axichat est encore en développement actif ; certaines fonctions peuvent donc ne pas fonctionner correctement.
 

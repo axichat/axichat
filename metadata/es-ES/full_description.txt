@@ -19,10 +19,10 @@ Características destacadas:
 - Reconexión automática para que no se pierdan mensajes
 - Calendario fácil con arrastrar y soltar
 - Programación en lenguaje natural sin IA
-- Compartir disponibilidad que muestra coincidencias antes de agendar
 - Añadir al calendario con un toque desde mensajes de texto
 - Modo invitado para planificar sin conexión
 - Funciona sin Google, Firebase ni FCM
+- Sin rastreadores ni anuncios
 
 <strong>Nota:</strong> Axichat sigue en desarrollo activo, por lo que algunas funciones pueden fallar.
 

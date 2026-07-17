@@ -19,10 +19,10 @@ Funktionshighlights:
 - Automatische Wiederverbindung, damit Nachrichten nicht verloren gehen
 - Einfacher Drag-and-drop-Kalender
 - Planung in natürlicher Sprache ohne KI
-- Verfügbarkeitsfreigabe, die Überschneidungen vor der Planung zeigt
 - Mit einem Tipp aus einfachen Textnachrichten in den Kalender
 - Gastmodus für Offline-Planung
 - Funktioniert ohne Google, Firebase und FCM
+- Keine Tracker und keine Werbung
 
 <strong>Hinweis:</strong> Axichat wird noch aktiv entwickelt, daher können Dinge kaputtgehen.
 
