@@ -217,7 +217,8 @@
 - **How does Axichat compare to Spike?** Both improve on traditional email clients. Axichat differs
   in several ways:
 
-  - It combines chat over XMPP with email over SMTP, while Spike is limited to SMTP.
+  - Both turn email into chat-like conversations, but Axichat also uses XMPP for Axichat-to-Axichat
+    messaging while retaining SMTP/IMAP for email. Spike's conversational email remains email-based.
   - It is designed for individual, family, and business use; Spike focuses more on business teams.
   - Its source code is public.
   - It uses Flutter, which provides a better user interface and better performance across
